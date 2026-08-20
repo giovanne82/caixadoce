@@ -68,6 +68,68 @@ export interface Colaborador {
   abasPermitidas: string[];
 }
 
+// ==============================================================================
+// ENCOMENDAS & CALENDÁRIO
+// ==============================================================================
+
+export type StatusEncomenda = "pendente" | "em_producao" | "pronta" | "entregue" | "cancelada";
+export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega";
+
+export interface ItemEncomenda {
+  id?: string;
+  nome: string;
+  quantidade: number;
+  valorUnitario?: number;
+  observacao?: string;
+}
+
+export interface Encomenda {
+  id: string;
+  estabelecimentoCodigo: string;
+  clienteNome: string;
+  clienteWhatsapp: string;
+  dataEntrega: string; // YYYY-MM-DD
+  horarioEntrega: string; // HH:mm
+  itens: string; // Descrição ou resumo dos itens pedidos
+  valorTotal: number;
+  valorEntrada?: number;
+  statusPagamento: StatusPagamentoEncomenda;
+  status: StatusEncomenda;
+  observacoes?: string;
+  enderecoEntrega?: string;
+  tipoEntrega?: "retirada" | "delivery";
+  createdAt?: string;
+}
+
+export interface DataBloqueada {
+  id: string;
+  estabelecimentoCodigo: string;
+  data: string; // YYYY-MM-DD
+  motivo: string;
+  createdAt?: string;
+}
+
+export const STATUS_ENCOMENDA_CONFIG: Record<
+  StatusEncomenda,
+  { label: string; color: string; badgeVariant: "default" | "secondary" | "outline" | "destructive" }
+> = {
+  pendente: { label: "Pendente", color: "text-amber-600 bg-amber-500/10 border-amber-500/30", badgeVariant: "secondary" },
+  em_producao: { label: "Em Produção", color: "text-blue-600 bg-blue-500/10 border-blue-500/30", badgeVariant: "secondary" },
+  pronta: { label: "Pronta p/ Entrega", color: "text-purple-600 bg-purple-500/10 border-purple-500/30", badgeVariant: "secondary" },
+  entregue: { label: "Entregue", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30", badgeVariant: "default" },
+  cancelada: { label: "Cancelada", color: "text-rose-600 bg-rose-500/10 border-rose-500/30", badgeVariant: "destructive" },
+};
+
+export const STATUS_PAGAMENTO_CONFIG: Record<
+  StatusPagamentoEncomenda,
+  { label: string; color: string }
+> = {
+  pendente: { label: "Pendente (0%)", color: "text-rose-600" },
+  sinal_pago: { label: "Sinal Pago (50%)", color: "text-amber-600" },
+  pago_integral: { label: "100% Pago", color: "text-emerald-600" },
+  pago_na_entrega: { label: "Pagar na Entrega", color: "text-blue-600" },
+};
+
 export const CATEGORIAS_PADRAO = {
   receitas: [
     "Venda Direta / Balcão",
@@ -93,7 +155,14 @@ export function formatarMoeda(valor: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-  }).format(valor);
+  }).format(valor || 0);
+}
+
+export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
+  const cleanPhone = whatsapp.replace(/\D/g, "");
+  const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+  const textEncoded = mensagem ? `?text=${encodeURIComponent(mensagem)}` : "";
+  return `https://wa.me/${formattedPhone}${textEncoded}`;
 }
 
 export function gerarCodigoEstabelecimento(): string {

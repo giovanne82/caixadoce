@@ -8,6 +8,7 @@ import { LoginView } from "@/components/auth/LoginView";
 import { ProfileSelectionView } from "@/components/auth/ProfileSelectionView";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { DashboardTab } from "@/components/caixadoce/DashboardTab";
+import { OrdersView } from "@/components/caixadoce/OrdersView";
 import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
@@ -19,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
+  CalendarDays,
   DollarSign,
   Users,
   CreditCard,
@@ -32,14 +34,16 @@ import { toast } from "sonner";
 import {
   type TransacaoFinanceira,
   type StatusTransacao,
+  type Encomenda,
+  type DataBloqueada,
 } from "@/lib/caixadoce-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Gestão Financeira, Vendas e Assinaturas" },
-      { name: "description", content: "Sistema inteligente para gestão de caixa, faturamento e equipe." },
-      { property: "og:title", content: "CaixaDoce — Gestão Financeira Inteligente" },
+      { title: "CaixaDoce — Gestão Financeira, Encomendas & Assinaturas" },
+      { name: "description", content: "Sistema inteligente para gestão de pedidos, caixa, faturamento e equipe." },
+      { property: "og:title", content: "CaixaDoce — Gestão Financeira & Encomendas" },
     ],
   }),
   component: Index,
@@ -49,10 +53,12 @@ function Index() {
   const { user, profile, isMounted, logout, switchProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
+  const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
+  const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
 
   const activeCode = profile?.establishmentCode || "CD-1001";
 
-  // Carrega transações do Supabase / Cache Local
+  // 1. Carrega transações do Supabase / Cache Local
   const fetchTransacoes = useCallback(async () => {
     if (!profile) return;
 
@@ -64,12 +70,10 @@ function Index() {
         .order("created_at", { ascending: false });
 
       if (error || !data || data.length === 0) {
-        // Fallback para storage local
         const raw = localStorage.getItem(`caixadoce_transacoes_${activeCode}`);
         if (raw) {
           setTransacoes(JSON.parse(raw));
         } else {
-          // Lançamentos demonstrativos iniciais
           const demos: TransacaoFinanceira[] = [
             {
               id: "tr-1",
@@ -92,17 +96,6 @@ function Index() {
               metodoPagamento: "cartao_credito",
               status: "concluida",
               clienteOuFornecedor: "Lucas Martins",
-            },
-            {
-              id: "tr-3",
-              descricao: "Compra Embalagens Kraft & Fitas",
-              valor: 85.5,
-              tipo: "despesa",
-              categoria: "Embalagens",
-              data: new Date().toLocaleDateString("pt-BR"),
-              metodoPagamento: "pix",
-              status: "concluida",
-              clienteOuFornecedor: "Distribuidora Papel & Arte",
             },
           ];
           setTransacoes(demos);
@@ -130,9 +123,117 @@ function Index() {
     }
   }, [activeCode, profile]);
 
+  // 2. Carrega Encomendas e Datas Bloqueadas do Supabase / Cache Local
+  const fetchEncomendasECalendario = useCallback(async () => {
+    if (!profile) return;
+
+    // A) Encomendas
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("data_entrega", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_orders_${activeCode}`);
+        if (raw) {
+          setEncomendas(JSON.parse(raw));
+        } else {
+          // Exemplos demonstrativos
+          const hoje = new Date().toISOString().split("T")[0];
+          const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+          const demoOrders: Encomenda[] = [
+            {
+              id: "ord-1",
+              estabelecimentoCodigo: activeCode,
+              clienteNome: "Camila Guimarães",
+              clienteWhatsapp: "(11) 98765-4321",
+              dataEntrega: hoje,
+              horarioEntrega: "15:30",
+              itens: "1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga",
+              valorTotal: 180.0,
+              valorEntrada: 90.0,
+              statusPagamento: "sinal_pago",
+              status: "em_producao",
+              tipoEntrega: "retirada",
+              observacoes: "Vela decorativa dourada inclusa",
+            },
+            {
+              id: "ord-2",
+              estabelecimentoCodigo: activeCode,
+              clienteNome: "Rodrigo Mendonça",
+              clienteWhatsapp: "(11) 99123-4567",
+              dataEntrega: amanha,
+              horarioEntrega: "11:00",
+              itens: "2x Tortas Holandesas Grandes, 50x Mini Coxinhas",
+              valorTotal: 220.0,
+              valorEntrada: 220.0,
+              statusPagamento: "pago_integral",
+              status: "pendente",
+              tipoEntrega: "delivery",
+              enderecoEntrega: "Rua das Flores, 450 - Apto 12B",
+            },
+          ];
+          setEncomendas(demoOrders);
+          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(demoOrders));
+        }
+      } else {
+        const mapeadas: Encomenda[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          clienteNome: d.cliente_nome,
+          clienteWhatsapp: d.cliente_whatsapp,
+          dataEntrega: d.data_entrega,
+          horarioEntrega: d.horario_entrega || "14:00",
+          itens: d.itens,
+          valorTotal: Number(d.valor_total),
+          valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
+          statusPagamento: d.status_pagamento || "pendente",
+          status: d.status || "pendente",
+          observacoes: d.observacoes,
+          enderecoEntrega: d.endereco_entrega,
+          tipoEntrega: d.tipo_entrega || "retirada",
+          createdAt: d.created_at,
+        }));
+        setEncomendas(mapeadas);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar encomendas:", e);
+    }
+
+    // B) Datas Bloqueadas
+    try {
+      const { data, error } = await supabase
+        .from("datas_bloqueadas")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode);
+
+      if (error || !data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_datas_bloqueadas_${activeCode}`);
+        if (raw) {
+          setDatasBloqueadas(JSON.parse(raw));
+        }
+      } else {
+        const mapeadas: DataBloqueada[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          data: d.data,
+          motivo: d.motivo || "Agenda Lotada",
+          createdAt: d.created_at,
+        }));
+        setDatasBloqueadas(mapeadas);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar datas bloqueadas:", e);
+    }
+  }, [activeCode, profile]);
+
   useEffect(() => {
     fetchTransacoes();
-  }, [fetchTransacoes]);
+    fetchEncomendasECalendario();
+  }, [fetchTransacoes, fetchEncomendasECalendario]);
 
   // Listener para retorno do Stripe Checkout
   useEffect(() => {
@@ -144,6 +245,120 @@ function Index() {
     }
   }, []);
 
+  // Handlers de Encomendas
+  const criarEncomenda = async (dados: Omit<Encomenda, "id" | "estabelecimentoCodigo">) => {
+    const item: Encomenda = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+    };
+
+    const atualizadas = [item, ...encomendas];
+    setEncomendas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
+    } catch {}
+
+    try {
+      await supabase.from("orders").insert([
+        {
+          id: item.id,
+          estabelecimento_codigo: activeCode,
+          cliente_nome: item.clienteNome,
+          cliente_whatsapp: item.clienteWhatsapp,
+          data_entrega: item.dataEntrega,
+          horario_entrega: item.horarioEntrega,
+          itens: item.itens,
+          valor_total: item.valorTotal,
+          valor_entrada: item.valorEntrada || 0,
+          status_pagamento: item.statusPagamento,
+          status: item.status,
+          tipo_entrega: item.tipoEntrega,
+          endereco_entrega: item.enderecoEntrega,
+          observacoes: item.observacoes,
+        },
+      ]);
+    } catch (err) {
+      console.warn("Supabase insert order warning:", err);
+    }
+  };
+
+  const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
+    const atualizadas = encomendas.map((e) => (e.id === id ? { ...e, ...dados } : e));
+    setEncomendas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
+    } catch {}
+
+    try {
+      await supabase
+        .from("orders")
+        .update({
+          cliente_nome: dados.clienteNome,
+          cliente_whatsapp: dados.clienteWhatsapp,
+          data_entrega: dados.dataEntrega,
+          horario_entrega: dados.horarioEntrega,
+          itens: dados.itens,
+          valor_total: dados.valorTotal,
+          valor_entrada: dados.valorEntrada,
+          status_pagamento: dados.statusPagamento,
+          status: dados.status,
+          tipo_entrega: dados.tipoEntrega,
+          endereco_entrega: dados.enderecoEntrega,
+          observacoes: dados.observacoes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+    } catch (err) {
+      console.warn("Supabase update order warning:", err);
+    }
+  };
+
+  const excluirEncomenda = async (id: string) => {
+    const atualizadas = encomendas.filter((e) => e.id !== id);
+    setEncomendas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
+      await supabase.from("orders").delete().eq("id", id);
+    } catch {}
+    toast.success("Encomenda excluída com sucesso.");
+  };
+
+  // Handlers de Bloqueio de Datas
+  const bloquearData = async (data: string, motivo: string) => {
+    const item: DataBloqueada = {
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+      data,
+      motivo,
+    };
+
+    const atualizadas = [...datasBloqueadas.filter((d) => d.data !== data), item];
+    setDatasBloqueadas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(atualizadas));
+      await supabase.from("datas_bloqueadas").insert([
+        {
+          id: item.id,
+          estabelecimento_codigo: activeCode,
+          data: item.data,
+          motivo: item.motivo,
+        },
+      ]);
+    } catch {}
+  };
+
+  const desbloquearData = async (id: string) => {
+    const atualizadas = datasBloqueadas.filter((d) => d.id !== id);
+    setDatasBloqueadas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(atualizadas));
+      await supabase.from("datas_bloqueadas").delete().eq("id", id);
+    } catch {}
+    toast.info("Data desbloqueada na agenda.");
+  };
+
+  // Handlers de Transações Financeiras
   const adicionarTransacao = async (nova: Omit<TransacaoFinanceira, "id">) => {
     const item: TransacaoFinanceira = {
       id: crypto.randomUUID(),
@@ -173,7 +388,7 @@ function Index() {
         },
       ]);
     } catch (err) {
-      console.warn("Aviso ao salvar no Supabase (mantido no cache):", err);
+      console.warn("Aviso ao salvar no Supabase:", err);
     }
   };
 
@@ -281,6 +496,9 @@ function Index() {
               <TabsTrigger value="dashboard" className="flex items-center gap-1.5 font-semibold text-xs">
                 <LayoutDashboard className="w-4 h-4" /> Visão Geral
               </TabsTrigger>
+              <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
+                <CalendarDays className="w-4 h-4 text-primary" /> Encomendas &amp; Calendário
+              </TabsTrigger>
               <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
                 <DollarSign className="w-4 h-4" /> Financeiro &amp; Caixa
               </TabsTrigger>
@@ -301,6 +519,18 @@ function Index() {
               transacoes={transacoes}
               onNavigateTab={setActiveTab}
               onNovaTransacao={() => setActiveTab("financeiro")}
+            />
+          </TabsContent>
+
+          <TabsContent value="encomendas">
+            <OrdersView
+              encomendas={encomendas}
+              datasBloqueadas={datasBloqueadas}
+              onCriarEncomenda={criarEncomenda}
+              onEditarEncomenda={editarEncomenda}
+              onExcluirEncomenda={excluirEncomenda}
+              onBloquearData={bloquearData}
+              onDesbloquearData={desbloquearData}
             />
           </TabsContent>
 
