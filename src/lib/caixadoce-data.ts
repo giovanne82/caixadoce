@@ -130,6 +130,120 @@ export const STATUS_PAGAMENTO_CONFIG: Record<
   pago_na_entrega: { label: "Pagar na Entrega", color: "text-blue-600" },
 };
 
+// ==============================================================================
+// SCANNER DE NOTAS & DESPESAS INTELIGENTE
+// ==============================================================================
+
+export type CategoriaDespesaItem = "producao" | "utensilios" | "consumo_proprio" | "outros";
+
+export interface ItemNotaFiscal {
+  id: string;
+  nome: string;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
+  categoria: CategoriaDespesaItem;
+}
+
+export interface DespesaNotaFiscal {
+  id: string;
+  estabelecimentoCodigo: string;
+  fornecedorNome: string; // ex: Atacadão, Casa do Confeiteiro, Supermercado BH
+  dataCompra: string; // YYYY-MM-DD
+  valorTotal: number;
+  valorProducao: number;
+  valorUtensilios: number;
+  valorConsumoProprio: number;
+  valorOutros: number;
+  itens: ItemNotaFiscal[];
+  comprovanteUrl?: string;
+  metodoPagamento?: MetodoPagamento;
+  createdAt?: string;
+}
+
+export const CATEGORIAS_DESPESA_CONFIG: Record<
+  CategoriaDespesaItem,
+  { label: string; icon: string; color: string; badgeClass: string; desc: string }
+> = {
+  producao: {
+    label: "Produção",
+    icon: "Cookie",
+    color: "text-amber-600",
+    badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    desc: "Insumos e matérias-primas que compõem o custo direto do doce (leite condensado, farinha, chocolate, confeitos).",
+  },
+  utensilios: {
+    label: "Utensílios / Equipamentos",
+    icon: "UtensilsCrossed",
+    color: "text-blue-600",
+    badgeClass: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30",
+    desc: "Formas, espátulas, bicos de confeitar, balanças e materiais duráveis.",
+  },
+  consumo_proprio: {
+    label: "Consumo Próprio / Pessoal",
+    icon: "User",
+    color: "text-rose-600",
+    badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    desc: "Itens de mercado ou uso pessoal da casa que NÃO devem entrar no custo do doce.",
+  },
+  outros: {
+    label: "Genérico / Outros",
+    icon: "Package",
+    color: "text-stone-600",
+    badgeClass: "bg-stone-500/15 text-stone-700 dark:text-stone-300 border-stone-500/30",
+    desc: "Taxas, sacolas descartáveis, materiais de limpeza e despesas gerais.",
+  },
+};
+
+/**
+ * Motor de Inteligência para Classificação Automática de Itens de Cupom Fiscal
+ */
+export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
+  const n = (nome || "").toLowerCase();
+
+  // 1. Produção (Confeitaria & Ingredientes)
+  const termosProducao = [
+    "leite condensado", "leite cond", "leite moca", "leite moça", "piracanjuba", "itambe", "nestle",
+    "creme de leite", "creme leite", "chocolate", "cacau", "barra choco", "gotas choco", "nutella",
+    "doce de leite", "farinha", "trigo", "acucar", "açucar", "açúcar", "refinado", "cristal", "demerara",
+    "confeito", "granulado", "chocoball", "pasta americana", "chantilly", "chantypak", "corante",
+    "manteiga", "margarina", "ovo", "ovos", "fermento", "bicarbonato", "essencia", "baunilha",
+    "leite em po", "leite em pó", "ninho", "coco ralado", "amendoim", "nozes", "castanha",
+    "marshmallow", "gelatina", "glicose", "forminha", "glitter comestivel", "desmoldante"
+  ];
+
+  if (termosProducao.some((t) => n.includes(t))) {
+    return "producao";
+  }
+
+  // 2. Utensílios / Equipamentos
+  const termosUtensilios = [
+    "forma", "assadeira", "espatula", "espátula", "bico", "manga confeitar", "saco confeitar",
+    "bailarina", "fouet", "batedor", "balanca", "balança", "termometro", "pincel",
+    "tapete silicone", "rolo", "cortador", "grade resfriamento", "pao duro", "pão duro",
+    "batedeira", "mixer", "liquidificador", "tigela", "bowl", "estilete culinario"
+  ];
+
+  if (termosUtensilios.some((t) => n.includes(t))) {
+    return "utensilios";
+  }
+
+  // 3. Consumo Próprio / Pessoal (Mercado que não é confeitaria)
+  const termosPessoal = [
+    "sabonete", "shampoo", "condicionador", "pasta dente", "creme dental", "escova dente",
+    "papel higienico", "papel higiênico", "desodorante", "detergente", "sabao po", "sabão em pó",
+    "amaciante", "agua sanitaria", "água sanitária", "arroz", "feijao", "feijão", "oleo soja",
+    "azeite", "carne", "frango", "cerveja", "refrigerante", "coca cola", "biscoito", "bolacha",
+    "fralda", "amaciante", "desinfetante", "cerveja", "suco tang"
+  ];
+
+  if (termosPessoal.some((t) => n.includes(t))) {
+    return "consumo_proprio";
+  }
+
+  return "outros";
+}
+
 export const CATEGORIAS_PADRAO = {
   receitas: [
     "Venda Direta / Balcão",
@@ -140,7 +254,8 @@ export const CATEGORIAS_PADRAO = {
     "Outras Receitas",
   ],
   despesas: [
-    "Insumos & Ingredientes",
+    "Insumos & Ingredientes (Produção)",
+    "Utensílios & Equipamentos",
     "Embalagens",
     "Equipe & Salários",
     "Aluguel & Contas (Água/Luz/Gás)",

@@ -9,6 +9,7 @@ import { ProfileSelectionView } from "@/components/auth/ProfileSelectionView";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { DashboardTab } from "@/components/caixadoce/DashboardTab";
 import { OrdersView } from "@/components/caixadoce/OrdersView";
+import { ExpensesScannerView } from "@/components/caixadoce/ExpensesScannerView";
 import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
   CalendarDays,
+  ScanLine,
   DollarSign,
   Users,
   CreditCard,
@@ -28,7 +30,6 @@ import {
   LogOut,
   RefreshCw,
   Shield,
-  User as UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -36,14 +37,15 @@ import {
   type StatusTransacao,
   type Encomenda,
   type DataBloqueada,
+  type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Gestão Financeira, Encomendas & Assinaturas" },
-      { name: "description", content: "Sistema inteligente para gestão de pedidos, caixa, faturamento e equipe." },
-      { property: "og:title", content: "CaixaDoce — Gestão Financeira & Encomendas" },
+      { title: "CaixaDoce — Gestão Financeira, Encomendas & Scanner" },
+      { name: "description", content: "Sistema inteligente para gestão de confeitaria, notas fiscais, caixa e equipe." },
+      { property: "og:title", content: "CaixaDoce — Gestão Financeira Inteligente" },
     ],
   }),
   component: Index,
@@ -55,6 +57,7 @@ function Index() {
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
+  const [despesas, setDespesas] = useState<DespesaNotaFiscal[]>([]);
 
   const activeCode = profile?.establishmentCode || "CD-1001";
 
@@ -127,7 +130,6 @@ function Index() {
   const fetchEncomendasECalendario = useCallback(async () => {
     if (!profile) return;
 
-    // A) Encomendas
     try {
       const { data, error } = await supabase
         .from("orders")
@@ -140,10 +142,7 @@ function Index() {
         if (raw) {
           setEncomendas(JSON.parse(raw));
         } else {
-          // Exemplos demonstrativos
           const hoje = new Date().toISOString().split("T")[0];
-          const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
           const demoOrders: Encomenda[] = [
             {
               id: "ord-1",
@@ -159,21 +158,6 @@ function Index() {
               status: "em_producao",
               tipoEntrega: "retirada",
               observacoes: "Vela decorativa dourada inclusa",
-            },
-            {
-              id: "ord-2",
-              estabelecimentoCodigo: activeCode,
-              clienteNome: "Rodrigo Mendonça",
-              clienteWhatsapp: "(11) 99123-4567",
-              dataEntrega: amanha,
-              horarioEntrega: "11:00",
-              itens: "2x Tortas Holandesas Grandes, 50x Mini Coxinhas",
-              valorTotal: 220.0,
-              valorEntrada: 220.0,
-              statusPagamento: "pago_integral",
-              status: "pendente",
-              tipoEntrega: "delivery",
-              enderecoEntrega: "Rua das Flores, 450 - Apto 12B",
             },
           ];
           setEncomendas(demoOrders);
@@ -203,7 +187,6 @@ function Index() {
       console.warn("Erro ao buscar encomendas:", e);
     }
 
-    // B) Datas Bloqueadas
     try {
       const { data, error } = await supabase
         .from("datas_bloqueadas")
@@ -212,9 +195,7 @@ function Index() {
 
       if (error || !data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_datas_bloqueadas_${activeCode}`);
-        if (raw) {
-          setDatasBloqueadas(JSON.parse(raw));
-        }
+        if (raw) setDatasBloqueadas(JSON.parse(raw));
       } else {
         const mapeadas: DataBloqueada[] = data.map((d: any) => ({
           id: String(d.id),
@@ -230,10 +211,154 @@ function Index() {
     }
   }, [activeCode, profile]);
 
+  // 3. Carrega Despesas do Scanner
+  const fetchDespesas = useCallback(async () => {
+    if (!profile) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("data_compra", { ascending: false });
+
+      if (error || !data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_expenses_${activeCode}`);
+        if (raw) {
+          setDespesas(JSON.parse(raw));
+        } else {
+          // Exemplos demonstrativos
+          const demoDespesas: DespesaNotaFiscal[] = [
+            {
+              id: "exp-1",
+              estabelecimentoCodigo: activeCode,
+              fornecedorNome: "Atacadão",
+              dataCompra: new Date().toISOString().split("T")[0],
+              valorTotal: 289.40,
+              valorProducao: 245.00,
+              valorUtensilios: 0.00,
+              valorConsumoProprio: 44.40,
+              valorOutros: 0.00,
+              itens: [
+                {
+                  id: "it-1",
+                  nome: "LEITE CONDENSADO PIRACANJUBA 395G",
+                  quantidade: 24,
+                  valorUnitario: 5.49,
+                  valorTotal: 131.76,
+                  categoria: "producao",
+                },
+                {
+                  id: "it-2",
+                  nome: "CREME DE LEITE ITAMBE 200G",
+                  quantidade: 12,
+                  valorUnitario: 3.29,
+                  valorTotal: 39.48,
+                  categoria: "producao",
+                },
+                {
+                  id: "it-3",
+                  nome: "CHOCOLATE 50% CACAU HARALD 1KG",
+                  quantidade: 2,
+                  valorUnitario: 36.88,
+                  valorTotal: 73.76,
+                  categoria: "producao",
+                },
+                {
+                  id: "it-4",
+                  nome: "SABONETE DOVE ORIGINAL 90G",
+                  quantidade: 4,
+                  valorUnitario: 4.89,
+                  valorTotal: 19.56,
+                  categoria: "consumo_proprio",
+                },
+                {
+                  id: "it-5",
+                  nome: "DETERGENTE YPE NEUTRO 500ML",
+                  quantidade: 4,
+                  valorUnitario: 2.39,
+                  valorTotal: 9.56,
+                  categoria: "consumo_proprio",
+                },
+                {
+                  id: "it-6",
+                  nome: "ARROZ TIO JOAO TIPO 1 5KG",
+                  quantidade: 1,
+                  valorUnitario: 15.28,
+                  valorTotal: 15.28,
+                  categoria: "consumo_proprio",
+                },
+              ],
+            },
+            {
+              id: "exp-2",
+              estabelecimentoCodigo: activeCode,
+              fornecedorNome: "Casa do Confeiteiro",
+              dataCompra: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split("T")[0],
+              valorTotal: 185.00,
+              valorProducao: 141.00,
+              valorUtensilios: 44.00,
+              valorConsumoProprio: 0.00,
+              valorOutros: 0.00,
+              itens: [
+                {
+                  id: "it-7",
+                  nome: "BARRA CHOCOLATE SICAO NOBRE 1.01KG",
+                  quantidade: 2,
+                  valorUnitario: 48.00,
+                  valorTotal: 96.00,
+                  categoria: "producao",
+                },
+                {
+                  id: "it-8",
+                  nome: "GRANULADO CALLEBAUT 500G",
+                  quantidade: 1,
+                  valorUnitario: 45.00,
+                  valorTotal: 45.00,
+                  categoria: "producao",
+                },
+                {
+                  id: "it-9",
+                  nome: "ESPATULA DE SILICONE ROSA 28CM",
+                  quantidade: 2,
+                  valorUnitario: 22.00,
+                  valorTotal: 44.00,
+                  categoria: "utensilios",
+                },
+              ],
+            },
+          ];
+          setDespesas(demoDespesas);
+          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(demoDespesas));
+        }
+      } else {
+        const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          fornecedorNome: d.fornecedor_nome,
+          dataCompra: d.data_compra,
+          valorTotal: Number(d.valor_total),
+          valorProducao: Number(d.valor_producao),
+          valorUtensilios: Number(d.valor_utensilios),
+          valorConsumoProprio: Number(d.valor_consumo_proprio),
+          valorOutros: Number(d.valor_outros),
+          itens: Array.isArray(d.itens) ? d.itens : [],
+          comprovanteUrl: d.comprovante_url,
+          metodoPagamento: d.metodo_pagamento,
+          createdAt: d.created_at,
+        }));
+        setDespesas(mapeadas);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar despesas:", e);
+    }
+  }, [activeCode, profile]);
+
   useEffect(() => {
     fetchTransacoes();
     fetchEncomendasECalendario();
-  }, [fetchTransacoes, fetchEncomendasECalendario]);
+    fetchDespesas();
+  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas]);
 
   // Listener para retorno do Stripe Checkout
   useEffect(() => {
@@ -356,6 +481,67 @@ function Index() {
       await supabase.from("datas_bloqueadas").delete().eq("id", id);
     } catch {}
     toast.info("Data desbloqueada na agenda.");
+  };
+
+  // Handlers de Despesas do Scanner
+  const salvarDespesa = async (dados: Omit<DespesaNotaFiscal, "id">) => {
+    const item: DespesaNotaFiscal = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+    };
+
+    const atualizadas = [item, ...despesas];
+    setDespesas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+    } catch {}
+
+    // 1. Salva na tabela expenses do Supabase
+    try {
+      await supabase.from("expenses").insert([
+        {
+          id: item.id,
+          estabelecimento_codigo: activeCode,
+          fornecedor_nome: item.fornecedorNome,
+          data_compra: item.dataCompra,
+          valor_total: item.valorTotal,
+          valor_producao: item.valorProducao,
+          valor_utensilios: item.valorUtensilios,
+          valor_consumo_proprio: item.valorConsumoProprio,
+          valor_outros: item.valorOutros,
+          itens: item.itens,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Supabase insert expense warning:", e);
+    }
+
+    // 2. Lança automaticamente a despesa no fluxo de caixa (Financeiro)
+    // Custo da empresa = Produção + Utensílios + Outros
+    const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
+    if (custoEmpresa > 0) {
+      await adicionarTransacao({
+        descricao: `Compra Insumos / Nota Fiscal - ${item.fornecedorNome}`,
+        valor: custoEmpresa,
+        tipo: "despesa",
+        categoria: "Insumos & Ingredientes (Produção)",
+        data: item.dataCompra.split("-").reverse().join("/"),
+        metodoPagamento: "pix",
+        status: "concluida",
+        clienteOuFornecedor: item.fornecedorNome,
+      });
+    }
+  };
+
+  const excluirDespesa = async (id: string) => {
+    const atualizadas = despesas.filter((d) => d.id !== id);
+    setDespesas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+      await supabase.from("expenses").delete().eq("id", id);
+    } catch {}
+    toast.success("Despesa excluída com sucesso.");
   };
 
   // Handlers de Transações Financeiras
@@ -499,6 +685,9 @@ function Index() {
               <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
                 <CalendarDays className="w-4 h-4 text-primary" /> Encomendas &amp; Calendário
               </TabsTrigger>
+              <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
+                <ScanLine className="w-4 h-4 text-primary" /> Scanner &amp; Despesas
+              </TabsTrigger>
               <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
                 <DollarSign className="w-4 h-4" /> Financeiro &amp; Caixa
               </TabsTrigger>
@@ -531,6 +720,14 @@ function Index() {
               onExcluirEncomenda={excluirEncomenda}
               onBloquearData={bloquearData}
               onDesbloquearData={desbloquearData}
+            />
+          </TabsContent>
+
+          <TabsContent value="scanner">
+            <ExpensesScannerView
+              despesas={despesas}
+              onSalvarDespesa={salvarDespesa}
+              onExcluirDespesa={excluirDespesa}
             />
           </TabsContent>
 
