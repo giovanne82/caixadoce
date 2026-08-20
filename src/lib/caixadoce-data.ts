@@ -148,7 +148,7 @@ export interface ItemNotaFiscal {
 export interface DespesaNotaFiscal {
   id: string;
   estabelecimentoCodigo: string;
-  fornecedorNome: string; // ex: Atacadão, Casa do Confeiteiro, Supermercado BH
+  fornecedorNome: string;
   dataCompra: string; // YYYY-MM-DD
   valorTotal: number;
   valorProducao: number;
@@ -195,13 +195,9 @@ export const CATEGORIAS_DESPESA_CONFIG: Record<
   },
 };
 
-/**
- * Motor de Inteligência para Classificação Automática de Itens de Cupom Fiscal
- */
 export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
   const n = (nome || "").toLowerCase();
 
-  // 1. Produção (Confeitaria & Ingredientes)
   const termosProducao = [
     "leite condensado", "leite cond", "leite moca", "leite moça", "piracanjuba", "itambe", "nestle",
     "creme de leite", "creme leite", "chocolate", "cacau", "barra choco", "gotas choco", "nutella",
@@ -216,7 +212,6 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
     return "producao";
   }
 
-  // 2. Utensílios / Equipamentos
   const termosUtensilios = [
     "forma", "assadeira", "espatula", "espátula", "bico", "manga confeitar", "saco confeitar",
     "bailarina", "fouet", "batedor", "balanca", "balança", "termometro", "pincel",
@@ -228,7 +223,6 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
     return "utensilios";
   }
 
-  // 3. Consumo Próprio / Pessoal (Mercado que não é confeitaria)
   const termosPessoal = [
     "sabonete", "shampoo", "condicionador", "pasta dente", "creme dental", "escova dente",
     "papel higienico", "papel higiênico", "desodorante", "detergente", "sabao po", "sabão em pó",
@@ -242,6 +236,106 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
   }
 
   return "outros";
+}
+
+// ==============================================================================
+// CARDÁPIO PÚBLICO & PRODUTOS
+// ==============================================================================
+
+export interface ProdutoCardapio {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  descricao: string;
+  preco: number;
+  categoria: "Bolos Decorados" | "Doces & Brigadeiros" | "Tortas & Sobremesas" | "Bentô Cakes" | "Kits Festa";
+  fotoUrl: string;
+  destaque?: boolean;
+  tempoPreparoHoras?: number;
+}
+
+export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
+  {
+    id: "prod-1",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bolo Vulcão Ninho com Nutella",
+    descricao: "Massa fofinha de chocolate ou baunilha, com piscina cremosa de brigadeiro de Leite Ninho e cobertura generosa de Nutella pura.",
+    preco: 95.0,
+    categoria: "Bolos Decorados",
+    fotoUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 24,
+  },
+  {
+    id: "prod-2",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bolo Red Velvet Especial",
+    descricao: "Massa aveludada vermelha, recheio especial de cream cheese frosting suave e morangos frescos no topo.",
+    preco: 140.0,
+    categoria: "Bolos Decorados",
+    fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 24,
+  },
+  {
+    id: "prod-3",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Caixa Brigadeiros Gourmet (12 un)",
+    descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
+    preco: 48.0,
+    categoria: "Doces & Brigadeiros",
+    fotoUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 12,
+  },
+  {
+    id: "prod-4",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bentô Cake Personalizado",
+    descricao: "Mini bolo de 10cm com frase ou meme personalizado no topo. Ideal para presentes e comemorações intimistas.",
+    preco: 45.0,
+    categoria: "Bentô Cakes",
+    fotoUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 24,
+  },
+  {
+    id: "prod-5",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Torta Holandesa Tradicional",
+    descricao: "Base crocante de biscoitos Calypso, creme holandês aerado e ganache de chocolate meio amargo brilhante.",
+    preco: 85.0,
+    categoria: "Tortas & Sobremesas",
+    fotoUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 24,
+  },
+  {
+    id: "prod-6",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Cento de Docinhos para Festa (100 un)",
+    descricao: "Mix com 40 Brigadeiros, 30 Beijinhos de Coco e 30 Dois Amores. Enrolados na hora.",
+    preco: 160.0,
+    categoria: "Kits Festa",
+    fotoUrl: "https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 48,
+  },
+];
+
+export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
+  const code = (codigoLoja || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return CATALOGO_PRODUTOS_PADRAO;
+}
+
+export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCardapio[]) {
+  const code = (codigoLoja || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_cardapio_${code}`, JSON.stringify(produtos));
+  } catch (e) {
+    console.warn("Erro ao salvar produtos do cardápio:", e);
+  }
 }
 
 export const CATEGORIAS_PADRAO = {

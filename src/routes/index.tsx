@@ -706,6 +706,10 @@ function Index() {
           <TabsContent value="dashboard">
             <DashboardTab
               transacoes={transacoes}
+              encomendas={encomendas}
+              despesas={despesas}
+              activeCode={activeCode}
+              storeName={profile.establishmentName}
               onNavigateTab={setActiveTab}
               onNovaTransacao={() => setActiveTab("financeiro")}
             />
