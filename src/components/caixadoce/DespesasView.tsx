@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
   CardContent,
@@ -27,6 +28,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   ShoppingCart,
   Plus,
   Edit2,
@@ -47,10 +56,17 @@ import {
   MessageCircle,
   Share2,
   Check,
+  Clock,
+  FileText,
+  MapPin,
 } from "lucide-react";
 import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
+  obterNotinhasVinculadasLista,
+  salvarNotinhasVinculadasLista,
+  formatarMoeda,
+  CATEGORIAS_DESPESA_CONFIG,
   type ItemListaCompra,
   type ListaCompras,
   type Encomenda,
@@ -107,6 +123,105 @@ export function DespesasView({
   const [expandedListaId, setExpandedListaId] = useState<string | null>(() => {
     return listas.find((l) => l.status === "ativa")?.id || listas[0]?.id || null;
   });
+
+  // Notinhas Vinculadas à Lista de Compras
+  const [linkedReceiptIds, setLinkedReceiptIds] = useState<string[]>(() =>
+    obterNotinhasVinculadasLista(estabelecimentoCodigo)
+  );
+  const [buscaNotinha, setBuscaNotinha] = useState("");
+  const [dropdownNotinhasAberto, setDropdownNotinhasAberto] = useState(false);
+  const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
+
+  // Carregar vinculações do Supabase no mount
+  useEffect(() => {
+    async function carregarNotinhasVinculadasSupabase() {
+      try {
+        const { data, error } = await supabase
+          .from("shopping_list_receipts")
+          .select("receipt_id")
+          .eq("estabelecimento_codigo", estabelecimentoCodigo);
+
+        if (!error && data && data.length > 0) {
+          const ids = data.map((d: any) => String(d.receipt_id));
+          setLinkedReceiptIds(ids);
+          salvarNotinhasVinculadasLista(estabelecimentoCodigo, ids);
+        }
+      } catch (e) {
+        console.warn("Aviso ao carregar notinhas vinculadas do Supabase:", e);
+      }
+    }
+    carregarNotinhasVinculadasSupabase();
+  }, [estabelecimentoCodigo]);
+
+  // Handler para Vincular Notinha
+  const handleVincularNotinha = async (receiptId: string) => {
+    if (linkedReceiptIds.includes(receiptId)) return;
+
+    const novosIds = [...linkedReceiptIds, receiptId];
+    setLinkedReceiptIds(novosIds);
+    salvarNotinhasVinculadasLista(estabelecimentoCodigo, novosIds);
+    setBuscaNotinha("");
+    setDropdownNotinhasAberto(false);
+
+    try {
+      await supabase.from("shopping_list_receipts").insert([
+        {
+          estabelecimento_codigo: estabelecimentoCodigo,
+          receipt_id: receiptId,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao vincular no Supabase:", e);
+    }
+    toast.success("Notinha vinculada à Lista de Compras!");
+  };
+
+  // Handler para Desvincular Notinha
+  const handleDesvincularNotinha = async (receiptId: string) => {
+    const novosIds = linkedReceiptIds.filter((id) => id !== receiptId);
+    setLinkedReceiptIds(novosIds);
+    salvarNotinhasVinculadasLista(estabelecimentoCodigo, novosIds);
+
+    try {
+      await supabase
+        .from("shopping_list_receipts")
+        .delete()
+        .eq("estabelecimento_codigo", estabelecimentoCodigo)
+        .eq("receipt_id", receiptId);
+    } catch (e) {
+      console.warn("Aviso ao desvincular do Supabase:", e);
+    }
+    toast.info("Notinha desvinculada.");
+  };
+
+  // Objetos das Notinhas Vinculadas
+  const notinhasVinculadasObjetos = useMemo(() => {
+    return despesas.filter((d) => linkedReceiptIds.includes(d.id));
+  }, [despesas, linkedReceiptIds]);
+
+  // Soma Total dos Valores das Notinhas Vinculadas
+  const somaNotinhasVinculadas = useMemo(() => {
+    return notinhasVinculadasObjetos.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
+  }, [notinhasVinculadasObjetos]);
+
+  // Sugestões de Notinhas para Autocomplete/Combobox (Busca por Estabelecimento, Data, Valor ou N° Nota/Pedido)
+  const sugestoesNotinhas = useMemo(() => {
+    const termo = buscaNotinha.trim().toLowerCase();
+    return despesas.filter((d) => {
+      if (linkedReceiptIds.includes(d.id)) return false;
+      if (!termo) return true;
+      const fornecedorMatch = d.fornecedorNome.toLowerCase().includes(termo);
+      const dataMatch =
+        d.dataCompra.toLowerCase().includes(termo) ||
+        d.dataCompra.split("-").reverse().join("/").includes(termo);
+      const valorMatch =
+        String(d.valorTotal).includes(termo) ||
+        formatarMoeda(d.valorTotal).toLowerCase().includes(termo);
+      const notaMatch = (d.numeroNota || "").toLowerCase().includes(termo);
+      const pedidoMatch = (d.numeroPedido || "").toLowerCase().includes(termo);
+      return fornecedorMatch || dataMatch || valorMatch || notaMatch || pedidoMatch;
+    }).slice(0, 8);
+  }, [despesas, linkedReceiptIds, buscaNotinha]);
 
   // Campo do Formulário para Criar Nova Lista
   const [nomeNovaListaInput, setNomeNovaListaInput] = useState("");
@@ -249,10 +364,7 @@ export function DespesasView({
 
   // Adicionar item na edição
   const handleAdicionarItemEdicao = () => {
-    if (!editNovoItemNome.trim()) {
-      toast.error("Informe o nome do produto.");
-      return;
-    }
+    if (!editNovoItemNome.trim()) return;
     const novo: ItemListaCompra = {
       id: crypto.randomUUID(),
       nome: editNovoItemNome.trim(),
@@ -265,37 +377,27 @@ export function DespesasView({
     setEditNovoItemQtd(1);
   };
 
-  // Salvar alterações da edição da lista
+  // Salvar alterações na edição da lista
   const handleSalvarEdicaoLista = () => {
     if (!listaEditando) return;
-    const nomeFinal = editNomeLista.trim() || listaEditando.nome;
-
     setListas((prev) =>
       prev.map((l) =>
-        l.id === listaEditando.id ? { ...l, nome: nomeFinal, itens: editItensLista } : l
+        l.id === listaEditando.id
+          ? { ...l, nome: editNomeLista.trim() || l.nome, itens: editItensLista }
+          : l
       )
     );
     setModalEditarListaOpen(false);
-    toast.success("Lista atualizada com sucesso!");
+    toast.success("Lista de compras atualizada!");
   };
 
-  // Compartilhar Lista no WhatsApp
+  // Compartilhar por WhatsApp
   const handleEnviarWhatsAppLista = (lista: ListaCompras) => {
-    const dataAtual = new Date().toLocaleDateString("pt-BR");
-    let texto = `🛒 *LISTA DE COMPRAS - ${lista.nome.toUpperCase()}*\n📅 Data: ${dataAtual}\n`;
-
-    if (lista.clienteTags && lista.clienteTags.length > 0) {
-      texto += `👤 *Clientes:* ${lista.clienteTags.join(", ")}\n`;
-    }
-
-    if (lista.estabelecimentosVinculados && lista.estabelecimentosVinculados.length > 0) {
-      texto += `🏷️ *Comprado em:* ${lista.estabelecimentosVinculados.join(", ")}\n`;
-    }
-
-    texto += `\n📌 *ITENS DA LISTA:*\n`;
-
     const total = lista.itens.length;
     const compradosCount = lista.itens.filter((i) => i.comprado).length;
+
+    let texto = `🛒 *LISTA DE COMPRAS - ${lista.nome.toUpperCase()}*\n`;
+    texto += `📅 Data: ${new Date(lista.createdAt).toLocaleDateString("pt-BR")}\n\n`;
 
     if (total === 0) {
       texto += `_(Lista vazia)_\n`;
@@ -346,9 +448,19 @@ export function DespesasView({
             Lista de Compras <ShoppingCart className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Crie novas listas, inclua os insumos necessários e acompanhe seus itens em compras.
+            Crie novas listas, inclua insumos e vincule notinhas fiscais capturadas.
           </p>
         </div>
+
+        <Card className="border-2 border-primary/40 bg-card shadow-xs p-3 min-w-[200px]">
+          <p className="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
+            <Receipt className="w-3.5 h-3.5" /> Soma Notinhas Vinculadas
+          </p>
+          <p className="text-xl font-black text-foreground mt-0.5">{formatarMoeda(somaNotinhasVinculadas)}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {notinhasVinculadasObjetos.length} notinha(s) vinculada(s)
+          </p>
+        </Card>
       </div>
 
       {/* ========================================================================= */}
@@ -383,6 +495,117 @@ export function DespesasView({
             <Plus className="w-5 h-5 mr-2" /> Criar Lista de Compras
           </Button>
         </CardContent>
+      </Card>
+
+      {/* ========================================================================= */}
+      {/* COMPONENTE DE BUSCA E VINCULAÇÃO (AUTOCOMPLETE / COMBOBOX DE NOTINHAS) */}
+      {/* ========================================================================= */}
+      <Card className="border-border shadow-sm p-4 bg-card space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Receipt className="w-4 h-4 text-primary" /> Vincular Notinha Fiscal / Cupom à Lista de Compras
+          </Label>
+          <span className="text-[11px] text-muted-foreground">
+            Associe comprovantes físicos a esta lista de compras
+          </span>
+        </div>
+
+        <div className="relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar notinha para vincular (por loja, data, valor, n° nota/pedido)..."
+              value={buscaNotinha}
+              onChange={(e) => {
+                setBuscaNotinha(e.target.value);
+                setDropdownNotinhasAberto(true);
+              }}
+              onFocus={() => setDropdownNotinhasAberto(true)}
+              className="h-9 pl-9 text-xs"
+            />
+          </div>
+
+          {/* Dropdown Flutuante de Autocomplete de Notinhas */}
+          {dropdownNotinhasAberto && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+              {sugestoesNotinhas.length > 0 ? (
+                sugestoesNotinhas.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => handleVincularNotinha(n.id)}
+                    className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-primary shrink-0" />
+                      <div>
+                        <p className="font-bold text-foreground">{n.fornecedorNome}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-mono font-black text-foreground">
+                      {formatarMoeda(n.valorTotal)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-center text-xs text-muted-foreground">
+                  {despesas.length === 0
+                    ? "Nenhuma notinha capturada no sistema ainda."
+                    : "Nenhuma notinha encontrada para o filtro ou todas já estão vinculadas."}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* SEÇÃO 'NOTINHAS VINCULADAS' COM CHIPS E ABERTURA DE MODAL */}
+      <Card className="border-border shadow-sm p-4 bg-card space-y-3">
+        <div className="flex items-center justify-between border-b border-border/50 pb-2">
+          <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Receipt className="w-4 h-4 text-primary" /> Notinhas Vinculadas ({notinhasVinculadasObjetos.length})
+          </h4>
+          <span className="text-[11px] text-muted-foreground">
+            Clique sobre o chip para ver detalhes da notinha
+          </span>
+        </div>
+
+        {notinhasVinculadasObjetos.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted-foreground italic bg-muted/20 rounded-xl border border-border/40">
+            Nenhuma notinha vinculada a esta lista. Use o campo acima para buscar e associar notinhas fiscais capturadas!
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {notinhasVinculadasObjetos.map((notinha) => (
+              <div
+                key={notinha.id}
+                onClick={() => setNotaDetalheSelecionada(notinha)}
+                className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 text-xs font-semibold shadow-2xs transition-all select-none"
+                title="Clique para visualizar detalhes desta notinha"
+              >
+                <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>
+                  <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
+                  <span className="font-mono font-bold text-primary">{formatarMoeda(notinha.valorTotal)}</span>
+                </span>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDesvincularNotinha(notinha.id);
+                  }}
+                  className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 hover:text-rose-600 text-muted-foreground transition-colors"
+                  title="Desvincular Notinha"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* BARRA DE BUSCA EM TODAS AS LISTAS */}
@@ -464,7 +687,6 @@ export function DespesasView({
                     {/* BARRA DE AÇÕES DA LISTA (EDITAR & ENVIAR WHATSAPP) */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* BOTÃO EDITAR LISTA */}
                         <Button
                           size="sm"
                           variant="outline"
@@ -477,7 +699,6 @@ export function DespesasView({
                           <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Editar Lista
                         </Button>
 
-                        {/* BOTÃO ENVIAR POR WHATSAPP */}
                         <Button
                           size="sm"
                           onClick={(e) => {
@@ -506,60 +727,56 @@ export function DespesasView({
                             onClick={() => handleReabrirLista(lista.id)}
                             className="h-8 text-xs font-bold"
                           >
-                            <ArchiveRestore className="w-3.5 h-3.5 mr-1" /> Reabrir
+                            <ArchiveRestore className="w-3.5 h-3.5 mr-1" /> Reabrir Lista
                           </Button>
                         )}
 
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleExcluirLista(lista.id)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
-                          title="Excluir Lista"
+                          onClick={() => {
+                            if (confirm(`Deseja excluir a lista "${lista.nome}"?`)) {
+                              handleExcluirLista(lista.id);
+                            }
+                          }}
+                          className="h-8 text-xs text-rose-600 hover:bg-rose-500/10"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
 
-                    {/* CHECKLIST DE ITENS DA LISTA */}
+                    {/* LISTAGEM DOS ITENS DA LISTA */}
                     <div className="space-y-2">
-                      <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">
-                        Itens da Lista ({totalItens}):
-                      </h4>
-
-                      {totalItens === 0 ? (
-                        <p className="text-xs text-muted-foreground italic py-3">
-                          Nenhum item cadastrado nesta lista. Clique no botão "Editar Lista" acima para incluir produtos.
+                      {lista.itens.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-4 text-center italic">
+                          Nenhum produto nesta lista. Clique em "Editar Lista" para adicionar!
                         </p>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {lista.itens.map((item) => (
-                            <label
-                              key={item.id}
-                              className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
-                                item.comprado
-                                  ? "bg-emerald-500/10 border-emerald-500/30 text-muted-foreground line-through"
-                                  : "bg-muted/30 border-border text-foreground font-semibold hover:bg-muted/50"
+                          {lista.itens.map((it) => (
+                            <div
+                              key={it.id}
+                              onClick={() => handleToggleItemComprado(lista.id, it.id)}
+                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none ${
+                                it.comprado
+                                  ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 line-through opacity-80"
+                                  : "bg-muted/30 text-foreground border-border hover:border-primary/40 shadow-2xs"
                               }`}
                             >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <input
-                                  type="checkbox"
-                                  checked={item.comprado}
-                                  onChange={() => handleToggleItemComprado(lista.id, item.id)}
-                                  className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer shrink-0"
-                                />
-                                <span className="text-xs truncate font-bold">
-                                  {item.quantidade} {item.unidade || "un"} x {item.nome}
+                              <div className="flex items-center gap-2.5 truncate">
+                                <span
+                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] ${
+                                    it.comprado ? "bg-emerald-600 text-white" : "border-2 border-primary"
+                                  }`}
+                                >
+                                  {it.comprado ? <Check className="w-3 h-3" /> : null}
+                                </span>
+                                <span className="truncate font-bold">
+                                  {it.quantidade} {it.unidade || "un"} x {it.nome}
                                 </span>
                               </div>
-                              {item.comprado && (
-                                <Badge variant="secondary" className="text-[9px] bg-emerald-600 text-white font-bold no-underline">
-                                  ✓ Comprado
-                                </Badge>
-                              )}
-                            </label>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -568,31 +785,30 @@ export function DespesasView({
                 )}
               </Card>
             );
-          })
-        )}
+          }))}
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL 1: ADICIONAR PRODUTOS E SALVAR NOVA LISTA */}
+      {/* MODAL: CRIAR NOVA LISTA COM INCLUSÃO DE PRODUTOS */}
       {/* ========================================================================= */}
       <Dialog open={modalCriarListaOpen} onOpenChange={setModalCriarListaOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <ListPlus className="w-5 h-5 text-primary" /> Adicionar Produtos na Lista: "{novaListaNome}"
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+              <ShoppingCart className="w-5 h-5 text-primary" /> Adicionar Produtos à Lista
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Informe os produtos e quantidades para montar sua lista de compras. Ao terminar, clique em <strong>Salvar Lista</strong>.
+              Monte os itens da lista "<strong>{novaListaNome}</strong>" antes de salvar.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Formulário para Inserir Produto sem campo Unidade */}
+            {/* Form de Adicionar Item no Modal sem campo Unidade */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
               <div className="sm:col-span-8 space-y-1">
-                <Label className="text-xs font-semibold">Nome do Produto / Insumo</Label>
+                <Label className="text-xs font-semibold">Produto / Insumo</Label>
                 <Input
-                  placeholder="Ex: Leite Condensado, Cobertura 1kg..."
+                  placeholder="Ex: Leite Condensado Moça..."
                   value={modalItemNome}
                   onChange={(e) => setModalItemNome(e.target.value)}
                   onKeyDown={(e) => {
@@ -601,10 +817,9 @@ export function DespesasView({
                       handleAdicionarItemModalCriacao();
                     }
                   }}
-                  className="h-9 text-xs"
+                  className="h-8 text-xs"
                 />
               </div>
-
               <div className="sm:col-span-4 space-y-1">
                 <Label className="text-xs font-semibold">Quantidade</Label>
                 <Input
@@ -612,34 +827,28 @@ export function DespesasView({
                   min={1}
                   value={modalItemQtd}
                   onChange={(e) => setModalItemQtd(Number(e.target.value))}
-                  className="h-9 text-xs text-center"
+                  className="h-8 text-xs text-center"
                 />
               </div>
-
               <div className="col-span-full pt-1">
-                <Button
-                  type="button"
-                  onClick={handleAdicionarItemModalCriacao}
-                  variant="secondary"
-                  className="w-full h-8 text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2]"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> + Adicionar Produto
+                <Button type="button" onClick={handleAdicionarItemModalCriacao} size="sm" variant="secondary" className="w-full text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2]">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> + Incluir na Lista
                 </Button>
               </div>
             </div>
 
-            {/* Lista dos Itens Inseridos nesta Criação */}
+            {/* Lista dos Itens Incluídos no Criar */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Produtos Adicionados ({novosItensCriacao.length}):
+                Itens Incluídos ({novosItensCriacao.length}):
               </Label>
-              {novosItensCriacao.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed rounded-xl">
-                  Nenhum produto adicionado ainda. Preencha o campo acima e clique em "+ Adicionar Produto".
-                </p>
-              ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto border border-border rounded-xl p-2">
-                  {novosItensCriacao.map((it, idx) => (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto border border-border rounded-xl p-2">
+                {novosItensCriacao.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4 italic">
+                    Nenhum produto adicionado ainda.
+                  </p>
+                ) : (
+                  novosItensCriacao.map((it, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-xs">
                       <span className="font-bold text-foreground">
                         {it.quantidade}x {it.nome}
@@ -654,9 +863,9 @@ export function DespesasView({
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
@@ -667,35 +876,29 @@ export function DespesasView({
             <Button
               type="button"
               onClick={handleSalvarNovaListaFinal}
-              className="font-extrabold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
             >
-              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Salvar Lista
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Salvar Lista Completa
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL 2: EDITAR LISTA EXISTENTE */}
+      {/* MODAL: EDITAR LISTA EXISTENTE */}
       {/* ========================================================================= */}
       <Dialog open={modalEditarListaOpen} onOpenChange={setModalEditarListaOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
               <Edit2 className="w-5 h-5 text-primary" /> Editar Lista de Compras
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Altere o nome da lista ou adicione/remova produtos.
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label htmlFor="edit-nome-lista" className="text-xs font-bold">
-                Nome da Lista
-              </Label>
+              <Label className="text-xs font-bold">Nome da Lista</Label>
               <Input
-                id="edit-nome-lista"
                 value={editNomeLista}
                 onChange={(e) => setEditNomeLista(e.target.value)}
                 className="h-9 text-xs font-bold"
@@ -770,6 +973,121 @@ export function DespesasView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL: DETALHES DA NOTINHA SELECIONADA A PARTIR DO CHIP */}
+      {/* ========================================================================= */}
+      {notaDetalheSelecionada && (
+        <Dialog open={!!notaDetalheSelecionada} onOpenChange={() => setNotaDetalheSelecionada(null)}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+                <Building2 className="w-5 h-5 text-primary" /> {notaDetalheSelecionada.fornecedorNome}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° da Nota:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaDetalheSelecionada.numeroNota || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° do Pedido:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaDetalheSelecionada.numeroPedido || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Data &amp; Hora:
+                  </span>
+                  <p className="font-mono text-foreground mt-0.5">
+                    {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}{" "}
+                    {notaDetalheSelecionada.horaCompra ? `às ${notaDetalheSelecionada.horaCompra}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Endereço:
+                  </span>
+                  <p className="text-foreground truncate mt-0.5" title={notaDetalheSelecionada.fornecedorEndereco}>
+                    {notaDetalheSelecionada.fornecedorEndereco || "Local físico"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/70 overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead className="text-xs">Item / Descrição</TableHead>
+                      <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                      <TableHead className="text-xs w-20">Unit.</TableHead>
+                      <TableHead className="text-xs w-20">Total</TableHead>
+                      <TableHead className="text-xs">Categoria</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notaDetalheSelecionada.itens.map((it) => {
+                      const cfg = CATEGORIAS_DESPESA_CONFIG[it.categoria] || CATEGORIAS_DESPESA_CONFIG.outros;
+                      return (
+                        <TableRow key={it.id}>
+                          <TableCell className="text-xs font-semibold text-foreground">{it.nome}</TableCell>
+                          <TableCell className="text-xs text-center font-mono">{it.quantidade}</TableCell>
+                          <TableCell className="text-xs">{formatarMoeda(it.valorUnitario)}</TableCell>
+                          <TableCell className="text-xs font-bold text-foreground">
+                            {formatarMoeda(it.valorTotal)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-[10px] ${cfg.badgeClass}`}>
+                              {cfg.label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold flex justify-between">
+                  <span>🍫 Produção (Doces):</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorProducao)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold flex justify-between">
+                  <span>🥣 Utensílios:</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorUtensilios)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold flex justify-between">
+                  <span>🛒 Consumo Pessoal:</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorConsumoProprio)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-stone-500/10 text-stone-700 dark:text-stone-300 font-semibold flex justify-between">
+                  <span>💰 Total Notinha:</span>
+                  <span className="font-extrabold">{formatarMoeda(notaDetalheSelecionada.valorTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button onClick={() => setNotaDetalheSelecionada(null)} className="text-xs font-semibold">
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
