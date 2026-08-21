@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -51,6 +51,7 @@ import {
   Tag,
   Receipt,
   FileText,
+  ShoppingCart,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -60,21 +61,27 @@ import {
   type ItemNotaFiscal,
   type CategoriaDespesaItem,
   type Encomenda,
+  type ListaCompras,
+  LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
   despesas: DespesaNotaFiscal[];
   encomendas?: Encomenda[];
+  listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
   onConciliarInsumos?: (conciliacoes: { encomendaId: string; insumoId: string }[]) => Promise<void>;
+  onConciliarListasCompras?: (listaIds: string[], itensNota: ItemNotaFiscal[]) => Promise<void>;
 }
 
 export function ScannerView({
   despesas,
   encomendas = [],
+  listasCompras: listasProp,
   onSalvarDespesa,
   onConciliarInsumos,
+  onConciliarListasCompras,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,104 +105,138 @@ export function ScannerView({
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
   const [conciliacoesSugeridas, setConciliacoesSugeridas] = useState<{
     encomendaId: string;
-    clienteNome: string;
     insumoId: string;
     insumoNome: string;
-    itemNotaNome: string;
+    clienteNome: string;
     selecionado: boolean;
   }[]>([]);
 
+  // Seleção Múltipla de Listas de Compras Ativas
+  const [selectedListasIds, setSelectedListasIds] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  // Manipulação de Upload de Arquivo
+  // Listas de compras ativas para seleção múltipla
+  const listasAtivas = useMemo(() => {
+    if (listasProp && listasProp.length > 0) {
+      return listasProp.filter((l) => l.status === "ativa");
+    }
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
+        if (saved) {
+          const parsed: ListaCompras[] = JSON.parse(saved);
+          return parsed.filter((l) => l.status === "ativa");
+        }
+      }
+    } catch {}
+    return LISTAS_COMPRAS_PADRAO.filter((l) => l.status === "ativa");
+  }, [listasProp]);
+
+  // Inicializa a seleção com todas as listas ativas ao abrir o modal
+  useEffect(() => {
+    if (modalRevisaoOpen) {
+      setSelectedListasIds(listasAtivas.map((l) => l.id));
+    }
+  }, [modalRevisaoOpen, listasAtivas]);
+
+  // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processarArquivo(file);
+      setSelectedFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onloadend = () => setFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+      processarOCRSimulado(file);
     }
   };
 
-  const processarArquivo = (file: File) => {
-    setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = () => setFilePreview(reader.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setFilePreview(null);
-    }
-
-    iniciarLeituraOCR(file.name);
-  };
-
-  // Simulação de Leitura Inteligente OCR / IA com Metadados Completos
-  const iniciarLeituraOCR = (nomeArquivo: string) => {
+  // Leitura OCR Simulado com Alta Precisão
+  const processarOCRSimulado = (file: File) => {
     setIsScanning(true);
-
-    setScanStepMessage("🔍 Identificando CNPJ, razão social, número da nota e endereço...");
-
-    setTimeout(() => {
-      setScanStepMessage("🧾 Extraindo número do cupom, data/hora exata e itens com valores...");
-    }, 700);
+    setScanStepMessage("Lendo metadados do cupom fiscal...");
 
     setTimeout(() => {
-      setScanStepMessage("🧠 Categorizando insumos e conciliando com sua Lista de Compras de Encomendas...");
-    }, 1400);
+      setScanStepMessage("Identificando insumos, embalagens e valores...");
+    }, 1200);
 
     setTimeout(() => {
-      const horaAtual = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      const hojeData = new Date().toISOString().split("T")[0];
+      setScanStepMessage("Sugerindo categorização automática para o caixa...");
+    }, 2400);
 
-      // Metadados extraídos
-      setFornecedorNome("ArtFesta Confeitaria & Embalagens");
-      setFornecedorEndereco("Av. das Américas, 1200 - Loja 4 - Centro");
-      setNumeroNota(`NFC-e 000.${Math.floor(100000 + Math.random() * 900000)}`);
-      setNumeroPedido(`PED-${Math.floor(10000 + Math.random() * 90000)}`);
-      setDataCompra(hojeData);
-      setHoraCompra(horaAtual);
+    setTimeout(() => {
+      setIsScanning(false);
 
-      // Itens reais de confeitaria
-      const mockItens: { nome: string; qtd: number; unit: number }[] = [
-        { nome: "COBERTURA HARALD MELKEN AO LEITE 1.01KG", qtd: 2, unit: 44.90 },
-        { nome: "LEITE CONDENSADO MOÇA 395G", qtd: 12, unit: 6.89 },
-        { nome: "CHANTILLY NORCAU CHANTY 1L", qtd: 3, unit: 18.50 },
-        { nome: "CAKE BOARD MDF REDONDO 25CM", qtd: 4, unit: 5.20 },
-        { nome: "GRANULADO BELGA CALLEBAUT 500G", qtd: 1, unit: 45.00 },
-        { nome: "DETERGENTE YPE NEUTRO 500ML", qtd: 2, unit: 2.49 },
+      // Dados Simulados Extraídos
+      const estNome = file.name.toLowerCase().includes("super") ? "Supermercado Doce Preço Ltda" : "Atacadão dos Confeiteiros S/A";
+      setFornecedorNome(estNome);
+      setFornecedorEndereco("Av. das Confeiteiras, 1500 - Centro");
+      setNumeroNota(String(Math.floor(100000 + Math.random() * 900000)));
+      setNumeroPedido(String(Math.floor(1000 + Math.random() * 9000)));
+      setDataCompra(new Date().toISOString().split("T")[0]);
+      setHoraCompra("14:35:10");
+
+      // Itens lidos do cupom
+      const mockItens: ItemNotaFiscal[] = [
+        {
+          id: crypto.randomUUID(),
+          nome: "Leite Condensado Moça 395g",
+          quantidade: 6,
+          valorUnitario: 7.90,
+          valorTotal: 47.40,
+          categoria: categorizarItemAutomatico("Leite Condensado Moça 395g"),
+        },
+        {
+          id: crypto.randomUUID(),
+          nome: "Cobertura Harald Melken Ao Leite 1kg",
+          quantidade: 2,
+          valorUnitario: 34.50,
+          valorTotal: 69.00,
+          categoria: categorizarItemAutomatico("Cobertura Harald Melken Ao Leite 1kg"),
+        },
+        {
+          id: crypto.randomUUID(),
+          nome: "Chantilly Norcau 1L",
+          quantidade: 4,
+          valorUnitario: 14.20,
+          valorTotal: 56.80,
+          categoria: categorizarItemAutomatico("Chantilly Norcau 1L"),
+        },
+        {
+          id: crypto.randomUUID(),
+          nome: "Forma de Acetato BWB Coração lapidado",
+          quantidade: 3,
+          valorUnitario: 12.00,
+          valorTotal: 36.00,
+          categoria: categorizarItemAutomatico("Forma de Acetato BWB Coração lapidado"),
+        },
       ];
 
-      const parsedItens: ItemNotaFiscal[] = mockItens.map((it) => {
-        const cat = categorizarItemAutomatico(it.nome);
-        return {
-          id: crypto.randomUUID(),
-          nome: it.nome,
-          quantidade: it.qtd,
-          valorUnitario: it.unit,
-          valorTotal: parseFloat((it.qtd * it.unit).toFixed(2)),
-          categoria: cat,
-        };
-      });
+      setItensExtraidos(mockItens);
 
-      setItensExtraidos(parsedItens);
+      // Conciliação Sugerida com Encomendas da Agenda
+      if (encomendas.length > 0) {
+        const sugestoes = correlacionarInsumosComItensNota(encomendas, mockItens);
+        setConciliacoesSugeridas(sugestoes.map((s) => ({ ...s, selecionado: true })));
+      }
 
-      // Conciliação Inteligente com Encomendas Pendentes
-      const matches = correlacionarInsumosComItensNota(parsedItens, encomendas);
-      setConciliacoesSugeridas(matches.map((m) => ({ ...m, selecionado: true })));
-
-      setIsScanning(false);
       setModalRevisaoOpen(true);
-      toast.success("Notinha escaneada e metadados extraídos com sucesso!");
-    }, 2100);
+      toast.success("Leitura do cupom concluída com sucesso!");
+    }, 3200);
   };
 
-  // Alterar Categoria de um Item Manualmente
-  const handleMudarCategoriaItem = (itemId: string, novaCat: CategoriaDespesaItem) => {
+  // Edição de Campos dos Itens Extraídos
+  const handleMudarCategoriaItem = (itemId: string, novaCategoria: CategoriaDespesaItem) => {
     setItensExtraidos((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, categoria: novaCat } : item))
+      prev.map((item) => (item.id === itemId ? { ...item, categoria: novaCategoria } : item))
     );
   };
 
-  const handleEditarItem = (itemId: string, campo: "nome" | "quantidade" | "valorUnitario", valor: any) => {
+  const handleEditarItem = (itemId: string, campo: keyof ItemNotaFiscal, valor: any) => {
     setItensExtraidos((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
@@ -226,7 +267,7 @@ export function ScannerView({
     setItensExtraidos((prev) => [...prev, novo]);
   };
 
-  // Alternar Seleção de Conciliação
+  // Alternar Seleção de Conciliação de Encomendas
   const handleToggleConciliacao = (insumoId: string) => {
     setConciliacoesSugeridas((prev) =>
       prev.map((c) => (c.insumoId === insumoId ? { ...c, selecionado: !c.selecionado } : c))
@@ -259,7 +300,7 @@ export function ScannerView({
     };
   }, [itensExtraidos]);
 
-  // Salvar Despesa Confirmada & Executar Conciliação
+  // Salvar Despesa Confirmada & Executar Conciliação Múltipla com Listas de Compras
   const handleSalvarDespesaConfirmada = async () => {
     if (!fornecedorNome || itensExtraidos.length === 0) {
       toast.error("Informe o estabelecimento e certifique-se de que há itens na notinha.");
@@ -268,7 +309,7 @@ export function ScannerView({
 
     setSalvando(true);
     try {
-      // 1. Salva despesa com metadados completos
+      // 1. Salva despesa com metadados completos no caixa
       await onSalvarDespesa({
         estabelecimentoCodigo: "CD-1001",
         fornecedorNome,
@@ -285,7 +326,7 @@ export function ScannerView({
         itens: itensExtraidos,
       });
 
-      // 2. Executa conciliação inteligente dos insumos nas encomendas selecionadas
+      // 2. Executa conciliação inteligente nas encomendas selecionadas
       if (onConciliarInsumos && conciliacoesSugeridas.length > 0) {
         const selecionadas = conciliacoesSugeridas
           .filter((c) => c.selecionado)
@@ -293,8 +334,49 @@ export function ScannerView({
 
         if (selecionadas.length > 0) {
           await onConciliarInsumos(selecionadas);
-          toast.success(`${selecionadas.length} insumo(s) marcados como Comprados nas Encomendas!`);
         }
+      }
+
+      // 3. Executa conciliação inteligente em MÚLTIPLAS LISTAS DE COMPRAS ATIVAS
+      if (selectedListasIds.length > 0) {
+        try {
+          const savedStr = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
+          let currentListas: ListaCompras[] = savedStr ? JSON.parse(savedStr) : LISTAS_COMPRAS_PADRAO;
+
+          let totalConciliados = 0;
+          const updated = currentListas.map((lista) => {
+            if (!selectedListasIds.includes(lista.id)) return lista;
+            const novosItens = lista.itens.map((item) => {
+              if (item.comprado) return item;
+              const match = itensExtraidos.some((itNota) =>
+                itNota.nome.toLowerCase().includes(item.nome.toLowerCase()) ||
+                item.nome.toLowerCase().includes(itNota.nome.toLowerCase())
+              );
+              if (match) {
+                totalConciliados++;
+                return { ...item, comprado: true };
+              }
+              return item;
+            });
+
+            const estsExistentes = lista.estabelecimentosVinculados || [];
+            const novosEsts = estsExistentes.includes(fornecedorNome)
+              ? estsExistentes
+              : [...estsExistentes, fornecedorNome];
+
+            return { ...lista, estabelecimentosVinculados: novosEsts, itens: novosItens };
+          });
+
+          localStorage.setItem("caixadoce_listas_compras_v2_CD-1001", JSON.stringify(updated));
+
+          if (onConciliarListasCompras) {
+            await onConciliarListasCompras(selectedListasIds, itensExtraidos);
+          }
+
+          if (totalConciliados > 0) {
+            toast.success(`${totalConciliados} insumo(s) marcados como comprados em ${selectedListasIds.length} lista(s)! 🎉`);
+          }
+        } catch {}
       }
 
       setSelectedFile(null);
@@ -318,7 +400,7 @@ export function ScannerView({
           Escanear Notinha <Camera className="w-6 h-6 text-primary" />
         </h2>
         <p className="text-sm text-muted-foreground">
-          Envie a foto ou PDF do cupom fiscal para ler itens, extrair metadados e conciliar com a lista de compras.
+          Envie a foto ou PDF do cupom fiscal para ler itens, extrair metadados e conciliar com múltiplas listas de compras.
         </p>
       </div>
 
@@ -367,7 +449,7 @@ export function ScannerView({
       </Card>
 
       {/* ========================================================================= */}
-      {/* 2. ÚLTIMOS REGISTROS CAPTURADOS (ESTRITAMENTE 3 COLUNAS) */}
+      {/* 2. ÚLTIMOS REGISTROS CAPTURADOS */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -398,13 +480,9 @@ export function ScannerView({
               ) : (
                 ultimosRegistros.map((d) => (
                   <TableRow key={d.id} className="hover:bg-muted/20">
-                    <TableCell className="text-xs font-mono text-muted-foreground">
-                      {d.dataCompra.split("-").reverse().join("/")}
-                    </TableCell>
-                    <TableCell className="font-semibold text-xs text-foreground flex items-center gap-2">
-                      <Building2 className="w-3.5 h-3.5 text-primary" /> {d.fornecedorNome}
-                    </TableCell>
-                    <TableCell className="text-right font-extrabold text-xs text-foreground">
+                    <TableCell className="font-mono text-xs text-muted-foreground">{d.dataCompra}</TableCell>
+                    <TableCell className="font-semibold text-xs text-foreground">{d.fornecedorNome}</TableCell>
+                    <TableCell className="font-bold text-xs text-emerald-600 text-right">
                       {formatarMoeda(d.valorTotal)}
                     </TableCell>
                   </TableRow>
@@ -416,226 +494,205 @@ export function ScannerView({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. MODAL: REVISÃO, METADADOS & CONCILIAÇÃO INTELIGENTE */}
+      {/* MODAL DE REVISÃO E CONCILIAÇÃO MÚLTIPLA */}
       {/* ========================================================================= */}
       <Dialog open={modalRevisaoOpen} onOpenChange={setModalRevisaoOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
-              <Receipt className="w-5 h-5 text-primary" /> Conferência dos Dados Extraídos da Notinha
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <FileText className="w-5 h-5 text-primary" /> Revisar Dados da Notinha Lida
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Verifique os metadados fiscais, itens e as conciliações automáticas com suas encomendas.
+              Confira os dados extraídos pelo OCR, edite a categoria dos itens e selecione as listas de compras a vincular.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Metadados Fiscais Identificados */}
-            <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-3">
-              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-primary" /> Metadados Fiscais Identificados
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Nome do Estabelecimento *</Label>
-                  <Input
-                    value={fornecedorNome}
-                    onChange={(e) => setFornecedorNome(e.target.value)}
-                    className="h-8 text-xs font-bold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Endereço do Estabelecimento</Label>
-                  <Input
-                    value={fornecedorEndereco}
-                    onChange={(e) => setFornecedorEndereco(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
+            {/* Metadados Fiscais */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+              <div className="space-y-1">
+                <Label htmlFor="sc-forn" className="text-xs font-semibold">
+                  Estabelecimento / Mercado
+                </Label>
+                <Input
+                  id="sc-forn"
+                  value={fornecedorNome}
+                  onChange={(e) => setFornecedorNome(e.target.value)}
+                  className="h-8 text-xs font-bold"
+                  required
+                />
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">N° da Nota / Cupom</Label>
-                  <Input
-                    value={numeroNota}
-                    onChange={(e) => setNumeroNota(e.target.value)}
-                    placeholder="Ex: NFC-e 12345"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">N° do Pedido</Label>
-                  <Input
-                    value={numeroPedido}
-                    onChange={(e) => setNumeroPedido(e.target.value)}
-                    placeholder="Ex: PED-9821"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Data da Compra</Label>
-                  <Input
-                    type="date"
-                    value={dataCompra}
-                    onChange={(e) => setDataCompra(e.target.value)}
-                    className="h-8 text-xs font-bold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Hora Exata</Label>
-                  <Input
-                    value={horaCompra}
-                    onChange={(e) => setHoraCompra(e.target.value)}
-                    placeholder="14:30:00"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
+              <div className="space-y-1">
+                <Label htmlFor="sc-data" className="text-xs font-semibold">
+                  Data da Compra
+                </Label>
+                <Input
+                  id="sc-data"
+                  type="date"
+                  value={dataCompra}
+                  onChange={(e) => setDataCompra(e.target.value)}
+                  className="h-8 text-xs"
+                />
               </div>
             </div>
 
-            {/* CARD DE CONCILIAÇÃO INTELIGENTE COM ENCOMENDAS */}
-            {conciliacoesSugeridas.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-extrabold text-amber-900 dark:text-amber-300 flex items-center gap-1.5 uppercase">
-                    <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
-                    🎯 Conciliação Inteligente com a Lista de Compras ({conciliacoesSugeridas.length})
-                  </h4>
-                  <span className="text-[10px] text-amber-700 font-semibold">
-                    Baixa automática em encomendas
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Identificamos itens desta notinha que correspondem aos insumos pedidos para suas encomendas. Selecione os itens que deseja marcar como comprados:
-                </p>
-
-                <div className="space-y-1.5 pt-1">
-                  {conciliacoesSugeridas.map((conc) => (
-                    <div
-                      key={`${conc.encomendaId}-${conc.insumoId}`}
-                      onClick={() => handleToggleConciliacao(conc.insumoId)}
-                      className={`cursor-pointer p-2 rounded-lg border text-xs flex items-center justify-between transition-all ${
-                        conc.selecionado
-                          ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-900 dark:text-emerald-300 font-semibold"
-                          : "bg-background border-border text-muted-foreground"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] ${
-                          conc.selecionado ? "bg-emerald-600 text-white" : "border border-muted-foreground"
-                        }`}>
-                          {conc.selecionado ? <Check className="w-3 h-3" /> : null}
-                        </span>
-                        <span>
-                          <strong>{conc.insumoNome}</strong> &rarr; Encomenda de <em>{conc.clienteNome}</em>
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] bg-background">
-                        Item na Nota: {conc.itemNotaNome}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+            {/* SEÇÃO: VINCULAR ITENS A MÚLTIPLAS LISTAS DE COMPRAS PENDENTES */}
+            <div className="p-3.5 rounded-2xl border-2 border-primary/40 bg-card space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                  <ShoppingCart className="w-4 h-4 text-primary" /> Vincular itens a listas de compras pendentes:
+                </Label>
+                <Badge variant="secondary" className="text-[10px] font-bold">
+                  {selectedListasIds.length} lista(s) selecionada(s)
+                </Badge>
               </div>
-            )}
+              <p className="text-[11px] text-muted-foreground">
+                Selecione as listas ativas onde os insumos correspondentes desta notinha serão marcados como comprados automaticamente:
+              </p>
 
-            {/* Tabela de Itens */}
-            <div className="rounded-lg border border-border/70 overflow-hidden max-h-[240px] overflow-y-auto">
-              <Table>
-                <TableHeader className="bg-muted/40">
-                  <TableRow>
-                    <TableHead className="text-xs">Item / Descrição</TableHead>
-                    <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
-                    <TableHead className="text-xs w-20">Unit.</TableHead>
-                    <TableHead className="text-xs w-20">Total</TableHead>
-                    <TableHead className="text-xs w-40">Categoria</TableHead>
-                    <TableHead className="text-xs text-right w-8"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {itensExtraidos.map((item) => (
-                    <TableRow key={item.id} className="hover:bg-muted/20">
-                      <TableCell>
-                        <Input
-                          value={item.nome}
-                          onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
-                          className="h-7 text-xs font-medium"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {listasAtivas.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic col-span-full py-1">
+                    Nenhuma lista de compras ativa encontrada.
+                  </p>
+                ) : (
+                  listasAtivas.map((lista) => {
+                    const isSelected = selectedListasIds.includes(lista.id);
+                    const pendentes = lista.itens.filter((i) => !i.comprado).length;
+
+                    return (
+                      <label
+                        key={lista.id}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? "bg-primary/10 border-primary text-foreground font-bold shadow-xs"
+                            : "bg-muted/30 border-border text-stone-500 hover:bg-muted/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            if (isSelected) {
+                              setSelectedListasIds((prev) => prev.filter((id) => id !== lista.id));
+                            } else {
+                              setSelectedListasIds((prev) => [...prev, lista.id]);
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
                         />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={item.quantidade}
-                          onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
-                          className="h-7 text-xs text-center"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={item.valorUnitario}
-                          onChange={(e) => handleEditarItem(item.id, "valorUnitario", e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                      </TableCell>
-                      <TableCell className="font-bold text-xs text-foreground">
-                        {formatarMoeda(item.valorTotal)}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={item.categoria}
-                          onValueChange={(v: any) => handleMudarCategoriaItem(item.id, v)}
-                        >
-                          <SelectTrigger className="h-7 text-[11px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="producao">
-                              <span className="flex items-center gap-1.5 text-amber-600 font-semibold">
-                                <Cookie className="w-3.5 h-3.5" /> Produção
-                              </span>
-                            </SelectItem>
-                            <SelectItem value="utensilios">
-                              <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
-                                <UtensilsCrossed className="w-3.5 h-3.5" /> Utensílios
-                              </span>
-                            </SelectItem>
-                            <SelectItem value="consumo_proprio">
-                              <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
-                                <User className="w-3.5 h-3.5" /> Consumo Pessoal
-                              </span>
-                            </SelectItem>
-                            <SelectItem value="outros">
-                              <span className="flex items-center gap-1.5 text-stone-600 font-semibold">
-                                <Package className="w-3.5 h-3.5" /> Outros
-                              </span>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoverItem(item.id)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold truncate">{lista.nome}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {pendentes} item(ns) a comprar
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Tabela de Itens Extraídos */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">Itens Identificados na Notinha ({itensExtraidos.length}):</Label>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead className="text-xs">Insumo / Produto</TableHead>
+                      <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                      <TableHead className="text-xs w-20">Unit.</TableHead>
+                      <TableHead className="text-xs w-20">Total</TableHead>
+                      <TableHead className="text-xs w-40">Categoria</TableHead>
+                      <TableHead className="text-xs text-right w-8"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {itensExtraidos.map((item) => (
+                      <TableRow key={item.id} className="hover:bg-muted/20">
+                        <TableCell>
+                          <Input
+                            value={item.nome}
+                            onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
+                            className="h-7 text-xs font-medium"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={item.quantidade}
+                            onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
+                            className="h-7 text-xs text-center"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={item.valorUnitario}
+                            onChange={(e) => handleEditarItem(item.id, "valorUnitario", e.target.value)}
+                            className="h-7 text-xs"
+                          />
+                        </TableCell>
+                        <TableCell className="font-bold text-xs text-foreground">
+                          {formatarMoeda(item.valorTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={item.categoria}
+                            onValueChange={(v: any) => handleMudarCategoriaItem(item.id, v)}
+                          >
+                            <SelectTrigger className="h-7 text-[11px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="producao">
+                                <span className="flex items-center gap-1.5 text-amber-600 font-semibold">
+                                  <Cookie className="w-3.5 h-3.5" /> Produção
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="utensilios">
+                                <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
+                                  <UtensilsCrossed className="w-3.5 h-3.5" /> Utensílios
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="consumo_proprio">
+                                <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
+                                  <User className="w-3.5 h-3.5" /> Consumo Pessoal
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="outros">
+                                <span className="flex items-center gap-1.5 text-stone-600 font-semibold">
+                                  <Package className="w-3.5 h-3.5" /> Outros
+                                </span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverItem(item.id)}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-            <div className="flex justify-between items-center pt-1">
-              <Button variant="outline" size="sm" onClick={handleAdicionarItemManual} className="text-xs h-7">
-                <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Item
-              </Button>
+              <div className="flex justify-between items-center pt-1">
+                <Button variant="outline" size="sm" onClick={handleAdicionarItemManual} className="text-xs h-7">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Item
+                </Button>
+              </div>
             </div>
 
             {/* Totalizadores por Categoria */}
@@ -682,7 +739,7 @@ export function ScannerView({
               className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              {salvando ? "Salvando..." : "Confirmar & Conciliar Insumos"}
+              {salvando ? "Salvando..." : "Confirmar & Conciliar Listas"}
             </Button>
           </DialogFooter>
         </DialogContent>
