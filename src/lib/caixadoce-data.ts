@@ -69,6 +69,176 @@ export interface Colaborador {
 }
 
 // ==============================================================================
+// CLIENTES (CUSTOMERS)
+// ==============================================================================
+
+export interface Cliente {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  whatsapp: string;
+  endereco?: string;
+  observacoes?: string;
+  createdAt?: string;
+}
+
+export const CLIENTES_PADRAO: Cliente[] = [
+  {
+    id: "cli-1",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Mariana Silva",
+    whatsapp: "(11) 98765-4321",
+    endereco: "Rua das Flores, 120 - Apto 42 - Jardim Paulista, São Paulo/SP",
+    observacoes: "Cliente frequente de bolos decorados e brigadeiros.",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "cli-2",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Camila Guimarães",
+    whatsapp: "(11) 97123-4567",
+    endereco: "Av. Brigadeiro Luís Antônio, 3400 - Cerqueira César, São Paulo/SP",
+    observacoes: "Prefere doces menos açucarados (Ninho e 50% Cacau).",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "cli-3",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Lucas Martins",
+    whatsapp: "(11) 99888-7766",
+    endereco: "Rua Augusta, 850 - Consolação, São Paulo/SP",
+    observacoes: "Pede bentô cakes personalizados para aniversários.",
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_customers_${code}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return CLIENTES_PADRAO;
+}
+
+export function salvarClientesStorage(estabelecimentoCodigo: string, lista: Cliente[]) {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_customers_${code}`, JSON.stringify(lista));
+  } catch (e) {
+    console.warn("Erro ao salvar clientes:", e);
+  }
+}
+
+// ==============================================================================
+// PRODUTOS & CARDÁPIO (PRODUCTS)
+// ==============================================================================
+
+export interface ProdutoCardapio {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  descricao: string;
+  preco: number;
+  categoria: "Bolos Decorados" | "Doces & Brigadeiros" | "Tortas & Sobremesas" | "Bentô Cakes" | "Kits Festa";
+  fotoUrl: string;
+  destaque?: boolean;
+  tempoPreparoHoras?: number;
+  ativo?: boolean;
+  createdAt?: string;
+}
+
+export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
+  {
+    id: "prod-1",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bolo Vulcão Ninho com Nutella",
+    descricao: "Massa fofinha de chocolate ou baunilha, com piscina cremosa de brigadeiro de Leite Ninho e cobertura generosa de Nutella pura.",
+    preco: 95.0,
+    categoria: "Bolos Decorados",
+    fotoUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 24,
+    ativo: true,
+  },
+  {
+    id: "prod-2",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bolo Red Velvet Especial",
+    descricao: "Massa aveludada vermelha, recheio especial de cream cheese frosting suave e morangos frescos no topo.",
+    preco: 140.0,
+    categoria: "Bolos Decorados",
+    fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 24,
+    ativo: true,
+  },
+  {
+    id: "prod-3",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Caixa Brigadeiros Gourmet (12 un)",
+    descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
+    preco: 48.0,
+    categoria: "Doces & Brigadeiros",
+    fotoUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80",
+    destaque: true,
+    tempoPreparoHoras: 12,
+    ativo: true,
+  },
+  {
+    id: "prod-4",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Bentô Cake Personalizado",
+    descricao: "Mini bolo de 10cm com frase ou meme personalizado no topo. Ideal para presentes e comemorações intimistas.",
+    preco: 45.0,
+    categoria: "Bentô Cakes",
+    fotoUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 24,
+    ativo: true,
+  },
+  {
+    id: "prod-5",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Torta Holandesa Tradicional",
+    descricao: "Base crocante de biscoitos Calypso, creme holandês aerado e ganache de chocolate meio amargo brilhante.",
+    preco: 85.0,
+    categoria: "Tortas & Sobremesas",
+    fotoUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 24,
+    ativo: true,
+  },
+  {
+    id: "prod-6",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Cento de Docinhos para Festa (100 un)",
+    descricao: "Mix com 40 Brigadeiros, 30 Beijinhos de Coco e 30 Dois Amores. Enrolados na hora.",
+    preco: 160.0,
+    categoria: "Kits Festa",
+    fotoUrl: "https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=600&q=80",
+    tempoPreparoHoras: 48,
+    ativo: true,
+  },
+];
+
+export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
+  const code = (codigoLoja || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return CATALOGO_PRODUTOS_PADRAO;
+}
+
+export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCardapio[]) {
+  const code = (codigoLoja || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_cardapio_${code}`, JSON.stringify(produtos));
+  } catch (e) {
+    console.warn("Erro ao salvar produtos do cardápio:", e);
+  }
+}
+
+// ==============================================================================
 // CATÁLOGO DE INSUMOS (ARTFESTA & PERSONALIZADOS)
 // ==============================================================================
 
@@ -169,6 +339,14 @@ export function salvarNovoInsumoCatalogo(estabelecimentoCodigo: string, novoNome
 export type StatusEncomenda = "pendente" | "em_producao" | "pronta" | "entregue" | "cancelada";
 export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega";
 
+export interface ItemPedidoEncomenda {
+  id: string;
+  produtoId?: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario?: number;
+}
+
 export interface InsumoNecessarioPedido {
   id: string;
   nome: string;
@@ -179,11 +357,13 @@ export interface InsumoNecessarioPedido {
 export interface Encomenda {
   id: string;
   estabelecimentoCodigo: string;
+  clienteId?: string;
   clienteNome: string;
   clienteWhatsapp: string;
   dataEntrega: string; // YYYY-MM-DD
   horarioEntrega: string; // HH:mm
-  itens: string; // Descrição ou resumo dos itens pedidos
+  itens: string; // Resumo textual
+  itensDetalhes?: ItemPedidoEncomenda[]; // Tags estruturadas de produtos
   insumosNecessarios?: InsumoNecessarioPedido[]; // Tags de insumos vinculados com quantidade
   valorTotal: number;
   valorEntrada?: number;
@@ -373,106 +553,6 @@ export function correlacionarInsumosComItensNota(
   return correspondencias;
 }
 
-// ==============================================================================
-// CARDÁPIO PÚBLICO & PRODUTOS
-// ==============================================================================
-
-export interface ProdutoCardapio {
-  id: string;
-  estabelecimentoCodigo: string;
-  nome: string;
-  descricao: string;
-  preco: number;
-  categoria: "Bolos Decorados" | "Doces & Brigadeiros" | "Tortas & Sobremesas" | "Bentô Cakes" | "Kits Festa";
-  fotoUrl: string;
-  destaque?: boolean;
-  tempoPreparoHoras?: number;
-}
-
-export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
-  {
-    id: "prod-1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo Vulcão Ninho com Nutella",
-    descricao: "Massa fofinha de chocolate ou baunilha, com piscina cremosa de brigadeiro de Leite Ninho e cobertura generosa de Nutella pura.",
-    preco: 95.0,
-    categoria: "Bolos Decorados",
-    fotoUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 24,
-  },
-  {
-    id: "prod-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo Red Velvet Especial",
-    descricao: "Massa aveludada vermelha, recheio especial de cream cheese frosting suave e morangos frescos no topo.",
-    preco: 140.0,
-    categoria: "Bolos Decorados",
-    fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 24,
-  },
-  {
-    id: "prod-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Caixa Brigadeiros Gourmet (12 un)",
-    descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
-    preco: 48.0,
-    categoria: "Doces & Brigadeiros",
-    fotoUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 12,
-  },
-  {
-    id: "prod-4",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bentô Cake Personalizado",
-    descricao: "Mini bolo de 10cm com frase ou meme personalizado no topo. Ideal para presentes e comemorações intimistas.",
-    preco: 45.0,
-    categoria: "Bentô Cakes",
-    fotoUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-  },
-  {
-    id: "prod-5",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Torta Holandesa Tradicional",
-    descricao: "Base crocante de biscoitos Calypso, creme holandês aerado e ganache de chocolate meio amargo brilhante.",
-    preco: 85.0,
-    categoria: "Tortas & Sobremesas",
-    fotoUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-  },
-  {
-    id: "prod-6",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Cento de Docinhos para Festa (100 un)",
-    descricao: "Mix com 40 Brigadeiros, 30 Beijinhos de Coco e 30 Dois Amores. Enrolados na hora.",
-    preco: 160.0,
-    categoria: "Kits Festa",
-    fotoUrl: "https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 48,
-  },
-];
-
-export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
-  const code = (codigoLoja || "CD-1001").toUpperCase();
-  try {
-    const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return CATALOGO_PRODUTOS_PADRAO;
-}
-
-export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCardapio[]) {
-  const code = (codigoLoja || "CD-1001").toUpperCase();
-  try {
-    localStorage.setItem(`caixadoce_cardapio_${code}`, JSON.stringify(produtos));
-  } catch (e) {
-    console.warn("Erro ao salvar produtos do cardápio:", e);
-  }
-}
-
 export const CATEGORIAS_PADRAO = {
   receitas: [
     "Venda Direta / Balcão",
@@ -496,7 +576,7 @@ export const CATEGORIAS_PADRAO = {
 };
 
 // ==============================================================================
-// HELPERS DE MÁSCARA E FORMATAÇÃO
+// HELPERS DE MÁSCARA, FORMATAÇÃO & WHATSAPP
 // ==============================================================================
 
 export function formatarMoeda(valor: number): string {
@@ -507,7 +587,7 @@ export function formatarMoeda(valor: number): string {
 }
 
 export function aplicarMascaraTelefone(valor: string): string {
-  const limpo = valor.replace(/\D/g, "").slice(0, 11);
+  const limpo = (valor || "").replace(/\D/g, "").slice(0, 11);
   if (!limpo) return "";
   if (limpo.length <= 2) return `(${limpo}`;
   if (limpo.length <= 6) return `(${limpo.slice(0, 2)}) ${limpo.slice(2)}`;
@@ -533,10 +613,43 @@ export function converterMoedaInputParaNumero(valorFormatado: string): number {
 }
 
 export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
-  const cleanPhone = whatsapp.replace(/\D/g, "");
+  const cleanPhone = (whatsapp || "").replace(/\D/g, "");
   const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
   const textEncoded = mensagem ? `?text=${encodeURIComponent(mensagem)}` : "";
   return `https://wa.me/${formattedPhone}${textEncoded}`;
+}
+
+/**
+ * Gera mensagem formatada e elegante com o resumo do pedido para enviar ao cliente no WhatsApp
+ */
+export function gerarMensagemResumoWhatsApp(encomenda: Encomenda, nomeLoja?: string): string {
+  const dataFormatada = encomenda.dataEntrega.split("-").reverse().join("/");
+  const hora = encomenda.horarioEntrega || "14:00";
+  const valorTotal = formatarMoeda(encomenda.valorTotal);
+  const sinalPago = formatarMoeda(encomenda.valorEntrada || 0);
+  const saldoRestante = formatarMoeda(Math.max(0, encomenda.valorTotal - (encomenda.valorEntrada || 0)));
+  const modalidade = encomenda.tipoEntrega === "delivery" ? `🚚 Entrega / Delivery (${encomenda.enderecoEntrega || "A combinar"})` : "🏬 Retirada no Balcão";
+
+  let itensTexto = encomenda.itens;
+  if (encomenda.itensDetalhes && encomenda.itensDetalhes.length > 0) {
+    itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
+  }
+
+  return `✨ *Confirmação de Encomenda - ${nomeLoja || "CaixaDoce"}* ✨
+
+Olá, *${encomenda.clienteNome}*! Seu pedido foi registrado com sucesso. Seguem os detalhes:
+
+📅 *Data Prevista:* ${dataFormatada} às ${hora}
+🎂 *Itens Pedidos:*
+${itensTexto}
+
+📍 *Modalidade:* ${modalidade}
+${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : ""}
+💰 *Valor Total:* ${valorTotal}
+💳 *Sinal Pago:* ${sinalPago}
+💵 *Saldo Restante:* ${saldoRestante}
+
+Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
 }
 
 export function gerarCodigoEstabelecimento(): string {

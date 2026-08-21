@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
+import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
+import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +30,69 @@ const AgendarStoreSlugRoute = AgendarStoreSlugRouteImport.update({
   path: '/agendar/$storeSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CardapioIndexRoute = CardapioIndexRouteImport.update({
+  id: '/cardapio/',
+  path: '/cardapio/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CardapioStoreCodeRoute = CardapioStoreCodeRouteImport.update({
+  id: '/cardapio/$storeCode',
+  path: '/cardapio/$storeCode',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/cardapio': typeof CardapioIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/agendar/$storeSlug'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/agendar/$storeSlug'
+    | '/cardapio/$storeCode'
+    | '/cardapio/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/agendar/$storeSlug'
-  id: '__root__' | '/' | '/login' | '/agendar/$storeSlug'
+  to:
+    | '/'
+    | '/login'
+    | '/agendar/$storeSlug'
+    | '/cardapio/$storeCode'
+    | '/cardapio'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/agendar/$storeSlug'
+    | '/cardapio/$storeCode'
+    | '/cardapio/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
+  CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
+  CardapioIndexRoute: typeof CardapioIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +118,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgendarStoreSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cardapio/': {
+      id: '/cardapio/'
+      path: '/cardapio'
+      fullPath: '/cardapio/'
+      preLoaderRoute: typeof CardapioIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cardapio/$storeCode': {
+      id: '/cardapio/$storeCode'
+      path: '/cardapio/$storeCode'
+      fullPath: '/cardapio/$storeCode'
+      preLoaderRoute: typeof CardapioStoreCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +139,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
+  CardapioStoreCodeRoute: CardapioStoreCodeRoute,
+  CardapioIndexRoute: CardapioIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -10,6 +10,8 @@ import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { ScannerView } from "@/components/caixadoce/ScannerView";
 import { DespesasView } from "@/components/caixadoce/DespesasView";
 import { OrdersView } from "@/components/caixadoce/OrdersView";
+import { CustomersView } from "@/components/caixadoce/CustomersView";
+import { ProductsView } from "@/components/caixadoce/ProductsView";
 import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
@@ -23,8 +25,10 @@ import {
   Camera,
   Layers,
   CalendarDays,
-  DollarSign,
   Users,
+  Cake,
+  DollarSign,
+  UserCheck,
   CreditCard,
   Settings,
   LogOut,
@@ -38,13 +42,17 @@ import {
   type Encomenda,
   type DataBloqueada,
   type DespesaNotaFiscal,
+  type Cliente,
+  type ProdutoCardapio,
+  CLIENTES_PADRAO,
+  CATALOGO_PRODUTOS_PADRAO,
 } from "@/lib/caixadoce-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Escanear Notinhas, Despesas & Encomendas" },
-      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos e encomendas de confeitaria." },
+      { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
+      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos, encomendas e cardápio de confeitaria." },
       { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
     ],
   }),
@@ -59,8 +67,11 @@ function Index() {
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
   const [despesas, setDespesas] = useState<DespesaNotaFiscal[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
 
   const activeCode = profile?.establishmentCode || "CD-1001";
+  const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
   // 1. Carrega transações do Supabase / Cache Local
   const fetchTransacoes = useCallback(async () => {
@@ -127,7 +138,7 @@ function Index() {
     }
   }, [activeCode, profile]);
 
-  // 2. Carrega Encomendas e Datas Bloqueadas do Supabase / Cache Local
+  // 2. Carrega Encomendas e Datas Bloqueadas
   const fetchEncomendasECalendario = useCallback(async () => {
     if (!profile) return;
 
@@ -153,12 +164,16 @@ function Index() {
               dataEntrega: hoje,
               horarioEntrega: "15:30",
               itens: "1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga",
-              insumosNecessarios: [
-                { id: "ins-tag-1", nome: "Leite Condensado Moça 395g", comprado: false },
-                { id: "ins-tag-2", nome: "Cobertura Harald Melken Ao Leite", comprado: false },
-                { id: "ins-tag-3", nome: "Chantilly Norcau Chanty 1L", comprado: true },
+              itensDetalhes: [
+                { id: "it-1", nome: "Bolo Red Velvet Especial", quantidade: 1, precoUnitario: 140 },
+                { id: "it-2", nome: "Caixa Brigadeiros Gourmet (12 un)", quantidade: 1, precoUnitario: 48 },
               ],
-              valorTotal: 180.0,
+              insumosNecessarios: [
+                { id: "ins-tag-1", nome: "Leite Condensado Moça 395g", quantidade: 3, comprado: false },
+                { id: "ins-tag-2", nome: "Cobertura Harald Melken Ao Leite", quantidade: 1, comprado: false },
+                { id: "ins-tag-3", nome: "Chantilly Norcau Chanty 1L", quantidade: 2, comprado: true },
+              ],
+              valorTotal: 188.0,
               valorEntrada: 90.0,
               statusPagamento: "sinal_pago",
               status: "em_producao",
@@ -173,11 +188,13 @@ function Index() {
         const mapeadas: Encomenda[] = data.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
+          clienteId: d.cliente_id,
           clienteNome: d.cliente_nome,
           clienteWhatsapp: d.cliente_whatsapp,
           dataEntrega: d.data_entrega,
           horarioEntrega: d.horario_entrega || "14:00",
           itens: d.itens,
+          itensDetalhes: Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [],
           insumosNecessarios: Array.isArray(d.insumos_necessarios) ? d.insumos_necessarios : [],
           valorTotal: Number(d.valor_total),
           valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
@@ -307,21 +324,214 @@ function Index() {
     }
   }, [activeCode, profile]);
 
+  // 4. Carrega Clientes (Customers)
+  const fetchClientes = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("name", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_customers_${activeCode}`);
+        if (raw) {
+          setClientes(JSON.parse(raw));
+        } else {
+          setClientes(CLIENTES_PADRAO);
+          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(CLIENTES_PADRAO));
+        }
+      } else {
+        const mapeados: Cliente[] = data.map((c: any) => ({
+          id: String(c.id),
+          estabelecimentoCodigo: c.estabelecimento_codigo,
+          nome: c.name,
+          whatsapp: c.whatsapp,
+          endereco: c.address,
+          observacoes: c.notes,
+          createdAt: c.created_at,
+        }));
+        setClientes(mapeados);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar clientes:", e);
+    }
+  }, [activeCode, profile]);
+
+  // 5. Carrega Produtos do Cardápio (Products)
+  const fetchProdutos = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("name", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_cardapio_${activeCode}`);
+        if (raw) {
+          setProdutos(JSON.parse(raw));
+        } else {
+          setProdutos(CATALOGO_PRODUTOS_PADRAO);
+          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(CATALOGO_PRODUTOS_PADRAO));
+        }
+      } else {
+        const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
+          id: String(p.id),
+          estabelecimentoCodigo: p.estabelecimento_codigo,
+          nome: p.name,
+          descricao: p.description,
+          preco: Number(p.price),
+          fotoUrl: p.image_url,
+          categoria: p.category,
+          destaque: false,
+          tempoPreparoHoras: p.prep_time_hours || 24,
+          ativo: p.is_active !== false,
+          createdAt: p.created_at,
+        }));
+        setProdutos(mapeados);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar produtos:", e);
+    }
+  }, [activeCode, profile]);
+
   useEffect(() => {
     fetchTransacoes();
     fetchEncomendasECalendario();
     fetchDespesas();
-  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas]);
+    fetchClientes();
+    fetchProdutos();
+  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos]);
 
-  // Listener para retorno do Stripe Checkout
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("checkout_status") === "success") {
-        toast.success("Assinatura Stripe ativada com sucesso! Acesso Pro liberado.");
-      }
+  // Handlers de Clientes
+  const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    const novo: Cliente = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+      createdAt: new Date().toISOString(),
+    };
+
+    const atualizados = [novo, ...clientes];
+    setClientes(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
+      await supabase.from("customers").insert([
+        {
+          id: novo.id,
+          estabelecimento_codigo: activeCode,
+          name: novo.nome,
+          whatsapp: novo.whatsapp,
+          address: novo.endereco,
+          notes: novo.observacoes,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao salvar cliente:", e);
     }
-  }, []);
+  };
+
+  const editarCliente = async (id: string, dados: Partial<Cliente>) => {
+    const atualizados = clientes.map((c) => (c.id === id ? { ...c, ...dados } : c));
+    setClientes(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
+      await supabase
+        .from("customers")
+        .update({
+          name: dados.nome,
+          whatsapp: dados.whatsapp,
+          address: dados.endereco,
+          notes: dados.observacoes,
+        })
+        .eq("id", id);
+    } catch (e) {
+      console.warn("Aviso ao editar cliente:", e);
+    }
+  };
+
+  const excluirCliente = async (id: string) => {
+    const atualizados = clientes.filter((c) => c.id !== id);
+    setClientes(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
+      await supabase.from("customers").delete().eq("id", id);
+    } catch {}
+    toast.success("Cliente removido com sucesso.");
+  };
+
+  const criarClienteRapido = async (nome: string, whatsapp: string, endereco?: string) => {
+    const existe = clientes.find((c) => c.nome.toLowerCase() === nome.toLowerCase() || (whatsapp && c.whatsapp.replace(/\D/g, "") === whatsapp.replace(/\D/g, "")));
+    if (!existe) {
+      await criarCliente({ nome, whatsapp, endereco });
+    }
+  };
+
+  // Handlers de Produtos
+  const criarProduto = async (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    const novo: ProdutoCardapio = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+      createdAt: new Date().toISOString(),
+    };
+
+    const atualizados = [novo, ...produtos];
+    setProdutos(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
+      await supabase.from("products").insert([
+        {
+          id: novo.id,
+          estabelecimento_codigo: activeCode,
+          name: novo.nome,
+          description: novo.descricao,
+          price: novo.preco,
+          image_url: novo.fotoUrl,
+          category: novo.categoria,
+          is_active: novo.ativo !== false,
+          prep_time_hours: novo.tempoPreparoHoras || 24,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao salvar produto:", e);
+    }
+  };
+
+  const editarProduto = async (id: string, dados: Partial<ProdutoCardapio>) => {
+    const atualizados = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p));
+    setProdutos(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
+      await supabase
+        .from("products")
+        .update({
+          name: dados.nome,
+          description: dados.descricao,
+          price: dados.preco,
+          image_url: dados.fotoUrl,
+          category: dados.categoria,
+          is_active: dados.ativo,
+          prep_time_hours: dados.tempoPreparoHoras,
+        })
+        .eq("id", id);
+    } catch (e) {
+      console.warn("Aviso ao editar produto:", e);
+    }
+  };
+
+  const excluirProduto = async (id: string) => {
+    const atualizados = produtos.filter((p) => p.id !== id);
+    setProdutos(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
+      await supabase.from("products").delete().eq("id", id);
+    } catch {}
+    toast.success("Produto removido do cardápio.");
+  };
 
   // Handlers de Encomendas
   const criarEncomenda = async (dados: Omit<Encomenda, "id" | "estabelecimentoCodigo">) => {
@@ -342,11 +552,13 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
+          cliente_id: item.clienteId,
           cliente_nome: item.clienteNome,
           cliente_whatsapp: item.clienteWhatsapp,
           data_entrega: item.dataEntrega,
           horario_entrega: item.horarioEntrega,
           itens: item.itens,
+          itens_detalhes: item.itensDetalhes || [],
           insumos_necessarios: item.insumosNecessarios || [],
           valor_total: item.valorTotal,
           valor_entrada: item.valorEntrada || 0,
@@ -373,11 +585,13 @@ function Index() {
       await supabase
         .from("orders")
         .update({
+          cliente_id: dados.clienteId,
           cliente_nome: dados.clienteNome,
           cliente_whatsapp: dados.clienteWhatsapp,
           data_entrega: dados.dataEntrega,
           horario_entrega: dados.horarioEntrega,
           itens: dados.itens,
+          itens_detalhes: dados.itensDetalhes,
           insumos_necessarios: dados.insumosNecessarios,
           valor_total: dados.valorTotal,
           valor_entrada: dados.valorEntrada,
@@ -417,7 +631,6 @@ function Index() {
         return { ...enc, insumosNecessarios: insumosAtualizados };
       });
 
-      // Atualiza no Supabase
       const encAlvo = novasEncomendas.find((e) => e.id === encomendaId);
       if (encAlvo) {
         try {
@@ -483,7 +696,6 @@ function Index() {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
 
-    // 1. Salva na tabela expenses do Supabase com metadados
     try {
       await supabase.from("expenses").insert([
         {
@@ -507,7 +719,6 @@ function Index() {
       console.warn("Supabase insert expense warning:", e);
     }
 
-    // 2. Lança automaticamente no fluxo de caixa (Financeiro)
     const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
     if (custoEmpresa > 0) {
       await adicionarTransacao({
@@ -677,11 +888,17 @@ function Index() {
               <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
                 <CalendarDays className="w-4 h-4 text-primary" /> Encomendas &amp; Calendário
               </TabsTrigger>
+              <TabsTrigger value="clientes" className="flex items-center gap-1.5 font-semibold text-xs">
+                <Users className="w-4 h-4 text-primary" /> Clientes
+              </TabsTrigger>
+              <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-semibold text-xs">
+                <Cake className="w-4 h-4 text-primary" /> Meus Produtos / Cardápio
+              </TabsTrigger>
               <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
                 <DollarSign className="w-4 h-4" /> Financeiro &amp; Caixa
               </TabsTrigger>
               <TabsTrigger value="colaboradores" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Users className="w-4 h-4" /> Equipe &amp; Acessos
+                <UserCheck className="w-4 h-4" /> Equipe &amp; Acessos
               </TabsTrigger>
               <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
                 <CreditCard className="w-4 h-4" /> Meu Plano (Stripe)
@@ -710,20 +927,46 @@ function Index() {
             />
           </TabsContent>
 
-          {/* 3. Encomendas & Calendário & Lista de Compras */}
+          {/* 3. Encomendas & Calendário */}
           <TabsContent value="encomendas">
             <OrdersView
               encomendas={encomendas}
               datasBloqueadas={datasBloqueadas}
+              clientes={clientes}
+              produtos={produtos}
+              estabelecimentoNome={activeName}
               onCriarEncomenda={criarEncomenda}
               onEditarEncomenda={editarEncomenda}
               onExcluirEncomenda={excluirEncomenda}
               onBloquearData={bloquearData}
               onDesbloquearData={desbloquearData}
+              onCriarClienteRapido={criarClienteRapido}
             />
           </TabsContent>
 
-          {/* 4. Financeiro & Caixa */}
+          {/* 4. Aba: Clientes (CustomersView) */}
+          <TabsContent value="clientes">
+            <CustomersView
+              clientes={clientes}
+              encomendas={encomendas}
+              onCriarCliente={criarCliente}
+              onEditarCliente={editarCliente}
+              onExcluirCliente={excluirCliente}
+            />
+          </TabsContent>
+
+          {/* 5. Aba: Meus Produtos / Cardápio (ProductsView) */}
+          <TabsContent value="produtos">
+            <ProductsView
+              produtos={produtos}
+              estabelecimentoCodigo={activeCode}
+              onCriarProduto={criarProduto}
+              onEditarProduto={editarProduto}
+              onExcluirProduto={excluirProduto}
+            />
+          </TabsContent>
+
+          {/* 6. Financeiro & Caixa */}
           <TabsContent value="financeiro">
             <FinanceiroTab
               transacoes={transacoes}
@@ -733,17 +976,17 @@ function Index() {
             />
           </TabsContent>
 
-          {/* 5. Equipe & Acessos */}
+          {/* 7. Equipe & Acessos */}
           <TabsContent value="colaboradores">
             <ColaboradoresTab />
           </TabsContent>
 
-          {/* 6. Meu Plano (Stripe) */}
+          {/* 8. Meu Plano (Stripe) */}
           <TabsContent value="plano">
             <MeuPlanoTab />
           </TabsContent>
 
-          {/* 7. Configurações & Perfil */}
+          {/* 9. Configurações & Perfil */}
           <TabsContent value="config">
             <ConfiguracoesTab />
           </TabsContent>
