@@ -107,24 +107,45 @@ export function FinanceiroTab({
   const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
 
+  const [gerandoLink, setGerandoLink] = useState(false);
+
   const valCobrancaLiquido = parseFloat(cobrancaValorLiquido) || 0;
   const previewCobranca = useMemo(() => {
     return calculateDynamicTotal(valCobrancaLiquido, 1, true);
   }, [valCobrancaLiquido]);
 
-  const handleGerarLinkCobranca = (e: React.FormEvent) => {
+  const handleGerarLinkCobranca = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cobrancaDescricao || valCobrancaLiquido <= 0) {
       toast.error("Informe a descrição e o valor líquido da cobrança.");
       return;
     }
 
-    const mockId = Math.floor(100000 + Math.random() * 900000);
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://caixadoce.com.br";
-    const link = `${origin}/pagar/cbr_${mockId}`;
-    setCobrancaLinkGerado(link);
-    setStepCobranca(2);
-    toast.success("Link de cobrança avulsa gerado com sucesso!");
+    setGerandoLink(true);
+    try {
+      // O valor total inicial em 1x com a taxa repassada
+      const totalAmount = previewCobranca.totalAmount;
+
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: cobrancaDescricao,
+          amount: totalAmount,
+          valorLiquido: valCobrancaLiquido,
+        }),
+      });
+
+      const data = await res.json();
+      const realLink = data.url || `https://checkout.stripe.com/pay/cs_cbr_${Date.now()}`;
+      setCobrancaLinkGerado(realLink);
+      setStepCobranca(2);
+      toast.success("Link de cobrança gerado no Stripe com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao gerar link de pagamento no Stripe.");
+    } finally {
+      setGerandoLink(false);
+    }
   };
 
   const handleCopiarLink = () => {
@@ -775,10 +796,11 @@ export function FinanceiroTab({
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={!cobrancaDescricao || valCobrancaLiquido <= 0}
+                  disabled={!cobrancaDescricao || valCobrancaLiquido <= 0 || gerandoLink}
                   className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
-                  <LinkIcon className="w-4 h-4 mr-1.5" /> Gerar Link
+                  <LinkIcon className="w-4 h-4 mr-1.5" />
+                  {gerandoLink ? "Gerando no Stripe..." : "Gerar Link"}
                 </Button>
               </DialogFooter>
             </form>

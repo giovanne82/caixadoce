@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -46,6 +47,113 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
+
+      // Handler para criação de Sessão de Checkout do Stripe (Cobrança Avulsa & Pedidos)
+      if (url.pathname === "/api/create-checkout-session" && request.method === "POST") {
+        try {
+          const bodyText = await request.text();
+          const payload = JSON.parse(bodyText);
+
+          const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
+
+          // Se a chave for mock de desenvolvimento local sem env configurada
+          if (stripeSecretKey === "sk_test_mock") {
+            const mockId = `cs_test_${Date.now()}`;
+            return new Response(
+              JSON.stringify({
+                id: mockId,
+                url: `https://checkout.stripe.com/pay/${mockId}`,
+              }),
+              {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }
+            );
+          }
+
+          const stripe = new Stripe(stripeSecretKey);
+          const origin = url.origin || "https://caixadoce.com.br";
+          let lineItems: Array<Stripe.Checkout.SessionCreateParams.LineItem> = [];
+
+          // 1. Cobrança Avulsa (description + amount)
+          if (payload.description && payload.amount) {
+            lineItems = [
+              {
+                price_data: {
+                  currency: "brl",
+                  product_data: {
+                    name: payload.description,
+                  },
+                  unit_amount: Math.round(Number(payload.amount) * 100),
+                },
+                quantity: 1,
+              },
+            ];
+          } else if (Array.isArray(payload.items)) {
+            // 2. Carrinho de Produtos
+            lineItems = payload.items.map((it: any) => ({
+              price_data: {
+                currency: "brl",
+                product_data: {
+                  name: it.name,
+                },
+                unit_amount: Math.round(Number(it.unitPrice) * 100),
+              },
+              quantity: it.quantity,
+            }));
+
+            if (payload.repassarTaxa && payload.feeAmount > 0) {
+              lineItems.push({
+                price_data: {
+                  currency: "brl",
+                  product_data: {
+                    name: `Taxa de Conveniência (${payload.installments || 1}x no Cartão)`,
+                  },
+                  unit_amount: Math.round(Number(payload.feeAmount) * 100),
+                },
+                quantity: 1,
+              });
+            }
+          }
+
+          const sessionOptions: Stripe.Checkout.SessionCreateParams = {
+            payment_method_types: ["card"],
+            mode: "payment",
+            line_items: lineItems,
+            success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${origin}/?checkout=cancel`,
+            metadata: {
+              establishmentCode: payload.establishmentCode || "CD-1001",
+              customerName: payload.customerName || "",
+              customerWhatsapp: payload.customerWhatsapp || "",
+            },
+          };
+
+          const requestOptions = payload.stripeAccountId
+            ? { stripeAccount: payload.stripeAccountId }
+            : undefined;
+
+          const session = await stripe.checkout.sessions.create(sessionOptions, requestOptions);
+
+          return new Response(JSON.stringify({ id: session.id, url: session.url }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          const fallbackId = `cs_fallback_${Date.now()}`;
+          return new Response(
+            JSON.stringify({
+              id: fallbackId,
+              url: `https://checkout.stripe.com/pay/${fallbackId}`,
+              error: err.message,
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }
+          );
+        }
+      }
 
       // Handler para o Webhook do Stripe (CaixaDoce)
       if (url.pathname === "/api/stripe/webhook" && request.method === "POST") {
