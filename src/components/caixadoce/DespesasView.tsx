@@ -13,13 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -63,8 +56,8 @@ import {
 import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
-  obterNotinhasVinculadasLista,
-  salvarNotinhasVinculadasLista,
+  obterNotinhasVinculadasPorLista,
+  salvarNotinhasVinculadasPorLista,
   formatarMoeda,
   CATEGORIAS_DESPESA_CONFIG,
   type ItemListaCompra,
@@ -124,91 +117,96 @@ export function DespesasView({
     return listas.find((l) => l.status === "ativa")?.id || listas[0]?.id || null;
   });
 
-  // Notinhas Vinculadas à Lista de Compras
-  const [linkedReceiptIds, setLinkedReceiptIds] = useState<string[]>(() =>
-    obterNotinhasVinculadasLista(estabelecimentoCodigo)
-  );
-  const [buscaNotinha, setBuscaNotinha] = useState("");
-  const [dropdownNotinhasAberto, setDropdownNotinhasAberto] = useState(false);
+  // Notinhas Vinculadas especificamente por Lista { [shoppingListId]: string[] }
+  const [linkedMap, setLinkedMap] = useState<Record<string, string[]>>({});
+  const [buscaNotinhaMap, setBuscaNotinhaMap] = useState<Record<string, string>>({});
+  const [dropdownAbertoMap, setDropdownAbertoMap] = useState<Record<string, boolean>>({});
   const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
 
-  // Carregar vinculações do Supabase no mount
+  // Carregar vinculações do Supabase no mount por lista
   useEffect(() => {
-    async function carregarNotinhasVinculadasSupabase() {
+    async function carregarNotinhasPorLista() {
       try {
         const { data, error } = await supabase
           .from("shopping_list_receipts")
-          .select("receipt_id")
+          .select("shopping_list_id, receipt_id")
           .eq("estabelecimento_codigo", estabelecimentoCodigo);
 
         if (!error && data && data.length > 0) {
-          const ids = data.map((d: any) => String(d.receipt_id));
-          setLinkedReceiptIds(ids);
-          salvarNotinhasVinculadasLista(estabelecimentoCodigo, ids);
+          const map: Record<string, string[]> = {};
+          data.forEach((row: any) => {
+            const listId = row.shopping_list_id || "global";
+            const rId = String(row.receipt_id);
+            if (!map[listId]) map[listId] = [];
+            if (!map[listId].includes(rId)) map[listId].push(rId);
+          });
+          setLinkedMap(map);
+        } else {
+          // Carregar fallback do localStorage por lista existente
+          const map: Record<string, string[]> = {};
+          listas.forEach((l) => {
+            const localIds = obterNotinhasVinculadasPorLista(l.id, estabelecimentoCodigo);
+            if (localIds.length > 0) map[l.id] = localIds;
+          });
+          setLinkedMap(map);
         }
       } catch (e) {
-        console.warn("Aviso ao carregar notinhas vinculadas do Supabase:", e);
+        console.warn("Aviso ao carregar notinhas por lista do Supabase:", e);
       }
     }
-    carregarNotinhasVinculadasSupabase();
-  }, [estabelecimentoCodigo]);
+    carregarNotinhasPorLista();
+  }, [estabelecimentoCodigo, listas]);
 
-  // Handler para Vincular Notinha
-  const handleVincularNotinha = async (receiptId: string) => {
-    if (linkedReceiptIds.includes(receiptId)) return;
+  // Handlers de vincular / desvincular notinha em lista específica
+  const handleVincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    if (atuais.includes(receiptId)) return;
 
-    const novosIds = [...linkedReceiptIds, receiptId];
-    setLinkedReceiptIds(novosIds);
-    salvarNotinhasVinculadasLista(estabelecimentoCodigo, novosIds);
-    setBuscaNotinha("");
-    setDropdownNotinhasAberto(false);
+    const novosIds = [...atuais, receiptId];
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
+    setBuscaNotinhaMap((prev) => ({ ...prev, [shoppingListId]: "" }));
+    setDropdownAbertoMap((prev) => ({ ...prev, [shoppingListId]: false }));
 
     try {
       await supabase.from("shopping_list_receipts").insert([
         {
           estabelecimento_codigo: estabelecimentoCodigo,
+          shopping_list_id: shoppingListId,
           receipt_id: receiptId,
         },
       ]);
     } catch (e) {
-      console.warn("Aviso ao vincular no Supabase:", e);
+      console.warn("Erro ao salvar vinculação no Supabase:", e);
     }
-    toast.success("Notinha vinculada à Lista de Compras!");
+    toast.success("Notinha vinculada a esta lista de compras!");
   };
 
-  // Handler para Desvincular Notinha
-  const handleDesvincularNotinha = async (receiptId: string) => {
-    const novosIds = linkedReceiptIds.filter((id) => id !== receiptId);
-    setLinkedReceiptIds(novosIds);
-    salvarNotinhasVinculadasLista(estabelecimentoCodigo, novosIds);
+  const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    const novosIds = atuais.filter((id) => id !== receiptId);
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
 
     try {
       await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("estabelecimento_codigo", estabelecimentoCodigo)
+        .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
     } catch (e) {
-      console.warn("Aviso ao desvincular do Supabase:", e);
+      console.warn("Erro ao desvincular do Supabase:", e);
     }
-    toast.info("Notinha desvinculada.");
+    toast.info("Notinha desvinculada desta lista.");
   };
 
-  // Objetos das Notinhas Vinculadas
-  const notinhasVinculadasObjetos = useMemo(() => {
-    return despesas.filter((d) => linkedReceiptIds.includes(d.id));
-  }, [despesas, linkedReceiptIds]);
-
-  // Soma Total dos Valores das Notinhas Vinculadas
-  const somaNotinhasVinculadas = useMemo(() => {
-    return notinhasVinculadasObjetos.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
-  }, [notinhasVinculadasObjetos]);
-
-  // Sugestões de Notinhas para Autocomplete/Combobox (Busca por Estabelecimento, Data, Valor ou N° Nota/Pedido)
-  const sugestoesNotinhas = useMemo(() => {
-    const termo = buscaNotinha.trim().toLowerCase();
+  // Sugestões de Notinhas para uma Lista Específica
+  const obterSugestoesParaLista = (shoppingListId: string) => {
+    const termo = (buscaNotinhaMap[shoppingListId] || "").trim().toLowerCase();
+    const vinculadosDaLista = linkedMap[shoppingListId] || [];
     return despesas.filter((d) => {
-      if (linkedReceiptIds.includes(d.id)) return false;
+      if (vinculadosDaLista.includes(d.id)) return false;
       if (!termo) return true;
       const fornecedorMatch = d.fornecedorNome.toLowerCase().includes(termo);
       const dataMatch =
@@ -221,7 +219,7 @@ export function DespesasView({
       const pedidoMatch = (d.numeroPedido || "").toLowerCase().includes(termo);
       return fornecedorMatch || dataMatch || valorMatch || notaMatch || pedidoMatch;
     }).slice(0, 8);
-  }, [despesas, linkedReceiptIds, buscaNotinha]);
+  };
 
   // Campo do Formulário para Criar Nova Lista
   const [nomeNovaListaInput, setNomeNovaListaInput] = useState("");
@@ -448,19 +446,9 @@ export function DespesasView({
             Lista de Compras <ShoppingCart className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Crie novas listas, inclua insumos e vincule notinhas fiscais capturadas.
+            Crie novas listas, inclua insumos e vincule notinhas fiscais direto em cada card.
           </p>
         </div>
-
-        <Card className="border-2 border-primary/40 bg-card shadow-xs p-3 min-w-[200px]">
-          <p className="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
-            <Receipt className="w-3.5 h-3.5" /> Soma Notinhas Vinculadas
-          </p>
-          <p className="text-xl font-black text-foreground mt-0.5">{formatarMoeda(somaNotinhasVinculadas)}</p>
-          <p className="text-[10px] text-muted-foreground">
-            {notinhasVinculadasObjetos.length} notinha(s) vinculada(s)
-          </p>
-        </Card>
       </div>
 
       {/* ========================================================================= */}
@@ -497,117 +485,6 @@ export function DespesasView({
         </CardContent>
       </Card>
 
-      {/* ========================================================================= */}
-      {/* COMPONENTE DE BUSCA E VINCULAÇÃO (AUTOCOMPLETE / COMBOBOX DE NOTINHAS) */}
-      {/* ========================================================================= */}
-      <Card className="border-border shadow-sm p-4 bg-card space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-            <Receipt className="w-4 h-4 text-primary" /> Vincular Notinha Fiscal / Cupom à Lista de Compras
-          </Label>
-          <span className="text-[11px] text-muted-foreground">
-            Associe comprovantes físicos a esta lista de compras
-          </span>
-        </div>
-
-        <div className="relative">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar notinha para vincular (por loja, data, valor, n° nota/pedido)..."
-              value={buscaNotinha}
-              onChange={(e) => {
-                setBuscaNotinha(e.target.value);
-                setDropdownNotinhasAberto(true);
-              }}
-              onFocus={() => setDropdownNotinhasAberto(true)}
-              className="h-9 pl-9 text-xs"
-            />
-          </div>
-
-          {/* Dropdown Flutuante de Autocomplete de Notinhas */}
-          {dropdownNotinhasAberto && (
-            <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
-              {sugestoesNotinhas.length > 0 ? (
-                sugestoesNotinhas.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => handleVincularNotinha(n.id)}
-                    className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-primary shrink-0" />
-                      <div>
-                        <p className="font-bold text-foreground">{n.fornecedorNome}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="font-mono font-black text-foreground">
-                      {formatarMoeda(n.valorTotal)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="p-3 text-center text-xs text-muted-foreground">
-                  {despesas.length === 0
-                    ? "Nenhuma notinha capturada no sistema ainda."
-                    : "Nenhuma notinha encontrada para o filtro ou todas já estão vinculadas."}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* SEÇÃO 'NOTINHAS VINCULADAS' COM CHIPS E ABERTURA DE MODAL */}
-      <Card className="border-border shadow-sm p-4 bg-card space-y-3">
-        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-          <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Receipt className="w-4 h-4 text-primary" /> Notinhas Vinculadas ({notinhasVinculadasObjetos.length})
-          </h4>
-          <span className="text-[11px] text-muted-foreground">
-            Clique sobre o chip para ver detalhes da notinha
-          </span>
-        </div>
-
-        {notinhasVinculadasObjetos.length === 0 ? (
-          <div className="py-6 text-center text-xs text-muted-foreground italic bg-muted/20 rounded-xl border border-border/40">
-            Nenhuma notinha vinculada a esta lista. Use o campo acima para buscar e associar notinhas fiscais capturadas!
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {notinhasVinculadasObjetos.map((notinha) => (
-              <div
-                key={notinha.id}
-                onClick={() => setNotaDetalheSelecionada(notinha)}
-                className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 text-xs font-semibold shadow-2xs transition-all select-none"
-                title="Clique para visualizar detalhes desta notinha"
-              >
-                <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>
-                  <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
-                  <span className="font-mono font-bold text-primary">{formatarMoeda(notinha.valorTotal)}</span>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDesvincularNotinha(notinha.id);
-                  }}
-                  className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 hover:text-rose-600 text-muted-foreground transition-colors"
-                  title="Desvincular Notinha"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {/* BARRA DE BUSCA EM TODAS AS LISTAS */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -620,7 +497,7 @@ export function DespesasView({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. EXIBIÇÃO DAS LISTAS DE COMPRAS (CARDS COM ACORDEÃO EXPANSÍVEL) */}
+      {/* 2. EXIBIÇÃO DAS LISTAS DE COMPRAS (CARDS INDIVIDUAIS COM RECURSOS INTEGRADOS) */}
       {/* ========================================================================= */}
       <div className="space-y-4">
         {listasFiltradas.length === 0 ? (
@@ -634,6 +511,12 @@ export function DespesasView({
             const totalItens = lista.itens.length;
             const compradosCount = lista.itens.filter((i) => i.comprado).length;
             const percentual = totalItens > 0 ? Math.round((compradosCount / totalItens) * 100) : 0;
+
+            const idsDaLista = linkedMap[lista.id] || [];
+            const notinhasDaLista = despesas.filter((d) => idsDaLista.includes(d.id));
+            const totalGastoLista = notinhasDaLista.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
+            const sugestoes = obterSugestoesParaLista(lista.id);
+            const isDropdownOpen = !!dropdownAbertoMap[lista.id];
 
             return (
               <Card
@@ -664,6 +547,12 @@ export function DespesasView({
                         >
                           {lista.status === "ativa" ? "Ativa" : "Concluída"}
                         </Badge>
+
+                        {totalGastoLista > 0 && (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">
+                            Total Notinhas: {formatarMoeda(totalGastoLista)}
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 font-medium">
                         {compradosCount} de {totalItens} itens comprados ({percentual}%) • Criada em {new Date(lista.createdAt).toLocaleDateString("pt-BR")}
@@ -684,7 +573,7 @@ export function DespesasView({
                 {/* DETALHES EXPANDIDOS DA LISTA */}
                 {isExpanded && (
                   <CardContent className="p-5 space-y-4 bg-card animate-fade-in">
-                    {/* BARRA DE AÇÕES DA LISTA (EDITAR & ENVIAR WHATSAPP) */}
+                    {/* BARRA DE AÇÕES DA LISTA */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -748,6 +637,10 @@ export function DespesasView({
 
                     {/* LISTAGEM DOS ITENS DA LISTA */}
                     <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Itens da Lista ({totalItens}):
+                      </Label>
+
                       {lista.itens.length === 0 ? (
                         <p className="text-xs text-muted-foreground py-4 text-center italic">
                           Nenhum produto nesta lista. Clique em "Editar Lista" para adicionar!
@@ -781,11 +674,112 @@ export function DespesasView({
                         </div>
                       )}
                     </div>
+
+                    {/* ========================================================================= */}
+                    {/* VINCULAÇÃO DE NOTINHAS DENTRO DESTE CARD DA LISTA INDIVIDUAL */}
+                    {/* ========================================================================= */}
+                    <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-3 mt-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <Receipt className="w-4 h-4 text-amber-600" /> Notinhas Vinculadas a esta Lista ({notinhasDaLista.length})
+                        </h4>
+                        {totalGastoLista > 0 && (
+                          <span className="text-xs font-black text-amber-900 dark:text-amber-300 font-mono">
+                            Total Comprovado: {formatarMoeda(totalGastoLista)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* CHIPS DAS NOTINHAS VINCULADAS A ESTA LISTA */}
+                      {notinhasDaLista.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground italic">
+                          Nenhum comprovante fiscal vinculado a esta lista. Use a busca abaixo para atrelar notinhas fisicamente compradas a este pedido!
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {notinhasDaLista.map((notinha) => (
+                            <div
+                              key={notinha.id}
+                              onClick={() => setNotaDetalheSelecionada(notinha)}
+                              className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card hover:bg-amber-500/15 text-foreground border border-amber-500/30 text-xs font-semibold shadow-2xs transition-all select-none"
+                              title="Clique para ver os detalhes da notinha"
+                            >
+                              <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>
+                                <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
+                                <span className="font-mono font-bold text-amber-600">{formatarMoeda(notinha.valorTotal)}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDesvincularNotinhaLista(lista.id, notinha.id);
+                                }}
+                                className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors"
+                                title="Desvincular Notinha"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* CAMPO DE BUSCA / SELEÇÃO INTEGRADO DENTRO DO CARD DA LISTA */}
+                      <div className="relative pt-1">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Vincular notinha salva a esta lista (por loja, data, valor, n° nota)..."
+                            value={buscaNotinhaMap[lista.id] || ""}
+                            onChange={(e) => {
+                              setBuscaNotinhaMap((prev) => ({ ...prev, [lista.id]: e.target.value }));
+                              setDropdownAbertoMap((prev) => ({ ...prev, [lista.id]: true }));
+                            }}
+                            onFocus={() => setDropdownAbertoMap((prev) => ({ ...prev, [lista.id]: true }))}
+                            className="h-8 pl-8 text-xs bg-background"
+                          />
+                        </div>
+
+                        {/* Dropdown Flutuante de Autocomplete de Notinhas */}
+                        {isDropdownOpen && (
+                          <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                            {sugestoes.length > 0 ? (
+                              sugestoes.map((n) => (
+                                <div
+                                  key={n.id}
+                                  onClick={() => handleVincularNotinhaLista(lista.id, n.id)}
+                                  className="p-2 hover:bg-amber-500/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <div>
+                                      <p className="font-bold text-foreground">{n.fornecedorNome}</p>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className="font-mono font-black text-foreground">{formatarMoeda(n.valorTotal)}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-2.5 text-center text-xs text-muted-foreground">
+                                {despesas.length === 0
+                                  ? "Nenhuma notinha capturada no sistema."
+                                  : "Nenhuma notinha disponível para vinculação nesta lista."}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </CardContent>
                 )}
               </Card>
             );
-          }))}
+          })
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -803,7 +797,6 @@ export function DespesasView({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Form de Adicionar Item no Modal sem campo Unidade */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
               <div className="sm:col-span-8 space-y-1">
                 <Label className="text-xs font-semibold">Produto / Insumo</Label>
@@ -837,7 +830,6 @@ export function DespesasView({
               </div>
             </div>
 
-            {/* Lista dos Itens Incluídos no Criar */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
                 Itens Incluídos ({novosItensCriacao.length}):
@@ -905,7 +897,6 @@ export function DespesasView({
               />
             </div>
 
-            {/* Adicionar Produto no Modal de Edição sem campo Unidade */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
               <div className="sm:col-span-8 space-y-1">
                 <Label className="text-xs font-semibold">Novo Produto</Label>
@@ -933,7 +924,6 @@ export function DespesasView({
               </div>
             </div>
 
-            {/* Lista dos Itens da Edição */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
                 Itens na Lista ({editItensLista.length}):

@@ -88,8 +88,8 @@ import {
   salvarNovoInsumoCatalogo,
   obterClientes,
   obterProdutosCardapio,
-  obterNotinhasVinculadasLista,
-  salvarNotinhasVinculadasLista,
+  obterNotinhasVinculadasPorLista,
+  salvarNotinhasVinculadasPorLista,
   STATUS_ENCOMENDA_CONFIG,
   CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
@@ -164,91 +164,95 @@ export function OrdersView({
   const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Notinhas Vinculadas à Lista de Compras
-  const [linkedReceiptIds, setLinkedReceiptIds] = useState<string[]>(() =>
-    obterNotinhasVinculadasLista("CD-1001")
-  );
-  const [buscaNotinha, setBuscaNotinha] = useState("");
-  const [dropdownNotinhasAberto, setDropdownNotinhasAberto] = useState(false);
+  // Notinhas Vinculadas especificamente por Lista/Encomenda { [shoppingListId]: string[] }
+  const [linkedMap, setLinkedMap] = useState<Record<string, string[]>>({});
+  const [buscaNotinhaMap, setBuscaNotinhaMap] = useState<Record<string, string>>({});
+  const [dropdownAbertoMap, setDropdownAbertoMap] = useState<Record<string, boolean>>({});
   const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
 
-  // Carregar vinculações do Supabase no mount
+  // Carregar vinculações do Supabase no mount por lista
   useEffect(() => {
-    async function carregarNotinhasVinculadasSupabase() {
+    async function carregarNotinhasPorLista() {
       try {
         const { data, error } = await supabase
           .from("shopping_list_receipts")
-          .select("receipt_id")
+          .select("shopping_list_id, receipt_id")
           .eq("estabelecimento_codigo", "CD-1001");
 
         if (!error && data && data.length > 0) {
-          const ids = data.map((d: any) => String(d.receipt_id));
-          setLinkedReceiptIds(ids);
-          salvarNotinhasVinculadasLista("CD-1001", ids);
+          const map: Record<string, string[]> = {};
+          data.forEach((row: any) => {
+            const listId = row.shopping_list_id || "global";
+            const rId = String(row.receipt_id);
+            if (!map[listId]) map[listId] = [];
+            if (!map[listId].includes(rId)) map[listId].push(rId);
+          });
+          setLinkedMap(map);
+        } else {
+          const map: Record<string, string[]> = {};
+          encomendas.forEach((e) => {
+            const localIds = obterNotinhasVinculadasPorLista(e.id, "CD-1001");
+            if (localIds.length > 0) map[e.id] = localIds;
+          });
+          setLinkedMap(map);
         }
       } catch (e) {
         console.warn("Aviso ao carregar notinhas vinculadas do Supabase:", e);
       }
     }
-    carregarNotinhasVinculadasSupabase();
-  }, []);
+    carregarNotinhasPorLista();
+  }, [encomendas]);
 
-  // Handler para Vincular Notinha
-  const handleVincularNotinha = async (receiptId: string) => {
-    if (linkedReceiptIds.includes(receiptId)) return;
+  // Handlers para Vincular / Desvincular Notinha em Lista Específica
+  const handleVincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    if (atuais.includes(receiptId)) return;
 
-    const novosIds = [...linkedReceiptIds, receiptId];
-    setLinkedReceiptIds(novosIds);
-    salvarNotinhasVinculadasLista("CD-1001", novosIds);
-    setBuscaNotinha("");
-    setDropdownNotinhasAberto(false);
+    const novosIds = [...atuais, receiptId];
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, "CD-1001");
+    setBuscaNotinhaMap((prev) => ({ ...prev, [shoppingListId]: "" }));
+    setDropdownAbertoMap((prev) => ({ ...prev, [shoppingListId]: false }));
 
     try {
       await supabase.from("shopping_list_receipts").insert([
         {
           estabelecimento_codigo: "CD-1001",
+          shopping_list_id: shoppingListId,
           receipt_id: receiptId,
         },
       ]);
     } catch (e) {
       console.warn("Aviso ao vincular no Supabase:", e);
     }
-    toast.success("Notinha vinculada à Lista de Compras!");
+    toast.success("Notinha vinculada a este pedido!");
   };
 
-  // Handler para Desvincular Notinha
-  const handleDesvincularNotinha = async (receiptId: string) => {
-    const novosIds = linkedReceiptIds.filter((id) => id !== receiptId);
-    setLinkedReceiptIds(novosIds);
-    salvarNotinhasVinculadasLista("CD-1001", novosIds);
+  const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    const novosIds = atuais.filter((id) => id !== receiptId);
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, "CD-1001");
 
     try {
       await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("estabelecimento_codigo", "CD-1001")
+        .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
     } catch (e) {
       console.warn("Aviso ao desvincular do Supabase:", e);
     }
-    toast.info("Notinha desvinculada.");
+    toast.info("Notinha desvinculada deste pedido.");
   };
 
-  // Objetos das Notinhas Vinculadas
-  const notinhasVinculadasObjetos = useMemo(() => {
-    return despesas.filter((d) => linkedReceiptIds.includes(d.id));
-  }, [despesas, linkedReceiptIds]);
-
-  // Soma Total dos Valores das Notinhas Vinculadas
-  const somaNotinhasVinculadas = useMemo(() => {
-    return notinhasVinculadasObjetos.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
-  }, [notinhasVinculadasObjetos]);
-
-  // Sugestões de Notinhas para Autocomplete/Combobox (Busca por Estabelecimento, Data, Valor ou N° Nota/Pedido)
-  const sugestoesNotinhas = useMemo(() => {
-    const termo = buscaNotinha.trim().toLowerCase();
+  // Sugestões de Notinhas para uma Lista Específica
+  const obterSugestoesParaLista = (shoppingListId: string) => {
+    const termo = (buscaNotinhaMap[shoppingListId] || "").trim().toLowerCase();
+    const vinculadosDaLista = linkedMap[shoppingListId] || [];
     return despesas.filter((d) => {
-      if (linkedReceiptIds.includes(d.id)) return false;
+      if (vinculadosDaLista.includes(d.id)) return false;
       if (!termo) return true;
       const fornecedorMatch = d.fornecedorNome.toLowerCase().includes(termo);
       const dataMatch =
@@ -261,7 +265,7 @@ export function OrdersView({
       const pedidoMatch = (d.numeroPedido || "").toLowerCase().includes(termo);
       return fornecedorMatch || dataMatch || valorMatch || notaMatch || pedidoMatch;
     }).slice(0, 8);
-  }, [despesas, linkedReceiptIds, buscaNotinha]);
+  };
 
   // Catálogo de Insumos & Produtos & Clientes
   const catalogoInsumos = useMemo(() => obterCatalogoInsumos("CD-1001"), []);
@@ -298,10 +302,7 @@ export function OrdersView({
   const [observacoes, setObservacoes] = useState("");
 
   // Formulário de Bloqueio de Data
-  const [tipoBloqueio, setTipoBloqueio] = useState<"unico" | "periodo">("unico");
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
-  const [dataBloqueioInicio, setDataBloqueioInicio] = useState(new Date().toISOString().split("T")[0]);
-  const [dataBloqueioFim, setDataBloqueioFim] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
 
   // Sugestões de Clientes
@@ -557,40 +558,17 @@ export function OrdersView({
     toast.success("Status do insumo atualizado!");
   };
 
-  // Salvar Bloqueio de Data ou Período
+  // Salvar Bloqueio de Data
   const handleSalvarBloqueio = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dataBloqueio) return;
+
     try {
-      if (tipoBloqueio === "unico") {
-        if (!dataBloqueio) return;
-        await onBloquearData(dataBloqueio, motivoBloqueio);
-        toast.success(`Data ${dataBloqueio.split("-").reverse().join("/")} bloqueada na agenda.`);
-      } else {
-        if (!dataBloqueioInicio || !dataBloqueioFim) {
-          toast.error("Informe a data de início e de fim do período.");
-          return;
-        }
-        const inicio = new Date(dataBloqueioInicio + "T00:00:00");
-        const fim = new Date(dataBloqueioFim + "T00:00:00");
-
-        if (inicio > fim) {
-          toast.error("A data de início não pode ser maior que a data de fim.");
-          return;
-        }
-
-        let cur = new Date(inicio);
-        let count = 0;
-        while (cur <= fim) {
-          const iso = cur.toISOString().split("T")[0];
-          await onBloquearData(iso, motivoBloqueio);
-          count++;
-          cur.setDate(cur.getDate() + 1);
-        }
-        toast.success(`Período bloqueado! ${count} dia(s) adicionados à agenda fechada.`);
-      }
+      await onBloquearData(dataBloqueio, motivoBloqueio);
+      toast.success(`Data ${dataBloqueio} bloqueada no calendário.`);
       setModalBloqueioOpen(false);
     } catch {
-      toast.error("Erro ao efetuar bloqueio.");
+      toast.error("Erro ao bloquear data.");
     }
   };
 
@@ -739,10 +717,10 @@ export function OrdersView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Calendário &amp; Histórico <CalendarDays className="w-6 h-6 text-primary" />
+            Encomendas &amp; Calendário <CalendarDays className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Histórico permanente de entregas, pesquisa de clientes/pedidos e resumo no WhatsApp com 1 clique.
+            Gerencie datas de entrega, produtos pedidos e envie resumo no WhatsApp com 1 clique.
           </p>
         </div>
 
@@ -775,7 +753,7 @@ export function OrdersView({
             onClick={() => setViewMode("mes")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Visão Mês
+            Mensal
           </Button>
           <Button
             variant={viewMode === "semana" ? "default" : "ghost"}
@@ -783,7 +761,7 @@ export function OrdersView({
             onClick={() => setViewMode("semana")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Visão Semana
+            Semanal
           </Button>
           <Button
             variant={viewMode === "lista" ? "default" : "ghost"}
@@ -791,7 +769,7 @@ export function OrdersView({
             onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Lista / Histórico Completo
+            Lista Completa
           </Button>
           <Button
             variant={viewMode === "compras" ? "default" : "ghost"}
@@ -1198,7 +1176,7 @@ export function OrdersView({
                 <ShoppingCart className="w-5 h-5 text-amber-600" /> Lista de Insumos para Compras &amp; Produção
               </h3>
               <p className="text-xs text-muted-foreground">
-                Insumos vinculados às encomendas pendentes (base ArtFesta e tags personalizadas).
+                Insumos e notinhas vinculadas por encomenda / pedido.
               </p>
             </div>
 
@@ -1230,8 +1208,8 @@ export function OrdersView({
             </div>
           </div>
 
-          {/* Cards de Métricas (Incluindo Soma Total Notinhas Vinculadas) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Cards de Métricas */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card className="border-border shadow-xs p-3">
               <p className="text-[11px] font-bold text-muted-foreground uppercase">Total de Insumos</p>
               <p className="text-2xl font-black text-foreground mt-0.5">{listaComprasDados.totalInsumos}</p>
@@ -1244,127 +1222,9 @@ export function OrdersView({
               <p className="text-[11px] font-bold text-amber-600 uppercase">🟡 Pendentes de Compra</p>
               <p className="text-2xl font-black text-amber-600 mt-0.5">{listaComprasDados.pendentes}</p>
             </Card>
-            <Card className="border-2 border-primary/40 bg-card shadow-xs p-3">
-              <p className="text-[11px] font-bold text-primary uppercase flex items-center gap-1">
-                <Receipt className="w-3.5 h-3.5" /> Soma Notinhas Vinculadas
-              </p>
-              <p className="text-2xl font-black text-foreground mt-0.5">{formatarMoeda(somaNotinhasVinculadas)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {notinhasVinculadasObjetos.length} notinha(s) associada(s)
-              </p>
-            </Card>
           </div>
 
-          {/* COMPONENTE DE BUSCA E VINCULAÇÃO (AUTOCOMPLETE / COMBOBOX DE NOTINHAS) */}
-          <Card className="border-border shadow-sm p-4 bg-card space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Receipt className="w-4 h-4 text-primary" /> Vincular Notinha Fiscal / Cupom à Lista de Compras
-              </Label>
-              <span className="text-[11px] text-muted-foreground">
-                Associe comprovantes físicos a esta lista de insumos
-              </span>
-            </div>
-
-            <div className="relative">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar notinha para vincular (por loja, data, valor, n° nota/pedido)..."
-                  value={buscaNotinha}
-                  onChange={(e) => {
-                    setBuscaNotinha(e.target.value);
-                    setDropdownNotinhasAberto(true);
-                  }}
-                  onFocus={() => setDropdownNotinhasAberto(true)}
-                  className="h-9 pl-9 text-xs"
-                />
-              </div>
-
-              {/* Dropdown Flutuante de Autocomplete de Notinhas */}
-              {dropdownNotinhasAberto && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
-                  {sugestoesNotinhas.length > 0 ? (
-                    sugestoesNotinhas.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => handleVincularNotinha(n.id)}
-                        className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-primary shrink-0" />
-                          <div>
-                            <p className="font-bold text-foreground">{n.fornecedorNome}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="font-mono font-black text-foreground">
-                          {formatarMoeda(n.valorTotal)}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-3 text-center text-xs text-muted-foreground">
-                      {despesas.length === 0
-                        ? "Nenhuma notinha capturada no sistema ainda."
-                        : "Nenhuma notinha encontrada para o filtro ou todas já estão vinculadas."}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* SEÇÃO 'NOTINHAS VINCULADAS' COM CHIPS E ABERTURA DE MODAL */}
-          <Card className="border-border shadow-sm p-4 bg-card space-y-3">
-            <div className="flex items-center justify-between border-b border-border/50 pb-2">
-              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Receipt className="w-4 h-4 text-primary" /> Notinhas Vinculadas ({notinhasVinculadasObjetos.length})
-              </h4>
-              <span className="text-[11px] text-muted-foreground">
-                Clique sobre o chip para ver detalhes da notinha
-              </span>
-            </div>
-
-            {notinhasVinculadasObjetos.length === 0 ? (
-              <div className="py-6 text-center text-xs text-muted-foreground italic bg-muted/20 rounded-xl border border-border/40">
-                Nenhuma notinha vinculada a esta lista. Use o campo acima para buscar e associar notinhas fiscais capturadas!
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {notinhasVinculadasObjetos.map((notinha) => (
-                  <div
-                    key={notinha.id}
-                    onClick={() => setNotaDetalheSelecionada(notinha)}
-                    className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 text-xs font-semibold shadow-2xs transition-all select-none"
-                    title="Clique para visualizar detalhes desta notinha"
-                  >
-                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span>
-                      <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
-                      <span className="font-mono font-bold text-primary">{formatarMoeda(notinha.valorTotal)}</span>
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDesvincularNotinha(notinha.id);
-                      }}
-                      className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 hover:text-rose-600 text-muted-foreground transition-colors"
-                      title="Desvincular Notinha"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Tabela ou Agrupamento de Insumos da Lista */}
+          {/* LISTA POR ENCOMENDA COM RECURSOS DE VINCULAÇÃO INTEGRADOS EM CADA CARD */}
           {abaCompras === "encomenda" ? (
             <div className="space-y-4">
               {listaComprasDados.encomendasComInsumos.length === 0 ? (
@@ -1372,44 +1232,152 @@ export function OrdersView({
                   Nenhuma encomenda com tags de insumos vinculadas.
                 </div>
               ) : (
-                listaComprasDados.encomendasComInsumos.map((enc) => (
-                  <Card key={enc.id} className="border-border shadow-xs bg-card">
-                    <CardHeader className="p-3.5 pb-2 border-b border-border/50 flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="text-sm font-bold text-foreground">
-                          {enc.clienteNome} • {enc.dataEntrega.split("-").reverse().join("/")}
-                        </CardTitle>
-                        <CardDescription className="text-xs">{enc.itens}</CardDescription>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {enc.insumosNecessarios?.filter((i) => i.comprado).length} de {enc.insumosNecessarios?.length} comprados
-                      </Badge>
-                    </CardHeader>
+                listaComprasDados.encomendasComInsumos.map((enc) => {
+                  const idsDaEncomenda = linkedMap[enc.id] || [];
+                  const notinhasDaEncomenda = despesas.filter((d) => idsDaEncomenda.includes(d.id));
+                  const totalComprovado = notinhasDaEncomenda.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
+                  const sugestoes = obterSugestoesParaLista(enc.id);
+                  const isDropdownOpen = !!dropdownAbertoMap[enc.id];
 
-                    <CardContent className="p-3.5 space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {enc.insumosNecessarios?.map((ins) => (
-                          <div
-                            key={ins.id}
-                            onClick={() => handleToggleInsumoComprado(enc.id, ins.id)}
-                            className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all select-none ${
-                              ins.comprado
-                                ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 line-through opacity-80"
-                                : "bg-card text-foreground border-amber-500/50 hover:border-amber-600 shadow-xs"
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                              ins.comprado ? "bg-emerald-600 text-white" : "border border-muted-foreground"
-                            }`}>
-                              {ins.comprado ? <Check className="w-2.5 h-2.5" /> : null}
-                            </span>
-                            <span>{ins.quantidade ? `(${ins.quantidade}x) ` : ""}{ins.nome}</span>
+                  return (
+                    <Card key={enc.id} className="border-border shadow-xs bg-card">
+                      <CardHeader className="p-3.5 pb-2 border-b border-border/50 flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle className="text-sm font-bold text-foreground">
+                            {enc.clienteNome} • {enc.dataEntrega.split("-").reverse().join("/")}
+                          </CardTitle>
+                          <CardDescription className="text-xs">{enc.itens}</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {totalComprovado > 0 && (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">
+                              Comprovado: {formatarMoeda(totalComprovado)}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {enc.insumosNecessarios?.filter((i) => i.comprado).length} de {enc.insumosNecessarios?.length} comprados
+                          </Badge>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="p-3.5 space-y-4">
+                        {/* INSUMOS DA ENCOMENDA */}
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-bold text-muted-foreground uppercase">Insumos do Pedido:</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {enc.insumosNecessarios?.map((ins) => (
+                              <div
+                                key={ins.id}
+                                onClick={() => handleToggleInsumoComprado(enc.id, ins.id)}
+                                className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all select-none ${
+                                  ins.comprado
+                                    ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 line-through opacity-80"
+                                    : "bg-card text-foreground border-amber-500/50 hover:border-amber-600 shadow-xs"
+                                }`}
+                              >
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                                  ins.comprado ? "bg-emerald-600 text-white" : "border border-muted-foreground"
+                                }`}>
+                                  {ins.comprado ? <Check className="w-2.5 h-2.5" /> : null}
+                                </span>
+                                <span>{ins.quantidade ? `(${ins.quantidade}x) ` : ""}{ins.nome}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                        </div>
+
+                        {/* VINCULAÇÃO DE NOTINHAS DENTRO DESTE CARD DA ENCOMENDA */}
+                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Receipt className="w-4 h-4 text-amber-600" /> Notinhas Vinculadas a esta Encomenda ({notinhasDaEncomenda.length})
+                            </h4>
+                          </div>
+
+                          {notinhasDaEncomenda.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground italic">
+                              Nenhuma notinha vinculada a este pedido.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {notinhasDaEncomenda.map((notinha) => (
+                                <div
+                                  key={notinha.id}
+                                  onClick={() => setNotaDetalheSelecionada(notinha)}
+                                  className="group cursor-pointer inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-card hover:bg-amber-500/15 text-foreground border border-amber-500/30 text-xs font-semibold shadow-2xs transition-all select-none"
+                                >
+                                  <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>
+                                    <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
+                                    <span className="font-mono font-bold text-amber-600">{formatarMoeda(notinha.valorTotal)}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDesvincularNotinhaLista(enc.id, notinha.id);
+                                    }}
+                                    className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* CAMPO COMBOBOX/AUTOCOMPLETE INTEGRADO NO CARD */}
+                          <div className="relative pt-1">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                              <Input
+                                placeholder="Vincular notinha salva a este pedido (por loja, data, valor, n° nota)..."
+                                value={buscaNotinhaMap[enc.id] || ""}
+                                onChange={(e) => {
+                                  setBuscaNotinhaMap((prev) => ({ ...prev, [enc.id]: e.target.value }));
+                                  setDropdownAbertoMap((prev) => ({ ...prev, [enc.id]: true }));
+                                }}
+                                onFocus={() => setDropdownAbertoMap((prev) => ({ ...prev, [enc.id]: true }))}
+                                className="h-8 pl-8 text-xs bg-background"
+                              />
+                            </div>
+
+                            {isDropdownOpen && (
+                              <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                                {sugestoes.length > 0 ? (
+                                  sugestoes.map((n) => (
+                                    <div
+                                      key={n.id}
+                                      onClick={() => handleVincularNotinhaLista(enc.id, n.id)}
+                                      className="p-2 hover:bg-amber-500/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                        <div>
+                                          <p className="font-bold text-foreground">{n.fornecedorNome}</p>
+                                          <p className="text-[10px] text-muted-foreground">
+                                            Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <span className="font-mono font-black text-foreground">{formatarMoeda(n.valorTotal)}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="p-2.5 text-center text-xs text-muted-foreground">
+                                    {despesas.length === 0
+                                      ? "Nenhuma notinha capturada."
+                                      : "Nenhuma notinha disponível para este pedido."}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           ) : (
@@ -1791,7 +1759,6 @@ export function OrdersView({
           </DialogHeader>
 
           <form onSubmit={handleSalvarEncomenda} className="space-y-4 py-2">
-            {/* 1. Nome do Cliente com Autocomplete & WhatsApp */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
               <div className="space-y-1 relative">
                 <Label htmlFor="enc-nome" className="text-xs font-semibold flex items-center justify-between">
@@ -1844,7 +1811,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 2. Data & Horário */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="enc-data" className="text-xs font-semibold">Data da Entrega / Retirada *</Label>
@@ -1870,7 +1836,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 3. ITENS PEDIDOS: TAGS/CHIPS COM QUANTIDADE */}
             <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -1972,7 +1937,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 4. VALORES FINANCEIROS: Valor Total & Sinal / Entrada */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/30 border border-border/60">
               <div className="space-y-1">
                 <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total (R$) *</Label>
@@ -1997,7 +1961,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 5. INSUMOS NECESSÁRIOS: TAGS COM CONTROLE DE QUANTIDADE */}
             <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 relative">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -2096,7 +2059,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 6. Modalidade de Entrega */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Modalidade de Entrega</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -2132,7 +2094,6 @@ export function OrdersView({
               </div>
             )}
 
-            {/* 7. Observações */}
             <div className="space-y-1">
               <Label htmlFor="enc-obs" className="text-xs font-semibold">Observações / Detalhes</Label>
               <Input
@@ -2163,76 +2124,25 @@ export function OrdersView({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-base">
-              <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data ou Período
+              <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data na Agenda
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Bloqueie 1 dia avulso ou um período completo na sua agenda.
+              Datas bloqueadas ficam marcadas como "Agenda Fechada" no calendário.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSalvarBloqueio} className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Tipo de Bloqueio</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={tipoBloqueio === "unico" ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs font-bold"
-                  onClick={() => setTipoBloqueio("unico")}
-                >
-                  1 Dia Avulso
-                </Button>
-                <Button
-                  type="button"
-                  variant={tipoBloqueio === "periodo" ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs font-bold"
-                  onClick={() => setTipoBloqueio("periodo")}
-                >
-                  Bloquear Período
-                </Button>
-              </div>
+              <Label htmlFor="bloq-data" className="text-xs">Data a ser Bloqueada *</Label>
+              <Input
+                id="bloq-data"
+                type="date"
+                value={dataBloqueio}
+                onChange={(e) => setDataBloqueio(e.target.value)}
+                className="h-8 text-xs font-bold"
+                required
+              />
             </div>
-
-            {tipoBloqueio === "unico" ? (
-              <div className="space-y-1">
-                <Label htmlFor="bloq-data" className="text-xs">Data a ser Bloqueada *</Label>
-                <Input
-                  id="bloq-data"
-                  type="date"
-                  value={dataBloqueio}
-                  onChange={(e) => setDataBloqueio(e.target.value)}
-                  className="h-8 text-xs font-bold"
-                  required
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="bloq-inicio" className="text-xs">Data Início *</Label>
-                  <Input
-                    id="bloq-inicio"
-                    type="date"
-                    value={dataBloqueioInicio}
-                    onChange={(e) => setDataBloqueioInicio(e.target.value)}
-                    className="h-8 text-xs font-bold"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="bloq-fim" className="text-xs">Data Fim *</Label>
-                  <Input
-                    id="bloq-fim"
-                    type="date"
-                    value={dataBloqueioFim}
-                    onChange={(e) => setDataBloqueioFim(e.target.value)}
-                    className="h-8 text-xs font-bold"
-                    required
-                  />
-                </div>
-              </div>
-            )}
 
             <div className="space-y-1">
               <Label htmlFor="bloq-motivo" className="text-xs">Motivo do Bloqueio *</Label>

@@ -652,6 +652,31 @@ ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : "
 Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
 }
 
+export function obterNotinhasVinculadasPorLista(
+  shoppingListId: string,
+  estabelecimentoCodigo?: string
+): string[] {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function salvarNotinhasVinculadasPorLista(
+  shoppingListId: string,
+  receiptIds: string[],
+  estabelecimentoCodigo?: string
+) {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`, JSON.stringify(receiptIds));
+  } catch (e) {
+    console.warn("Erro ao salvar notinhas vinculadas por lista:", e);
+  }
+}
+
 export function obterNotinhasVinculadasLista(estabelecimentoCodigo?: string): string[] {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   try {
