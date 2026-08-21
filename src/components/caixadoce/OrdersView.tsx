@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -58,16 +58,18 @@ import {
   Edit2,
   Trash2,
   CalendarDays,
-  CheckCircle2,
   Tag,
   X,
   ShoppingCart,
   Check,
-  Package,
+  DollarSign,
 } from "lucide-react";
 import {
   formatarMoeda,
   formatarWhatsappLink,
+  aplicarMascaraTelefone,
+  aplicarMascaraMoedaInput,
+  converterMoedaInputParaNumero,
   obterCatalogoInsumos,
   salvarNovoInsumoCatalogo,
   STATUS_ENCOMENDA_CONFIG,
@@ -77,7 +79,6 @@ import {
   type StatusEncomenda,
   type StatusPagamentoEncomenda,
   type InsumoNecessarioPedido,
-  type InsumoCatalogo,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -131,9 +132,10 @@ export function OrdersView({
   const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Catálogo de Insumos para Autocomplete de Tags
+  // Catálogo de Insumos para Autocomplete
   const catalogoInsumos = useMemo(() => obterCatalogoInsumos("CD-1001"), []);
   const [buscaTag, setBuscaTag] = useState("");
+  const [dropdownTagsAberto, setDropdownTagsAberto] = useState(false);
   const [insumosTags, setInsumosTags] = useState<InsumoNecessarioPedido[]>([]);
 
   // Filtros da Lista
@@ -141,16 +143,14 @@ export function OrdersView({
   const [filtroPagamento, setFiltroPagamento] = useState<string>("todos");
   const [busca, setBusca] = useState<string>("");
 
-  // Formulário de Encomenda
+  // Formulário de Encomenda (com Máscaras)
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsapp, setClienteWhatsapp] = useState("");
   const [dataEntrega, setDataEntrega] = useState(new Date().toISOString().split("T")[0]);
   const [horarioEntrega, setHorarioEntrega] = useState("14:00");
   const [itens, setItens] = useState("");
-  const [valorTotal, setValorTotal] = useState<number | "">("");
-  const [valorEntrada, setValorEntrada] = useState<number | "">("");
-  const [statusPagamento, setStatusPagamento] = useState<StatusPagamentoEncomenda>("pendente");
-  const [status, setStatus] = useState<StatusEncomenda>("pendente");
+  const [valorTotalFormatado, setValorTotalFormatado] = useState("");
+  const [valorEntradaFormatado, setValorEntradaFormatado] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
@@ -159,10 +159,10 @@ export function OrdersView({
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
 
-  // Sugestões de Tags Filtradas
+  // Sugestões Dinâmicas Filtradas (somente quando estiver digitando)
   const sugestoesTags = useMemo(() => {
-    if (!buscaTag.trim()) return catalogoInsumos.slice(0, 6);
-    const termo = buscaTag.toLowerCase();
+    const termo = buscaTag.trim().toLowerCase();
+    if (!termo) return [];
     return catalogoInsumos
       .filter((i) => i.nome.toLowerCase().includes(termo) || i.categoria.toLowerCase().includes(termo))
       .slice(0, 8);
@@ -175,25 +175,35 @@ export function OrdersView({
 
     if (insumosTags.some((t) => t.nome.toLowerCase() === nomeLimpo.toLowerCase())) {
       toast.info("Este insumo já foi adicionado.");
+      setBuscaTag("");
+      setDropdownTagsAberto(false);
       return;
     }
 
     const novaTag: InsumoNecessarioPedido = {
       id: crypto.randomUUID(),
       nome: nomeLimpo,
+      quantidade: 1,
       comprado: false,
     };
 
     setInsumosTags((prev) => [...prev, novaTag]);
     salvarNovoInsumoCatalogo("CD-1001", nomeLimpo);
     setBuscaTag("");
+    setDropdownTagsAberto(false);
+  };
+
+  const handleAlterarQuantidadeTag = (tagId: string, novaQtd: number | string) => {
+    setInsumosTags((prev) =>
+      prev.map((t) => (t.id === tagId ? { ...t, quantidade: novaQtd } : t))
+    );
   };
 
   const handleRemoverTag = (tagId: string) => {
     setInsumosTags((prev) => prev.filter((t) => t.id !== tagId));
   };
 
-  // Abrir Modal de Criação (opcionalmente com data pré-definida)
+  // Abrir Modal de Criação
   const handleAbrirNovaEncomenda = (dataPredefinida?: string) => {
     setEditingId(null);
     setClienteNome("");
@@ -201,12 +211,11 @@ export function OrdersView({
     setDataEntrega(dataPredefinida || new Date().toISOString().split("T")[0]);
     setHorarioEntrega("14:00");
     setItens("");
+    setValorTotalFormatado("");
+    setValorEntradaFormatado("");
     setInsumosTags([]);
     setBuscaTag("");
-    setValorTotal("");
-    setValorEntrada("");
-    setStatusPagamento("pendente");
-    setStatus("pendente");
+    setDropdownTagsAberto(false);
     setTipoEntrega("retirada");
     setEnderecoEntrega("");
     setObservacoes("");
@@ -217,16 +226,15 @@ export function OrdersView({
   const handleAbrirEdicao = (ord: Encomenda) => {
     setEditingId(ord.id);
     setClienteNome(ord.clienteNome);
-    setClienteWhatsapp(ord.clienteWhatsapp);
+    setClienteWhatsapp(aplicarMascaraTelefone(ord.clienteWhatsapp));
     setDataEntrega(ord.dataEntrega);
     setHorarioEntrega(ord.horarioEntrega || "14:00");
     setItens(ord.itens);
+    setValorTotalFormatado(ord.valorTotal ? `R$ ${(ord.valorTotal).toFixed(2).replace(".", ",")}` : "");
+    setValorEntradaFormatado(ord.valorEntrada ? `R$ ${(ord.valorEntrada).toFixed(2).replace(".", ",")}` : "");
     setInsumosTags(ord.insumosNecessarios || []);
     setBuscaTag("");
-    setValorTotal(ord.valorTotal);
-    setValorEntrada(ord.valorEntrada || "");
-    setStatusPagamento(ord.statusPagamento);
-    setStatus(ord.status);
+    setDropdownTagsAberto(false);
     setTipoEntrega(ord.tipoEntrega || "retirada");
     setEnderecoEntrega(ord.enderecoEntrega || "");
     setObservacoes(ord.observacoes || "");
@@ -236,12 +244,23 @@ export function OrdersView({
   // Salvar Encomenda
   const handleSalvarEncomenda = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clienteNome || !itens || valorTotal === "") {
+    const valorNum = converterMoedaInputParaNumero(valorTotalFormatado);
+    const entradaNum = converterMoedaInputParaNumero(valorEntradaFormatado);
+
+    if (!clienteNome || !itens || valorNum <= 0) {
       toast.error("Preencha o nome do cliente, itens e valor total.");
       return;
     }
 
     try {
+      // Define status de pagamento automaticamente baseado no sinal
+      const statusPag: StatusPagamentoEncomenda =
+        entradaNum >= valorNum
+          ? "pago_integral"
+          : entradaNum > 0
+          ? "sinal_pago"
+          : "pendente";
+
       const payload = {
         clienteNome,
         clienteWhatsapp,
@@ -249,10 +268,10 @@ export function OrdersView({
         horarioEntrega,
         itens,
         insumosNecessarios: insumosTags,
-        valorTotal: Number(valorTotal),
-        valorEntrada: valorEntrada !== "" ? Number(valorEntrada) : 0,
-        statusPagamento,
-        status,
+        valorTotal: valorNum,
+        valorEntrada: entradaNum,
+        statusPagamento: statusPag,
+        status: "pendente" as StatusEncomenda,
         tipoEntrega,
         enderecoEntrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         observacoes,
@@ -271,7 +290,7 @@ export function OrdersView({
     }
   };
 
-  // Alternar Status de Insumo Comprado/Pendente (Baixa Rápida)
+  // Alternar Insumo Comprado/Pendente
   const handleToggleInsumoComprado = async (encomendaId: string, insumoId: string) => {
     const enc = encomendas.find((e) => e.id === encomendaId);
     if (!enc || !enc.insumosNecessarios) return;
@@ -395,15 +414,12 @@ export function OrdersView({
     year: "numeric",
   });
 
-  // =========================================================================
-  // PROCESSAMENTO DA LISTA DE COMPRAS / PRODUÇÃO
-  // =========================================================================
+  // Processamento da Lista de Compras
   const listaComprasDados = useMemo(() => {
     const hojeStr = new Date().toISOString().split("T")[0];
     const agora = new Date();
     const seteDiasDepois = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // Encomendas ativas
     const ativas = encomendas.filter((e) => e.status !== "cancelada" && e.status !== "entregue");
 
     let filtradas = ativas;
@@ -413,7 +429,6 @@ export function OrdersView({
       filtradas = ativas.filter((e) => e.dataEntrega >= hojeStr && e.dataEntrega <= seteDiasDepois);
     }
 
-    // Lista achatada de insumos
     const todosInsumos: { encomendaId: string; clienteNome: string; dataEntrega: string; insumo: InsumoNecessarioPedido }[] = [];
 
     for (const enc of filtradas) {
@@ -513,7 +528,6 @@ export function OrdersView({
           </Button>
         </div>
 
-        {/* Controles de Navegação (se em mês ou semana) */}
         {(viewMode === "mes" || viewMode === "semana") && (
           <div className="flex items-center gap-2 justify-center">
             <Button
@@ -546,7 +560,6 @@ export function OrdersView({
           </div>
         )}
 
-        {/* Filtros para modo lista */}
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-56">
@@ -814,7 +827,7 @@ export function OrdersView({
                                 }`}
                               >
                                 {ins.comprado ? <Check className="w-2.5 h-2.5 mr-0.5" /> : null}
-                                {ins.nome}
+                                {ins.quantidade ? `${ins.quantidade}x ` : ""}{ins.nome}
                               </Badge>
                             ))}
                           </div>
@@ -871,7 +884,6 @@ export function OrdersView({
       {/* ========================================================================= */}
       {viewMode === "compras" && (
         <div className="space-y-6">
-          {/* Header da Lista de Compras */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/25 p-4 rounded-2xl">
             <div>
               <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
@@ -882,7 +894,6 @@ export function OrdersView({
               </p>
             </div>
 
-            {/* Abas de Período da Lista de Compras */}
             <div className="flex items-center gap-1 bg-card p-1 rounded-xl border border-border">
               <Button
                 variant={abaCompras === "hoje" ? "default" : "ghost"}
@@ -911,7 +922,6 @@ export function OrdersView({
             </div>
           </div>
 
-          {/* Cards de Métricas da Lista */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card className="border-border shadow-xs p-3">
               <p className="text-[11px] font-bold text-muted-foreground uppercase">Total de Insumos</p>
@@ -927,12 +937,11 @@ export function OrdersView({
             </Card>
           </div>
 
-          {/* Conteúdo: Por Encomenda ou Lista Achatada */}
           {abaCompras === "encomenda" ? (
             <div className="space-y-4">
               {listaComprasDados.encomendasComInsumos.length === 0 ? (
                 <div className="py-12 text-center text-xs text-muted-foreground bg-muted/20 rounded-2xl border border-border/50">
-                  Nenhuma encomenda com tags de insumos vinculadas. Adicione insumos ao cadastrar pedidos!
+                  Nenhuma encomenda com tags de insumos vinculadas.
                 </div>
               ) : (
                 listaComprasDados.encomendasComInsumos.map((enc) => (
@@ -966,7 +975,7 @@ export function OrdersView({
                             }`}>
                               {ins.comprado ? <Check className="w-2.5 h-2.5" /> : null}
                             </span>
-                            <span>{ins.nome}</span>
+                            <span>{ins.quantidade ? `(${ins.quantidade}x) ` : ""}{ins.nome}</span>
                           </div>
                         ))}
                       </div>
@@ -982,6 +991,7 @@ export function OrdersView({
                   <TableRow>
                     <TableHead className="text-xs w-12 text-center">Status</TableHead>
                     <TableHead className="text-xs">Insumo / Tag</TableHead>
+                    <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
                     <TableHead className="text-xs">Cliente / Pedido</TableHead>
                     <TableHead className="text-xs">Data de Entrega</TableHead>
                     <TableHead className="text-xs text-right">Ação</TableHead>
@@ -990,8 +1000,8 @@ export function OrdersView({
                 <TableBody>
                   {listaComprasDados.todosInsumos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
-                        Nenhum insumo pendente para o período selecionado ({abaCompras === "hoje" ? "Hoje" : "Esta Semana"}).
+                      <TableCell colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        Nenhum insumo pendente para o período selecionado.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1011,6 +1021,9 @@ export function OrdersView({
                         </TableCell>
                         <TableCell className={`text-xs font-bold ${insumo.comprado ? "line-through text-muted-foreground" : "text-foreground"}`}>
                           {insumo.nome}
+                        </TableCell>
+                        <TableCell className="text-xs text-center font-mono font-bold">
+                          {insumo.quantidade || 1}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground font-semibold">
                           {clienteNome}
@@ -1137,7 +1150,6 @@ export function OrdersView({
                           )}
                         </div>
 
-                        {/* Insumos Necessários */}
                         {ord.insumosNecessarios && ord.insumosNecessarios.length > 0 && (
                           <div className="space-y-1">
                             <Label className="text-[10px] font-bold text-muted-foreground uppercase">Insumos:</Label>
@@ -1154,7 +1166,7 @@ export function OrdersView({
                                   }`}
                                 >
                                   {ins.comprado ? <Check className="w-3 h-3 mr-1" /> : null}
-                                  {ins.nome}
+                                  {ins.quantidade ? `${ins.quantidade}x ` : ""}{ins.nome}
                                 </Badge>
                               ))}
                             </div>
@@ -1212,7 +1224,7 @@ export function OrdersView({
       </Sheet>
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA (COM TAGS DE INSUMOS) */}
+      {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA (COM MÁSCARAS E CAMPOS REORDENADOS) */}
       {/* ========================================================================= */}
       <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
@@ -1222,14 +1234,15 @@ export function OrdersView({
               {editingId ? "Editar Encomenda" : "Cadastrar Nova Encomenda"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Preencha os dados do cliente, itens e vincule os insumos necessários da ArtFesta.
+              Preencha os dados do cliente, itens, valores e vincule os insumos da ArtFesta.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSalvarEncomenda} className="space-y-4 py-2">
+            {/* 1. Nome do Cliente & WhatsApp (com Máscara) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="enc-nome" className="text-xs">Nome do Cliente *</Label>
+                <Label htmlFor="enc-nome" className="text-xs font-semibold">Nome do Cliente *</Label>
                 <Input
                   id="enc-nome"
                   placeholder="Ex: Mariana Silva"
@@ -1240,20 +1253,21 @@ export function OrdersView({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="enc-whats" className="text-xs">WhatsApp (com DDD)</Label>
+                <Label htmlFor="enc-whats" className="text-xs font-semibold">WhatsApp (com DDD)</Label>
                 <Input
                   id="enc-whats"
-                  placeholder="(11) 98765-4321"
+                  placeholder="(11) 99999-9999"
                   value={clienteWhatsapp}
-                  onChange={(e) => setClienteWhatsapp(e.target.value)}
-                  className="h-8 text-xs"
+                  onChange={(e) => setClienteWhatsapp(aplicarMascaraTelefone(e.target.value))}
+                  className="h-8 text-xs font-mono"
                 />
               </div>
             </div>
 
+            {/* 2. Data & Horário */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="enc-data" className="text-xs">Data da Entrega / Retirada *</Label>
+                <Label htmlFor="enc-data" className="text-xs font-semibold">Data da Entrega / Retirada *</Label>
                 <Input
                   id="enc-data"
                   type="date"
@@ -1264,7 +1278,7 @@ export function OrdersView({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="enc-hora" className="text-xs">Horário Previsto *</Label>
+                <Label htmlFor="enc-hora" className="text-xs font-semibold">Horário Previsto *</Label>
                 <Input
                   id="enc-hora"
                   type="time"
@@ -1276,8 +1290,9 @@ export function OrdersView({
               </div>
             </div>
 
+            {/* 3. Itens Pedidos / Descrição */}
             <div className="space-y-1">
-              <Label htmlFor="enc-itens" className="text-xs">Itens Pedidos / Descrição *</Label>
+              <Label htmlFor="enc-itens" className="text-xs font-semibold">Itens Pedidos / Descrição *</Label>
               <Textarea
                 id="enc-itens"
                 rows={2}
@@ -1289,10 +1304,33 @@ export function OrdersView({
               />
             </div>
 
-            {/* =============================================================== */}
-            {/* SELEÇÃO DE INSUMOS VIA TAGS/CHIPS (ARTFESTA & PERSONALIZADAS) */}
-            {/* =============================================================== */}
-            <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+            {/* 4. VALORES FINANCEIROS: Valor Total & Sinal / Entrada (REORDENADOS PARA CIMA) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/30 border border-border/60">
+              <div className="space-y-1">
+                <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total (R$) *</Label>
+                <Input
+                  id="enc-valor"
+                  placeholder="R$ 0,00"
+                  value={valorTotalFormatado}
+                  onChange={(e) => setValorTotalFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-8 text-xs font-black text-foreground"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="enc-sinal" className="text-xs font-bold text-emerald-600">Sinal / Entrada (R$)</Label>
+                <Input
+                  id="enc-sinal"
+                  placeholder="R$ 0,00"
+                  value={valorEntradaFormatado}
+                  onChange={(e) => setValorEntradaFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-8 text-xs text-emerald-600 font-bold"
+                />
+              </div>
+            </div>
+
+            {/* 5. INSUMOS NECESSÁRIOS: TAGS COM CONTROLE DE QUANTIDADE & AUTOCOMPLETE FLUTUANTE */}
+            <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 relative">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Tag className="w-3.5 h-3.5 text-amber-600" /> Insumos Necessários (Catálogo ArtFesta)
@@ -1300,137 +1338,138 @@ export function OrdersView({
                 <span className="text-[10px] text-muted-foreground">{insumosTags.length} insumo(s)</span>
               </div>
 
-              {/* Chips Já Selecionados */}
-              <div className="flex flex-wrap gap-1.5 min-h-[32px] p-2 bg-background rounded-lg border border-border">
+              {/* Chips com Quantidade: [ Nome | Qtd: [1] ] [x] */}
+              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
                 {insumosTags.length === 0 ? (
                   <span className="text-[11px] text-muted-foreground italic">
-                    Nenhum insumo vinculado ainda. Digite abaixo ou selecione uma sugestão.
+                    Nenhum insumo adicionado. Comece a digitar abaixo para buscar sugestões.
                   </span>
                 ) : (
                   insumosTags.map((t) => (
-                    <Badge
+                    <div
                       key={t.id}
-                      variant="secondary"
-                      className="text-xs py-1 px-2.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 flex items-center gap-1"
+                      className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold shadow-2xs"
                     >
-                      <span>{t.nome}</span>
+                      <span className="truncate max-w-[150px]">{t.nome}</span>
+                      <span className="text-muted-foreground/60">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={t.quantidade ?? 1}
+                          onChange={(e) => handleAlterarQuantidadeTag(t.id, Number(e.target.value) || 1)}
+                          className="w-10 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleRemoverTag(t.id)}
-                        className="hover:text-rose-600 ml-0.5"
+                        className="hover:text-rose-600 ml-1 text-muted-foreground"
                       >
                         <X className="w-3 h-3" />
                       </button>
-                    </Badge>
+                    </div>
                   ))
                 )}
               </div>
 
-              {/* Input com Autocomplete */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Digite para buscar ou criar insumo (ex: Harald Ao Leite, Chantilly, Nutella)..."
-                  value={buscaTag}
-                  onChange={(e) => setBuscaTag(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAdicionarTag(buscaTag);
-                    }
-                  }}
-                  className="h-8 text-xs flex-1"
-                />
+              {/* Input com Dropdown Flutuante */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Digite para buscar insumo (ex: Harald Ao Leite, Chantilly, Nutella)..."
+                    value={buscaTag}
+                    onChange={(e) => {
+                      setBuscaTag(e.target.value);
+                      setDropdownTagsAberto(true);
+                    }}
+                    onFocus={() => setDropdownTagsAberto(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAdicionarTag(buscaTag);
+                      }
+                    }}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleAdicionarTag(buscaTag)}
+                    disabled={!buscaTag.trim()}
+                    className="h-8 px-3 text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+                  </Button>
+                </div>
+
+                {/* Dropdown Flutuante de Sugestões (Aparece Apenas ao Digitar) */}
+                {dropdownTagsAberto && buscaTag.trim().length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40 animate-fade-in">
+                    {sugestoesTags.length > 0 ? (
+                      sugestoesTags.map((sug) => (
+                        <div
+                          key={sug.id}
+                          onClick={() => handleAdicionarTag(sug.nome)}
+                          className="p-2 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                        >
+                          <span className="font-semibold text-foreground">{sug.nome}</span>
+                          <span className="text-[10px] text-muted-foreground">{sug.categoria}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div
+                        onClick={() => handleAdicionarTag(buscaTag)}
+                        className="p-2.5 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Criar nova tag "{buscaTag}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 6. Modalidade de Entrega */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Modalidade de Entrega</Label>
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
-                  size="sm"
-                  onClick={() => handleAdicionarTag(buscaTag)}
-                  disabled={!buscaTag.trim()}
-                  className="h-8 px-3 text-xs"
+                  variant={tipoEntrega === "retirada" ? "default" : "outline"}
+                  onClick={() => setTipoEntrega("retirada")}
+                  className="h-8 text-xs font-semibold"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Tag
+                  <Store className="w-3.5 h-3.5 mr-1.5" /> Retirada no Balcão
+                </Button>
+                <Button
+                  type="button"
+                  variant={tipoEntrega === "delivery" ? "default" : "outline"}
+                  onClick={() => setTipoEntrega("delivery")}
+                  className="h-8 text-xs font-semibold"
+                >
+                  <Truck className="w-3.5 h-3.5 mr-1.5" /> Delivery / Entrega
                 </Button>
               </div>
-
-              {/* Sugestões Rápidas ArtFesta */}
-              <div className="flex flex-wrap gap-1 pt-1">
-                <span className="text-[10px] font-bold text-muted-foreground mr-1">Sugestões:</span>
-                {sugestoesTags.map((sug) => (
-                  <button
-                    key={sug.id}
-                    type="button"
-                    onClick={() => handleAdicionarTag(sug.nome)}
-                    className="text-[10px] bg-muted/60 hover:bg-amber-500/20 text-foreground px-2 py-0.5 rounded-md border border-border/60 transition-colors"
-                  >
-                    + {sug.nome}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {/* Valores & Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {tipoEntrega === "delivery" && (
               <div className="space-y-1">
-                <Label htmlFor="enc-valor" className="text-xs">Valor Total (R$) *</Label>
+                <Label htmlFor="enc-end" className="text-xs font-semibold">Endereço de Entrega</Label>
                 <Input
-                  id="enc-valor"
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  value={valorTotal}
-                  onChange={(e) => setValorTotal(e.target.value ? Number(e.target.value) : "")}
-                  className="h-8 text-xs font-black text-foreground"
-                  required
+                  id="enc-end"
+                  placeholder="Rua, Número, Bairro, Complemento"
+                  value={enderecoEntrega}
+                  onChange={(e) => setEnderecoEntrega(e.target.value)}
+                  className="h-8 text-xs"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="enc-sinal" className="text-xs">Sinal / Entrada (R$)</Label>
-                <Input
-                  id="enc-sinal"
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  value={valorEntrada}
-                  onChange={(e) => setValorEntrada(e.target.value ? Number(e.target.value) : "")}
-                  className="h-8 text-xs text-emerald-600 font-semibold"
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Status do Pagamento</Label>
-                <Select value={statusPagamento} onValueChange={(v: StatusPagamentoEncomenda) => setStatusPagamento(v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente (0%)</SelectItem>
-                    <SelectItem value="sinal_pago">Sinal Pago (50%)</SelectItem>
-                    <SelectItem value="pago_integral">100% Pago</SelectItem>
-                    <SelectItem value="pago_na_entrega">Pagar na Entrega</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Status de Produção</Label>
-                <Select value={status} onValueChange={(v: StatusEncomenda) => setStatus(v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="em_producao">Em Produção</SelectItem>
-                    <SelectItem value="pronta">Pronta p/ Entrega</SelectItem>
-                    <SelectItem value="entregue">Entregue</SelectItem>
-                    <SelectItem value="cancelada">Cancelada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
+            {/* 7. Observações */}
             <div className="space-y-1">
-              <Label htmlFor="enc-obs" className="text-xs">Observações / Detalhes</Label>
+              <Label htmlFor="enc-obs" className="text-xs font-semibold">Observações / Detalhes</Label>
               <Input
                 id="enc-obs"
                 placeholder="Ex: Nome no topo do bolo, vela inclusa..."

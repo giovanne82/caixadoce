@@ -173,7 +173,7 @@ export interface InsumoNecessarioPedido {
   id: string;
   nome: string;
   comprado: boolean;
-  quantidade?: string;
+  quantidade?: number | string;
 }
 
 export interface Encomenda {
@@ -184,7 +184,7 @@ export interface Encomenda {
   dataEntrega: string; // YYYY-MM-DD
   horarioEntrega: string; // HH:mm
   itens: string; // Descrição ou resumo dos itens pedidos
-  insumosNecessarios?: InsumoNecessarioPedido[]; // Tags de insumos vinculados
+  insumosNecessarios?: InsumoNecessarioPedido[]; // Tags de insumos vinculados com quantidade
   valorTotal: number;
   valorEntrada?: number;
   statusPagamento: StatusPagamentoEncomenda;
@@ -245,9 +245,9 @@ export interface DespesaNotaFiscal {
   fornecedorNome: string;
   dataCompra: string; // YYYY-MM-DD
   horaCompra?: string; // HH:mm:ss
-  numeroNota?: string; // Ex: NF-e 000.142.890
-  numeroPedido?: string; // Ex: PED-84920
-  fornecedorEndereco?: string; // Ex: Av. Brasil, 4500 - São Paulo/SP
+  numeroNota?: string;
+  numeroPedido?: string;
+  fornecedorEndereco?: string;
   valorTotal: number;
   valorProducao: number;
   valorUtensilios: number;
@@ -338,9 +338,6 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
   return "outros";
 }
 
-/**
- * Função de Conciliação Inteligente: Cruzamento entre itens fiscais da nota e tags pendentes
- */
 export function correlacionarInsumosComItensNota(
   itensNota: ItemNotaFiscal[],
   encomendas: Encomenda[]
@@ -498,11 +495,41 @@ export const CATEGORIAS_PADRAO = {
   ],
 };
 
+// ==============================================================================
+// HELPERS DE MÁSCARA E FORMATAÇÃO
+// ==============================================================================
+
 export function formatarMoeda(valor: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(valor || 0);
+}
+
+export function aplicarMascaraTelefone(valor: string): string {
+  const limpo = valor.replace(/\D/g, "").slice(0, 11);
+  if (!limpo) return "";
+  if (limpo.length <= 2) return `(${limpo}`;
+  if (limpo.length <= 6) return `(${limpo.slice(0, 2)}) ${limpo.slice(2)}`;
+  if (limpo.length <= 10) return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
+  return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
+}
+
+export function aplicarMascaraMoedaInput(valorInput: string): string {
+  const digitos = valorInput.replace(/\D/g, "");
+  if (!digitos) return "";
+  const centavos = (Number(digitos) / 100).toFixed(2);
+  return `R$ ${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(centavos))}`;
+}
+
+export function converterMoedaInputParaNumero(valorFormatado: string): number {
+  if (!valorFormatado) return 0;
+  const limpo = valorFormatado.replace(/\D/g, "");
+  if (!limpo) return 0;
+  return Number(limpo) / 100;
 }
 
 export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {

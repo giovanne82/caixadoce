@@ -400,7 +400,7 @@ export function FinanceiroTab({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(tipo === "receita" ? CATEGORIAS_PADRAO.receitas : CATEGORIAS_PADRAO.despesas).map((c) => (
+                  {(tipo === "receita" ? CATEGORIAS_PADRAO.receitas : CATEGORIAS_PADRAO.despesas).map((c: string) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>
