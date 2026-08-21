@@ -32,6 +32,8 @@ import {
   Plus,
   Clock,
   FileText,
+  MessageCircle,
+  Eye,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -67,6 +69,21 @@ export function ScannerView({
 
   // Modal de Revisão dos Dados Extraídos
   const [modalRevisaoOpen, setModalRevisaoOpen] = useState(false);
+
+  // Modal de Visualização de Detalhes da Notinha
+  const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
+  const [registroDetalhes, setRegistroDetalhes] = useState<DespesaNotaFiscal | null>(null);
+
+  const abrirDetalhesRegistro = (registro: DespesaNotaFiscal) => {
+    setRegistroDetalhes(registro);
+    setModalDetalhesOpen(true);
+  };
+
+  const compartilharNotinhaWhatsApp = (despesa: DespesaNotaFiscal) => {
+    const mensagem = `*Resumo da Compra* 🧾\n🏪 *Estabelecimento:* ${despesa.fornecedorNome}\n📅 *Data:* ${despesa.dataCompra}\n💰 *Total:* ${formatarMoeda(despesa.valorTotal)}`;
+    const textoCodificado = encodeURIComponent(mensagem);
+    window.open(`https://api.whatsapp.com/send?text=${textoCodificado}`, "_blank");
+  };
 
   // Metadados Fiscais Extraídos
   const [fornecedorNome, setFornecedorNome] = useState("");
@@ -297,25 +314,47 @@ export function ScannerView({
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead className="text-xs font-bold w-40">Data</TableHead>
+                <TableHead className="text-xs font-bold w-36">Data</TableHead>
                 <TableHead className="text-xs font-bold">Nome do Estabelecimento</TableHead>
-                <TableHead className="text-xs font-bold text-right w-44">Valor Total</TableHead>
+                <TableHead className="text-xs font-bold text-right w-36">Valor Total</TableHead>
+                <TableHead className="text-xs font-bold text-center w-24">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {ultimosRegistros.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-10 text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground">
                     Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
                   </TableCell>
                 </TableRow>
               ) : (
                 ultimosRegistros.map((d) => (
-                  <TableRow key={d.id} className="hover:bg-muted/20">
+                  <TableRow
+                    key={d.id}
+                    onClick={() => abrirDetalhesRegistro(d)}
+                    className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
+                  >
                     <TableCell className="font-mono text-xs text-muted-foreground">{d.dataCompra}</TableCell>
-                    <TableCell className="font-semibold text-xs text-foreground">{d.fornecedorNome}</TableCell>
+                    <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors">
+                      {d.fornecedorNome}
+                    </TableCell>
                     <TableCell className="font-bold text-xs text-emerald-600 text-right">
                       {formatarMoeda(d.valorTotal)}
+                    </TableCell>
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          compartilharNotinhaWhatsApp(d);
+                        }}
+                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
+                        title="Compartilhar no WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -464,6 +503,102 @@ export function ScannerView({
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
               {salvando ? "Salvando..." : "Salvar Notinha"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE VISUALIZAÇÃO DE DETALHES DA NOTINHA */}
+      {/* ========================================================================= */}
+      <Dialog open={modalDetalhesOpen} onOpenChange={setModalDetalhesOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <FileText className="w-5 h-5 text-primary" /> Detalhes da Notinha Fiscal
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Visualização completa dos itens e metadados capturados da nota.
+            </DialogDescription>
+          </DialogHeader>
+
+          {registroDetalhes && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Estabelecimento / Mercado</Label>
+                  <p className="text-sm font-bold text-foreground">{registroDetalhes.fornecedorNome}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Data da Compra</Label>
+                  <p className="text-sm font-semibold text-foreground">{registroDetalhes.dataCompra}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-foreground">
+                  Itens da Notinha ({registroDetalhes.itens?.length || 0}):
+                </Label>
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="text-xs font-bold">Descrição do Item</TableHead>
+                        <TableHead className="text-xs font-bold text-center w-16">Qtd</TableHead>
+                        <TableHead className="text-xs font-bold text-right w-24">Unitário</TableHead>
+                        <TableHead className="text-xs font-bold text-right w-24">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(!registroDetalhes.itens || registroDetalhes.itens.length === 0) ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">
+                            Nenhum item discriminado nesta notinha.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        registroDetalhes.itens.map((item, idx) => (
+                          <TableRow key={item.id || idx}>
+                            <TableCell className="text-xs font-medium text-foreground">{item.nome}</TableCell>
+                            <TableCell className="text-xs font-bold text-center">{item.quantidade}</TableCell>
+                            <TableCell className="text-xs text-right text-muted-foreground">
+                              {formatarMoeda(item.valorUnitario || 0)}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold text-right text-foreground">
+                              {formatarMoeda(item.valorTotal)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F3EEF9] border border-[#8E7CC3]/30">
+                <span className="text-xs font-extrabold text-[#5B478E] uppercase tracking-wider">
+                  TOTAL DA NOTINHA:
+                </span>
+                <span className="text-xl font-black text-[#2E1A47]">
+                  {formatarMoeda(registroDetalhes.valorTotal)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (registroDetalhes) compartilharNotinhaWhatsApp(registroDetalhes);
+              }}
+              className="gap-2 text-emerald-600 border-emerald-300 hover:bg-emerald-50 text-xs"
+            >
+              <MessageCircle className="w-4 h-4 text-emerald-600" /> Compartilhar no WhatsApp
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
