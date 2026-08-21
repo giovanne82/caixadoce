@@ -138,7 +138,7 @@ export function ConfiguracoesTab() {
       </div>
 
       <Tabs defaultValue="perfil" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-2 sm:grid-cols-4">
+        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3">
           <TabsTrigger value="perfil" className="flex items-center gap-1.5">
             <User className="w-4 h-4" /> Perfil Pessoal
           </TabsTrigger>
@@ -147,9 +147,6 @@ export function ConfiguracoesTab() {
           </TabsTrigger>
           <TabsTrigger value="seguranca" className="flex items-center gap-1.5">
             <Lock className="w-4 h-4" /> Segurança
-          </TabsTrigger>
-          <TabsTrigger value="equipe" className="flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4" /> Equipe &amp; Acessos
           </TabsTrigger>
         </TabsList>
 
@@ -185,8 +182,8 @@ export function ConfiguracoesTab() {
           </Card>
         </TabsContent>
 
-        {/* TAB: ESTABELECIMENTO & PIX */}
-        <TabsContent value="empresa">
+        {/* TAB: ESTABELECIMENTO & PIX (INCLUI EQUIPE & COLABORADORES) */}
+        <TabsContent value="empresa" className="space-y-6">
           <Card className="border-border shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-bold text-foreground">
@@ -291,6 +288,11 @@ export function ConfiguracoesTab() {
               </form>
             </CardContent>
           </Card>
+
+          {/* SEÇÃO DE EQUIPE & COLABORADORES INTEGRADA NA ABA DE ESTABELECIMENTO */}
+          <div className="pt-6 border-t border-border mt-6">
+            <ColaboradoresTab />
+          </div>
         </TabsContent>
 
         {/* TAB: SEGURANÇA */}
@@ -355,11 +357,6 @@ export function ConfiguracoesTab() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
-
-        {/* TAB: EQUIPE & ACESSOS */}
-        <TabsContent value="equipe">
-          <ColaboradoresTab />
         </TabsContent>
       </Tabs>
 

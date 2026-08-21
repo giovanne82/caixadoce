@@ -949,7 +949,7 @@ function Index() {
                 <Camera className="w-4 h-4 text-primary" /> Escanear
               </TabsTrigger>
               <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Layers className="w-4 h-4 text-primary" /> Compras
+                <Layers className="w-4 h-4 text-primary" /> Lista de Compras
               </TabsTrigger>
               <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
                 <CalendarDays className="w-4 h-4 text-primary" /> Calendário

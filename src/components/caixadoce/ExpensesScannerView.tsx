@@ -738,7 +738,7 @@ export function ExpensesScannerView({
                 <TableHead className="text-xs">Utensílios</TableHead>
                 <TableHead className="text-xs">Consumo Próprio</TableHead>
                 <TableHead className="text-xs">Total Nota</TableHead>
-                <TableHead className="text-xs text-right">Ações</TableHead>
+                <TableHead className="text-xs text-right">Compartilhar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

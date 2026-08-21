@@ -135,7 +135,7 @@ export function ColaboradoresTab() {
             Equipe &amp; Colaboradores <Users className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Gerencie operadores de caixa, gerentes e permissões de acesso ao sistema.
+            Compartilhe a sua lista de compras e notinhas com colaboradores.
           </p>
         </div>
         <Button onClick={() => setModalNovo(true)} className="font-semibold shadow-md">

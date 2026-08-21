@@ -319,7 +319,7 @@ export function ScannerView({
                 <TableHead className="text-xs font-bold w-36">Data</TableHead>
                 <TableHead className="text-xs font-bold">Nome do Estabelecimento</TableHead>
                 <TableHead className="text-xs font-bold text-right w-36">Valor Total</TableHead>
-                <TableHead className="text-xs font-bold text-center w-24">Ações</TableHead>
+                <TableHead className="text-xs font-bold text-center w-28">Compartilhar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
