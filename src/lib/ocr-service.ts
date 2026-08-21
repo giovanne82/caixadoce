@@ -53,18 +53,7 @@ export async function processarNotinhaComOCR(
 
   onStepProgress?.("Enviando notinha para a IA Multimodal do Google Gemini 1.5 Flash...");
 
-  const systemPrompt = `Você é um leitor inteligente de cupons fiscais, notinhas de supermercado e comprovantes de compras de confeitaria.
-Analise a imagem da notinha fiscal anexada e extraia as informações com extrema precisão.
-Retorne APENAS um objeto JSON no seguinte formato estrito, sem formatação markdown extra e sem texto adicional:
-
-{
-  "establishment": "Nome do estabelecimento / loja",
-  "date": "YYYY-MM-DD",
-  "items": [
-    { "name": "Descrição do produto", "quantity": 1, "total_price": 4.90 }
-  ],
-  "total_amount": 72.60
-}`;
+  const systemPrompt = `Você é um leitor especialista em cupons fiscais, NFC-e e DANFE do Brasil. Analise a imagem anexada e retorne ESTRITAMENTE um JSON válido com o schema: { "establishment": "Nome do estabelecimento / loja", "date": "YYYY-MM-DD", "items": [{ "name": "Descrição do produto", "quantity": 1, "total_price": 4.90 }], "total_amount": 72.60 }. Não inclua blocos markdown ou texto extra, apenas o JSON puro.`;
 
   let parsedJSON: any = null;
 
