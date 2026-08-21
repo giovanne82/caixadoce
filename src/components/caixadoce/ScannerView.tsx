@@ -41,6 +41,7 @@ import {
   type Encomenda,
   type ListaCompras,
 } from "@/lib/caixadoce-data";
+import { processarNotinhaComOCR } from "@/lib/ocr-service";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
@@ -90,85 +91,35 @@ export function ScannerView({
       } else {
         setFilePreview(null);
       }
-      processarOCRSimulado(file);
+      processarOCRReal(file);
     }
   };
 
-  // Leitura OCR Simulado com Alta Precisão
-  const processarOCRSimulado = (file: File) => {
+  // Leitura OCR Real com Tesseract.js e Parser de Cupom Fiscal
+  const processarOCRReal = async (file: File) => {
     setIsScanning(true);
-    setScanStepMessage("Lendo metadados do cupom fiscal...");
+    setScanStepMessage("Iniciando leitura OCR da notinha fiscal...");
 
-    setTimeout(() => {
-      setScanStepMessage("Identificando insumos e valores...");
-    }, 1200);
+    try {
+      const res = await processarNotinhaComOCR(file, (msg) => {
+        setScanStepMessage(msg);
+      });
 
-    setTimeout(() => {
-      setScanStepMessage("Organizando itens do cupom...");
-    }, 2400);
-
-    setTimeout(() => {
       setIsScanning(false);
+      setFornecedorNome(res.fornecedorNome);
+      setFornecedorEndereco(res.fornecedorEndereco);
+      setNumeroNota(res.numeroNota);
+      setNumeroPedido(res.numeroPedido);
+      setDataCompra(res.dataCompra);
+      setHoraCompra(res.horaCompra);
+      setItensExtraidos(res.itens);
 
-      // Extração Inteligente do Nome do Estabelecimento
-      const nameLower = file.name.toLowerCase();
-      let estNome = "ArtFesta Confeitaria & Embalagens";
-      if (nameLower.includes("atacadao") || nameLower.includes("atacadão")) {
-        estNome = "Atacadão dos Confeiteiros S/A";
-      } else if (nameLower.includes("super") || nameLower.includes("doce")) {
-        estNome = "Supermercado Doce Preço Ltda";
-      } else if (nameLower.includes("assai") || nameLower.includes("assaí")) {
-        estNome = "Assaí Atacadista S/A";
-      } else if (nameLower.includes("carrefour")) {
-        estNome = "Carrefour Hipermercado Ltda";
-      }
-      setFornecedorNome(estNome);
-      setFornecedorEndereco("Av. das Confeiteiras, 1500 - Centro");
-      setNumeroNota(String(Math.floor(100000 + Math.random() * 900000)));
-      setNumeroPedido(String(Math.floor(1000 + Math.random() * 9000)));
-      setDataCompra(new Date().toISOString().split("T")[0]);
-      setHoraCompra("14:35:10");
-
-      // Itens lidos do cupom
-      const mockItens: ItemNotaFiscal[] = [
-        {
-          id: crypto.randomUUID(),
-          nome: "Leite Condensado Moça 395g",
-          quantidade: 6,
-          valorUnitario: 7.90,
-          valorTotal: 47.40,
-          categoria: categorizarItemAutomatico("Leite Condensado Moça 395g"),
-        },
-        {
-          id: crypto.randomUUID(),
-          nome: "Cobertura Harald Melken Ao Leite 1kg",
-          quantidade: 2,
-          valorUnitario: 34.50,
-          valorTotal: 69.00,
-          categoria: categorizarItemAutomatico("Cobertura Harald Melken Ao Leite 1kg"),
-        },
-        {
-          id: crypto.randomUUID(),
-          nome: "Chantilly Norcau 1L",
-          quantidade: 4,
-          valorUnitario: 14.20,
-          valorTotal: 56.80,
-          categoria: categorizarItemAutomatico("Chantilly Norcau 1L"),
-        },
-        {
-          id: crypto.randomUUID(),
-          nome: "Forma de Acetato BWB Coração lapidado",
-          quantidade: 3,
-          valorUnitario: 12.00,
-          valorTotal: 36.00,
-          categoria: categorizarItemAutomatico("Forma de Acetato BWB Coração lapidado"),
-        },
-      ];
-
-      setItensExtraidos(mockItens);
       setModalRevisaoOpen(true);
-      toast.success("Leitura do cupom concluída com sucesso!");
-    }, 3200);
+      toast.success("Leitura OCR do cupom fiscal concluída com sucesso! 🎉");
+    } catch (e: any) {
+      setIsScanning(false);
+      toast.error(`Erro ao ler notinha: ${e.message}`);
+    }
   };
 
   // Edição Simplificada dos Itens (Nome, Qtd, Valor Total)

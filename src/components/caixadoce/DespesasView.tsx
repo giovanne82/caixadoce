@@ -587,9 +587,9 @@ export function DespesasView({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Formulário para Inserir Produto */}
+            {/* Formulário para Inserir Produto sem campo Unidade */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
-              <div className="sm:col-span-6 space-y-1">
+              <div className="sm:col-span-8 space-y-1">
                 <Label className="text-xs font-semibold">Nome do Produto / Insumo</Label>
                 <Input
                   placeholder="Ex: Leite Condensado, Cobertura 1kg..."
@@ -605,8 +605,8 @@ export function DespesasView({
                 />
               </div>
 
-              <div className="sm:col-span-3 space-y-1">
-                <Label className="text-xs font-semibold">Qtd</Label>
+              <div className="sm:col-span-4 space-y-1">
+                <Label className="text-xs font-semibold">Quantidade</Label>
                 <Input
                   type="number"
                   min={1}
@@ -614,23 +614,6 @@ export function DespesasView({
                   onChange={(e) => setModalItemQtd(Number(e.target.value))}
                   className="h-9 text-xs text-center"
                 />
-              </div>
-
-              <div className="sm:col-span-3 space-y-1">
-                <Label className="text-xs font-semibold">Unidade</Label>
-                <Select value={modalItemUnidade} onValueChange={setModalItemUnidade}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="un">un</SelectItem>
-                    <SelectItem value="kg">kg</SelectItem>
-                    <SelectItem value="g">g</SelectItem>
-                    <SelectItem value="cx">cx</SelectItem>
-                    <SelectItem value="pct">pct</SelectItem>
-                    <SelectItem value="L">L</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="col-span-full pt-1">
@@ -659,7 +642,7 @@ export function DespesasView({
                   {novosItensCriacao.map((it, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-xs">
                       <span className="font-bold text-foreground">
-                        {it.quantidade} {it.unidade} x {it.nome}
+                        {it.quantidade}x {it.nome}
                       </span>
                       <Button
                         type="button"
@@ -719,9 +702,9 @@ export function DespesasView({
               />
             </div>
 
-            {/* Adicionar Produto no Modal de Edição */}
+            {/* Adicionar Produto no Modal de Edição sem campo Unidade */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
-              <div className="sm:col-span-6 space-y-1">
+              <div className="sm:col-span-8 space-y-1">
                 <Label className="text-xs font-semibold">Novo Produto</Label>
                 <Input
                   placeholder="Nome do insumo..."
@@ -730,8 +713,8 @@ export function DespesasView({
                   className="h-8 text-xs"
                 />
               </div>
-              <div className="sm:col-span-3 space-y-1">
-                <Label className="text-xs font-semibold">Qtd</Label>
+              <div className="sm:col-span-4 space-y-1">
+                <Label className="text-xs font-semibold">Quantidade</Label>
                 <Input
                   type="number"
                   min={1}
@@ -740,25 +723,9 @@ export function DespesasView({
                   className="h-8 text-xs text-center"
                 />
               </div>
-              <div className="sm:col-span-3 space-y-1">
-                <Label className="text-xs font-semibold">Unidade</Label>
-                <Select value={editNovoItemUnidade} onValueChange={setEditNovoItemUnidade}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="un">un</SelectItem>
-                    <SelectItem value="kg">kg</SelectItem>
-                    <SelectItem value="g">g</SelectItem>
-                    <SelectItem value="cx">cx</SelectItem>
-                    <SelectItem value="pct">pct</SelectItem>
-                    <SelectItem value="L">L</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="col-span-full pt-1">
-                <Button type="button" onClick={handleAdicionarItemEdicao} size="sm" variant="secondary" className="w-full text-xs font-bold">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> + Incluir no Cupom
+                <Button type="button" onClick={handleAdicionarItemEdicao} size="sm" variant="secondary" className="w-full text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2]">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> + Incluir na Lista
                 </Button>
               </div>
             </div>
@@ -772,7 +739,7 @@ export function DespesasView({
                 {editItensLista.map((it, idx) => (
                   <div key={it.id || idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-xs">
                     <span className="font-bold text-foreground">
-                      {it.quantidade} {it.unidade || "un"} x {it.nome}
+                      {it.quantidade}x {it.nome}
                     </span>
                     <Button
                       type="button"
