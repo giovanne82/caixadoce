@@ -7,9 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { LoginView } from "@/components/auth/LoginView";
 import { ProfileSelectionView } from "@/components/auth/ProfileSelectionView";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
-import { DashboardTab } from "@/components/caixadoce/DashboardTab";
+import { ScannerView } from "@/components/caixadoce/ScannerView";
+import { DespesasView } from "@/components/caixadoce/DespesasView";
 import { OrdersView } from "@/components/caixadoce/OrdersView";
-import { ExpensesScannerView } from "@/components/caixadoce/ExpensesScannerView";
 import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
@@ -20,9 +20,9 @@ import { NotificationBell } from "@/components/caixadoce/NotificationBell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard,
+  Camera,
+  Layers,
   CalendarDays,
-  ScanLine,
   DollarSign,
   Users,
   CreditCard,
@@ -43,9 +43,9 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Gestão Financeira, Encomendas & Scanner" },
-      { name: "description", content: "Sistema inteligente para gestão de confeitaria, notas fiscais, caixa e equipe." },
-      { property: "og:title", content: "CaixaDoce — Gestão Financeira Inteligente" },
+      { title: "CaixaDoce — Escanear Notas, Despesas & Encomendas" },
+      { name: "description", content: "Sistema inteligente para scanner de cupons, gestão de despesas e encomendas de confeitaria." },
+      { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
     ],
   }),
   component: Index,
@@ -53,7 +53,8 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { user, profile, isMounted, logout, switchProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  // Scanner é a tela inicial padrão ao abrir o sistema
+  const [activeTab, setActiveTab] = useState<string>("scanner");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
@@ -227,7 +228,6 @@ function Index() {
         if (raw) {
           setDespesas(JSON.parse(raw));
         } else {
-          // Exemplos demonstrativos
           const demoDespesas: DespesaNotaFiscal[] = [
             {
               id: "exp-1",
@@ -517,8 +517,7 @@ function Index() {
       console.warn("Supabase insert expense warning:", e);
     }
 
-    // 2. Lança automaticamente a despesa no fluxo de caixa (Financeiro)
-    // Custo da empresa = Produção + Utensílios + Outros
+    // 2. Lança automaticamente no fluxo de caixa (Financeiro)
     const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
     if (custoEmpresa > 0) {
       await adicionarTransacao({
@@ -541,7 +540,7 @@ function Index() {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
       await supabase.from("expenses").delete().eq("id", id);
     } catch {}
-    toast.success("Despesa excluída com sucesso.");
+    toast.success("Registro de despesa excluído com sucesso.");
   };
 
   // Handlers de Transações Financeiras
@@ -677,16 +676,17 @@ function Index() {
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          {/* Navegação Reestruturada */}
           <div className="-mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
-              <TabsTrigger value="dashboard" className="flex items-center gap-1.5 font-semibold text-xs">
-                <LayoutDashboard className="w-4 h-4" /> Visão Geral
+              <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
+                <Camera className="w-4 h-4 text-primary" /> Escanear Nota
+              </TabsTrigger>
+              <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
+                <Layers className="w-4 h-4 text-primary" /> Despesas
               </TabsTrigger>
               <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
                 <CalendarDays className="w-4 h-4 text-primary" /> Encomendas &amp; Calendário
-              </TabsTrigger>
-              <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
-                <ScanLine className="w-4 h-4 text-primary" /> Scanner &amp; Despesas
               </TabsTrigger>
               <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
                 <DollarSign className="w-4 h-4" /> Financeiro &amp; Caixa
@@ -703,18 +703,23 @@ function Index() {
             </TabsList>
           </div>
 
-          <TabsContent value="dashboard">
-            <DashboardTab
-              transacoes={transacoes}
-              encomendas={encomendas}
+          {/* 1. Tela Inicial: Escanear Nota */}
+          <TabsContent value="scanner">
+            <ScannerView
               despesas={despesas}
-              activeCode={activeCode}
-              storeName={profile.establishmentName}
-              onNavigateTab={setActiveTab}
-              onNovaTransacao={() => setActiveTab("financeiro")}
+              onSalvarDespesa={salvarDespesa}
             />
           </TabsContent>
 
+          {/* 2. Aba Dedicada: Despesas */}
+          <TabsContent value="despesas">
+            <DespesasView
+              despesas={despesas}
+              onExcluirDespesa={excluirDespesa}
+            />
+          </TabsContent>
+
+          {/* 3. Encomendas & Calendário */}
           <TabsContent value="encomendas">
             <OrdersView
               encomendas={encomendas}
@@ -727,14 +732,7 @@ function Index() {
             />
           </TabsContent>
 
-          <TabsContent value="scanner">
-            <ExpensesScannerView
-              despesas={despesas}
-              onSalvarDespesa={salvarDespesa}
-              onExcluirDespesa={excluirDespesa}
-            />
-          </TabsContent>
-
+          {/* 4. Financeiro & Caixa */}
           <TabsContent value="financeiro">
             <FinanceiroTab
               transacoes={transacoes}
@@ -744,14 +742,17 @@ function Index() {
             />
           </TabsContent>
 
+          {/* 5. Equipe & Acessos */}
           <TabsContent value="colaboradores">
             <ColaboradoresTab />
           </TabsContent>
 
+          {/* 6. Meu Plano (Stripe) */}
           <TabsContent value="plano">
             <MeuPlanoTab />
           </TabsContent>
 
+          {/* 7. Configurações & Perfil */}
           <TabsContent value="config">
             <ConfiguracoesTab />
           </TabsContent>
