@@ -35,12 +35,6 @@ import {
   CreditCard,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
-import {
-  obterConfiguracoesStripeLoja,
-  salvarConfiguracoesStripeLoja,
-  createStripeConnectAccount,
-  type StripeConnectAccount,
-} from "@/lib/stripe-connect-service";
 import { toast } from "sonner";
 
 export function ConfiguracoesTab() {
@@ -54,36 +48,6 @@ export function ConfiguracoesTab() {
   } = useAuth();
 
   const activeCode = profile?.establishmentCode || "CD-1001";
-
-  // Stripe Connect State
-  const [stripeConfig, setStripeConfig] = useState<StripeConnectAccount>(() =>
-    obterConfiguracoesStripeLoja(activeCode)
-  );
-  const [conectandoStripe, setConectandoStripe] = useState(false);
-
-  const handleConectarStripe = async () => {
-    setConectandoStripe(true);
-    try {
-      const res = await createStripeConnectAccount(activeCode, user?.email || "admin@caixadoce.com.br");
-      const atualizada = obterConfiguracoesStripeLoja(activeCode);
-      setStripeConfig(atualizada);
-      toast.success(`Conta Stripe Connect vinculada com sucesso! (${res.mockAccountId}) 🎉`);
-    } catch {
-      toast.error("Erro ao conectar conta Stripe.");
-    } finally {
-      setConectandoStripe(false);
-    }
-  };
-
-  const handleToggleRepassarTaxa = (checked: boolean) => {
-    const atualizada = salvarConfiguracoesStripeLoja(activeCode, { repassarTaxaStripe: checked });
-    setStripeConfig(atualizada);
-    if (checked) {
-      toast.success("Repasse de taxa ativado! Seu cliente pagará o acréscimo do cartão.");
-    } else {
-      toast.info("Repasse de taxa desativado. Sua loja absorverá as taxas do cartão.");
-    }
-  };
 
   // User Profile Form
   const [nomeUsuario, setNomeUsuario] = useState(user?.name || "");
@@ -327,77 +291,6 @@ export function ConfiguracoesTab() {
                   {salvandoEst ? "Salvando..." : "Salvar Dados do Estabelecimento"}
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-
-          {/* SEÇÃO: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) */}
-          <Card className="border-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-primary" /> Pagamentos Online (Cartão via Stripe)
-              </CardTitle>
-              <CardDescription>
-                Receba pagamentos no cartão de crédito e débito dos seus clientes direto na sua conta bancária via Stripe Connect
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-5">
-              {/* Status da Conexão Stripe Connect */}
-              <div className="p-4 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-extrabold text-foreground">Status da Conta Stripe:</span>
-                    {stripeConfig.status === "connected" ? (
-                      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
-                        🟢 Stripe Connect Ativo
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                        🟡 Não Conectado
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {stripeConfig.status === "connected"
-                      ? `Conta Stripe vinculada (${stripeConfig.accountId}). Vendas no cartão estão habilitadas no seu cardápio.`
-                      : "Conecte sua conta Stripe para habilitar pagamentos no cartão de crédito/débito no seu cardápio online."}
-                  </p>
-                </div>
-
-                <Button
-                  type="button"
-                  variant={stripeConfig.status === "connected" ? "outline" : "default"}
-                  onClick={handleConectarStripe}
-                  disabled={conectandoStripe}
-                  className="font-extrabold text-xs shadow-xs shrink-0"
-                >
-                  <CreditCard className="w-4 h-4 mr-1.5" />
-                  {conectandoStripe
-                    ? "Conectando..."
-                    : stripeConfig.status === "connected"
-                    ? "Reconectar Conta Stripe"
-                    : "Conectar Conta Stripe"}
-                </Button>
-              </div>
-
-              {/* Toggle/Switch 'Repassar taxa de processamento ao cliente' */}
-              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-start justify-between gap-4">
-                <div className="space-y-1 flex-1">
-                  <Label htmlFor="switch-repassar-taxa" className="text-sm font-extrabold text-foreground cursor-pointer">
-                    Repassar taxa de processamento ao cliente
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Ao ativar, o seu cliente pagará o acréscimo da taxa do cartão, garantindo que você receba o valor integral da venda.
-                  </p>
-                </div>
-
-                <Switch
-                  id="switch-repassar-taxa"
-                  checked={stripeConfig.repassarTaxaStripe}
-                  onCheckedChange={handleToggleRepassarTaxa}
-                  className="data-[state=checked]:bg-primary"
-                />
-              </div>
             </CardContent>
           </Card>
 

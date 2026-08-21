@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -50,6 +51,11 @@ import {
   User,
   PieChart,
   Layers,
+  CreditCard,
+  Link as LinkIcon,
+  Copy,
+  Check,
+  MessageCircle,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -60,11 +66,19 @@ import {
   type StatusTransacao,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { calculateDynamicTotal } from "@/lib/stripeFees";
+import {
+  obterConfiguracoesStripeLoja,
+  salvarConfiguracoesStripeLoja,
+  createStripeConnectAccount,
+  type StripeConnectAccount,
+} from "@/lib/stripe-connect-service";
 import { toast } from "sonner";
 
 interface FinanceiroTabProps {
   transacoes: TransacaoFinanceira[];
   despesas?: DespesaNotaFiscal[];
+  establishmentCode?: string;
   onAdicionarTransacao: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onRemoverTransacao: (id: string) => Promise<void>;
   onAtualizarStatus: (id: string, status: StatusTransacao) => Promise<void>;
@@ -73,10 +87,117 @@ interface FinanceiroTabProps {
 export function FinanceiroTab({
   transacoes,
   despesas = [],
+  establishmentCode = "CD-1001",
   onAdicionarTransacao,
   onRemoverTransacao,
   onAtualizarStatus,
 }: FinanceiroTabProps) {
+  const code = establishmentCode || "CD-1001";
+
+  // Stripe Connect Config State
+  const [stripeConfig, setStripeConfig] = useState<StripeConnectAccount>(() =>
+    obterConfiguracoesStripeLoja(code)
+  );
+  const [conectandoStripe, setConectandoStripe] = useState(false);
+
+  const handleConectarStripe = async () => {
+    setConectandoStripe(true);
+    try {
+      const res = await createStripeConnectAccount(code);
+      setStripeConfig(obterConfiguracoesStripeLoja(code));
+      toast.success(`Conta Stripe Connect vinculada com sucesso! (${res.mockAccountId}) 🎉`);
+    } catch {
+      toast.error("Erro ao conectar conta Stripe.");
+    } finally {
+      setConectandoStripe(false);
+    }
+  };
+
+  const handleToggleRepassarTaxa = (checked: boolean) => {
+    const atualizada = salvarConfiguracoesStripeLoja(code, { repassarTaxaStripe: checked });
+    setStripeConfig(atualizada);
+    if (checked) {
+      toast.success("Repasse de taxa ativado! Seu cliente pagará o acréscimo do cartão.");
+    } else {
+      toast.info("Repasse de taxa desativado. Sua loja absorverá as taxas do cartão.");
+    }
+  };
+
+  // Form State Cobrança Avulsa (Link de Pagamento Stripe)
+  const [modalCobrancaOpen, setModalCobrancaOpen] = useState(false);
+  const [stepCobranca, setStepCobranca] = useState<1 | 2>(1);
+  const [cobrancaDescricao, setCobrancaDescricao] = useState("");
+  const [cobrancaValorLiquido, setCobrancaValorLiquido] = useState("");
+  const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  const [gerandoLink, setGerandoLink] = useState(false);
+
+  const valCobrancaLiquido = parseFloat(cobrancaValorLiquido) || 0;
+  const previewCobranca = useMemo(() => {
+    return calculateDynamicTotal(valCobrancaLiquido, 1, true);
+  }, [valCobrancaLiquido]);
+
+  const handleGerarLinkCobranca = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cobrancaDescricao || valCobrancaLiquido <= 0) {
+      toast.error("Informe a descrição e o valor líquido da cobrança.");
+      return;
+    }
+
+    setGerandoLink(true);
+    try {
+      const totalAmount = previewCobranca.totalAmount;
+
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: cobrancaDescricao,
+          amount: totalAmount,
+          valorLiquido: valCobrancaLiquido,
+          establishmentCode: code,
+        }),
+      });
+
+      const data = await res.json();
+      const realLink = data.url || `https://checkout.stripe.com/pay/cs_cbr_${Date.now()}`;
+      setCobrancaLinkGerado(realLink);
+      setStepCobranca(2);
+      toast.success("Link de cobrança gerado no Stripe com sucesso!");
+    } catch {
+      toast.error("Erro ao gerar link de pagamento no Stripe.");
+    } finally {
+      setGerandoLink(false);
+    }
+  };
+
+  const handleCopiarLink = () => {
+    if (cobrancaLinkGerado && typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(cobrancaLinkGerado);
+      setLinkCopiado(true);
+      toast.success("Link de cobrança copiado para a área de transferência!");
+      setTimeout(() => setLinkCopiado(false), 3000);
+    }
+  };
+
+  const handleEnviarWhatsapp = () => {
+    if (!cobrancaLinkGerado || !cobrancaDescricao) return;
+    const msg = `Olá! Aqui está o link de pagamento referente a ${cobrancaDescricao}: ${cobrancaLinkGerado}`;
+    const linkWa = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(linkWa, "_blank");
+  };
+
+  const handleFecharModalCobranca = () => {
+    setModalCobrancaOpen(false);
+    setTimeout(() => {
+      setStepCobranca(1);
+      setCobrancaDescricao("");
+      setCobrancaValorLiquido("");
+      setCobrancaLinkGerado(null);
+      setLinkCopiado(false);
+    }, 200);
+  };
+
   const [modalNovaTransacao, setModalNovaTransacao] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "receita" | "despesa">("todos");
@@ -231,6 +352,110 @@ export function FinanceiroTab({
             <Plus className="w-4 h-4 mr-1.5" />
             Novo Lançamento
           </Button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (STRIPE CONNECT & COBRANÇA AVULSA) */}
+      {/* ========================================================================= */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+            Recebimentos &amp; Integrações <CreditCard className="w-4 h-4 text-primary" />
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* CARD 1: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) */}
+          <Card className="border-border shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-primary" /> Pagamentos Online (Stripe)
+                </CardTitle>
+                {stripeConfig.status === "connected" ? (
+                  <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
+                    🟢 Stripe Ativo
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
+                    🟡 Não Conectado
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="text-xs">
+                Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-3 pt-0">
+              <div className="p-3 rounded-xl bg-muted/40 border border-border flex items-center justify-between gap-3">
+                <div className="text-xs space-y-0.5">
+                  <p className="font-extrabold text-foreground">
+                    {stripeConfig.status === "connected" ? "Conta Stripe Vinculada" : "Conectar Conta"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {stripeConfig.status === "connected" ? stripeConfig.accountId : "Habilite vendas no cartão"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={stripeConfig.status === "connected" ? "outline" : "default"}
+                  onClick={handleConectarStripe}
+                  disabled={conectandoStripe}
+                  className="font-bold text-xs shrink-0"
+                >
+                  {conectandoStripe ? "Conectando..." : stripeConfig.status === "connected" ? "Reconectar" : "Conectar Stripe"}
+                </Button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="sw-repassar" className="text-xs font-extrabold text-foreground cursor-pointer">
+                    Repassar taxa ao cliente
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    O cliente paga o acréscimo da taxa do cartão.
+                  </p>
+                </div>
+                <Switch
+                  id="sw-repassar"
+                  checked={stripeConfig.repassarTaxaStripe}
+                  onCheckedChange={handleToggleRepassarTaxa}
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* CARD 2: COBRANÇA AVULSA / LINK DE PAGAMENTO */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4 text-primary" /> Cobrança Avulsa / Link
+                </CardTitle>
+                <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 font-bold">
+                  Link Direto
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Crie um link de pagamento com o valor que desejar e permita que seu cliente pague no cartão de crédito na quantidade de parcelas que ele preferir.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="pt-0">
+              <Button
+                type="button"
+                onClick={() => setModalCobrancaOpen(true)}
+                size="lg"
+                className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
+              >
+                <LinkIcon className="w-4 h-4" /> Gerar Link de Cobrança
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -618,6 +843,174 @@ export function FinanceiroTab({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE GERAR LINK DE COBRANÇA AVULSA (STRIPE CONNECT INTEGRATED) */}
+      {/* ========================================================================= */}
+      <Dialog open={modalCobrancaOpen} onOpenChange={handleFecharModalCobranca}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+              <LinkIcon className="w-5 h-5 text-primary" /> Gerar Link de Cobrança Avulsa
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Crie um link de pagamento direto para seu cliente com repasse automático de taxas no cartão.
+            </DialogDescription>
+          </DialogHeader>
+
+          {stepCobranca === 1 ? (
+            <form onSubmit={handleGerarLinkCobranca} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cob-desc" className="text-xs font-bold">
+                  Descrição da Cobrança *
+                </Label>
+                <Input
+                  id="cob-desc"
+                  placeholder="Ex: Sinal do Bolo de Casamento, Encomenda Especial..."
+                  value={cobrancaDescricao}
+                  onChange={(e) => setCobrancaDescricao(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cob-val" className="text-xs font-bold">
+                  Valor líquido a receber (R$) *
+                </Label>
+                <Input
+                  id="cob-val"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  placeholder="Ex: 150.00"
+                  value={cobrancaValorLiquido}
+                  onChange={(e) => setCobrancaValorLiquido(e.target.value)}
+                  className="h-9 text-xs font-mono font-bold"
+                  required
+                />
+              </div>
+
+              {/* SIMULAÇÃO DE PREVISÃO DE TAXAS NA TELA */}
+              {valCobrancaLiquido > 0 && (
+                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Valor desejado para a loja:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {previewCobranca.formattedSubtotal}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                    <span>Taxa estimada no cartão (1x):</span>
+                    <span className="font-mono">{previewCobranca.formattedFeeAmount}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
+                    <span>Total inicial do cliente (1x):</span>
+                    <span className="font-mono text-primary text-sm">
+                      {previewCobranca.formattedTotalAmount}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic">
+                    💡 O cliente pagará a partir de <strong>{previewCobranca.formattedTotalAmount}</strong> (as taxas de parcelamento até 12x serão custeadas por ele na tela de pagamento).
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFecharModalCobranca}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!cobrancaDescricao || valCobrancaLiquido <= 0 || gerandoLink}
+                  className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  <LinkIcon className="w-4 h-4 mr-1.5" />
+                  {gerandoLink ? "Gerando no Stripe..." : "Gerar Link"}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            /* STEP 2: SUCESSO E COMPARTILHAMENTO DO LINK */
+            <div className="space-y-4 py-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-extrabold text-foreground">Link de Cobrança Criado!</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Referente a <strong>"{cobrancaDescricao}"</strong> • Valor Líquido:{" "}
+                  <strong>{previewCobranca.formattedSubtotal}</strong>
+                </p>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase">
+                  Link de Pagamento Gerado
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={cobrancaLinkGerado || ""}
+                    readOnly
+                    className="h-9 text-xs font-mono bg-muted/50 border-primary/30"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopiarLink}
+                    className="h-9 px-3 shrink-0 font-bold"
+                  >
+                    {linkCopiado ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1 text-emerald-600" /> Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1" /> Copiar Link
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-muted/40 border border-border text-left space-y-1 text-xs">
+                <p className="text-muted-foreground">
+                  <strong>Como funciona para o cliente?</strong> Ao abrir o link, ele verá o detalhamento da cobrança e poderá pagar via Pix Direto ou no Cartão em até 12x com o acréscimo automático das taxas.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-3 border-t flex flex-col sm:flex-row gap-2 justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStepCobranca(1)}
+                  className="w-full sm:w-auto text-xs"
+                >
+                  Nova Cobrança
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleEnviarWhatsapp}
+                  className="w-full sm:w-auto font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar por WhatsApp
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
