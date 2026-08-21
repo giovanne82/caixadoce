@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 
 export interface ResultadoOCRNotinha {
@@ -23,45 +22,55 @@ export interface GeminiReceiptResponse {
   total_amount?: number;
 }
 
-/**
- * Leitura de Cupons Fiscais utilizando o SDK Oficial @google/generative-ai
- */
 export async function extractReceiptDataWithGemini(imageBase64: string): Promise<GeminiReceiptResponse> {
   const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY não configurada.");
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" },
+  const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: `Você é um leitor especialista em notas fiscais, NFC-e e cupons brasileiros. 
+Analise a imagem e extraia os dados estritamente em JSON puro com este formato:
+{
+  "establishment": "Nome do estabelecimento",
+  "date": "YYYY-MM-DD",
+  "items": [
+    { "name": "Nome/Descrição do item", "quantity": 1, "total_price": 10.50 }
+  ],
+  "total_amount": 10.50
+}
+Responda apenas com o JSON sem formatação markdown.`
+            },
+            {
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: cleanBase64
+              }
+            }
+          ]
+        }
+      ]
+    })
   });
 
-  const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Erro na API Gemini (${response.status}): ${err}`);
+  }
 
-  const prompt = `Você é especialista em cupons fiscais e relatórios gerenciais do Brasil.
-Extraia os dados da imagem em JSON puro com o seguinte formato:
-{
-"establishment": "Nome da loja/empresa",
-"date": "YYYY-MM-DD",
-"items": [
-{ "name": "Descrição do item", "quantity": 1, "total_price": 4.90 }
-],
-"total_amount": 72.60
-}`;
-
-  const result = await model.generateContent([
-    prompt,
-    {
-      inlineData: {
-        data: cleanBase64,
-        mimeType: "image/jpeg",
-      },
-    },
-  ]);
-
-  const response = await result.response;
-  const rawText = response.text();
-  return JSON.parse(rawText);
+  const data = await response.json();
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  return JSON.parse(jsonClean);
 }
 
 export async function converterImagemParaBase64(file: File): Promise<string> {
