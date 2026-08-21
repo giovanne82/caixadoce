@@ -24,12 +24,22 @@ export interface GeminiReceiptResponse {
   total_amount?: number;
 }
 
-export async function extractReceiptDataWithGemini(imageBase64: string): Promise<GeminiReceiptResponse> {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Chamada para a API do Gemini com rotina de retry automático e backoff.
+ * Em caso de status 503 (Service Unavailable) ou 429 (Rate Limit), executa até 2 novas tentativas
+ * com intervalo de 1,5 segundos (1500ms) entre elas.
+ * O feedback de carregamento "Processando notinha..." permanece ativo durante as retentativas.
+ */
+export async function extractReceiptDataWithGemini(
+  imageBase64: string,
+  onProgress?: (step: string) => void
+): Promise<GeminiReceiptResponse> {
   const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY não configurada.");
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
   const body = {
@@ -65,21 +75,64 @@ Responda apenas com o JSON sem formatação markdown.`
     }
   };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const MAX_TENTATIVAS = 3;
+  const DELAY_RETRY_MS = 1500;
+  let ultimoErro: Error | null = null;
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Erro na API Gemini (${response.status}): ${err}`);
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    try {
+      if (tentativa > 1) {
+        onProgress?.(`Processando notinha... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
+      } else {
+        onProgress?.("Processando notinha...");
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        const status = response.status;
+
+        // Se for 503 (Service Unavailable) ou 429 (Rate Limit) e ainda houver tentativas restantes
+        if ((status === 503 || status === 429) && tentativa < MAX_TENTATIVAS) {
+          console.warn(`[Gemini API] Erro HTTP ${status}. Retentando em ${DELAY_RETRY_MS}ms (Tentativa ${tentativa}/${MAX_TENTATIVAS})...`);
+          onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
+          await sleep(DELAY_RETRY_MS);
+          continue;
+        }
+
+        throw new Error(`Erro na API Gemini (${status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(jsonClean);
+
+    } catch (err: any) {
+      ultimoErro = err;
+      const isRetryable =
+        err?.message?.includes("503") ||
+        err?.message?.includes("429") ||
+        err?.name === "TypeError"; // Erro de rede
+
+      if (isRetryable && tentativa < MAX_TENTATIVAS) {
+        console.warn(`[Gemini API] Falha na tentativa ${tentativa}/${MAX_TENTATIVAS}: ${err.message}. Aguardando ${DELAY_RETRY_MS}ms...`);
+        onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
+        await sleep(DELAY_RETRY_MS);
+        continue;
+      }
+
+      // Se não for retentável ou já atingiu o máximo de tentativas, estoura a exceção
+      throw err;
+    }
   }
 
-  const data = await response.json();
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(jsonClean);
+  throw ultimoErro || new Error("Falha ao comunicar com a API do Gemini após 3 tentativas.");
 }
 
 export async function converterImagemParaBase64(file: File): Promise<string> {
@@ -97,10 +150,10 @@ export async function processarNotinhaComOCR(
   file: File,
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Analisando notinha com IA do Google Gemini...");
+  onStepProgress?.("Processando notinha...");
 
   const imageBase64 = await converterImagemParaBase64(file);
-  const parsedJSON = await extractReceiptDataWithGemini(imageBase64);
+  const parsedJSON = await extractReceiptDataWithGemini(imageBase64, onStepProgress);
 
   onStepProgress?.("Organizando itens e populando o modal de revisão...");
 

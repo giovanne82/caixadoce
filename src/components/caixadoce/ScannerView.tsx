@@ -117,7 +117,7 @@ export function ScannerView({
   // Leitura com IA do Google Gemini (extractReceiptDataWithGemini)
   const processarOCRReal = async (file: File) => {
     setIsScanning(true);
-    setScanStepMessage("Analisando notinha com IA...");
+    setScanStepMessage("Processando notinha...");
 
     try {
       const res = await processarNotinhaComOCR(file, (msg) => {
