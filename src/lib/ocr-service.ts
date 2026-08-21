@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 
 export interface ResultadoOCRNotinha {
@@ -23,61 +24,44 @@ export interface GeminiReceiptResponse {
 }
 
 /**
- * Chamada à API do Gemini gemini-1.5-flash com payload exato
+ * Leitura de Cupons Fiscais utilizando o SDK Oficial @google/generative-ai
  */
 export async function extractReceiptDataWithGemini(imageBase64: string): Promise<GeminiReceiptResponse> {
   const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("VITE_GEMINI_API_KEY não configurada.");
-  }
+  if (!apiKey) throw new Error("VITE_GEMINI_API_KEY não configurada.");
 
-  // Remove o prefixo data:image/...;base64, se existir
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: { responseMimeType: "application/json" },
+  });
+
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
 
-  const body = {
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: 'Extraia os dados desta nota/cupom fiscal brasileiro. Retorne ESTRITAMENTE um JSON no formato: {"establishment": string, "date": "YYYY-MM-DD", "items": [{"name": string, "quantity": number, "total_price": number}], "total_amount": number}. Não inclua markdown.',
-          },
-          {
-            inline_data: {
-              mime_type: "image/jpeg",
-              data: cleanBase64,
-            },
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      response_mime_type: "application/json",
-    },
-  };
+  const prompt = `Você é especialista em cupons fiscais e relatórios gerenciais do Brasil.
+Extraia os dados da imagem em JSON puro com o seguinte formato:
+{
+"establishment": "Nome da loja/empresa",
+"date": "YYYY-MM-DD",
+"items": [
+{ "name": "Descrição do item", "quantity": 1, "total_price": 4.90 }
+],
+"total_amount": 72.60
+}`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+  const result = await model.generateContent([
+    prompt,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }
-  );
+      inlineData: {
+        data: cleanBase64,
+        mimeType: "image/jpeg",
+      },
+    },
+  ]);
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Erro na API Gemini: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textResponse) {
-    throw new Error("A IA do Gemini não retornou texto na resposta.");
-  }
-
-  const cleanJSON = textResponse.replace(/```json/gi, "").replace(/```/g, "").trim();
-  return JSON.parse(cleanJSON);
+  const response = await result.response;
+  const rawText = response.text();
+  return JSON.parse(rawText);
 }
 
 export async function converterImagemParaBase64(file: File): Promise<string> {
@@ -95,7 +79,7 @@ export async function processarNotinhaComOCR(
   file: File,
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Analisando notinha com IA...");
+  onStepProgress?.("Analisando notinha com IA do Google Gemini...");
 
   const imageBase64 = await converterImagemParaBase64(file);
   const parsedJSON = await extractReceiptDataWithGemini(imageBase64);
