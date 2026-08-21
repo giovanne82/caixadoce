@@ -40,10 +40,12 @@ import {
   Cookie,
   UtensilsCrossed,
   User,
-  Package,
   Trash2,
   Eye,
   PieChart,
+  MapPin,
+  FileText,
+  Clock,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -57,7 +59,6 @@ interface DespesasViewProps {
 }
 
 export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) {
-  // Modo de Agrupamento: 'estabelecimento' ou 'data'
   const [modoAgrupamento, setModoAgrupamento] = useState<"estabelecimento" | "data">("estabelecimento");
 
   // Filtros
@@ -82,12 +83,7 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
       consumoProprio += d.valorConsumoProprio || 0;
     }
 
-    return {
-      total,
-      producao,
-      utensilios,
-      consumoProprio,
-    };
+    return { total, producao, utensilios, consumoProprio };
   }, [despesas]);
 
   // Agrupamento por Estabelecimento
@@ -116,7 +112,7 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
     })).sort((a, b) => b.total - a.total);
   }, [despesas, metricas.total]);
 
-  // Lista de Fornecedores Únicos para Filtro
+  // Fornecedores Únicos
   const lojasUnicas = useMemo(() => {
     return Array.from(new Set(despesas.map((d) => d.fornecedorNome).filter(Boolean)));
   }, [despesas]);
@@ -124,12 +120,8 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
   // Despesas Filtradas
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((d) => {
-      const matchLoja =
-        filtroEstabelecimento === "todos" ||
-        d.fornecedorNome === filtroEstabelecimento;
-
+      const matchLoja = filtroEstabelecimento === "todos" || d.fornecedorNome === filtroEstabelecimento;
       const matchLojaCard = !lojaSelecionadaCard || d.fornecedorNome === lojaSelecionadaCard;
-
       const matchBusca =
         !busca ||
         d.fornecedorNome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -253,7 +245,7 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {agrupamentoEstabelecimentos.length === 0 ? (
               <div className="col-span-full py-8 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-border/50">
-                Nenhum estabelecimento registrado. Digitalize uma nota para começar!
+                Nenhum estabelecimento registrado. Digitalize uma notinha para começar!
               </div>
             ) : (
               agrupamentoEstabelecimentos.map((loja) => {
@@ -417,22 +409,58 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: DETALHES DOS ITENS SEPARADOS POR CATEGORIA */}
+      {/* MODAL: DETALHES COMPLETOS COM METADADOS FISCAIS */}
       {/* ========================================================================= */}
       {notaSelecionada && (
         <Dialog open={!!notaSelecionada} onOpenChange={() => setNotaSelecionada(null)}>
-          <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-foreground text-base">
                 <Building2 className="w-5 h-5 text-primary" /> {notaSelecionada.fornecedorNome}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Comprado em {notaSelecionada.dataCompra.split("-").reverse().join("/")} • Valor Total:{" "}
-                <strong>{formatarMoeda(notaSelecionada.valorTotal)}</strong>
+                Comprovante fiscal registrado em {notaSelecionada.dataCompra.split("-").reverse().join("/")}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
+              {/* Metadados Fiscais Completos */}
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° da Nota:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaSelecionada.numeroNota || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° do Pedido:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaSelecionada.numeroPedido || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Data &amp; Hora:
+                  </span>
+                  <p className="font-mono text-foreground mt-0.5">
+                    {notaSelecionada.dataCompra.split("-").reverse().join("/")} {notaSelecionada.horaCompra ? `às ${notaSelecionada.horaCompra}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Endereço:
+                  </span>
+                  <p className="text-foreground truncate mt-0.5" title={notaSelecionada.fornecedorEndereco}>
+                    {notaSelecionada.fornecedorEndereco || "Local físico"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tabela dos Itens */}
               <div className="rounded-lg border border-border/70 overflow-hidden">
                 <Table>
                   <TableHeader className="bg-muted/40">
@@ -482,8 +510,8 @@ export function DespesasView({ despesas, onExcluirDespesa }: DespesasViewProps) 
                   <span>{formatarMoeda(notaSelecionada.valorConsumoProprio)}</span>
                 </div>
                 <div className="p-2.5 rounded-lg bg-stone-500/10 text-stone-700 dark:text-stone-300 font-semibold flex justify-between">
-                  <span>📦 Genérico / Outros:</span>
-                  <span>{formatarMoeda(notaSelecionada.valorOutros)}</span>
+                  <span>💰 Total Notinha:</span>
+                  <span className="font-extrabold">{formatarMoeda(notaSelecionada.valorTotal)}</span>
                 </div>
               </div>
             </div>

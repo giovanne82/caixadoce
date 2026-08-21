@@ -46,60 +46,36 @@ import {
   UtensilsCrossed,
   User,
   Package,
-  RefreshCw,
   Clock,
+  Check,
+  Tag,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import {
   formatarMoeda,
   categorizarItemAutomatico,
+  correlacionarInsumosComItensNota,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
   type CategoriaDespesaItem,
+  type Encomenda,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
   despesas: DespesaNotaFiscal[];
+  encomendas?: Encomenda[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
+  onConciliarInsumos?: (conciliacoes: { encomendaId: string; insumoId: string }[]) => Promise<void>;
 }
 
-// Modelos pré-configurados para testes rápidos de OCR/IA
-const MODELOS_NOTAS_DEMO: { nomeLoja: string; itens: { nome: string; qtd: number; unit: number }[] }[] = [
-  {
-    nomeLoja: "Atacadão",
-    itens: [
-      { nome: "LEITE CONDENSADO PIRACANJUBA 395G", qtd: 24, unit: 5.49 },
-      { nome: "CREME DE LEITE ITAMBE 200G", qtd: 12, unit: 3.29 },
-      { nome: "CHOCOLATE EM PO 50% CACAU HARALD 1KG", qtd: 2, unit: 38.90 },
-      { nome: "SABONETE DOVE ORIGINAL 90G", qtd: 4, unit: 4.89 },
-      { nome: "DETERGENTE YPE NEUTRO 500ML", qtd: 3, unit: 2.39 },
-      { nome: "MANTEIGA COM SAL ITAMBE 500G", qtd: 4, unit: 18.90 },
-    ],
-  },
-  {
-    nomeLoja: "Casa do Confeiteiro",
-    itens: [
-      { nome: "BARRA CHOCOLATE SICAO NOBRE AO LEITE 1.01KG", qtd: 3, unit: 49.90 },
-      { nome: "NUTELLA BALDE 3KG", qtd: 1, unit: 169.90 },
-      { nome: "FORMA DE SILICONE TRUFAS BWB", qtd: 4, unit: 12.50 },
-      { nome: "ESPATULA DE SILICONE ROSA 28CM", qtd: 2, unit: 22.00 },
-      { nome: "GRANULADO BELGA CALLEBAUT 500G", qtd: 2, unit: 44.90 },
-      { nome: "BICO DE CONFEITAR 1M WILTON", qtd: 1, unit: 18.00 },
-    ],
-  },
-  {
-    nomeLoja: "Supermercado BH",
-    itens: [
-      { nome: "FARINHA DE TRIGO DONA BENTA 1KG", qtd: 6, unit: 4.99 },
-      { nome: "OVOS BRANCOS GRANDES BANDEJA C/ 30", qtd: 2, unit: 19.90 },
-      { nome: "ACUCAR REFINADO UNIAO 1KG", qtd: 5, unit: 4.49 },
-      { nome: "ARROZ TIO JOAO TIPO 1 5KG", qtd: 1, unit: 29.90 },
-      { nome: "CAFE PILAO TRADICIONAL 500G", qtd: 1, unit: 19.80 },
-    ],
-  },
-];
-
-export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
+export function ScannerView({
+  despesas,
+  encomendas = [],
+  onSalvarDespesa,
+  onConciliarInsumos,
+}: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados do Scanner e Upload
@@ -110,9 +86,25 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
 
   // Modal de Revisão dos Dados Extraídos
   const [modalRevisaoOpen, setModalRevisaoOpen] = useState(false);
+
+  // Metadados Fiscais Extraídos
   const [fornecedorNome, setFornecedorNome] = useState("");
+  const [fornecedorEndereco, setFornecedorEndereco] = useState("");
+  const [numeroNota, setNumeroNota] = useState("");
+  const [numeroPedido, setNumeroPedido] = useState("");
   const [dataCompra, setDataCompra] = useState(new Date().toISOString().split("T")[0]);
+  const [horaCompra, setHoraCompra] = useState("14:35:10");
+
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
+  const [conciliacoesSugeridas, setConciliacoesSugeridas] = useState<{
+    encomendaId: string;
+    clienteNome: string;
+    insumoId: string;
+    insumoNome: string;
+    itemNotaNome: string;
+    selecionado: boolean;
+  }[]>([]);
+
   const [salvando, setSalvando] = useState(false);
 
   // Manipulação de Upload de Arquivo
@@ -136,29 +128,43 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
     iniciarLeituraOCR(file.name);
   };
 
-  // Simulação Inteligente de Leitura OCR/IA
-  const iniciarLeituraOCR = (nomeArquivo: string, modeloCustom?: typeof MODELOS_NOTAS_DEMO[0]) => {
+  // Simulação de Leitura Inteligente OCR / IA com Metadados Completos
+  const iniciarLeituraOCR = (nomeArquivo: string) => {
     setIsScanning(true);
 
-    const modelo =
-      modeloCustom ||
-      MODELOS_NOTAS_DEMO[Math.floor(Math.random() * MODELOS_NOTAS_DEMO.length)];
-
-    setScanStepMessage("🔍 Identificando cabeçalho e CNPJ do emissor...");
+    setScanStepMessage("🔍 Identificando CNPJ, razão social, número da nota e endereço...");
 
     setTimeout(() => {
-      setScanStepMessage("🧾 Extraindo itens, quantidades e valores da nota...");
-    }, 800);
+      setScanStepMessage("🧾 Extraindo número do cupom, data/hora exata e itens com valores...");
+    }, 700);
 
     setTimeout(() => {
-      setScanStepMessage("🧠 Aplicando IA para categorizar custos de produção e despesas...");
-    }, 1600);
+      setScanStepMessage("🧠 Categorizando insumos e conciliando com sua Lista de Compras de Encomendas...");
+    }, 1400);
 
     setTimeout(() => {
-      setFornecedorNome(modelo.nomeLoja);
-      setDataCompra(new Date().toISOString().split("T")[0]);
+      const horaAtual = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const hojeData = new Date().toISOString().split("T")[0];
 
-      const parsedItens: ItemNotaFiscal[] = modelo.itens.map((it) => {
+      // Metadados extraídos
+      setFornecedorNome("ArtFesta Confeitaria & Embalagens");
+      setFornecedorEndereco("Av. das Américas, 1200 - Loja 4 - Centro");
+      setNumeroNota(`NFC-e 000.${Math.floor(100000 + Math.random() * 900000)}`);
+      setNumeroPedido(`PED-${Math.floor(10000 + Math.random() * 90000)}`);
+      setDataCompra(hojeData);
+      setHoraCompra(horaAtual);
+
+      // Itens reais de confeitaria
+      const mockItens: { nome: string; qtd: number; unit: number }[] = [
+        { nome: "COBERTURA HARALD MELKEN AO LEITE 1.01KG", qtd: 2, unit: 44.90 },
+        { nome: "LEITE CONDENSADO MOÇA 395G", qtd: 12, unit: 6.89 },
+        { nome: "CHANTILLY NORCAU CHANTY 1L", qtd: 3, unit: 18.50 },
+        { nome: "CAKE BOARD MDF REDONDO 25CM", qtd: 4, unit: 5.20 },
+        { nome: "GRANULADO BELGA CALLEBAUT 500G", qtd: 1, unit: 45.00 },
+        { nome: "DETERGENTE YPE NEUTRO 500ML", qtd: 2, unit: 2.49 },
+      ];
+
+      const parsedItens: ItemNotaFiscal[] = mockItens.map((it) => {
         const cat = categorizarItemAutomatico(it.nome);
         return {
           id: crypto.randomUUID(),
@@ -171,10 +177,15 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
       });
 
       setItensExtraidos(parsedItens);
+
+      // Conciliação Inteligente com Encomendas Pendentes
+      const matches = correlacionarInsumosComItensNota(parsedItens, encomendas);
+      setConciliacoesSugeridas(matches.map((m) => ({ ...m, selecionado: true })));
+
       setIsScanning(false);
       setModalRevisaoOpen(true);
-      toast.success(`Nota do ${modelo.nomeLoja} lida com sucesso! ${parsedItens.length} itens categorizados.`);
-    }, 2400);
+      toast.success("Notinha escaneada e metadados extraídos com sucesso!");
+    }, 2100);
   };
 
   // Alterar Categoria de um Item Manualmente
@@ -184,7 +195,6 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
     );
   };
 
-  // Alterar Valor ou Quantidade de um Item
   const handleEditarItem = (itemId: string, campo: "nome" | "quantidade" | "valorUnitario", valor: any) => {
     setItensExtraidos((prev) =>
       prev.map((item) => {
@@ -200,12 +210,10 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
     );
   };
 
-  // Remover Item da Lista
   const handleRemoverItem = (itemId: string) => {
     setItensExtraidos((prev) => prev.filter((it) => it.id !== itemId));
   };
 
-  // Adicionar Novo Item Manual
   const handleAdicionarItemManual = () => {
     const novo: ItemNotaFiscal = {
       id: crypto.randomUUID(),
@@ -218,7 +226,14 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
     setItensExtraidos((prev) => [...prev, novo]);
   };
 
-  // Cálculos dos Totais da Nota em Revisão
+  // Alternar Seleção de Conciliação
+  const handleToggleConciliacao = (insumoId: string) => {
+    setConciliacoesSugeridas((prev) =>
+      prev.map((c) => (c.insumoId === insumoId ? { ...c, selecionado: !c.selecionado } : c))
+    );
+  };
+
+  // Totais da Nota
   const totaisNota = useMemo(() => {
     let total = 0;
     let producao = 0;
@@ -244,19 +259,24 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
     };
   }, [itensExtraidos]);
 
-  // Salvar Despesa Confirmada
+  // Salvar Despesa Confirmada & Executar Conciliação
   const handleSalvarDespesaConfirmada = async () => {
     if (!fornecedorNome || itensExtraidos.length === 0) {
-      toast.error("Informe o estabelecimento e certifique-se de que há itens na nota.");
+      toast.error("Informe o estabelecimento e certifique-se de que há itens na notinha.");
       return;
     }
 
     setSalvando(true);
     try {
+      // 1. Salva despesa com metadados completos
       await onSalvarDespesa({
         estabelecimentoCodigo: "CD-1001",
         fornecedorNome,
+        fornecedorEndereco,
+        numeroNota,
+        numeroPedido,
         dataCompra,
+        horaCompra,
         valorTotal: totaisNota.total,
         valorProducao: totaisNota.producao,
         valorUtensilios: totaisNota.utensilios,
@@ -265,39 +285,48 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
         itens: itensExtraidos,
       });
 
+      // 2. Executa conciliação inteligente dos insumos nas encomendas selecionadas
+      if (onConciliarInsumos && conciliacoesSugeridas.length > 0) {
+        const selecionadas = conciliacoesSugeridas
+          .filter((c) => c.selecionado)
+          .map((c) => ({ encomendaId: c.encomendaId, insumoId: c.insumoId }));
+
+        if (selecionadas.length > 0) {
+          await onConciliarInsumos(selecionadas);
+          toast.success(`${selecionadas.length} insumo(s) marcados como Comprados nas Encomendas!`);
+        }
+      }
+
       setSelectedFile(null);
       setFilePreview(null);
       setItensExtraidos([]);
       setFornecedorNome("");
       setModalRevisaoOpen(false);
-      toast.success("Despesa processada e lançada no caixa com sucesso!");
+      toast.success("Notinha processada e salva no caixa com sucesso!");
     } finally {
       setSalvando(false);
     }
   };
 
-  // Últimos registros capturados (exibe estritamente Data, Estabelecimento e Valor Total)
-  const ultimosRegistros = useMemo(() => {
-    return despesas.slice(0, 10);
-  }, [despesas]);
+  const ultimosRegistros = useMemo(() => despesas.slice(0, 10), [despesas]);
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
         <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-          Escanear Nota Fiscal <Camera className="w-6 h-6 text-primary" />
+          Escanear Notinha <Camera className="w-6 h-6 text-primary" />
         </h2>
         <p className="text-sm text-muted-foreground">
-          Envie a foto ou PDF do cupom fiscal para ler e categorizar despesas automaticamente com IA.
+          Envie a foto ou PDF do cupom fiscal para ler itens, extrair metadados e conciliar com a lista de compras.
         </p>
       </div>
 
       {/* ========================================================================= */}
-      {/* 1. ÁREA SUPERIOR: UPLOAD E PROCESSAMENTO EXCLUSIVO */}
+      {/* 1. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
       {/* ========================================================================= */}
       <Card className="border-2 border-dashed border-primary/40 bg-card/80 shadow-md">
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-8">
           <input
             type="file"
             ref={fileInputRef}
@@ -312,64 +341,33 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
                 <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
                 <Sparkles className="w-6 h-6 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">Analisando Cupom Fiscal...</h3>
+              <h3 className="text-lg font-bold text-foreground">Lendo e Processando Notinha...</h3>
               <p className="text-xs text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-              {/* Área de Clique / Drag & Drop */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="md:col-span-2 py-10 px-6 text-center cursor-pointer border border-border/70 rounded-2xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all flex flex-col items-center justify-center"
-              >
-                <div className="p-3.5 rounded-2xl bg-primary/10 text-primary mb-3">
-                  <UploadCloud className="w-8 h-8" />
-                </div>
-                <h4 className="text-sm font-bold text-foreground">
-                  Clique para tirar foto ou selecionar imagem / PDF da nota
-                </h4>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Formatos aceitos: JPG, PNG ou PDF (máximo 10MB)
-                </p>
-                <Button size="sm" className="mt-4 font-semibold shadow-xs">
-                  <Camera className="w-4 h-4 mr-1.5" /> Selecionar Nota
-                </Button>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="py-12 px-6 text-center cursor-pointer border border-border/70 rounded-2xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all flex flex-col items-center justify-center max-w-xl mx-auto"
+            >
+              <div className="p-4 rounded-2xl bg-primary/10 text-primary mb-3">
+                <UploadCloud className="w-10 h-10" />
               </div>
-
-              {/* Botões de Teste Rápido */}
-              <div className="p-4 rounded-2xl bg-muted/30 border border-border/60 space-y-3">
-                <div>
-                  <p className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Ou teste agora com cupons modelo:
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Clique para simular a extração OCR de compras reais de confeitaria:
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  {MODELOS_NOTAS_DEMO.map((demo) => (
-                    <Button
-                      key={demo.nomeLoja}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => iniciarLeituraOCR(`cupom_${demo.nomeLoja.toLowerCase()}.jpg`, demo)}
-                      disabled={isScanning}
-                      className="w-full justify-start text-xs h-8.5 font-medium hover:border-primary/50"
-                    >
-                      <Building2 className="w-3.5 h-3.5 mr-2 text-primary" />
-                      {demo.nomeLoja}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+              <h4 className="text-base font-extrabold text-foreground">
+                Tirar foto ou selecionar PDF / Imagem da Notinha
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Formatos aceitos: JPG, PNG ou PDF (comprovantes fiscais de compras)
+              </p>
+              <Button size="sm" className="mt-5 font-bold shadow-sm px-6 h-9">
+                <Camera className="w-4 h-4 mr-2" /> Selecionar Arquivo da Notinha
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* ========================================================================= */}
-      {/* 2. ÁREA INFERIOR: ÚLTIMOS REGISTROS CAPTURADOS (ESTRITAMENTE 3 COLUNAS) */}
+      {/* 2. ÚLTIMOS REGISTROS CAPTURADOS (ESTRITAMENTE 3 COLUNAS) */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -377,7 +375,7 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
             <Clock className="w-5 h-5 text-primary" /> Últimos Registros Capturados
           </h3>
           <span className="text-xs text-muted-foreground">
-            {ultimosRegistros.length} nota(s) recente(s)
+            {ultimosRegistros.length} registro(s) recente(s)
           </span>
         </div>
 
@@ -394,7 +392,7 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
               {ultimosRegistros.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-10 text-xs text-muted-foreground">
-                    Nenhuma nota fiscal capturada ainda. Envie uma foto acima para começar!
+                    Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
                   </TableCell>
                 </TableRow>
               ) : (
@@ -418,46 +416,133 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: REVISÃO E CONFIRMAÇÃO DA NOTA EXTRAÍDA */}
+      {/* 3. MODAL: REVISÃO, METADADOS & CONCILIAÇÃO INTELIGENTE */}
       {/* ========================================================================= */}
       <Dialog open={modalRevisaoOpen} onOpenChange={setModalRevisaoOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground">
-              <Building2 className="w-5 h-5 text-primary" /> Conferência dos Itens Extraídos
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+              <Receipt className="w-5 h-5 text-primary" /> Conferência dos Dados Extraídos da Notinha
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Verifique os itens identificados pela IA e ajuste as categorias antes de confirmar.
+              Verifique os metadados fiscais, itens e as conciliações automáticas com suas encomendas.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Cabeçalho da Nota */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/30 border border-border/50">
-              <div className="space-y-1">
-                <Label htmlFor="rev-loja" className="text-xs">Estabelecimento / Loja</Label>
-                <Input
-                  id="rev-loja"
-                  value={fornecedorNome}
-                  onChange={(e) => setFornecedorNome(e.target.value)}
-                  placeholder="Ex: Atacadão, Casa do Confeiteiro"
-                  className="h-8 text-xs font-semibold"
-                />
+            {/* Metadados Fiscais Identificados */}
+            <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-3">
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-primary" /> Metadados Fiscais Identificados
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Nome do Estabelecimento *</Label>
+                  <Input
+                    value={fornecedorNome}
+                    onChange={(e) => setFornecedorNome(e.target.value)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Endereço do Estabelecimento</Label>
+                  <Input
+                    value={fornecedorEndereco}
+                    onChange={(e) => setFornecedorEndereco(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="rev-data" className="text-xs">Data da Compra</Label>
-                <Input
-                  id="rev-data"
-                  type="date"
-                  value={dataCompra}
-                  onChange={(e) => setDataCompra(e.target.value)}
-                  className="h-8 text-xs"
-                />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">N° da Nota / Cupom</Label>
+                  <Input
+                    value={numeroNota}
+                    onChange={(e) => setNumeroNota(e.target.value)}
+                    placeholder="Ex: NFC-e 12345"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">N° do Pedido</Label>
+                  <Input
+                    value={numeroPedido}
+                    onChange={(e) => setNumeroPedido(e.target.value)}
+                    placeholder="Ex: PED-9821"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Data da Compra</Label>
+                  <Input
+                    type="date"
+                    value={dataCompra}
+                    onChange={(e) => setDataCompra(e.target.value)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Hora Exata</Label>
+                  <Input
+                    value={horaCompra}
+                    onChange={(e) => setHoraCompra(e.target.value)}
+                    placeholder="14:30:00"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
               </div>
             </div>
 
+            {/* CARD DE CONCILIAÇÃO INTELIGENTE COM ENCOMENDAS */}
+            {conciliacoesSugeridas.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-amber-900 dark:text-amber-300 flex items-center gap-1.5 uppercase">
+                    <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
+                    🎯 Conciliação Inteligente com a Lista de Compras ({conciliacoesSugeridas.length})
+                  </h4>
+                  <span className="text-[10px] text-amber-700 font-semibold">
+                    Baixa automática em encomendas
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Identificamos itens desta notinha que correspondem aos insumos pedidos para suas encomendas. Selecione os itens que deseja marcar como comprados:
+                </p>
+
+                <div className="space-y-1.5 pt-1">
+                  {conciliacoesSugeridas.map((conc) => (
+                    <div
+                      key={`${conc.encomendaId}-${conc.insumoId}`}
+                      onClick={() => handleToggleConciliacao(conc.insumoId)}
+                      className={`cursor-pointer p-2 rounded-lg border text-xs flex items-center justify-between transition-all ${
+                        conc.selecionado
+                          ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-900 dark:text-emerald-300 font-semibold"
+                          : "bg-background border-border text-muted-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] ${
+                          conc.selecionado ? "bg-emerald-600 text-white" : "border border-muted-foreground"
+                        }`}>
+                          {conc.selecionado ? <Check className="w-3 h-3" /> : null}
+                        </span>
+                        <span>
+                          <strong>{conc.insumoNome}</strong> &rarr; Encomenda de <em>{conc.clienteNome}</em>
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] bg-background">
+                        Item na Nota: {conc.itemNotaNome}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Tabela de Itens */}
-            <div className="rounded-lg border border-border/70 overflow-hidden max-h-[250px] overflow-y-auto">
+            <div className="rounded-lg border border-border/70 overflow-hidden max-h-[240px] overflow-y-auto">
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -574,7 +659,7 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
                 </p>
               </div>
               <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-xs">
-                <p className="text-[10px] font-bold text-primary uppercase">💰 Total Nota</p>
+                <p className="text-[10px] font-bold text-primary uppercase">💰 Total Notinha</p>
                 <p className="text-sm font-extrabold text-foreground mt-0.5">
                   {formatarMoeda(totaisNota.total)}
                 </p>
@@ -597,7 +682,7 @@ export function ScannerView({ despesas, onSalvarDespesa }: ScannerViewProps) {
               className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              {salvando ? "Salvando..." : "Confirmar & Lançar"}
+              {salvando ? "Salvando..." : "Confirmar & Conciliar Insumos"}
             </Button>
           </DialogFooter>
         </DialogContent>

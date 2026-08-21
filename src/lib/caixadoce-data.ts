@@ -69,18 +69,111 @@ export interface Colaborador {
 }
 
 // ==============================================================================
-// ENCOMENDAS & CALENDÁRIO
+// CATÁLOGO DE INSUMOS (ARTFESTA & PERSONALIZADOS)
+// ==============================================================================
+
+export interface InsumoCatalogo {
+  id: string;
+  nome: string;
+  categoria: "Chocolates & Coberturas" | "Lácteos & Recheios" | "Confeitos & Açúcares" | "Embalagens & Descartáveis" | "Bases & Estruturas" | "Outros Insumos";
+  marca?: string;
+  unidadePadrao?: string;
+}
+
+export const CATALOGO_INSUMOS_ARTFESTA: InsumoCatalogo[] = [
+  // Chocolates & Coberturas
+  { id: "ins-1", nome: "Cobertura Harald Melken Ao Leite 1.01kg", categoria: "Chocolates & Coberturas", marca: "Harald" },
+  { id: "ins-2", nome: "Cobertura Harald Melken Meio Amargo 1.01kg", categoria: "Chocolates & Coberturas", marca: "Harald" },
+  { id: "ins-3", nome: "Cobertura Harald Melken Branco 1.01kg", categoria: "Chocolates & Coberturas", marca: "Harald" },
+  { id: "ins-4", nome: "Cobertura Sicao Supreme Blend 1.01kg", categoria: "Chocolates & Coberturas", marca: "Sicao" },
+  { id: "ins-5", nome: "Cobertura Sicao Supreme Ao Leite 1.01kg", categoria: "Chocolates & Coberturas", marca: "Sicao" },
+  { id: "ins-6", nome: "Cobertura Sicao Supreme Branco 1.01kg", categoria: "Chocolates & Coberturas", marca: "Sicao" },
+  { id: "ins-7", nome: "Cacau em Pó Alcalino 100% 500g", categoria: "Chocolates & Coberturas", marca: "Harald / Sicao" },
+  { id: "ins-8", nome: "Chocolate em Pó 50% Cacau 1kg", categoria: "Chocolates & Coberturas", marca: "Harald" },
+
+  // Lácteos & Recheios
+  { id: "ins-9", nome: "Leite Condensado Moça 395g", categoria: "Lácteos & Recheios", marca: "Nestlé" },
+  { id: "ins-10", nome: "Leite Condensado Piracanjuba 395g", categoria: "Lácteos & Recheios", marca: "Piracanjuba" },
+  { id: "ins-11", nome: "Leite Condensado Itambé 395g", categoria: "Lácteos & Recheios", marca: "Itambé" },
+  { id: "ins-12", nome: "Creme de Leite 200g", categoria: "Lácteos & Recheios", marca: "Piracanjuba / Nestlé" },
+  { id: "ins-13", nome: "Creme de Leite Tetra Pak 1kg", categoria: "Lácteos & Recheios", marca: "Piracanjuba / Itambé" },
+  { id: "ins-14", nome: "Leite em Pó Ninho Integral 380g", categoria: "Lácteos & Recheios", marca: "Nestlé" },
+  { id: "ins-15", nome: "Chantilly Norcau Chanty 1L", categoria: "Lácteos & Recheios", marca: "Norcau" },
+  { id: "ins-16", nome: "Chantilly ChantyPak Puratos 1L", categoria: "Lácteos & Recheios", marca: "Puratos" },
+  { id: "ins-17", nome: "Chantilly Ricca 1L", categoria: "Lácteos & Recheios", marca: "Bunge" },
+  { id: "ins-18", nome: "Nutella Balde 3kg", categoria: "Lácteos & Recheios", marca: "Ferrero" },
+  { id: "ins-19", nome: "Nutella Pote 650g", categoria: "Lácteos & Recheios", marca: "Ferrero" },
+  { id: "ins-20", nome: "Doce de Leite Confeiteiro 1kg", categoria: "Lácteos & Recheios", marca: "Viçosa / Itambé" },
+
+  // Confeitos & Açúcares
+  { id: "ins-21", nome: "Coco Ralado Fino Úmido e Adoçado 1kg", categoria: "Confeitos & Açúcares", marca: "Sococo" },
+  { id: "ins-22", nome: "Coco Ralado Flococado 500g", categoria: "Confeitos & Açúcares", marca: "Menina / Sococo" },
+  { id: "ins-23", nome: "Açúcar Impalpável Confeiteiro 1kg", categoria: "Confeitos & Açúcares", marca: "União / Mavalerio" },
+  { id: "ins-24", nome: "Açúcar Glacúcar 1kg", categoria: "Confeitos & Açúcares", marca: "União" },
+  { id: "ins-25", nome: "Emulsificante Emustab 200g", categoria: "Confeitos & Açúcares", marca: "Selecta" },
+  { id: "ins-26", nome: "Granulado Belga Callebaut Ao Leite 500g", categoria: "Confeitos & Açúcares", marca: "Callebaut" },
+  { id: "ins-27", nome: "Confeitos Chocoball Miçangas Coloridas", categoria: "Confeitos & Açúcares", marca: "Mavalerio" },
+
+  // Embalagens & Descartáveis
+  { id: "ins-28", nome: "Cake Board MDF Redondo 15cm", categoria: "Bases & Estruturas", marca: "ArtFesta" },
+  { id: "ins-29", nome: "Cake Board MDF Redondo 20cm", categoria: "Bases & Estruturas", marca: "ArtFesta" },
+  { id: "ins-30", nome: "Cake Board MDF Redondo 25cm", categoria: "Bases & Estruturas", marca: "ArtFesta" },
+  { id: "ins-31", nome: "Cake Board MDF Redondo 30cm", categoria: "Bases & Estruturas", marca: "ArtFesta" },
+  { id: "ins-32", nome: "Caixa de Bolo Alta com Visor 25x25x30cm", categoria: "Embalagens & Descartáveis", marca: "ArtFesta / Kraft" },
+  { id: "ins-33", nome: "Caixa de Bolo Alta com Visor 30x30x30cm", categoria: "Embalagens & Descartáveis", marca: "ArtFesta / Kraft" },
+  { id: "ins-34", nome: "Embalagens Articuladas H70 para Fatias", categoria: "Embalagens & Descartáveis", marca: "Sanpack / Hiperpack" },
+  { id: "ins-35", nome: "Embalagens Articuladas H78 para Fatias Altas", categoria: "Embalagens & Descartáveis", marca: "Sanpack / Hiperpack" },
+  { id: "ins-36", nome: "Copos Tampa Bolha 250ml (C/ 25 un)", categoria: "Embalagens & Descartáveis", marca: "Plastilânia" },
+  { id: "ins-37", nome: "Copos Tampa Bolha 400ml (C/ 25 un)", categoria: "Embalagens & Descartáveis", marca: "Plastilânia" },
+  { id: "ins-38", nome: "Forminhas 4 Pétalas N°4 (C/ 100 un)", categoria: "Embalagens & Descartáveis", marca: "Regina Festas" },
+];
+
+export function obterCatalogoInsumos(estabelecimentoCodigo?: string): InsumoCatalogo[] {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+  } catch {}
+  return CATALOGO_INSUMOS_ARTFESTA;
+}
+
+export function salvarNovoInsumoCatalogo(estabelecimentoCodigo: string, novoNome: string): InsumoCatalogo {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  const catalogoAtual = obterCatalogoInsumos(code);
+
+  const existente = catalogoAtual.find((i) => i.nome.toLowerCase() === novoNome.toLowerCase());
+  if (existente) return existente;
+
+  const novo: InsumoCatalogo = {
+    id: `ins-${Date.now()}`,
+    nome: novoNome.trim(),
+    categoria: "Outros Insumos",
+    marca: "Personalizado",
+  };
+
+  const atualizado = [novo, ...catalogoAtual];
+  try {
+    localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(atualizado));
+  } catch {}
+
+  return novo;
+}
+
+// ==============================================================================
+// ENCOMENDAS & CALENDÁRIO & INSUMOS NECESSÁRIOS
 // ==============================================================================
 
 export type StatusEncomenda = "pendente" | "em_producao" | "pronta" | "entregue" | "cancelada";
 export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega";
 
-export interface ItemEncomenda {
-  id?: string;
+export interface InsumoNecessarioPedido {
+  id: string;
   nome: string;
-  quantidade: number;
-  valorUnitario?: number;
-  observacao?: string;
+  comprado: boolean;
+  quantidade?: string;
 }
 
 export interface Encomenda {
@@ -91,6 +184,7 @@ export interface Encomenda {
   dataEntrega: string; // YYYY-MM-DD
   horarioEntrega: string; // HH:mm
   itens: string; // Descrição ou resumo dos itens pedidos
+  insumosNecessarios?: InsumoNecessarioPedido[]; // Tags de insumos vinculados
   valorTotal: number;
   valorEntrada?: number;
   statusPagamento: StatusPagamentoEncomenda;
@@ -150,6 +244,10 @@ export interface DespesaNotaFiscal {
   estabelecimentoCodigo: string;
   fornecedorNome: string;
   dataCompra: string; // YYYY-MM-DD
+  horaCompra?: string; // HH:mm:ss
+  numeroNota?: string; // Ex: NF-e 000.142.890
+  numeroPedido?: string; // Ex: PED-84920
+  fornecedorEndereco?: string; // Ex: Av. Brasil, 4500 - São Paulo/SP
   valorTotal: number;
   valorProducao: number;
   valorUtensilios: number;
@@ -205,7 +303,8 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
     "confeito", "granulado", "chocoball", "pasta americana", "chantilly", "chantypak", "corante",
     "manteiga", "margarina", "ovo", "ovos", "fermento", "bicarbonato", "essencia", "baunilha",
     "leite em po", "leite em pó", "ninho", "coco ralado", "amendoim", "nozes", "castanha",
-    "marshmallow", "gelatina", "glicose", "forminha", "glitter comestivel", "desmoldante"
+    "marshmallow", "gelatina", "glicose", "forminha", "glitter comestivel", "desmoldante", "sicao",
+    "harald", "melken", "supreme", "norcau", "callebaut"
   ];
 
   if (termosProducao.some((t) => n.includes(t))) {
@@ -216,7 +315,8 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
     "forma", "assadeira", "espatula", "espátula", "bico", "manga confeitar", "saco confeitar",
     "bailarina", "fouet", "batedor", "balanca", "balança", "termometro", "pincel",
     "tapete silicone", "rolo", "cortador", "grade resfriamento", "pao duro", "pão duro",
-    "batedeira", "mixer", "liquidificador", "tigela", "bowl", "estilete culinario"
+    "batedeira", "mixer", "liquidificador", "tigela", "bowl", "estilete culinario", "cake board",
+    "caixa bolo", "embalagem h70", "embalagem h78", "copo bolha"
   ];
 
   if (termosUtensilios.some((t) => n.includes(t))) {
@@ -236,6 +336,44 @@ export function categorizarItemAutomatico(nome: string): CategoriaDespesaItem {
   }
 
   return "outros";
+}
+
+/**
+ * Função de Conciliação Inteligente: Cruzamento entre itens fiscais da nota e tags pendentes
+ */
+export function correlacionarInsumosComItensNota(
+  itensNota: ItemNotaFiscal[],
+  encomendas: Encomenda[]
+): { encomendaId: string; clienteNome: string; insumoId: string; insumoNome: string; itemNotaNome: string }[] {
+  const correspondencias: { encomendaId: string; clienteNome: string; insumoId: string; insumoNome: string; itemNotaNome: string }[] = [];
+
+  for (const enc of encomendas) {
+    if (!enc.insumosNecessarios || enc.status === "cancelada" || enc.status === "entregue") continue;
+
+    for (const insumo of enc.insumosNecessarios) {
+      if (insumo.comprado) continue;
+
+      const insumoTermo = insumo.nome.toLowerCase().replace(/[^a-z0-9]/g, " ");
+      const palavrasChave = insumoTermo.split(" ").filter((p) => p.length >= 4);
+
+      const matchedItemNota = itensNota.find((it) => {
+        const itemTermo = it.nome.toLowerCase();
+        return palavrasChave.some((palavra) => itemTermo.includes(palavra));
+      });
+
+      if (matchedItemNota) {
+        correspondencias.push({
+          encomendaId: enc.id,
+          clienteNome: enc.clienteNome,
+          insumoId: insumo.id,
+          insumoNome: insumo.nome,
+          itemNotaNome: matchedItemNota.nome,
+        });
+      }
+    }
+  }
+
+  return correspondencias;
 }
 
 // ==============================================================================

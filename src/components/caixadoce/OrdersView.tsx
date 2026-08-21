@@ -47,34 +47,37 @@ import {
   Calendar as CalendarIcon,
   Plus,
   Search,
-  Filter,
   Clock,
   MessageCircle,
   Lock,
   Unlock,
   ChevronLeft,
   ChevronRight,
-  PackageCheck,
   Truck,
   Store,
-  DollarSign,
   Edit2,
   Trash2,
-  AlertCircle,
   CalendarDays,
-  Sparkles,
   CheckCircle2,
-  XCircle,
+  Tag,
+  X,
+  ShoppingCart,
+  Check,
+  Package,
 } from "lucide-react";
 import {
   formatarMoeda,
   formatarWhatsappLink,
+  obterCatalogoInsumos,
+  salvarNovoInsumoCatalogo,
   STATUS_ENCOMENDA_CONFIG,
   STATUS_PAGAMENTO_CONFIG,
   type Encomenda,
   type DataBloqueada,
   type StatusEncomenda,
   type StatusPagamentoEncomenda,
+  type InsumoNecessarioPedido,
+  type InsumoCatalogo,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -88,7 +91,6 @@ interface OrdersViewProps {
   onDesbloquearData: (id: string) => Promise<void>;
 }
 
-// Helpers de Estilo Semântico para Pílulas de Status
 function obterEstiloPilula(status: StatusEncomenda) {
   switch (status) {
     case "pendente":
@@ -113,9 +115,12 @@ export function OrdersView({
   onBloquearData,
   onDesbloquearData,
 }: OrdersViewProps) {
-  // Visualização: 'mes' | 'semana' | 'lista'
-  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista">("mes");
+  // Modos de Visualização: 'mes' | 'semana' | 'lista' | 'compras'
+  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("mes");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+
+  // Aba dentro da Lista de Compras: 'hoje' | 'semana' | 'encomenda'
+  const [abaCompras, setAbaCompras] = useState<"hoje" | "semana" | "encomenda">("semana");
 
   // Painel Lateral (Drawer) do Dia Selecionado
   const [selectedDrawerDate, setSelectedDrawerDate] = useState<string | null>(null);
@@ -125,6 +130,11 @@ export function OrdersView({
   const [modalEncomendaOpen, setModalEncomendaOpen] = useState(false);
   const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Catálogo de Insumos para Autocomplete de Tags
+  const catalogoInsumos = useMemo(() => obterCatalogoInsumos("CD-1001"), []);
+  const [buscaTag, setBuscaTag] = useState("");
+  const [insumosTags, setInsumosTags] = useState<InsumoNecessarioPedido[]>([]);
 
   // Filtros da Lista
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
@@ -149,6 +159,40 @@ export function OrdersView({
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
 
+  // Sugestões de Tags Filtradas
+  const sugestoesTags = useMemo(() => {
+    if (!buscaTag.trim()) return catalogoInsumos.slice(0, 6);
+    const termo = buscaTag.toLowerCase();
+    return catalogoInsumos
+      .filter((i) => i.nome.toLowerCase().includes(termo) || i.categoria.toLowerCase().includes(termo))
+      .slice(0, 8);
+  }, [buscaTag, catalogoInsumos]);
+
+  // Manipulação de Tags no Modal
+  const handleAdicionarTag = (nomeInsumo: string) => {
+    const nomeLimpo = nomeInsumo.trim();
+    if (!nomeLimpo) return;
+
+    if (insumosTags.some((t) => t.nome.toLowerCase() === nomeLimpo.toLowerCase())) {
+      toast.info("Este insumo já foi adicionado.");
+      return;
+    }
+
+    const novaTag: InsumoNecessarioPedido = {
+      id: crypto.randomUUID(),
+      nome: nomeLimpo,
+      comprado: false,
+    };
+
+    setInsumosTags((prev) => [...prev, novaTag]);
+    salvarNovoInsumoCatalogo("CD-1001", nomeLimpo);
+    setBuscaTag("");
+  };
+
+  const handleRemoverTag = (tagId: string) => {
+    setInsumosTags((prev) => prev.filter((t) => t.id !== tagId));
+  };
+
   // Abrir Modal de Criação (opcionalmente com data pré-definida)
   const handleAbrirNovaEncomenda = (dataPredefinida?: string) => {
     setEditingId(null);
@@ -157,6 +201,8 @@ export function OrdersView({
     setDataEntrega(dataPredefinida || new Date().toISOString().split("T")[0]);
     setHorarioEntrega("14:00");
     setItens("");
+    setInsumosTags([]);
+    setBuscaTag("");
     setValorTotal("");
     setValorEntrada("");
     setStatusPagamento("pendente");
@@ -175,6 +221,8 @@ export function OrdersView({
     setDataEntrega(ord.dataEntrega);
     setHorarioEntrega(ord.horarioEntrega || "14:00");
     setItens(ord.itens);
+    setInsumosTags(ord.insumosNecessarios || []);
+    setBuscaTag("");
     setValorTotal(ord.valorTotal);
     setValorEntrada(ord.valorEntrada || "");
     setStatusPagamento(ord.statusPagamento);
@@ -185,7 +233,7 @@ export function OrdersView({
     setModalEncomendaOpen(true);
   };
 
-  // Salvar Encomenda (Criar ou Editar)
+  // Salvar Encomenda
   const handleSalvarEncomenda = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteNome || !itens || valorTotal === "") {
@@ -200,6 +248,7 @@ export function OrdersView({
         dataEntrega,
         horarioEntrega,
         itens,
+        insumosNecessarios: insumosTags,
         valorTotal: Number(valorTotal),
         valorEntrada: valorEntrada !== "" ? Number(valorEntrada) : 0,
         statusPagamento,
@@ -222,6 +271,19 @@ export function OrdersView({
     }
   };
 
+  // Alternar Status de Insumo Comprado/Pendente (Baixa Rápida)
+  const handleToggleInsumoComprado = async (encomendaId: string, insumoId: string) => {
+    const enc = encomendas.find((e) => e.id === encomendaId);
+    if (!enc || !enc.insumosNecessarios) return;
+
+    const insumosAtualizados = enc.insumosNecessarios.map((ins) =>
+      ins.id === insumoId ? { ...ins, comprado: !ins.comprado } : ins
+    );
+
+    await onEditarEncomenda(encomendaId, { insumosNecessarios: insumosAtualizados });
+    toast.success("Status do insumo atualizado!");
+  };
+
   // Salvar Bloqueio de Data
   const handleSalvarBloqueio = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,7 +304,6 @@ export function OrdersView({
     setDrawerOpen(true);
   };
 
-  // Dados das Encomendas no Dia Selecionado para o Drawer
   const encomendasDoDiaDrawer = useMemo(() => {
     if (!selectedDrawerDate) return [];
     return encomendas.filter((e) => e.dataEntrega === selectedDrawerDate);
@@ -289,42 +350,27 @@ export function OrdersView({
 
     const dias = [];
 
-    // Dias do mês anterior para completar a 1ª semana
     for (let i = primeiroDiaSemana - 1; i >= 0; i--) {
       const diaNum = ultimoDiaMesAnterior - i;
       const dataIso = new Date(ano, mes - 1, diaNum).toISOString().split("T")[0];
-      dias.push({
-        dataIso,
-        diaNum,
-        foraDoMes: true,
-      });
+      dias.push({ dataIso, diaNum, foraDoMes: true });
     }
 
-    // Dias do mês atual
     for (let i = 1; i <= ultimoDiaMes; i++) {
       const dataIso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
-      dias.push({
-        dataIso,
-        diaNum: i,
-        foraDoMes: false,
-      });
+      dias.push({ dataIso, diaNum: i, foraDoMes: false });
     }
 
-    // Dias do próximo mês para fechar a grade (múltiplo de 7)
     const restante = 42 - dias.length;
     for (let i = 1; i <= (restante > 7 ? restante - 7 : restante); i++) {
       const dataIso = new Date(ano, mes + 1, i).toISOString().split("T")[0];
-      dias.push({
-        dataIso,
-        diaNum: i,
-        foraDoMes: true,
-      });
+      dias.push({ dataIso, diaNum: i, foraDoMes: true });
     }
 
     return dias;
   }, [currentDate]);
 
-  // Dias da Semana Atual
+  // Grid Semanal
   const diasDaSemanaGrid = useMemo(() => {
     const inicio = new Date(currentDate);
     const diaSemana = inicio.getDay();
@@ -349,16 +395,63 @@ export function OrdersView({
     year: "numeric",
   });
 
+  // =========================================================================
+  // PROCESSAMENTO DA LISTA DE COMPRAS / PRODUÇÃO
+  // =========================================================================
+  const listaComprasDados = useMemo(() => {
+    const hojeStr = new Date().toISOString().split("T")[0];
+    const agora = new Date();
+    const seteDiasDepois = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    // Encomendas ativas
+    const ativas = encomendas.filter((e) => e.status !== "cancelada" && e.status !== "entregue");
+
+    let filtradas = ativas;
+    if (abaCompras === "hoje") {
+      filtradas = ativas.filter((e) => e.dataEntrega === hojeStr);
+    } else if (abaCompras === "semana") {
+      filtradas = ativas.filter((e) => e.dataEntrega >= hojeStr && e.dataEntrega <= seteDiasDepois);
+    }
+
+    // Lista achatada de insumos
+    const todosInsumos: { encomendaId: string; clienteNome: string; dataEntrega: string; insumo: InsumoNecessarioPedido }[] = [];
+
+    for (const enc of filtradas) {
+      if (enc.insumosNecessarios && enc.insumosNecessarios.length > 0) {
+        for (const ins of enc.insumosNecessarios) {
+          todosInsumos.push({
+            encomendaId: enc.id,
+            clienteNome: enc.clienteNome,
+            dataEntrega: enc.dataEntrega,
+            insumo: ins,
+          });
+        }
+      }
+    }
+
+    const totalInsumos = todosInsumos.length;
+    const comprados = todosInsumos.filter((i) => i.insumo.comprado).length;
+    const pendentes = totalInsumos - comprados;
+
+    return {
+      encomendasComInsumos: filtradas,
+      todosInsumos,
+      totalInsumos,
+      comprados,
+      pendentes,
+    };
+  }, [encomendas, abaCompras]);
+
   return (
     <div className="space-y-6">
-      {/* Header com Ações e Troca de Visualização */}
+      {/* Header com Ações */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
             Encomendas &amp; Calendário <CalendarDays className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Gerencie datas de entrega, bloqueios de agenda e pedidos com facilidade.
+            Gerencie datas de entrega, lista de compras de insumos ArtFesta e pedidos com facilidade.
           </p>
         </div>
 
@@ -382,15 +475,14 @@ export function OrdersView({
         </div>
       </div>
 
-      {/* Barra de Controle de Visualização e Filtros */}
+      {/* Barra de Controle de Visualização */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
-        {/* Alternador de Modo: Mês / Semana / Lista */}
-        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto">
           <Button
             variant={viewMode === "mes" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("mes")}
-            className="h-7 text-xs font-semibold"
+            className="h-7 text-xs font-semibold shrink-0"
           >
             Mensal
           </Button>
@@ -398,7 +490,7 @@ export function OrdersView({
             variant={viewMode === "semana" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("semana")}
-            className="h-7 text-xs font-semibold"
+            className="h-7 text-xs font-semibold shrink-0"
           >
             Semanal
           </Button>
@@ -406,14 +498,23 @@ export function OrdersView({
             variant={viewMode === "lista" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("lista")}
-            className="h-7 text-xs font-semibold"
+            className="h-7 text-xs font-semibold shrink-0"
           >
             Lista Completa
           </Button>
+          <Button
+            variant={viewMode === "compras" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("compras")}
+            className="h-7 text-xs font-semibold shrink-0 text-amber-600 dark:text-amber-400"
+          >
+            <ShoppingCart className="w-3.5 h-3.5 mr-1 text-amber-500" />
+            Lista de Compras / Produção
+          </Button>
         </div>
 
-        {/* Controles de Navegação de Data (se no modo calendário) */}
-        {viewMode !== "lista" && (
+        {/* Controles de Navegação (se em mês ou semana) */}
+        {(viewMode === "mes" || viewMode === "semana") && (
           <div className="flex items-center gap-2 justify-center">
             <Button
               variant="outline"
@@ -445,7 +546,7 @@ export function OrdersView({
           </div>
         )}
 
-        {/* Filtros para o modo lista */}
+        {/* Filtros para modo lista */}
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-56">
@@ -471,29 +572,15 @@ export function OrdersView({
                 <SelectItem value="cancelada">Cancelada</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-36">
-                <SelectValue placeholder="Pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos Pagamentos</SelectItem>
-                <SelectItem value="pendente">Pendente (0%)</SelectItem>
-                <SelectItem value="sinal_pago">Sinal Pago (50%)</SelectItem>
-                <SelectItem value="pago_integral">100% Pago</SelectItem>
-                <SelectItem value="pago_na_entrega">Pagar na Entrega</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 1. VISUALIZAÇÃO EM CALENDÁRIO MENSAL (COM PÍLULAS COMPACTAS E CORES) */}
+      {/* 1. VISUALIZAÇÃO EM CALENDÁRIO MENSAL */}
       {/* ========================================================================= */}
       {viewMode === "mes" && (
         <Card className="border-border shadow-sm overflow-hidden bg-card">
-          {/* Cabeçalho dos Dias da Semana */}
           <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-xs font-bold text-muted-foreground py-2">
             <div>Dom</div>
             <div>Seg</div>
@@ -504,7 +591,6 @@ export function OrdersView({
             <div>Sáb</div>
           </div>
 
-          {/* Grade dos Dias */}
           <div className="grid grid-cols-7 divide-x divide-y divide-border/60 bg-muted/10">
             {diasDoMesGrid.map((dia, idx) => {
               const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso);
@@ -528,7 +614,6 @@ export function OrdersView({
                       : "hover:bg-primary/5 hover:border-primary/40"
                   }`}
                 >
-                  {/* Topo da Célula: Número do Dia + Indicador de Bloqueio */}
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
@@ -544,7 +629,6 @@ export function OrdersView({
                       <Badge
                         variant="destructive"
                         className="text-[9px] px-1.5 py-0 font-bold bg-rose-600 text-white flex items-center gap-0.5"
-                        title={`Agenda Fechada: ${bloqueio.motivo}`}
                       >
                         <Lock className="w-2.5 h-2.5" />
                         <span className="hidden sm:inline">Fechada</span>
@@ -552,7 +636,6 @@ export function OrdersView({
                     )}
                   </div>
 
-                  {/* Pílulas Compactas das Encomendas: [Horário] Nome (Item) */}
                   <div className="space-y-1 my-1 flex-1">
                     {exibidas.map((ord) => {
                       const estiloPilula = obterEstiloPilula(ord.status);
@@ -562,7 +645,6 @@ export function OrdersView({
                         <div
                           key={ord.id}
                           className={`text-[10px] sm:text-[11px] font-semibold px-1.5 py-0.5 rounded-md border truncate shadow-2xs flex items-center gap-1 transition-transform group-hover:translate-x-0.5 ${estiloPilula}`}
-                          title={`${ord.horarioEntrega || "14:00"} ${ord.clienteNome} (${ord.itens}) - ${formatarMoeda(ord.valorTotal)}`}
                         >
                           <span className="font-mono font-bold shrink-0 opacity-80">
                             {ord.horarioEntrega || "14:00"}
@@ -574,7 +656,6 @@ export function OrdersView({
                       );
                     })}
 
-                    {/* Etiqueta +X mais clicável */}
                     {restantes > 0 && (
                       <div className="text-[10px] font-extrabold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 px-1.5 py-0.5 rounded-md text-center">
                         +{restantes} mais
@@ -582,7 +663,6 @@ export function OrdersView({
                     )}
                   </div>
 
-                  {/* Rodapé da Célula */}
                   <div className="text-[9px] text-muted-foreground flex justify-between items-center opacity-70 group-hover:opacity-100">
                     {totalCount > 0 ? (
                       <span className="font-semibold text-foreground font-mono">
@@ -636,17 +716,12 @@ export function OrdersView({
 
                 <CardContent className="p-2 space-y-1.5 flex-1 min-h-[140px]">
                   {encomendasDoDia.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground text-center py-6">
-                      Livre
-                    </p>
+                    <p className="text-[11px] text-muted-foreground text-center py-6">Livre</p>
                   ) : (
                     encomendasDoDia.map((ord) => {
                       const estiloPilula = obterEstiloPilula(ord.status);
                       return (
-                        <div
-                          key={ord.id}
-                          className={`p-1.5 rounded-lg border text-xs space-y-1 ${estiloPilula}`}
-                        >
+                        <div key={ord.id} className={`p-1.5 rounded-lg border text-xs space-y-1 ${estiloPilula}`}>
                           <div className="flex items-center justify-between font-bold">
                             <span className="font-mono text-[10px]">{ord.horarioEntrega || "14:00"}</span>
                             <span className="text-[10px]">{formatarMoeda(ord.valorTotal)}</span>
@@ -660,7 +735,7 @@ export function OrdersView({
                 </CardContent>
 
                 <CardFooter className="p-2 border-t border-border/50 text-[10px] text-primary font-bold flex justify-between">
-                  <span>{encomendasDoDia.length} encomenda(s)</span>
+                  <span>{encomendasDoDia.length} ped.</span>
                   <span>Ver detalhes &gt;</span>
                 </CardFooter>
               </Card>
@@ -670,7 +745,7 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. VISUALIZAÇÃO EM LISTA / TABELA COMPLETA */}
+      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA */}
       {/* ========================================================================= */}
       {viewMode === "lista" && (
         <Card className="border-border shadow-sm overflow-hidden bg-card">
@@ -680,25 +755,22 @@ export function OrdersView({
                 <TableHead className="text-xs">Data &amp; Hora</TableHead>
                 <TableHead className="text-xs">Cliente</TableHead>
                 <TableHead className="text-xs">Itens do Pedido</TableHead>
-                <TableHead className="text-xs">Tipo Entrega</TableHead>
+                <TableHead className="text-xs">Insumos Vinculados</TableHead>
                 <TableHead className="text-xs">Valor Total</TableHead>
-                <TableHead className="text-xs">Pagamento</TableHead>
-                <TableHead className="text-xs">Status Produção</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {encomendasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-xs text-muted-foreground">
-                    Nenhuma encomenda encontrada com os filtros atuais.
+                  <TableCell colSpan={7} className="text-center py-10 text-xs text-muted-foreground">
+                    Nenhuma encomenda encontrada.
                   </TableCell>
                 </TableRow>
               ) : (
                 encomendasFiltradas.map((ord) => {
                   const statusCfg = STATUS_ENCOMENDA_CONFIG[ord.status];
-                  const pagCfg = STATUS_PAGAMENTO_CONFIG[ord.statusPagamento];
-
                   return (
                     <TableRow key={ord.id} className="hover:bg-muted/20">
                       <TableCell className="text-xs font-mono">
@@ -714,7 +786,7 @@ export function OrdersView({
                         <div className="font-semibold text-xs text-foreground">{ord.clienteNome}</div>
                         {ord.clienteWhatsapp && (
                           <a
-                            href={formatarWhatsappLink(ord.clienteWhatsapp, `Olá ${ord.clienteNome}! Estamos preparando sua encomenda do CaixaDoce.`)}
+                            href={formatarWhatsappLink(ord.clienteWhatsapp)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline font-mono"
@@ -724,35 +796,35 @@ export function OrdersView({
                         )}
                       </TableCell>
 
-                      <TableCell className="text-xs max-w-[220px] truncate text-muted-foreground" title={ord.itens}>
+                      <TableCell className="text-xs max-w-[200px] truncate text-muted-foreground">
                         {ord.itens}
                       </TableCell>
 
-                      <TableCell className="text-xs">
-                        {ord.tipoEntrega === "delivery" ? (
-                          <span className="flex items-center gap-1 text-blue-600 font-semibold">
-                            <Truck className="w-3.5 h-3.5" /> Delivery
-                          </span>
+                      <TableCell>
+                        {ord.insumosNecessarios && ord.insumosNecessarios.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {ord.insumosNecessarios.map((ins) => (
+                              <Badge
+                                key={ins.id}
+                                variant="outline"
+                                className={`text-[9px] px-1.5 py-0 ${
+                                  ins.comprado
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-semibold"
+                                    : "bg-amber-500/10 text-amber-700 border-amber-500/30"
+                                }`}
+                              >
+                                {ins.comprado ? <Check className="w-2.5 h-2.5 mr-0.5" /> : null}
+                                {ins.nome}
+                              </Badge>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="flex items-center gap-1 text-stone-600 font-semibold">
-                            <Store className="w-3.5 h-3.5" /> Retirada
-                          </span>
+                          <span className="text-[11px] text-muted-foreground italic">Nenhum</span>
                         )}
                       </TableCell>
 
                       <TableCell className="text-xs font-extrabold text-foreground">
                         {formatarMoeda(ord.valorTotal)}
-                        {ord.valorEntrada && ord.valorEntrada > 0 ? (
-                          <div className="text-[10px] text-emerald-600 font-normal">
-                            Sinal: {formatarMoeda(ord.valorEntrada)}
-                          </div>
-                        ) : null}
-                      </TableCell>
-
-                      <TableCell className="text-xs">
-                        <span className={`font-semibold ${pagCfg?.color || ""}`}>
-                          {pagCfg?.label || ord.statusPagamento}
-                        </span>
                       </TableCell>
 
                       <TableCell>
@@ -795,7 +867,179 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 4. PAINEL LATERAL (DRAWER / SHEET) DE DETALHES DO DIA SELECIONADO */}
+      {/* 4. VISUALIZAÇÃO: LISTA DE COMPRAS / PRODUÇÃO */}
+      {/* ========================================================================= */}
+      {viewMode === "compras" && (
+        <div className="space-y-6">
+          {/* Header da Lista de Compras */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/25 p-4 rounded-2xl">
+            <div>
+              <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-amber-600" /> Lista de Insumos para Compras &amp; Produção
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Insumos vinculados às encomendas pendentes (base ArtFesta e tags personalizadas).
+              </p>
+            </div>
+
+            {/* Abas de Período da Lista de Compras */}
+            <div className="flex items-center gap-1 bg-card p-1 rounded-xl border border-border">
+              <Button
+                variant={abaCompras === "hoje" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setAbaCompras("hoje")}
+                className="h-7 text-xs font-semibold"
+              >
+                📌 Hoje
+              </Button>
+              <Button
+                variant={abaCompras === "semana" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setAbaCompras("semana")}
+                className="h-7 text-xs font-semibold"
+              >
+                🗓️ Esta Semana
+              </Button>
+              <Button
+                variant={abaCompras === "encomenda" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setAbaCompras("encomenda")}
+                className="h-7 text-xs font-semibold"
+              >
+                📋 Por Encomenda
+              </Button>
+            </div>
+          </div>
+
+          {/* Cards de Métricas da Lista */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Card className="border-border shadow-xs p-3">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase">Total de Insumos</p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{listaComprasDados.totalInsumos}</p>
+            </Card>
+            <Card className="border-border shadow-xs p-3 bg-emerald-500/5 border-emerald-500/20">
+              <p className="text-[11px] font-bold text-emerald-600 uppercase">🟢 Comprados</p>
+              <p className="text-2xl font-black text-emerald-600 mt-0.5">{listaComprasDados.comprados}</p>
+            </Card>
+            <Card className="border-border shadow-xs p-3 bg-amber-500/5 border-amber-500/20">
+              <p className="text-[11px] font-bold text-amber-600 uppercase">🟡 Pendentes de Compra</p>
+              <p className="text-2xl font-black text-amber-600 mt-0.5">{listaComprasDados.pendentes}</p>
+            </Card>
+          </div>
+
+          {/* Conteúdo: Por Encomenda ou Lista Achatada */}
+          {abaCompras === "encomenda" ? (
+            <div className="space-y-4">
+              {listaComprasDados.encomendasComInsumos.length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted-foreground bg-muted/20 rounded-2xl border border-border/50">
+                  Nenhuma encomenda com tags de insumos vinculadas. Adicione insumos ao cadastrar pedidos!
+                </div>
+              ) : (
+                listaComprasDados.encomendasComInsumos.map((enc) => (
+                  <Card key={enc.id} className="border-border shadow-xs bg-card">
+                    <CardHeader className="p-3.5 pb-2 border-b border-border/50 flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-bold text-foreground">
+                          {enc.clienteNome} • {enc.dataEntrega.split("-").reverse().join("/")}
+                        </CardTitle>
+                        <CardDescription className="text-xs">{enc.itens}</CardDescription>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {enc.insumosNecessarios?.filter((i) => i.comprado).length} de {enc.insumosNecessarios?.length} comprados
+                      </Badge>
+                    </CardHeader>
+
+                    <CardContent className="p-3.5 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {enc.insumosNecessarios?.map((ins) => (
+                          <div
+                            key={ins.id}
+                            onClick={() => handleToggleInsumoComprado(enc.id, ins.id)}
+                            className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all select-none ${
+                              ins.comprado
+                                ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 line-through opacity-80"
+                                : "bg-card text-foreground border-amber-500/50 hover:border-amber-600 shadow-xs"
+                            }`}
+                          >
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                              ins.comprado ? "bg-emerald-600 text-white" : "border border-muted-foreground"
+                            }`}>
+                              {ins.comprado ? <Check className="w-2.5 h-2.5" /> : null}
+                            </span>
+                            <span>{ins.nome}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          ) : (
+            <Card className="border-border shadow-xs bg-card overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead className="text-xs w-12 text-center">Status</TableHead>
+                    <TableHead className="text-xs">Insumo / Tag</TableHead>
+                    <TableHead className="text-xs">Cliente / Pedido</TableHead>
+                    <TableHead className="text-xs">Data de Entrega</TableHead>
+                    <TableHead className="text-xs text-right">Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {listaComprasDados.todosInsumos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                        Nenhum insumo pendente para o período selecionado ({abaCompras === "hoje" ? "Hoje" : "Esta Semana"}).
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    listaComprasDados.todosInsumos.map(({ encomendaId, clienteNome, dataEntrega, insumo }) => (
+                      <TableRow key={`${encomendaId}-${insumo.id}`} className="hover:bg-muted/20">
+                        <TableCell className="text-center">
+                          <button
+                            onClick={() => handleToggleInsumoComprado(encomendaId, insumo.id)}
+                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors mx-auto ${
+                              insumo.comprado
+                                ? "bg-emerald-600 text-white"
+                                : "border-2 border-amber-500 hover:bg-amber-500/20"
+                            }`}
+                          >
+                            {insumo.comprado ? <Check className="w-3.5 h-3.5" /> : null}
+                          </button>
+                        </TableCell>
+                        <TableCell className={`text-xs font-bold ${insumo.comprado ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                          {insumo.nome}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-semibold">
+                          {clienteNome}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {dataEntrega.split("-").reverse().join("/")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant={insumo.comprado ? "ghost" : "outline"}
+                            size="sm"
+                            onClick={() => handleToggleInsumoComprado(encomendaId, insumo.id)}
+                            className="h-6 text-[10px] px-2"
+                          >
+                            {insumo.comprado ? "Desmarcar" : "Marcar Comprado"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. PAINEL LATERAL (DRAWER) DE DETALHES DO DIA SELECIONADO */}
       {/* ========================================================================= */}
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col justify-between">
@@ -813,11 +1057,10 @@ export function OrdersView({
                   : "Entregas do Dia"}
               </SheetTitle>
               <SheetDescription className="text-xs">
-                Visualização detalhada de todas as encomendas e controle de agenda da data.
+                Visualização detalhada de todas as encomendas e insumos da data.
               </SheetDescription>
             </SheetHeader>
 
-            {/* Aviso de Bloqueio no Painel Lateral */}
             {bloqueioDoDiaDrawer && (
               <div className="mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 font-semibold">
@@ -835,7 +1078,6 @@ export function OrdersView({
               </div>
             )}
 
-            {/* Ação Rápida: Adicionar Encomenda para esta data */}
             <div className="mt-4 flex gap-2">
               <Button
                 size="sm"
@@ -849,7 +1091,6 @@ export function OrdersView({
               </Button>
             </div>
 
-            {/* Lista das Encomendas do Dia */}
             <div className="mt-4 space-y-3">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Entregas Agendadas ({encomendasDoDiaDrawer.length})
@@ -865,7 +1106,6 @@ export function OrdersView({
                   return (
                     <Card key={ord.id} className="border-border shadow-xs bg-card overflow-hidden">
                       <div className="p-3.5 space-y-3">
-                        {/* Topo do Card da Encomenda */}
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-xs font-black text-primary flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
@@ -875,23 +1115,21 @@ export function OrdersView({
                           </Badge>
                         </div>
 
-                        {/* Dados do Cliente e Contato WhatsApp */}
                         <div>
                           <p className="text-sm font-extrabold text-foreground">{ord.clienteNome}</p>
                           {ord.clienteWhatsapp && (
                             <a
-                              href={formatarWhatsappLink(ord.clienteWhatsapp, `Olá ${ord.clienteNome}! Entramos em contato referente a sua encomenda agendada para ${ord.dataEntrega.split("-").reverse().join("/")}.`)}
+                              href={formatarWhatsappLink(ord.clienteWhatsapp)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-semibold hover:underline mt-0.5"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
-                              <span>{ord.clienteWhatsapp} (Conversar)</span>
+                              <span>{ord.clienteWhatsapp}</span>
                             </a>
                           )}
                         </div>
 
-                        {/* Itens e Detalhes */}
                         <div className="p-2.5 rounded-lg bg-muted/40 text-xs space-y-1">
                           <p className="font-medium text-foreground">{ord.itens}</p>
                           {ord.observacoes && (
@@ -899,7 +1137,30 @@ export function OrdersView({
                           )}
                         </div>
 
-                        {/* Valores e Entrega */}
+                        {/* Insumos Necessários */}
+                        {ord.insumosNecessarios && ord.insumosNecessarios.length > 0 && (
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Insumos:</Label>
+                            <div className="flex flex-wrap gap-1">
+                              {ord.insumosNecessarios.map((ins) => (
+                                <Badge
+                                  key={ins.id}
+                                  variant="outline"
+                                  onClick={() => handleToggleInsumoComprado(ord.id, ins.id)}
+                                  className={`cursor-pointer text-[10px] px-2 py-0.5 ${
+                                    ins.comprado
+                                      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/40 line-through"
+                                      : "bg-amber-500/10 text-amber-700 border-amber-500/30"
+                                  }`}
+                                >
+                                  {ins.comprado ? <Check className="w-3 h-3 mr-1" /> : null}
+                                  {ins.nome}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
                           <span className="font-extrabold text-foreground text-sm">
                             {formatarMoeda(ord.valorTotal)}
@@ -909,30 +1170,6 @@ export function OrdersView({
                           </span>
                         </div>
 
-                        {/* Alteração Rápida de Status */}
-                        <div className="space-y-1 pt-1">
-                          <Label className="text-[10px] font-bold text-muted-foreground uppercase">Alterar Status:</Label>
-                          <Select
-                            value={ord.status}
-                            onValueChange={(v: StatusEncomenda) => {
-                              onEditarEncomenda(ord.id, { status: v });
-                              toast.success(`Status alterado para ${STATUS_ENCOMENDA_CONFIG[v].label}`);
-                            }}
-                          >
-                            <SelectTrigger className="h-7 text-xs font-semibold">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pendente">Pendente</SelectItem>
-                              <SelectItem value="em_producao">Em Produção</SelectItem>
-                              <SelectItem value="pronta">Pronta p/ Entrega</SelectItem>
-                              <SelectItem value="entregue">Entregue</SelectItem>
-                              <SelectItem value="cancelada">Cancelada</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Botões de Ação */}
                         <div className="flex justify-end gap-1 pt-1">
                           <Button
                             variant="outline"
@@ -975,22 +1212,21 @@ export function OrdersView({
       </Sheet>
 
       {/* ========================================================================= */}
-      {/* 5. MODAL: CADASTRAR OU EDITAR ENCOMENDA */}
+      {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA (COM TAGS DE INSUMOS) */}
       {/* ========================================================================= */}
       <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <CalendarDays className="w-5 h-5 text-primary" />
               {editingId ? "Editar Encomenda" : "Cadastrar Nova Encomenda"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Preencha os detalhes do cliente, data, itens encomendados e valor.
+              Preencha os dados do cliente, itens e vincule os insumos necessários da ArtFesta.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSalvarEncomenda} className="space-y-4 py-2">
-            {/* Cliente & WhatsApp */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="enc-nome" className="text-xs">Nome do Cliente *</Label>
@@ -1015,7 +1251,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* Data & Horário */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="enc-data" className="text-xs">Data da Entrega / Retirada *</Label>
@@ -1041,7 +1276,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* Itens Encomendados */}
             <div className="space-y-1">
               <Label htmlFor="enc-itens" className="text-xs">Itens Pedidos / Descrição *</Label>
               <Textarea
@@ -1055,7 +1289,85 @@ export function OrdersView({
               />
             </div>
 
-            {/* Valores & Sinal */}
+            {/* =============================================================== */}
+            {/* SELEÇÃO DE INSUMOS VIA TAGS/CHIPS (ARTFESTA & PERSONALIZADAS) */}
+            {/* =============================================================== */}
+            <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-amber-600" /> Insumos Necessários (Catálogo ArtFesta)
+                </Label>
+                <span className="text-[10px] text-muted-foreground">{insumosTags.length} insumo(s)</span>
+              </div>
+
+              {/* Chips Já Selecionados */}
+              <div className="flex flex-wrap gap-1.5 min-h-[32px] p-2 bg-background rounded-lg border border-border">
+                {insumosTags.length === 0 ? (
+                  <span className="text-[11px] text-muted-foreground italic">
+                    Nenhum insumo vinculado ainda. Digite abaixo ou selecione uma sugestão.
+                  </span>
+                ) : (
+                  insumosTags.map((t) => (
+                    <Badge
+                      key={t.id}
+                      variant="secondary"
+                      className="text-xs py-1 px-2.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 flex items-center gap-1"
+                    >
+                      <span>{t.nome}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoverTag(t.id)}
+                        className="hover:text-rose-600 ml-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))
+                )}
+              </div>
+
+              {/* Input com Autocomplete */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Digite para buscar ou criar insumo (ex: Harald Ao Leite, Chantilly, Nutella)..."
+                  value={buscaTag}
+                  onChange={(e) => setBuscaTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAdicionarTag(buscaTag);
+                    }
+                  }}
+                  className="h-8 text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleAdicionarTag(buscaTag)}
+                  disabled={!buscaTag.trim()}
+                  className="h-8 px-3 text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Tag
+                </Button>
+              </div>
+
+              {/* Sugestões Rápidas ArtFesta */}
+              <div className="flex flex-wrap gap-1 pt-1">
+                <span className="text-[10px] font-bold text-muted-foreground mr-1">Sugestões:</span>
+                {sugestoesTags.map((sug) => (
+                  <button
+                    key={sug.id}
+                    type="button"
+                    onClick={() => handleAdicionarTag(sug.nome)}
+                    className="text-[10px] bg-muted/60 hover:bg-amber-500/20 text-foreground px-2 py-0.5 rounded-md border border-border/60 transition-colors"
+                  >
+                    + {sug.nome}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Valores & Status */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="enc-valor" className="text-xs">Valor Total (R$) *</Label>
@@ -1071,7 +1383,7 @@ export function OrdersView({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="enc-sinal" className="text-xs">Sinal / Entrada Paga (R$)</Label>
+                <Label htmlFor="enc-sinal" className="text-xs">Sinal / Entrada (R$)</Label>
                 <Input
                   id="enc-sinal"
                   type="number"
@@ -1084,7 +1396,6 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* Status de Pagamento & Produção */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Status do Pagamento</Label>
@@ -1118,48 +1429,11 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* Modalidade de Entrega */}
-            <div className="space-y-2">
-              <Label className="text-xs">Modalidade de Entrega</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={tipoEntrega === "retirada" ? "default" : "outline"}
-                  onClick={() => setTipoEntrega("retirada")}
-                  className="h-8 text-xs font-semibold"
-                >
-                  <Store className="w-3.5 h-3.5 mr-1.5" /> Retirada no Balcão
-                </Button>
-                <Button
-                  type="button"
-                  variant={tipoEntrega === "delivery" ? "default" : "outline"}
-                  onClick={() => setTipoEntrega("delivery")}
-                  className="h-8 text-xs font-semibold"
-                >
-                  <Truck className="w-3.5 h-3.5 mr-1.5" /> Delivery / Entrega
-                </Button>
-              </div>
-            </div>
-
-            {tipoEntrega === "delivery" && (
-              <div className="space-y-1">
-                <Label htmlFor="enc-end" className="text-xs">Endereço de Entrega</Label>
-                <Input
-                  id="enc-end"
-                  placeholder="Rua, Número, Bairro, Complemento"
-                  value={enderecoEntrega}
-                  onChange={(e) => setEnderecoEntrega(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-            )}
-
-            {/* Observações */}
             <div className="space-y-1">
               <Label htmlFor="enc-obs" className="text-xs">Observações / Detalhes</Label>
               <Input
                 id="enc-obs"
-                placeholder="Ex: Nome no topo do bolo, vela inclusa, alergias..."
+                placeholder="Ex: Nome no topo do bolo, vela inclusa..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 className="h-8 text-xs"
@@ -1179,7 +1453,7 @@ export function OrdersView({
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: BLOQUEAR DATA NA AGENDA */}
+      {/* 7. MODAL: BLOQUEAR DATA NA AGENDA */}
       {/* ========================================================================= */}
       <Dialog open={modalBloqueioOpen} onOpenChange={setModalBloqueioOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1188,7 +1462,7 @@ export function OrdersView({
               <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data na Agenda
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Datas bloqueadas ficam marcadas como "Agenda Fechada" e impedem agendamentos públicos de clientes.
+              Datas bloqueadas ficam marcadas como "Agenda Fechada" no calendário.
             </DialogDescription>
           </DialogHeader>
 
@@ -1221,7 +1495,6 @@ export function OrdersView({
               </Select>
             </div>
 
-            {/* Lista de Datas Já Bloqueadas */}
             {datasBloqueadas.length > 0 && (
               <div className="space-y-1 pt-2 border-t border-border/50">
                 <Label className="text-[11px] font-bold text-muted-foreground">Datas Já Bloqueadas:</Label>

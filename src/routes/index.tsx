@@ -43,8 +43,8 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Escanear Notas, Despesas & Encomendas" },
-      { name: "description", content: "Sistema inteligente para scanner de cupons, gestão de despesas e encomendas de confeitaria." },
+      { title: "CaixaDoce — Escanear Notinhas, Despesas & Encomendas" },
+      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos e encomendas de confeitaria." },
       { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
     ],
   }),
@@ -53,7 +53,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { user, profile, isMounted, logout, switchProfile } = useAuth();
-  // Scanner é a tela inicial padrão ao abrir o sistema
+  // Scanner é a tela inicial padrão
   const [activeTab, setActiveTab] = useState<string>("scanner");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
@@ -153,6 +153,11 @@ function Index() {
               dataEntrega: hoje,
               horarioEntrega: "15:30",
               itens: "1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga",
+              insumosNecessarios: [
+                { id: "ins-tag-1", nome: "Leite Condensado Moça 395g", comprado: false },
+                { id: "ins-tag-2", nome: "Cobertura Harald Melken Ao Leite", comprado: false },
+                { id: "ins-tag-3", nome: "Chantilly Norcau Chanty 1L", comprado: true },
+              ],
               valorTotal: 180.0,
               valorEntrada: 90.0,
               statusPagamento: "sinal_pago",
@@ -173,6 +178,7 @@ function Index() {
           dataEntrega: d.data_entrega,
           horarioEntrega: d.horario_entrega || "14:00",
           itens: d.itens,
+          insumosNecessarios: Array.isArray(d.insumos_necessarios) ? d.insumos_necessarios : [],
           valorTotal: Number(d.valor_total),
           valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
           statusPagamento: d.status_pagamento || "pendente",
@@ -232,97 +238,40 @@ function Index() {
             {
               id: "exp-1",
               estabelecimentoCodigo: activeCode,
-              fornecedorNome: "Atacadão",
+              fornecedorNome: "ArtFesta Confeitaria & Embalagens",
+              fornecedorEndereco: "Av. das Américas, 1200 - Centro",
+              numeroNota: "NFC-e 000.142.890",
+              numeroPedido: "PED-84920",
               dataCompra: new Date().toISOString().split("T")[0],
+              horaCompra: "14:35:10",
               valorTotal: 289.40,
               valorProducao: 245.00,
-              valorUtensilios: 0.00,
-              valorConsumoProprio: 44.40,
-              valorOutros: 0.00,
-              itens: [
-                {
-                  id: "it-1",
-                  nome: "LEITE CONDENSADO PIRACANJUBA 395G",
-                  quantidade: 24,
-                  valorUnitario: 5.49,
-                  valorTotal: 131.76,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-2",
-                  nome: "CREME DE LEITE ITAMBE 200G",
-                  quantidade: 12,
-                  valorUnitario: 3.29,
-                  valorTotal: 39.48,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-3",
-                  nome: "CHOCOLATE 50% CACAU HARALD 1KG",
-                  quantidade: 2,
-                  valorUnitario: 36.88,
-                  valorTotal: 73.76,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-4",
-                  nome: "SABONETE DOVE ORIGINAL 90G",
-                  quantidade: 4,
-                  valorUnitario: 4.89,
-                  valorTotal: 19.56,
-                  categoria: "consumo_proprio",
-                },
-                {
-                  id: "it-5",
-                  nome: "DETERGENTE YPE NEUTRO 500ML",
-                  quantidade: 4,
-                  valorUnitario: 2.39,
-                  valorTotal: 9.56,
-                  categoria: "consumo_proprio",
-                },
-                {
-                  id: "it-6",
-                  nome: "ARROZ TIO JOAO TIPO 1 5KG",
-                  quantidade: 1,
-                  valorUnitario: 15.28,
-                  valorTotal: 15.28,
-                  categoria: "consumo_proprio",
-                },
-              ],
-            },
-            {
-              id: "exp-2",
-              estabelecimentoCodigo: activeCode,
-              fornecedorNome: "Casa do Confeiteiro",
-              dataCompra: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split("T")[0],
-              valorTotal: 185.00,
-              valorProducao: 141.00,
-              valorUtensilios: 44.00,
+              valorUtensilios: 44.40,
               valorConsumoProprio: 0.00,
               valorOutros: 0.00,
               itens: [
                 {
-                  id: "it-7",
-                  nome: "BARRA CHOCOLATE SICAO NOBRE 1.01KG",
-                  quantidade: 2,
-                  valorUnitario: 48.00,
-                  valorTotal: 96.00,
+                  id: "it-1",
+                  nome: "LEITE CONDENSADO MOÇA 395G",
+                  quantidade: 24,
+                  valorUnitario: 6.89,
+                  valorTotal: 165.36,
                   categoria: "producao",
                 },
                 {
-                  id: "it-8",
-                  nome: "GRANULADO CALLEBAUT 500G",
-                  quantidade: 1,
-                  valorUnitario: 45.00,
-                  valorTotal: 45.00,
+                  id: "it-2",
+                  nome: "COBERTURA SICAO AO LEITE 1.01KG",
+                  quantidade: 2,
+                  valorUnitario: 39.82,
+                  valorTotal: 79.64,
                   categoria: "producao",
                 },
                 {
-                  id: "it-9",
-                  nome: "ESPATULA DE SILICONE ROSA 28CM",
-                  quantidade: 2,
-                  valorUnitario: 22.00,
-                  valorTotal: 44.00,
+                  id: "it-3",
+                  nome: "CAKE BOARD MDF REDONDO 25CM",
+                  quantidade: 8,
+                  valorUnitario: 5.55,
+                  valorTotal: 44.40,
                   categoria: "utensilios",
                 },
               ],
@@ -336,7 +285,11 @@ function Index() {
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
           fornecedorNome: d.fornecedor_nome,
+          fornecedorEndereco: d.fornecedor_endereco,
+          numeroNota: d.numero_nota,
+          numeroPedido: d.numero_pedido,
           dataCompra: d.data_compra,
+          horaCompra: d.hora_compra,
           valorTotal: Number(d.valor_total),
           valorProducao: Number(d.valor_producao),
           valorUtensilios: Number(d.valor_utensilios),
@@ -394,6 +347,7 @@ function Index() {
           data_entrega: item.dataEntrega,
           horario_entrega: item.horarioEntrega,
           itens: item.itens,
+          insumos_necessarios: item.insumosNecessarios || [],
           valor_total: item.valorTotal,
           valor_entrada: item.valorEntrada || 0,
           status_pagamento: item.statusPagamento,
@@ -424,6 +378,7 @@ function Index() {
           data_entrega: dados.dataEntrega,
           horario_entrega: dados.horarioEntrega,
           itens: dados.itens,
+          insumos_necessarios: dados.insumosNecessarios,
           valor_total: dados.valorTotal,
           valor_entrada: dados.valorEntrada,
           status_pagamento: dados.statusPagamento,
@@ -447,6 +402,37 @@ function Index() {
       await supabase.from("orders").delete().eq("id", id);
     } catch {}
     toast.success("Encomenda excluída com sucesso.");
+  };
+
+  // Conciliação de Insumos Automática
+  const conciliarInsumos = async (conciliacoes: { encomendaId: string; insumoId: string }[]) => {
+    let novasEncomendas = [...encomendas];
+
+    for (const { encomendaId, insumoId } of conciliacoes) {
+      novasEncomendas = novasEncomendas.map((enc) => {
+        if (enc.id !== encomendaId || !enc.insumosNecessarios) return enc;
+        const insumosAtualizados = enc.insumosNecessarios.map((ins) =>
+          ins.id === insumoId ? { ...ins, comprado: true } : ins
+        );
+        return { ...enc, insumosNecessarios: insumosAtualizados };
+      });
+
+      // Atualiza no Supabase
+      const encAlvo = novasEncomendas.find((e) => e.id === encomendaId);
+      if (encAlvo) {
+        try {
+          await supabase
+            .from("orders")
+            .update({ insumos_necessarios: encAlvo.insumosNecessarios })
+            .eq("id", encomendaId);
+        } catch {}
+      }
+    }
+
+    setEncomendas(novasEncomendas);
+    try {
+      localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(novasEncomendas));
+    } catch {}
   };
 
   // Handlers de Bloqueio de Datas
@@ -497,14 +483,18 @@ function Index() {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
 
-    // 1. Salva na tabela expenses do Supabase
+    // 1. Salva na tabela expenses do Supabase com metadados
     try {
       await supabase.from("expenses").insert([
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
           fornecedor_nome: item.fornecedorNome,
+          fornecedor_endereco: item.fornecedorEndereco,
+          numero_nota: item.numeroNota,
+          numero_pedido: item.numeroPedido,
           data_compra: item.dataCompra,
+          hora_compra: item.horaCompra,
           valor_total: item.valorTotal,
           valor_producao: item.valorProducao,
           valor_utensilios: item.valorUtensilios,
@@ -521,7 +511,7 @@ function Index() {
     const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
     if (custoEmpresa > 0) {
       await adicionarTransacao({
-        descricao: `Compra Insumos / Nota Fiscal - ${item.fornecedorNome}`,
+        descricao: `Compra Insumos / Notinha - ${item.fornecedorNome}`,
         valor: custoEmpresa,
         tipo: "despesa",
         categoria: "Insumos & Ingredientes (Produção)",
@@ -676,11 +666,10 @@ function Index() {
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          {/* Navegação Reestruturada */}
           <div className="-mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
               <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Camera className="w-4 h-4 text-primary" /> Escanear Nota
+                <Camera className="w-4 h-4 text-primary" /> Escanear Notinha
               </TabsTrigger>
               <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
                 <Layers className="w-4 h-4 text-primary" /> Despesas
@@ -703,11 +692,13 @@ function Index() {
             </TabsList>
           </div>
 
-          {/* 1. Tela Inicial: Escanear Nota */}
+          {/* 1. Tela Inicial: Escanear Notinha (com Conciliação Inteligente) */}
           <TabsContent value="scanner">
             <ScannerView
               despesas={despesas}
+              encomendas={encomendas}
               onSalvarDespesa={salvarDespesa}
+              onConciliarInsumos={conciliarInsumos}
             />
           </TabsContent>
 
@@ -719,7 +710,7 @@ function Index() {
             />
           </TabsContent>
 
-          {/* 3. Encomendas & Calendário */}
+          {/* 3. Encomendas & Calendário & Lista de Compras */}
           <TabsContent value="encomendas">
             <OrdersView
               encomendas={encomendas}
