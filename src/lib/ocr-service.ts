@@ -28,7 +28,7 @@ export async function extractReceiptDataWithGemini(imageBase64: string): Promise
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
   const body = {
     contents: [
