@@ -39,6 +39,13 @@ import {
   CreditCard,
 } from "lucide-react";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   formatarMoeda,
   formatarWhatsappLink,
   aplicarMascaraTelefone,
@@ -47,9 +54,12 @@ import {
 } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
-  calcularTaxaStripePassThrough,
   createStripeSession,
 } from "@/lib/stripe-connect-service";
+import {
+  calculateDynamicTotal,
+  getInstallmentOptions,
+} from "@/lib/stripeFees";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/cardapio/$storeCode")({
@@ -86,6 +96,7 @@ function CardapioLojaView() {
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
+  const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
@@ -144,12 +155,20 @@ function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
   }, [carrinho]);
 
-  const { subtotal, taxaProcessamento, totalAPagar } = useMemo(() => {
-    return calcularTaxaStripePassThrough(
+  const feeResult = useMemo(() => {
+    return calculateDynamicTotal(
       totalCarrinho,
+      parcelasSelecionadas,
       metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
     );
-  }, [totalCarrinho, metodoPagamento, stripeConfig]);
+  }, [totalCarrinho, parcelasSelecionadas, metodoPagamento, stripeConfig]);
+
+  const installmentOptions = useMemo(() => {
+    return getInstallmentOptions(
+      totalCarrinho,
+      stripeConfig.repassarTaxaStripe
+    );
+  }, [totalCarrinho, stripeConfig]);
 
   const totalItensCarrinho = useMemo(() => {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
@@ -176,11 +195,12 @@ function CardapioLojaView() {
             unitPrice: it.produto.preco,
           })),
           subtotal: totalCarrinho,
+          installments: parcelasSelecionadas,
           repassarTaxa: stripeConfig.repassarTaxaStripe,
           stripeAccountId: stripeConfig.accountId,
         });
 
-        toast.success(`Sessão de pagamento no cartão criada! Redirecionando para o Stripe Checkout (Total: ${formatarMoeda(totalAPagar)})...`);
+        toast.success(`Sessão de pagamento no cartão criada! Total: ${feeResult.formattedTotalAmount} (${feeResult.installments}x de ${feeResult.formattedInstallmentValue})`);
         setTimeout(() => {
           window.open(session.checkoutUrl, "_blank");
         }, 800);
@@ -550,31 +570,58 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                       </Button>
                     </div>
 
-                    {/* Exibição Transparente da Taxa quando o cliente escolhe Cartão */}
+                    {/* Exibição e Seleção de Parcelas quando escolhe Cartão */}
                     {metodoPagamento === "cartao" && (
-                      <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in mt-2">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Subtotal dos Produtos:</span>
-                          <span className="font-mono font-semibold">{formatarMoeda(subtotal)}</span>
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1">
+                          <Label htmlFor="sel-parcelas" className="text-xs font-semibold">
+                            Número de Parcelas no Cartão
+                          </Label>
+                          <Select
+                            value={String(parcelasSelecionadas)}
+                            onValueChange={(val) => setParcelasSelecionadas(Number(val))}
+                          >
+                            <SelectTrigger id="sel-parcelas" className="h-9 text-xs font-semibold bg-background">
+                              <SelectValue placeholder="Selecione as parcelas" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              {installmentOptions.map((opt) => (
+                                <SelectItem key={opt.installments} value={String(opt.installments)} className="text-xs font-medium">
+                                  {opt.formattedOptionText}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        {taxaProcessamento > 0 ? (
-                          <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
-                            <span>Taxa de Processamento (Cartão):</span>
-                            <span className="font-mono">{formatarMoeda(taxaProcessamento)}</span>
+
+                        {/* RESUMO DE PAGAMENTO REATIVO */}
+                        <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Subtotal:</span>
+                            <span className="font-mono font-semibold">{feeResult.formattedSubtotal}</span>
                           </div>
-                        ) : (
-                          <div className="flex justify-between text-emerald-600 font-semibold">
-                            <span>Taxa de Processamento:</span>
-                            <span>Isento (absorvido pela loja)</span>
+                          {feeResult.feeAmount > 0 ? (
+                            <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                              <span>Taxa de Conveniência ({feeResult.installments}x):</span>
+                              <span className="font-mono">{feeResult.formattedFeeAmount}</span>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between text-emerald-600 font-semibold">
+                              <span>Taxa de Conveniência:</span>
+                              <span>Isento (absorvido pela loja)</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-2 border-t border-primary/20 text-sm font-extrabold text-foreground">
+                            <span>Total a Pagar:</span>
+                            <span className="font-mono text-primary">{feeResult.formattedTotalAmount}</span>
                           </div>
-                        )}
-                        <div className="flex justify-between pt-2 border-t border-primary/20 text-sm font-extrabold text-foreground">
-                          <span>Total a Pagar:</span>
-                          <span className="font-mono text-primary">{formatarMoeda(totalAPagar)}</span>
+                          <p className="text-[11px] font-extrabold text-primary text-right">
+                            ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground italic">
+                            💳 Taxa calculada dinamicamente incluindo processamento Stripe + 1% taxa da plataforma.
+                          </p>
                         </div>
-                        <p className="text-[10px] text-muted-foreground italic">
-                          💳 Acréscimo transparente de conveniência do cartão via Stripe.
-                        </p>
                       </div>
                     )}
                   </div>
@@ -609,7 +656,7 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                 {metodoPagamento === "cartao" ? (
                   <>
                     <CreditCard className="w-4 h-4 mr-1.5" />
-                    {processandoPagamento ? "Processando..." : `Pagar no Cartão (${formatarMoeda(totalAPagar)})`}
+                    {processandoPagamento ? "Processando..." : `Pagar ${feeResult.installments}x de ${feeResult.formattedInstallmentValue}`}
                   </>
                 ) : (
                   <>

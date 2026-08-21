@@ -1,3 +1,5 @@
+import { calculateDynamicTotal, type DynamicFeeResult } from "./stripeFees";
+
 export interface StripeConnectAccount {
   accountId: string | null;
   establishmentCode: string;
@@ -20,6 +22,7 @@ export interface CreateStripeSessionPayload {
   customerWhatsapp: string;
   items: StripeCheckoutItem[];
   subtotal: number;
+  installments?: number;
   repassarTaxa: boolean;
   stripeAccountId?: string | null;
 }
@@ -94,42 +97,12 @@ export async function createStripeConnectAccount(
 }
 
 /**
- * Calcula a taxa de processamento do cartão via Stripe com repasse transparente
- * Fórmula solicitada: (Subtotal / (1 - 0.0499)) - Subtotal + 0.39
- */
-export function calcularTaxaStripePassThrough(
-  subtotal: number,
-  repassarTaxa: boolean = true
-): {
-  subtotal: number;
-  taxaProcessamento: number;
-  totalAPagar: number;
-} {
-  if (!repassarTaxa || subtotal <= 0) {
-    return {
-      subtotal,
-      taxaProcessamento: 0,
-      totalAPagar: subtotal,
-    };
-  }
-
-  const taxaCalculada = subtotal / (1 - 0.0499) - subtotal + 0.39;
-  const taxaProcessamento = parseFloat(Math.max(0, taxaCalculada).toFixed(2));
-  const totalAPagar = parseFloat((subtotal + taxaProcessamento).toFixed(2));
-
-  return {
-    subtotal,
-    taxaProcessamento,
-    totalAPagar,
-  };
-}
-
-/**
- * Prepara a sessão de checkout com linha adicional transparente para 'Taxa de Processamento e Conveniência'
+ * Prepara a sessão de checkout com linha adicional transparente para 'Taxa de Conveniência (Cartão)'
  */
 export async function createStripeSession(payload: CreateStripeSessionPayload): Promise<{
   sessionId: string;
   checkoutUrl: string;
+  feeResult: DynamicFeeResult;
   lineItems: Array<{
     price_data: {
       currency: string;
@@ -143,8 +116,8 @@ export async function createStripeSession(payload: CreateStripeSessionPayload): 
     amount: number;
   };
 }> {
-  const { subtotal, repassarTaxa } = payload;
-  const { taxaProcessamento, totalAPagar } = calcularTaxaStripePassThrough(subtotal, repassarTaxa);
+  const { subtotal, installments = 1, repassarTaxa } = payload;
+  const feeResult = calculateDynamicTotal(subtotal, installments, repassarTaxa);
 
   // Line items dos produtos do pedido
   const lineItems = payload.items.map((it) => ({
@@ -158,38 +131,42 @@ export async function createStripeSession(payload: CreateStripeSessionPayload): 
     quantity: it.quantity,
   }));
 
-  // Linha adicional transparente para taxa de processamento e conveniência do cartão
-  if (repassarTaxa && taxaProcessamento > 0) {
+  // Linha adicional transparente para Taxa de Conveniência (Cartão) com valor exato das parcelas
+  if (repassarTaxa && feeResult.feeAmount > 0) {
     lineItems.push({
       price_data: {
         currency: "brl",
         product_data: {
-          name: "Taxa de Processamento e Conveniência (Cartão via Stripe)",
+          name: `Taxa de Conveniência e Processamento (${feeResult.installments}x no Cartão)`,
         },
-        unit_amount: Math.round(taxaProcessamento * 100),
+        unit_amount: Math.round(feeResult.feeAmount * 100),
       },
       quantity: 1,
     });
   }
 
-  console.log("[Stripe Connect API / Checkout] Sessão de pagamento via cartão criada:", {
+  console.log("[Stripe Connect API / Checkout] Sessão de pagamento com markup dinâmico gerada:", {
     establishmentCode: payload.establishmentCode,
-    subtotal,
-    taxaProcessamento,
-    totalAPagar,
-    itemsCount: lineItems.length,
+    subtotal: feeResult.subtotal,
+    installments: feeResult.installments,
+    feeAmount: feeResult.feeAmount,
+    totalAmount: feeResult.totalAmount,
+    installmentValue: feeResult.installmentValue,
   });
 
   const mockSessionId = `cs_stripe_${Date.now()}`;
   return {
     sessionId: mockSessionId,
-    checkoutUrl: `https://checkout.stripe.com/pay/${mockSessionId}?amount=${Math.round(totalAPagar * 100)}`,
+    checkoutUrl: `https://checkout.stripe.com/pay/${mockSessionId}?amount=${Math.round(
+      feeResult.totalAmount * 100
+    )}&installments=${feeResult.installments}`,
+    feeResult,
     lineItems,
     feeItem:
-      repassarTaxa && taxaProcessamento > 0
+      repassarTaxa && feeResult.feeAmount > 0
         ? {
-            name: "Taxa de Processamento e Conveniência (Cartão via Stripe)",
-            amount: taxaProcessamento,
+            name: `Taxa de Conveniência (${feeResult.installments}x no Cartão)`,
+            amount: feeResult.feeAmount,
           }
         : undefined,
   };

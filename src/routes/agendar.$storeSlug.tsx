@@ -56,10 +56,20 @@ import {
   type Encomenda,
 } from "@/lib/caixadoce-data";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   obterConfiguracoesStripeLoja,
-  calcularTaxaStripePassThrough,
   createStripeSession,
 } from "@/lib/stripe-connect-service";
+import {
+  calculateDynamicTotal,
+  getInstallmentOptions,
+} from "@/lib/stripeFees";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/agendar/$storeSlug")({
@@ -118,6 +128,7 @@ function PublicStoreView() {
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao" | "entrega">("pix");
+  const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [enviandoPedido, setEnviandoPedido] = useState(false);
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
@@ -206,12 +217,20 @@ function PublicStoreView() {
     return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
   }, [carrinho]);
 
-  const { subtotal, taxaProcessamento, totalAPagar } = useMemo(() => {
-    return calcularTaxaStripePassThrough(
+  const feeResult = useMemo(() => {
+    return calculateDynamicTotal(
       totalCarrinho,
+      parcelasSelecionadas,
       metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
     );
-  }, [totalCarrinho, metodoPagamento, stripeConfig]);
+  }, [totalCarrinho, parcelasSelecionadas, metodoPagamento, stripeConfig]);
+
+  const installmentOptions = useMemo(() => {
+    return getInstallmentOptions(
+      totalCarrinho,
+      stripeConfig.repassarTaxaStripe
+    );
+  }, [totalCarrinho, stripeConfig]);
 
   const totalItensCount = useMemo(() => {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
@@ -257,11 +276,12 @@ function PublicStoreView() {
             unitPrice: it.produto.preco,
           })),
           subtotal: totalCarrinho,
+          installments: parcelasSelecionadas,
           repassarTaxa: stripeConfig.repassarTaxaStripe,
           stripeAccountId: stripeConfig.accountId,
         });
 
-        toast.success(`Sessão no cartão gerada! Redirecionando para o Stripe Checkout (${formatarMoeda(totalAPagar)})...`);
+        toast.success(`Sessão no cartão gerada! Total: ${feeResult.formattedTotalAmount} (${feeResult.installments}x de ${feeResult.formattedInstallmentValue})`);
         setTimeout(() => {
           window.open(session.checkoutUrl, "_blank");
         }, 800);
@@ -696,31 +716,58 @@ function PublicStoreView() {
                     </Button>
                   </div>
 
-                  {/* Exibição Transparente da Taxa quando o cliente escolhe Cartão */}
+                  {/* Exibição e Seleção de Parcelas quando escolhe Cartão */}
                   {metodoPagamento === "cartao" && (
-                    <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5 text-xs mt-2">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Subtotal dos Produtos:</span>
-                        <span className="font-mono font-semibold">{formatarMoeda(subtotal)}</span>
+                    <div className="space-y-2.5 pt-1">
+                      <div className="space-y-1">
+                        <Label htmlFor="sel-parcelas-agendar" className="text-xs font-semibold">
+                          Número de Parcelas no Cartão
+                        </Label>
+                        <Select
+                          value={String(parcelasSelecionadas)}
+                          onValueChange={(val) => setParcelasSelecionadas(Number(val))}
+                        >
+                          <SelectTrigger id="sel-parcelas-agendar" className="h-8 text-xs font-semibold bg-background">
+                            <SelectValue placeholder="Selecione as parcelas" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-56">
+                            {installmentOptions.map((opt) => (
+                              <SelectItem key={opt.installments} value={String(opt.installments)} className="text-xs font-medium">
+                                {opt.formattedOptionText}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      {taxaProcessamento > 0 ? (
-                        <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
-                          <span>Taxa de Processamento (Cartão):</span>
-                          <span className="font-mono">{formatarMoeda(taxaProcessamento)}</span>
+
+                      {/* RESUMO DE PAGAMENTO REATIVO */}
+                      <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5 text-xs animate-fade-in">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Subtotal:</span>
+                          <span className="font-mono font-semibold">{feeResult.formattedSubtotal}</span>
                         </div>
-                      ) : (
-                        <div className="flex justify-between text-emerald-600 font-semibold">
-                          <span>Taxa de Processamento:</span>
-                          <span>Isento (absorvido pela loja)</span>
+                        {feeResult.feeAmount > 0 ? (
+                          <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                            <span>Taxa de Conveniência ({feeResult.installments}x):</span>
+                            <span className="font-mono">{feeResult.formattedFeeAmount}</span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between text-emerald-600 font-semibold">
+                            <span>Taxa de Conveniência:</span>
+                            <span>Isento (absorvido pela loja)</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
+                          <span>Total a Pagar:</span>
+                          <span className="font-mono text-primary text-sm">{feeResult.formattedTotalAmount}</span>
                         </div>
-                      )}
-                      <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
-                        <span>Total a Pagar:</span>
-                        <span className="font-mono text-primary text-sm">{formatarMoeda(totalAPagar)}</span>
+                        <p className="text-[11px] font-extrabold text-primary text-right">
+                          ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground italic">
+                          💳 Taxa calculada com markup exato incluindo processamento Stripe + 1% taxa da plataforma.
+                        </p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground italic">
-                        💳 Acréscimo transparente de conveniência do cartão via Stripe.
-                      </p>
                     </div>
                   )}
                 </div>
@@ -742,7 +789,7 @@ function PublicStoreView() {
               <DialogFooter className="pt-2 border-t flex items-center justify-between">
                 <div className="text-left">
                   <p className="text-[10px] text-muted-foreground">Total a Pagar:</p>
-                  <p className="text-base font-black text-primary font-mono">{formatarMoeda(totalAPagar)}</p>
+                  <p className="text-base font-black text-primary font-mono">{feeResult.formattedTotalAmount}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -762,7 +809,7 @@ function PublicStoreView() {
                     {metodoPagamento === "cartao" ? (
                       <>
                         <CreditCard className="w-3.5 h-3.5 mr-1" />
-                        {enviandoPedido ? "Gerando..." : "Pagar no Cartão"}
+                        {enviandoPedido ? "Gerando..." : `Pagar ${feeResult.installments}x de ${feeResult.formattedInstallmentValue}`}
                       </>
                     ) : (
                       <>{enviandoPedido ? "Confirmando..." : "Finalizar Pedido"}</>
