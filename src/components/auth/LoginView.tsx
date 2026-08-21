@@ -14,19 +14,46 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
-import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, CheckCircle2 } from "lucide-react";
+import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, MailCheck } from "lucide-react";
 
 interface LoginViewProps {
   onSuccess?: () => void;
 }
 
+function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" {...props}>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  );
+}
+
 export function LoginView({ onSuccess }: LoginViewProps) {
-  const { loginWithEmail, registerWithEmail, sendEmailOtpSignUp, verifyEmailOtp, resendEmailOtp, resetPassword } = useAuth();
+  const { loginWithEmail, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Toggle password visibility
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState("");
@@ -36,17 +63,23 @@ export function LoginView({ onSuccess }: LoginViewProps) {
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+
+  // Email confirmation banner state
+  const [emailConfirmationSentEmail, setEmailConfirmationSentEmail] = useState<string | null>(null);
 
   // Reset password state
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
-  // OTP Verification state
-  const [otpModalOpen, setOtpModalOpen] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [otpLoading, setOtpLoading] = useState(false);
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +92,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
       await loginWithEmail(loginEmail, loginPassword);
       onSuccess?.();
     } catch (error) {
-      // Handled by toast in auth-context
+      // Handled in context
     } finally {
       setLoading(false);
     }
@@ -75,45 +108,21 @@ export function LoginView({ onSuccess }: LoginViewProps) {
       toast.error("A senha deve conter no mínimo 6 caracteres.");
       return;
     }
-    if (registerPassword !== registerConfirmPassword) {
-      toast.error("As senhas informadas não coincidem.");
-      return;
-    }
 
     setLoading(true);
+    setEmailConfirmationSentEmail(null);
     try {
-      const otpRes = await sendEmailOtpSignUp(registerName, registerEmail, registerPassword);
-      if (otpRes.success) {
-        setOtpModalOpen(true);
-        toast.info(`Código de validação enviado para ${registerEmail}`);
+      const res = await registerWithEmail(registerName, registerEmail, registerPassword);
+      if (res?.requiresConfirmation) {
+        setEmailConfirmationSentEmail(registerEmail);
+        toast.info(`Link de ativação enviado para ${registerEmail}`);
       } else {
-        await registerWithEmail(registerName, registerEmail, registerPassword);
         onSuccess?.();
       }
     } catch (error) {
       // Handled in context
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (otpCode.length < 6) {
-      toast.error("Digite o código de 6 dígitos.");
-      return;
-    }
-    setOtpLoading(true);
-    try {
-      const res = await verifyEmailOtp(registerEmail, otpCode, registerName, registerPassword);
-      if (res.success) {
-        setOtpModalOpen(false);
-        toast.success("Conta confirmada com sucesso!");
-        onSuccess?.();
-      } else {
-        toast.error(res.error || "Código inválido.");
-      }
-    } finally {
-      setOtpLoading(false);
     }
   };
 
@@ -150,14 +159,42 @@ export function LoginView({ onSuccess }: LoginViewProps) {
         </CardHeader>
 
         <CardContent>
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              setActiveTab(v as any);
+              setEmailConfirmationSentEmail(null);
+            }}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="register">Cadastrar</TabsTrigger>
             </TabsList>
 
             {/* TAB: LOGIN */}
-            <TabsContent value="login">
+            <TabsContent value="login" className="space-y-4">
+              {/* Google OAuth Button */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2.5 h-11 border-border/80 bg-background hover:bg-accent/60 font-medium text-foreground transition-all shadow-sm"
+                onClick={handleGoogleLogin}
+                disabled={googleLoading || loading}
+              >
+                <GoogleIcon />
+                <span>Continuar com Google</span>
+              </Button>
+
+              <div className="relative my-4 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/60" />
+                </div>
+                <span className="relative bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  ou entre com e-mail
+                </span>
+              </div>
+
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="login-email">E-mail</Label>
@@ -190,17 +227,26 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                     <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="login-password"
-                      type="password"
+                      type={showLoginPassword ? "text" : "password"}
                       placeholder="••••••••"
-                      className="pl-9"
+                      className="pl-9 pr-10"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                      title={showLoginPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full font-semibold shadow-md" disabled={loading}>
+                <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading}>
                   {loading ? "Entrando..." : "Acessar CaixaDoce"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -208,7 +254,44 @@ export function LoginView({ onSuccess }: LoginViewProps) {
             </TabsContent>
 
             {/* TAB: REGISTER */}
-            <TabsContent value="register">
+            <TabsContent value="register" className="space-y-4">
+              {/* Google OAuth Button */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2.5 h-11 border-border/80 bg-background hover:bg-accent/60 font-medium text-foreground transition-all shadow-sm"
+                onClick={handleGoogleLogin}
+                disabled={googleLoading || loading}
+              >
+                <GoogleIcon />
+                <span>Continuar com Google</span>
+              </Button>
+
+              <div className="relative my-4 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/60" />
+                </div>
+                <span className="relative bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  ou cadastre-se com e-mail
+                </span>
+              </div>
+
+              {/* Informational Email Confirmation Banner */}
+              {emailConfirmationSentEmail && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs text-foreground space-y-1 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-start gap-2.5">
+                    <MailCheck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-amber-600 dark:text-amber-400">Verifique seu E-mail</h4>
+                      <p className="text-muted-foreground mt-0.5 leading-relaxed">
+                        Enviamos um link de confirmação para <strong>{emailConfirmationSentEmail}</strong>. Por favor,
+                        acesse sua caixa de entrada e clique no link para ativar seu cadastro.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="reg-name">Nome Completo / Estabelecimento</Label>
@@ -242,28 +325,28 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="reg-pass">Senha</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="reg-pass">Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="reg-pass"
-                      type="password"
-                      placeholder="Mín. 6 dígitos"
+                      type={showRegisterPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres"
+                      className="pl-9 pr-10"
                       value={registerPassword}
                       onChange={(e) => setRegisterPassword(e.target.value)}
                       required
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="reg-confirm">Confirmar</Label>
-                    <Input
-                      id="reg-confirm"
-                      type="password"
-                      placeholder="Repita a senha"
-                      value={registerConfirmPassword}
-                      onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                      required
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                      className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                      title={showRegisterPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 
@@ -274,7 +357,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                   </span>
                 </div>
 
-                <Button type="submit" className="w-full font-semibold shadow-md" disabled={loading}>
+                <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading}>
                   {loading ? "Criando Conta..." : "Começar Gratuitamente"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -321,51 +404,6 @@ export function LoginView({ onSuccess }: LoginViewProps) {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Validação OTP */}
-      <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
-        <DialogContent className="sm:max-w-md text-center">
-          <DialogHeader>
-            <DialogTitle>Validar E-mail</DialogTitle>
-            <DialogDescription>
-              Digite o código de 6 dígitos que enviamos para <strong>{registerEmail}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex justify-center my-4">
-            <InputOTP maxLength={6} value={otpCode} onChange={(val) => setOtpCode(val)}>
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            Não recebeu?{" "}
-            <button
-              type="button"
-              onClick={() => resendEmailOtp(registerEmail)}
-              className="text-primary font-medium hover:underline"
-            >
-              Reenviar código
-            </button>
-          </div>
-
-          <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" onClick={() => setOtpModalOpen(false)}>
-              Voltar
-            </Button>
-            <Button onClick={handleVerifyOtp} disabled={otpLoading || otpCode.length < 6}>
-              {otpLoading ? "Verificando..." : "Confirmar e Entrar"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

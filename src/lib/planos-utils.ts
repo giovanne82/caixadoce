@@ -1,63 +1,99 @@
-export type PlanoId = "freemium" | "pro" | "ilimitado";
+export type PlanoId = "basico" | "mensal" | "anual" | "freemium" | "pro" | "ilimitado";
 
 export interface PlanoConfig {
   id: PlanoId;
   nome: string;
   badge?: string;
   precoMensal: number;
+  precoAnualTotal?: number;
+  faturamento: string;
   descricao: string;
   recursos: string[];
   destaque?: boolean;
-  limiteTransacoesMensais?: number;
-  limiteColaboradores?: number;
+  recomendado?: boolean;
 }
 
-export const PLANOS_CONFIG: Record<PlanoId, PlanoConfig> = {
-  freemium: {
-    id: "freemium",
-    nome: "Plano Inicial (Trial)",
+export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
+  basico: {
+    id: "basico",
+    nome: "Plano Básico (Gratuito)",
     precoMensal: 0,
-    descricao: "Ideal para começar a organizar as finanças e vendas do seu negócio.",
+    faturamento: "Gratuito para sempre",
+    descricao: "Para organizar as compras da sua confeitaria de forma simples e eficiente.",
     recursos: [
-      "Até 50 transações por mês",
-      "1 Colaborador",
-      "Controle de Entradas e Saídas",
-      "Exportação de Relatórios Simples",
+      "Lista de Compras Interativa (Ilimitada)",
+      "Gestão de Múltiplas Listas Nomeadas",
+      "Vínculo de Clientes por Tags/Chips",
+      "Recibo Visual em Estilo Cupom",
       "Suporte via Comunidade",
     ],
-    limiteTransacoesMensais: 50,
-    limiteColaboradores: 1,
   },
-  pro: {
-    id: "pro",
-    nome: "Plano Profissional",
-    badge: "Mais Popular",
-    precoMensal: 79.90,
-    descricao: "Controle completo para confeiteiros, lojas e negócios em expansão.",
+  mensal: {
+    id: "mensal",
+    nome: "Plano Mensal Completo",
+    badge: "🔥 PROMOÇÃO DE LANÇAMENTO",
+    precoMensal: 14.90,
+    faturamento: "R$ 14,90 / mês (Promocional)",
+    descricao: "Acesso total ilimitado a todas as ferramentas com flexibilidade mensal.",
     recursos: [
-      "Transações Ilimitadas",
-      "Até 5 Colaboradores com níveis de acesso",
-      "Gestão de Pedidos e Vendas",
-      "Emissão de Recibos & Comprovantes Pix",
-      "Relatórios Financeiros Avançados",
+      "Scanner de Notinhas com IA (Ilimitado)",
+      "Lista de Compras & Conciliação Automática",
+      "Calendário de Encomendas & Histórico",
+      "Cardápio Digital Público & Agendamentos",
+      "Painel Financeiro & Fluxo de Caixa",
+      "Sem fidelidade, cancele quando quiser",
+    ],
+  },
+  anual: {
+    id: "anual",
+    nome: "Plano Anual Completo",
+    badge: "⭐ MELHOR CUSTO-BENEFÍCIO / MAIS ECONÔMICO",
+    precoMensal: 10.90,
+    precoAnualTotal: 130.80,
+    faturamento: "12x R$ 10,90 (R$ 130,80/ano)",
+    descricao: "A escolha mais inteligente e econômica para quem deseja transformar o negócio com todos os recursos.",
+    recursos: [
+      "Todas as funcionalidades do Plano Mensal",
+      "Scanner com IA + Conciliação Automática",
+      "Calendário & Histórico Permanente",
+      "Cardápio Digital & Agendamentos",
+      "Financeiro, DRE & Relatórios",
       "Suporte Prioritário no WhatsApp",
     ],
     destaque: true,
-    limiteColaboradores: 5,
+    recomendado: true,
+  },
+  // Compatibilidade com chaves de planos legados
+  freemium: {
+    id: "basico",
+    nome: "Plano Básico (Gratuito)",
+    precoMensal: 0,
+    faturamento: "Gratuito para sempre",
+    descricao: "Para organizar as compras da sua confeitaria de forma simples.",
+    recursos: [
+      "Lista de Compras Interativa (Ilimitada)",
+      "Gestão de Múltiplas Listas Nomeadas",
+      "Vínculo de Clientes por Tags/Chips",
+    ],
+  },
+  pro: {
+    id: "mensal",
+    nome: "Plano Mensal Completo",
+    precoMensal: 14.90,
+    faturamento: "R$ 14,90 / mês",
+    descricao: "Acesso total ilimitado.",
+    recursos: ["Todas as funcionalidades desbloqueadas"],
+    destaque: true,
   },
   ilimitado: {
-    id: "ilimitado",
-    nome: "Plano Enterprise / Ilimitado",
-    precoMensal: 149.90,
-    descricao: "Múltiplas unidades, suporte dedicado e recursos premium sem limites.",
-    recursos: [
-      "Todas as funcionalidades do Pro",
-      "Colaboradores Ilimitados",
-      "Múltiplas Unidades / Caixas",
-      "Integração Stripe Connect & Automações",
-      "Acesso antecipado a novos recursos",
-      "Gerente de Conta Dedicado",
-    ],
+    id: "anual",
+    nome: "Plano Anual Completo",
+    badge: "MELHOR CUSTO-BENEFÍCIO",
+    precoMensal: 10.90,
+    precoAnualTotal: 130.80,
+    faturamento: "12x R$ 10,90",
+    descricao: "A maior economia.",
+    recursos: ["Todas as funcionalidades desbloqueadas com prioridade"],
   },
 };
 
@@ -76,17 +112,56 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string): InfoPlanoEsta
   try {
     const raw = localStorage.getItem(`caixadoce_plano_${code}`);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
+      if (parsed.status === "trial" && parsed.dataInicio) {
+        const inicio = new Date(parsed.dataInicio).getTime();
+        const agora = new Date().getTime();
+        const diasDecorridos = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24));
+        const diasRestantes = Math.max(0, 30 - diasDecorridos);
+        if (diasRestantes <= 0) {
+          return {
+            ...parsed,
+            planoId: "basico",
+            status: "expirado",
+            diasRestantesTrial: 0,
+          };
+        }
+        return {
+          ...parsed,
+          diasRestantesTrial: diasRestantes,
+        };
+      }
+      return parsed;
     }
   } catch {}
 
-  // Padrão: 30 dias de Trial no plano Pro
   return {
-    planoId: "pro",
+    planoId: "anual",
     status: "trial",
     diasRestantesTrial: 30,
     dataInicio: new Date().toISOString(),
   };
+}
+
+export function verificarAcessoModulo(
+  modulo: "despesas" | "scanner" | "encomendas" | "produtos" | "financeiro",
+  infoPlano: InfoPlanoEstabelecimento
+): boolean {
+  if (modulo === "despesas") return true;
+
+  if (infoPlano.status === "trial") return true;
+  if (infoPlano.status === "ativo") {
+    if (
+      infoPlano.planoId === "mensal" ||
+      infoPlano.planoId === "anual" ||
+      infoPlano.planoId === "pro" ||
+      infoPlano.planoId === "ilimitado"
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function salvarDadosPlanoEstabelecimento(codigo: string, info: Partial<InfoPlanoEstabelecimento>) {

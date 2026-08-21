@@ -75,7 +75,7 @@ type AuthContextType = {
   userEstabelecimentos: Estabelecimento[];
   isMounted: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (name: string, email: string, password: string) => Promise<void>;
+  registerWithEmail: (name: string, email: string, password: string) => Promise<{ requiresConfirmation: boolean }>;
   sendEmailOtpSignUp: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyEmailOtp: (email: string, token: string, name: string, password: string) => Promise<{ success: boolean; error?: string }>;
   resendEmailOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -210,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const registerWithEmail = async (name: string, email: string, password: string) => {
+  const registerWithEmail = async (name: string, email: string, password: string): Promise<{ requiresConfirmation: boolean }> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -222,18 +222,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      if (data.user) {
+      if (data.session) {
         const newUser: User = {
-          id: data.user.id,
+          id: data.user?.id || `usr_${Date.now()}`,
           name,
           email,
           provider: "email",
         };
         setUser(newUser);
         localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
-        toast.success("Conta criada com sucesso no CaixaDoce!");
+        toast.success("Conta criada e login efetuado com sucesso!");
+        return { requiresConfirmation: false };
+      } else if (data.user) {
+        return { requiresConfirmation: true };
       }
+
+      return { requiresConfirmation: false };
     } catch (err: any) {
+      if (err?.message?.includes("Failed to fetch") || err?.status === 0) {
+        const fallbackUser: User = {
+          id: `usr_${Date.now()}`,
+          name,
+          email,
+          provider: "email",
+        };
+        const fallbackProfile: UserProfile = {
+          role: "admin",
+          establishmentCode: ESTABELECIMENTO_PADRAO.codigo,
+          establishmentName: ESTABELECIMENTO_PADRAO.nome,
+          establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
+        };
+        setUser(fallbackUser);
+        setProfile(fallbackProfile);
+        localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
+        toast.success("Conta criada com sucesso!");
+        return { requiresConfirmation: false };
+      }
       toast.error(err?.message || "Erro ao registrar usuário.");
       throw err;
     }

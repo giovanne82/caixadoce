@@ -140,7 +140,7 @@ export interface ProdutoCardapio {
   nome: string;
   descricao: string;
   preco: number;
-  categoria: "Bolos Decorados" | "Doces & Brigadeiros" | "Tortas & Sobremesas" | "Bentô Cakes" | "Kits Festa";
+  categoria: string;
   fotoUrl: string;
   destaque?: boolean;
   tempoPreparoHoras?: number;
@@ -180,7 +180,7 @@ export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
     descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
     preco: 48.0,
     categoria: "Doces & Brigadeiros",
-    fotoUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80",
+    fotoUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=600&q=80",
     destaque: true,
     tempoPreparoHoras: 12,
     ativo: true,
@@ -674,3 +674,124 @@ export function gerarCodigoEstabelecimento(): string {
   const num = Math.floor(1000 + Math.random() * 9000);
   return `CD-${num}`;
 }
+
+export interface ItemListaCompra {
+  id: string;
+  estabelecimentoCodigo?: string;
+  nome: string;
+  quantidade: number;
+  unidade?: string;
+  comprado: boolean;
+  encomendaId?: string;
+  encomendaClienteNome?: string;
+  clienteTags?: string[];
+  categoria?: string;
+  createdAt?: string;
+}
+
+export const ITENS_COMPRA_PADRAO: ItemListaCompra[] = [
+  {
+    id: "ic-1",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Leite Condensado Moça 395g",
+    quantidade: 6,
+    unidade: "un",
+    comprado: false,
+    categoria: "Insumos",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "ic-2",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Cobertura Harald Melken Ao Leite 1kg",
+    quantidade: 2,
+    unidade: "kg",
+    comprado: false,
+    categoria: "Insumos",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "ic-3",
+    estabelecimentoCodigo: "CD-1001",
+    nome: "Embalagem para Bolo de Pote 250ml (caixa c/ 50)",
+    quantidade: 1,
+    unidade: "cx",
+    comprado: true,
+    categoria: "Embalagens",
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export interface ListaCompras {
+  id: string;
+  nome: string;
+  estabelecimentoCodigo?: string;
+  estabelecimentosVinculados?: string[];
+  clienteTags?: string[];
+  status: "ativa" | "concluida" | "arquivada";
+  concluidaEm?: string;
+  itens: ItemListaCompra[];
+  createdAt: string;
+}
+
+export const LISTAS_COMPRAS_PADRAO: ListaCompras[] = [
+  {
+    id: "lc-1",
+    nome: "Compras de Sexta",
+    estabelecimentoCodigo: "CD-1001",
+    estabelecimentosVinculados: ["Atacadão dos Confeiteiros S/A"],
+    status: "ativa",
+    itens: ITENS_COMPRA_PADRAO,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "lc-2",
+    nome: "Festa da Maria",
+    estabelecimentoCodigo: "CD-1001",
+    estabelecimentosVinculados: ["ArtFesta Confeitaria & Embalagens"],
+    status: "ativa",
+    itens: [
+      {
+        id: "ic-201",
+        estabelecimentoCodigo: "CD-1001",
+        nome: "Chantilly Norcau 1L",
+        quantidade: 4,
+        unidade: "cx",
+        comprado: false,
+        clienteTags: ["Maria Silva"],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "ic-202",
+        estabelecimentoCodigo: "CD-1001",
+        nome: "Granulado Crocante Melken 500g",
+        quantidade: 2,
+        unidade: "pct",
+        comprado: true,
+        clienteTags: ["Maria Silva"],
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "lc-3",
+    nome: "Doces do Fim de Semana",
+    estabelecimentoCodigo: "CD-1001",
+    estabelecimentosVinculados: ["Supermercado Doce Preço Ltda"],
+    status: "concluida",
+    concluidaEm: new Date().toISOString(),
+    itens: [
+      {
+        id: "ic-301",
+        estabelecimentoCodigo: "CD-1001",
+        nome: "Açúcar de Confeiteiro Impalpável 1kg",
+        quantidade: 3,
+        unidade: "kg",
+        comprado: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+];

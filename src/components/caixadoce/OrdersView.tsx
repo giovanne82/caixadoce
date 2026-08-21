@@ -298,7 +298,10 @@ export function OrdersView({
   const [observacoes, setObservacoes] = useState("");
 
   // Formulário de Bloqueio de Data
+  const [tipoBloqueio, setTipoBloqueio] = useState<"unico" | "periodo">("unico");
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
+  const [dataBloqueioInicio, setDataBloqueioInicio] = useState(new Date().toISOString().split("T")[0]);
+  const [dataBloqueioFim, setDataBloqueioFim] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
 
   // Sugestões de Clientes
@@ -554,17 +557,40 @@ export function OrdersView({
     toast.success("Status do insumo atualizado!");
   };
 
-  // Salvar Bloqueio de Data
+  // Salvar Bloqueio de Data ou Período
   const handleSalvarBloqueio = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dataBloqueio) return;
-
     try {
-      await onBloquearData(dataBloqueio, motivoBloqueio);
-      toast.success(`Data ${dataBloqueio} bloqueada no calendário.`);
+      if (tipoBloqueio === "unico") {
+        if (!dataBloqueio) return;
+        await onBloquearData(dataBloqueio, motivoBloqueio);
+        toast.success(`Data ${dataBloqueio.split("-").reverse().join("/")} bloqueada na agenda.`);
+      } else {
+        if (!dataBloqueioInicio || !dataBloqueioFim) {
+          toast.error("Informe a data de início e de fim do período.");
+          return;
+        }
+        const inicio = new Date(dataBloqueioInicio + "T00:00:00");
+        const fim = new Date(dataBloqueioFim + "T00:00:00");
+
+        if (inicio > fim) {
+          toast.error("A data de início não pode ser maior que a data de fim.");
+          return;
+        }
+
+        let cur = new Date(inicio);
+        let count = 0;
+        while (cur <= fim) {
+          const iso = cur.toISOString().split("T")[0];
+          await onBloquearData(iso, motivoBloqueio);
+          count++;
+          cur.setDate(cur.getDate() + 1);
+        }
+        toast.success(`Período bloqueado! ${count} dia(s) adicionados à agenda fechada.`);
+      }
       setModalBloqueioOpen(false);
     } catch {
-      toast.error("Erro ao bloquear data.");
+      toast.error("Erro ao efetuar bloqueio.");
     }
   };
 
@@ -713,10 +739,10 @@ export function OrdersView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Encomendas &amp; Calendário <CalendarDays className="w-6 h-6 text-primary" />
+            Calendário &amp; Histórico <CalendarDays className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Gerencie datas de entrega, produtos pedidos e envie resumo no WhatsApp com 1 clique.
+            Histórico permanente de entregas, pesquisa de clientes/pedidos e resumo no WhatsApp com 1 clique.
           </p>
         </div>
 
@@ -749,7 +775,7 @@ export function OrdersView({
             onClick={() => setViewMode("mes")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Mensal
+            Visão Mês
           </Button>
           <Button
             variant={viewMode === "semana" ? "default" : "ghost"}
@@ -757,7 +783,7 @@ export function OrdersView({
             onClick={() => setViewMode("semana")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Semanal
+            Visão Semana
           </Button>
           <Button
             variant={viewMode === "lista" ? "default" : "ghost"}
@@ -765,7 +791,7 @@ export function OrdersView({
             onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Lista Completa
+            Lista / Histórico Completo
           </Button>
           <Button
             variant={viewMode === "compras" ? "default" : "ghost"}
@@ -2137,25 +2163,76 @@ export function OrdersView({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-base">
-              <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data na Agenda
+              <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data ou Período
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Datas bloqueadas ficam marcadas como "Agenda Fechada" no calendário.
+              Bloqueie 1 dia avulso ou um período completo na sua agenda.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSalvarBloqueio} className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label htmlFor="bloq-data" className="text-xs">Data a ser Bloqueada *</Label>
-              <Input
-                id="bloq-data"
-                type="date"
-                value={dataBloqueio}
-                onChange={(e) => setDataBloqueio(e.target.value)}
-                className="h-8 text-xs font-bold"
-                required
-              />
+              <Label className="text-xs font-semibold">Tipo de Bloqueio</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={tipoBloqueio === "unico" ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs font-bold"
+                  onClick={() => setTipoBloqueio("unico")}
+                >
+                  1 Dia Avulso
+                </Button>
+                <Button
+                  type="button"
+                  variant={tipoBloqueio === "periodo" ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs font-bold"
+                  onClick={() => setTipoBloqueio("periodo")}
+                >
+                  Bloquear Período
+                </Button>
+              </div>
             </div>
+
+            {tipoBloqueio === "unico" ? (
+              <div className="space-y-1">
+                <Label htmlFor="bloq-data" className="text-xs">Data a ser Bloqueada *</Label>
+                <Input
+                  id="bloq-data"
+                  type="date"
+                  value={dataBloqueio}
+                  onChange={(e) => setDataBloqueio(e.target.value)}
+                  className="h-8 text-xs font-bold"
+                  required
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="bloq-inicio" className="text-xs">Data Início *</Label>
+                  <Input
+                    id="bloq-inicio"
+                    type="date"
+                    value={dataBloqueioInicio}
+                    onChange={(e) => setDataBloqueioInicio(e.target.value)}
+                    className="h-8 text-xs font-bold"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="bloq-fim" className="text-xs">Data Fim *</Label>
+                  <Input
+                    id="bloq-fim"
+                    type="date"
+                    value={dataBloqueioFim}
+                    onChange={(e) => setDataBloqueioFim(e.target.value)}
+                    className="h-8 text-xs font-bold"
+                    required
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="bloq-motivo" className="text-xs">Motivo do Bloqueio *</Label>

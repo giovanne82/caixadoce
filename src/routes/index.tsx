@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,8 +34,11 @@ import {
   LogOut,
   RefreshCw,
   Shield,
+  Crown,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo } from "@/lib/planos-utils";
 import {
   type TransacaoFinanceira,
   type StatusTransacao,
@@ -44,8 +47,10 @@ import {
   type DespesaNotaFiscal,
   type Cliente,
   type ProdutoCardapio,
+  type ListaCompras,
   CLIENTES_PADRAO,
   CATALOGO_PRODUTOS_PADRAO,
+  LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
 
 export const Route = createFileRoute("/")({
@@ -59,6 +64,33 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
+  return (
+    <div className="py-12 px-6 text-center max-w-xl mx-auto space-y-5 bg-card border-2 border-dashed border-amber-500/40 rounded-3xl shadow-xl">
+      <div className="w-16 h-16 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto">
+        <Crown className="w-9 h-9 animate-bounce text-amber-500" />
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo dos Planos Pagos</h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Seu período de testes de 30 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras Ilimitada).
+        </p>
+        <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+          Assine o Plano Mensal (R$ 24,90) ou Anual (R$ 19,90/mês) para desbloquear o Scanner com IA, Calendário, Cardápio Digital e Financeiro!
+        </p>
+      </div>
+
+      <Button
+        onClick={onIrParaPlano}
+        className="font-extrabold shadow-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs py-5 px-6"
+      >
+        <Sparkles className="w-4 h-4 mr-2" /> Ver Planos &amp; Desbloquear Acesso Completo
+      </Button>
+    </div>
+  );
+}
+
 function Index() {
   const { user, profile, isMounted, logout, switchProfile } = useAuth();
   // Scanner é a tela inicial padrão
@@ -69,22 +101,63 @@ function Index() {
   const [despesas, setDespesas] = useState<DespesaNotaFiscal[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
+  const [listasCompras, setListasCompras] = useState<ListaCompras[]>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
+        return saved ? JSON.parse(saved) : LISTAS_COMPRAS_PADRAO;
+      }
+    } catch {}
+    return LISTAS_COMPRAS_PADRAO;
+  });
 
   const activeCode = profile?.establishmentCode || "CD-1001";
   const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
+  const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
+
   // 1. Carrega transações do Supabase / Cache Local
+  const safeFetchSupabase = useCallback(
+    async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[] | null> => {
+      try {
+        let query = supabase.from(tableName as any).select("*");
+        if (activeCode) {
+          query = query.eq("estabelecimento_codigo", activeCode);
+        }
+        if (orderColumn) {
+          query = query.order(orderColumn, { ascending });
+        }
+        const res = await query;
+
+        if (!res.error && res.data) return res.data;
+
+        // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400), tenta sem o filtro de estabelecimento
+        if (res.error && (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo"))) {
+          let fallbackQuery = supabase.from(tableName as any).select("*");
+          if (orderColumn) {
+            fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+          }
+          const fallbackRes = await fallbackQuery;
+          if (!fallbackRes.error && fallbackRes.data) {
+            return fallbackRes.data;
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
   const fetchTransacoes = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("transacoes_financeiras")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("created_at", { ascending: false });
+      const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_transacoes_${activeCode}`);
         if (raw) {
           setTransacoes(JSON.parse(raw));
@@ -143,13 +216,9 @@ function Index() {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("data_entrega", { ascending: true });
+      const data = await safeFetchSupabase("orders", activeCode, "data_entrega", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_orders_${activeCode}`);
         if (raw) {
           setEncomendas(JSON.parse(raw));
@@ -212,12 +281,9 @@ function Index() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("datas_bloqueadas")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode);
+      const data = await safeFetchSupabase("datas_bloqueadas", activeCode);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_datas_bloqueadas_${activeCode}`);
         if (raw) setDatasBloqueadas(JSON.parse(raw));
       } else {
@@ -233,20 +299,16 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar datas bloqueadas:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 3. Carrega Despesas do Scanner
   const fetchDespesas = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("data_compra", { ascending: false });
+      const data = await safeFetchSupabase("expenses", activeCode, "data_compra", false);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_expenses_${activeCode}`);
         if (raw) {
           setDespesas(JSON.parse(raw));
@@ -322,19 +384,15 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar despesas:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 4. Carrega Clientes (Customers)
   const fetchClientes = useCallback(async () => {
     if (!profile) return;
     try {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("name", { ascending: true });
+      const data = await safeFetchSupabase("customers", activeCode, "name", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_customers_${activeCode}`);
         if (raw) {
           setClientes(JSON.parse(raw));
@@ -357,19 +415,15 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar clientes:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 5. Carrega Produtos do Cardápio (Products)
   const fetchProdutos = useCallback(async () => {
     if (!profile) return;
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("name", { ascending: true });
+      const data = await safeFetchSupabase("products", activeCode, "name", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_cardapio_${activeCode}`);
         if (raw) {
           setProdutos(JSON.parse(raw));
@@ -396,7 +450,7 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar produtos:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   useEffect(() => {
     fetchTransacoes();
@@ -817,17 +871,17 @@ function Index() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-12">
-      {/* Header Principal do CaixaDoce */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-stone-900 via-amber-950 to-stone-900 text-white shadow-md">
+    <div className="min-h-screen bg-background pb-16 sm:pb-12">
+      {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
+      <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Logo & Identidade */}
             <div className="min-w-0 flex items-center gap-3">
-              <CaixaDoceLogo size="md" className="text-white" />
-              <div className="border-l border-white/20 pl-3">
-                <p className="truncate text-xs font-semibold text-white/90">{profile.establishmentName}</p>
-                <span className="inline-block bg-black/40 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold mt-0.5">
+              <CaixaDoceLogo size="md" />
+              <div className="border-l border-[#8E7CC3]/30 pl-3">
+                <p className="truncate text-xs font-bold text-[#2E1A47]">{profile.establishmentName}</p>
+                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold mt-0.5">
                   {profile.establishmentCode}
                 </span>
               </div>
@@ -837,13 +891,13 @@ function Index() {
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell transacoes={transacoes} onNavigateTab={setActiveTab} />
 
-              <div className="hidden sm:flex items-center gap-2 bg-black/30 px-3 py-1.5 rounded-full border border-white/15 text-xs shadow-inner">
-                <Shield className="w-3.5 h-3.5 text-amber-400" />
-                <span className="font-bold text-white tracking-wide truncate max-w-[140px]">
+              <div className="hidden sm:flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
+                <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
+                <span className="font-extrabold text-[#2E1A47] tracking-wide truncate max-w-[140px]">
                   {user.name}
                 </span>
-                <span className="text-white/40">|</span>
-                <span className="text-amber-300 font-semibold uppercase text-[10px]">
+                <span className="text-[#8E7CC3]/50">|</span>
+                <span className="text-[#7C3AED] font-extrabold uppercase text-[10px]">
                   {profile.role}
                 </span>
               </div>
@@ -853,10 +907,10 @@ function Index() {
                 size="sm"
                 onClick={switchProfile}
                 title="Trocar Estabelecimento"
-                className="h-8 px-2 sm:px-3 text-xs text-white/90 hover:text-white hover:bg-white/10 border border-white/15"
+                className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-[#7C3AED] bg-white/70 hover:bg-[#7C3AED]/10 border border-[#E8E0F2]"
               >
-                <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5 text-amber-400" />
-                <span className="hidden sm:inline font-medium">Trocar Loja</span>
+                <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5 text-[#7C3AED]" />
+                <span className="hidden sm:inline font-bold">Trocar Loja</span>
               </Button>
 
               <Button
@@ -864,10 +918,10 @@ function Index() {
                 size="sm"
                 onClick={logout}
                 title="Sair da Conta"
-                className="h-8 px-2 sm:px-3 text-xs text-white/90 hover:text-rose-300 hover:bg-rose-500/20 border border-white/15"
+                className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/70 hover:bg-rose-500/10 border border-[#E8E0F2]"
               >
-                <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-400" />
-                <span className="hidden sm:inline font-medium">Sair</span>
+                <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-500" />
+                <span className="hidden sm:inline font-bold">Sair</span>
               </Button>
             </div>
           </div>
@@ -880,119 +934,200 @@ function Index() {
           <div className="-mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
               <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Camera className="w-4 h-4 text-primary" /> Escanear Notinha
+                <Camera className="w-4 h-4 text-primary" /> Escanear
               </TabsTrigger>
               <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Layers className="w-4 h-4 text-primary" /> Despesas
+                <Layers className="w-4 h-4 text-primary" /> Compras
               </TabsTrigger>
               <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
-                <CalendarDays className="w-4 h-4 text-primary" /> Encomendas &amp; Calendário
-              </TabsTrigger>
-              <TabsTrigger value="clientes" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Users className="w-4 h-4 text-primary" /> Clientes
+                <CalendarDays className="w-4 h-4 text-primary" /> Calendário
               </TabsTrigger>
               <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Cake className="w-4 h-4 text-primary" /> Meus Produtos / Cardápio
+                <Cake className="w-4 h-4 text-primary" /> Cardápio
               </TabsTrigger>
               <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
-                <DollarSign className="w-4 h-4" /> Financeiro &amp; Caixa
-              </TabsTrigger>
-              <TabsTrigger value="colaboradores" className="flex items-center gap-1.5 font-semibold text-xs">
-                <UserCheck className="w-4 h-4" /> Equipe &amp; Acessos
-              </TabsTrigger>
-              <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
-                <CreditCard className="w-4 h-4" /> Meu Plano (Stripe)
+                <DollarSign className="w-4 h-4" /> Financeiro
               </TabsTrigger>
               <TabsTrigger value="config" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Settings className="w-4 h-4" /> Configurações &amp; Perfil
+                <Settings className="w-4 h-4" /> Configurações
+              </TabsTrigger>
+              <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
+                <CreditCard className="w-4 h-4" /> Meu Plano
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* 1. Tela Inicial: Escanear Notinha (com Conciliação Inteligente) */}
           <TabsContent value="scanner">
-            <ScannerView
-              despesas={despesas}
-              encomendas={encomendas}
-              onSalvarDespesa={salvarDespesa}
-              onConciliarInsumos={conciliarInsumos}
-            />
+            {verificarAcessoModulo("scanner", infoPlano) ? (
+              <ScannerView
+                despesas={despesas}
+                encomendas={encomendas}
+                listasCompras={listasCompras}
+                onSalvarDespesa={salvarDespesa}
+                onConciliarInsumos={conciliarInsumos}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
           </TabsContent>
 
-          {/* 2. Aba Dedicada: Despesas */}
+          {/* 2. Aba Dedicada: Compras (Lista de Compras Interativa - Sempre Gratuita!) */}
           <TabsContent value="despesas">
             <DespesasView
               despesas={despesas}
-              onExcluirDespesa={excluirDespesa}
-            />
-          </TabsContent>
-
-          {/* 3. Encomendas & Calendário */}
-          <TabsContent value="encomendas">
-            <OrdersView
               encomendas={encomendas}
+<<<<<<< HEAD
               datasBloqueadas={datasBloqueadas}
               despesas={despesas}
+=======
+>>>>>>> 60df2fc0cbda11290693585702760dddf90955ef
               clientes={clientes}
-              produtos={produtos}
-              estabelecimentoNome={activeName}
-              onCriarEncomenda={criarEncomenda}
-              onEditarEncomenda={editarEncomenda}
-              onExcluirEncomenda={excluirEncomenda}
-              onBloquearData={bloquearData}
-              onDesbloquearData={desbloquearData}
-              onCriarClienteRapido={criarClienteRapido}
-            />
-          </TabsContent>
-
-          {/* 4. Aba: Clientes (CustomersView) */}
-          <TabsContent value="clientes">
-            <CustomersView
-              clientes={clientes}
-              encomendas={encomendas}
-              onCriarCliente={criarCliente}
-              onEditarCliente={editarCliente}
-              onExcluirCliente={excluirCliente}
-            />
-          </TabsContent>
-
-          {/* 5. Aba: Meus Produtos / Cardápio (ProductsView) */}
-          <TabsContent value="produtos">
-            <ProductsView
               produtos={produtos}
               estabelecimentoCodigo={activeCode}
-              onCriarProduto={criarProduto}
-              onEditarProduto={editarProduto}
-              onExcluirProduto={excluirProduto}
+              onExcluirDespesa={excluirDespesa}
+              listasCompras={listasCompras}
+              onAtualizarListasCompras={setListasCompras}
             />
+          </TabsContent>
+
+          {/* 3. Encomendas & Calendário (com Histórico Permanente) */}
+          <TabsContent value="encomendas">
+            {verificarAcessoModulo("encomendas", infoPlano) ? (
+              <OrdersView
+                encomendas={encomendas}
+                datasBloqueadas={datasBloqueadas}
+                clientes={clientes}
+                produtos={produtos}
+                estabelecimentoNome={activeName}
+                onCriarEncomenda={criarEncomenda}
+                onEditarEncomenda={editarEncomenda}
+                onExcluirEncomenda={excluirEncomenda}
+                onBloquearData={bloquearData}
+                onDesbloquearData={desbloquearData}
+                onCriarClienteRapido={criarClienteRapido}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
+          </TabsContent>
+
+          {/* 4. Aba: Meus Produtos / Cardápio (ProductsView) */}
+          <TabsContent value="produtos">
+            {verificarAcessoModulo("produtos", infoPlano) ? (
+              <ProductsView
+                produtos={produtos}
+                estabelecimentoCodigo={activeCode}
+                onCriarProduto={criarProduto}
+                onEditarProduto={editarProduto}
+                onExcluirProduto={excluirProduto}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
           </TabsContent>
 
           {/* 6. Financeiro & Caixa */}
           <TabsContent value="financeiro">
-            <FinanceiroTab
-              transacoes={transacoes}
-              onAdicionarTransacao={adicionarTransacao}
-              onRemoverTransacao={removerTransacao}
-              onAtualizarStatus={atualizarStatusTransacao}
-            />
+            {verificarAcessoModulo("financeiro", infoPlano) ? (
+              <FinanceiroTab
+                transacoes={transacoes}
+                despesas={despesas}
+                onAdicionarTransacao={adicionarTransacao}
+                onRemoverTransacao={removerTransacao}
+                onAtualizarStatus={atualizarStatusTransacao}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
           </TabsContent>
 
-          {/* 7. Equipe & Acessos */}
-          <TabsContent value="colaboradores">
-            <ColaboradoresTab />
-          </TabsContent>
-
-          {/* 8. Meu Plano (Stripe) */}
-          <TabsContent value="plano">
-            <MeuPlanoTab />
-          </TabsContent>
-
-          {/* 9. Configurações & Perfil */}
+          {/* 7. Configurações & Perfil (com sub-aba Equipe & Acessos) */}
           <TabsContent value="config">
             <ConfiguracoesTab />
           </TabsContent>
+
+          {/* 8. Meu Plano (Stripe) — Último Item */}
+          <TabsContent value="plano">
+            <MeuPlanoTab />
+          </TabsContent>
         </Tabs>
       </main>
+
+      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white sm:hidden py-1.5 px-2 shadow-2xl">
+        <div className="flex items-center justify-around gap-1">
+          <button
+            onClick={() => setActiveTab("scanner")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Camera className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Escanear</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("despesas")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Layers className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Compras</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("encomendas")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <CalendarDays className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Calendário</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("produtos")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Cake className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Cardápio</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("financeiro")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <DollarSign className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Financeiro</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("config")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "config" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Settings className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Configurações</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("plano")}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <CreditCard className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Meu Plano</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

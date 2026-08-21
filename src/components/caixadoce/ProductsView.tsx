@@ -58,13 +58,14 @@ interface ProductsViewProps {
   onExcluirProduto: (id: string) => Promise<void>;
 }
 
-const CATEGORIAS_PRODUTO = [
-  "Bolos Decorados",
-  "Doces & Brigadeiros",
-  "Tortas & Sobremesas",
-  "Bentô Cakes",
-  "Kits Festa",
-] as const;
+const CATEGORIAS_PADRAO = [
+  "Bolos",
+  "Doces",
+  "Sobremesas",
+  "Salgados",
+  "Kit Festas",
+  "Bolo no Pote",
+];
 
 export function ProductsView({
   produtos,
@@ -79,23 +80,48 @@ export function ProductsView({
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
   const [modalQrOpen, setModalQrOpen] = useState(false);
+  const [modalNovaCatOpen, setModalNovaCatOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // Categorias Customizadas
+  const [categoriasCustom, setCategoriasCustom] = useState<string[]>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem(`caixadoce_custom_cats_${estabelecimentoCodigo}`);
+        return saved ? JSON.parse(saved) : [];
+      }
+    } catch {}
+    return [];
+  });
+
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
 
   // Formulário de Produto
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [precoFormatado, setPrecoFormatado] = useState("");
-  const [categoria, setCategoria] = useState<ProdutoCardapio["categoria"]>("Bolos Decorados");
+  const [categoria, setCategoria] = useState<string>("Bolos");
   const [fotoUrl, setFotoUrl] = useState("");
   const [destaque, setDestaque] = useState(false);
-  const [tempoPreparoHoras, setTempoPreparoHoras] = useState<number>(24);
   const [ativo, setAtivo] = useState(true);
 
   // URL do Cardápio Público
   const linkPublico = typeof window !== "undefined"
     ? `${window.location.origin}/cardapio/${estabelecimentoCodigo}`
     : `/cardapio/${estabelecimentoCodigo}`;
+
+  // Todas as Categorias Disponíveis
+  const todasCategoriasDisponiveis = useMemo(() => {
+    const conjunto = new Set([...CATEGORIAS_PADRAO, ...categoriasCustom, ...produtos.map((p) => p.categoria)]);
+    return Array.from(conjunto);
+  }, [categoriasCustom, produtos]);
+
+  // Categorias com Produtos Ativos (Filtro Dinâmico)
+  const categoriasComProdutosAtivos = useMemo(() => {
+    const ativas = new Set(produtos.filter((p) => p.ativo !== false).map((p) => p.categoria));
+    return todasCategoriasDisponiveis.filter((cat) => ativas.has(cat));
+  }, [produtos, todasCategoriasDisponiveis]);
 
   const handleCopiarLink = () => {
     if (typeof navigator !== "undefined") {
@@ -119,15 +145,32 @@ export function ProductsView({
     }
   };
 
+  const handleCriarCategoria = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nomeLimpo = novaCategoriaNome.trim();
+    if (!nomeLimpo) return;
+
+    if (!categoriasCustom.includes(nomeLimpo) && !CATEGORIAS_PADRAO.includes(nomeLimpo)) {
+      const atualizadas = [...categoriasCustom, nomeLimpo];
+      setCategoriasCustom(atualizadas);
+      try {
+        localStorage.setItem(`caixadoce_custom_cats_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
+      } catch {}
+      toast.success(`Categoria "${nomeLimpo}" criada com sucesso!`);
+    }
+    setCategoria(nomeLimpo);
+    setNovaCategoriaNome("");
+    setModalNovaCatOpen(false);
+  };
+
   const handleAbrirCriacao = () => {
     setEditingId(null);
     setNome("");
     setDescricao("");
     setPrecoFormatado("");
-    setCategoria("Bolos Decorados");
+    setCategoria(todasCategoriasDisponiveis[0] || "Bolos");
     setFotoUrl("");
     setDestaque(false);
-    setTempoPreparoHoras(24);
     setAtivo(true);
     setModalProdutoOpen(true);
   };
@@ -140,7 +183,6 @@ export function ProductsView({
     setCategoria(prod.categoria);
     setFotoUrl(prod.fotoUrl);
     setDestaque(!!prod.destaque);
-    setTempoPreparoHoras(prod.tempoPreparoHoras || 24);
     setAtivo(prod.ativo !== false);
     setModalProdutoOpen(true);
   };
@@ -162,7 +204,7 @@ export function ProductsView({
         categoria,
         fotoUrl: fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
         destaque,
-        tempoPreparoHoras,
+        tempoPreparoHoras: 24,
         ativo,
       };
 
@@ -199,8 +241,8 @@ export function ProductsView({
 
   return (
     <div className="space-y-6">
-      {/* Banner de Compartilhamento do Cardápio Público com Código Único */}
-      <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-stone-800 rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Banner de Compartilhamento do Cardápio Público em Lilás Suave / Lavanda #8E7CC3 */}
+      <div className="bg-gradient-to-r from-[#8E7CC3] via-[#7C69B3] to-[#5B478E] rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="bg-white/20 border border-white/30 text-white font-mono text-xs font-black px-2.5 py-0.5 rounded-full">
@@ -228,12 +270,12 @@ export function ProductsView({
           </Button>
 
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => setModalQrOpen(true)}
-            className="h-8.5 text-xs text-white border-white/40 hover:bg-white/10"
+            className="h-8.5 font-bold text-xs bg-white text-gray-900 hover:bg-gray-50 border border-gray-200/80 shadow-sm"
           >
-            <QrCode className="w-3.5 h-3.5 mr-1" /> QR Code
+            <QrCode className="w-3.5 h-3.5 mr-1 text-purple-700" /> QR Code
           </Button>
 
           <a href={`/cardapio/${estabelecimentoCodigo}`} target="_blank" rel="noopener noreferrer">
@@ -278,6 +320,7 @@ export function ProductsView({
           />
         </div>
 
+        {/* Filtro Dinâmico: exibe apenas categorias com produtos ativos */}
         <div className="flex items-center gap-1 overflow-x-auto">
           <Button
             variant={categoriaFiltro === "todas" ? "default" : "ghost"}
@@ -287,7 +330,7 @@ export function ProductsView({
           >
             Todos ({produtos.length})
           </Button>
-          {CATEGORIAS_PRODUTO.map((cat) => (
+          {categoriasComProdutosAtivos.map((cat) => (
             <Button
               key={cat}
               variant={categoriaFiltro === cat ? "default" : "ghost"}
@@ -322,70 +365,67 @@ export function ProductsView({
                     <img
                       src={prod.fotoUrl}
                       alt={prod.nome}
-                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+                      }}
                     />
-                    <div className="absolute top-2 left-2 flex gap-1">
-                      <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-bold">
+                    <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
+                      <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-semibold">
                         {prod.categoria}
                       </Badge>
                       {prod.destaque && (
-                        <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold flex items-center gap-0.5">
-                          <Sparkles className="w-2.5 h-2.5" /> Destaque
+                        <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" /> Destaque
                         </Badge>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAtivo(prod)}
-                      className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-md transition-colors ${
-                        isAtivo ? "bg-emerald-600/90 text-white" : "bg-stone-800/80 text-muted-foreground"
-                      }`}
-                      title={isAtivo ? "Ativo no Cardápio" : "Pausado"}
-                    >
-                      {isAtivo ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
                   </div>
 
                   <CardHeader className="p-3.5 pb-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-sm font-extrabold text-foreground leading-tight">
-                        {prod.nome}
-                      </CardTitle>
-                      <span className="text-base font-black text-foreground shrink-0 font-mono">
-                        {formatarMoeda(prod.preco)}
-                      </span>
-                    </div>
-                    <CardDescription className="text-xs line-clamp-2 mt-1">
-                      {prod.descricao}
-                    </CardDescription>
+                    <CardTitle className="text-base font-bold text-foreground line-clamp-1">{prod.nome}</CardTitle>
+                    <CardDescription className="text-xs line-clamp-2 mt-0.5">{prod.descricao}</CardDescription>
                   </CardHeader>
                 </div>
 
-                <CardFooter className="p-3.5 pt-2 border-t border-border/50 flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground font-semibold">
-                    Preparo: ~{prod.tempoPreparoHoras || 24}h
-                  </span>
+                <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Preço de Venda</span>
+                    <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
+                      {formatarMoeda(prod.preco)}
+                    </span>
+                  </div>
 
                   <div className="flex items-center gap-1">
                     <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAbrirEdicao(prod)}
-                      className="h-7 px-2 text-xs font-semibold"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleToggleAtivo(prod)}
+                      title={isAtivo ? "Pausar Produto" : "Ativar Produto"}
                     >
-                      <Edit2 className="w-3 h-3 mr-1" /> Editar
+                      {isAtivo ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                     </Button>
+
                     <Button
                       variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm(`Deseja excluir o produto "${prod.nome}"?`)) {
-                          onExcluirProduto(prod.id);
-                        }
-                      }}
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                      size="icon"
+                      className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                      onClick={() => handleAbrirEdicao(prod)}
+                      title="Editar Produto"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-rose-600 hover:text-rose-700"
+                      onClick={() => onExcluirProduto(prod.id)}
+                      title="Excluir Produto"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </CardFooter>
@@ -395,57 +435,45 @@ export function ProductsView({
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL: CADASTRAR OU EDITAR PRODUTO */}
-      {/* ========================================================================= */}
+      {/* MODAL: CRIAR / EDITAR PRODUTO */}
       <Dialog open={modalProdutoOpen} onOpenChange={setModalProdutoOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-base">
               <Cake className="w-5 h-5 text-primary" />
-              {editingId ? "Editar Produto" : "Novo Produto no Cardápio"}
+              {editingId ? "Editar Produto" : "Novo Produto para o Cardápio"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Adicione fotos e valores para exibir aos clientes no cardápio público e na seleção de encomendas.
+              Preencha os detalhes do produto que ficará disponível para seus clientes.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSalvar} className="space-y-3.5 py-2">
+          <form onSubmit={handleSalvar} className="space-y-4 py-2">
             {/* Foto do Produto */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Foto do Produto</Label>
-              <div className="flex items-center gap-3">
-                <div className="w-20 h-20 rounded-xl bg-muted border border-border overflow-hidden flex items-center justify-center shrink-0">
-                  {fotoUrl ? (
+            <div className="space-y-1.5 text-center">
+              <Label className="text-xs font-semibold block text-left">Foto do Produto</Label>
+              <div className="relative h-32 w-full rounded-2xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center bg-muted/20 overflow-hidden cursor-pointer group">
+                {fotoUrl ? (
+                  <>
                     <img src={fotoUrl} alt="Preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="space-y-1 flex-1">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleUploadFoto}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="h-8 text-xs font-semibold"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 mr-1" /> Escolher Foto
-                  </Button>
-                  <Input
-                    placeholder="Ou cole o link da imagem (URL)..."
-                    value={fotoUrl}
-                    onChange={(e) => setFotoUrl(e.target.value)}
-                    className="h-7 text-xs"
-                  />
-                </div>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
+                      Trocar Foto
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-muted-foreground p-3">
+                    <ImageIcon className="w-6 h-6" />
+                    <span className="text-xs font-semibold">Clique para carregar uma foto</span>
+                    <span className="text-[10px]">JPG, PNG ou WEBP</span>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUploadFoto}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
               </div>
             </div>
 
@@ -475,34 +503,29 @@ export function ProductsView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Categoria</Label>
-                <Select value={categoria} onValueChange={(v: any) => setCategoria(v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIAS_PRODUTO.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Categoria *</Label>
+                <button
+                  type="button"
+                  onClick={() => setModalNovaCatOpen(true)}
+                  className="text-[11px] text-primary hover:underline font-bold flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Nova Categoria
+                </button>
               </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="prod-tempo" className="text-xs font-semibold">Tempo Médio de Preparo (Horas)</Label>
-                <Input
-                  id="prod-tempo"
-                  type="number"
-                  min="1"
-                  value={tempoPreparoHoras}
-                  onChange={(e) => setTempoPreparoHoras(Number(e.target.value) || 24)}
-                  className="h-8 text-xs font-bold"
-                />
-              </div>
+              <Select value={categoria} onValueChange={(v: string) => setCategoria(v)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {todasCategoriasDisponiveis.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">
@@ -542,9 +565,40 @@ export function ProductsView({
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
+      {/* MODAL: CRIAR NOVA CATEGORIA */}
+      <Dialog open={modalNovaCatOpen} onOpenChange={setModalNovaCatOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-base">Nova Categoria</DialogTitle>
+            <DialogDescription className="text-xs">
+              Digite o nome da nova categoria para seus produtos.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCriarCategoria} className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="nova-cat-nome" className="text-xs font-semibold">Nome da Categoria *</Label>
+              <Input
+                id="nova-cat-nome"
+                placeholder="Ex: Taças da Felicidade"
+                value={novaCategoriaNome}
+                onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                className="h-8 text-xs font-semibold"
+                required
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalNovaCatOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" className="font-bold">
+                Adicionar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL: QR CODE DO CARDÁPIO PÚBLICO */}
-      {/* ========================================================================= */}
       <Dialog open={modalQrOpen} onOpenChange={setModalQrOpen}>
         <DialogContent className="sm:max-w-sm text-center">
           <DialogHeader>
