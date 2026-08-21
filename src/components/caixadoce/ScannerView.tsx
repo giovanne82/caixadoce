@@ -95,10 +95,10 @@ export function ScannerView({
     }
   };
 
-  // Leitura OCR Real com Tesseract.js e Parser de Cupom Fiscal
+  // Leitura com IA do Google Gemini (extractReceiptDataWithGemini)
   const processarOCRReal = async (file: File) => {
     setIsScanning(true);
-    setScanStepMessage("Iniciando leitura OCR da notinha fiscal...");
+    setScanStepMessage("Analisando notinha com IA...");
 
     try {
       const res = await processarNotinhaComOCR(file, (msg) => {
