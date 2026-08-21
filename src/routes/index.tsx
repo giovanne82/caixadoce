@@ -977,11 +977,6 @@ function Index() {
             <DespesasView
               despesas={despesas}
               encomendas={encomendas}
-<<<<<<< HEAD
-              datasBloqueadas={datasBloqueadas}
-              despesas={despesas}
-=======
->>>>>>> 60df2fc0cbda11290693585702760dddf90955ef
               clientes={clientes}
               produtos={produtos}
               estabelecimentoCodigo={activeCode}
@@ -997,6 +992,7 @@ function Index() {
               <OrdersView
                 encomendas={encomendas}
                 datasBloqueadas={datasBloqueadas}
+                despesas={despesas}
                 clientes={clientes}
                 produtos={produtos}
                 estabelecimentoNome={activeName}
