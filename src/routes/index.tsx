@@ -116,9 +116,9 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
-  // 1. Carrega transações do Supabase / Cache Local
+  // 1. Carrega transações do Supabase / Cache Local com interceptação silenciosa de erros (400 / 404 / tabela inexistente)
   const safeFetchSupabase = useCallback(
-    async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[] | null> => {
+    async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
       try {
         let query = supabase.from(tableName as any).select("*");
         if (activeCode) {
@@ -131,20 +131,32 @@ function Index() {
 
         if (!res.error && res.data) return res.data;
 
-        // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400), tenta sem o filtro de estabelecimento
-        if (res.error && (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo"))) {
-          let fallbackQuery = supabase.from(tableName as any).select("*");
-          if (orderColumn) {
-            fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
-          }
-          const fallbackRes = await fallbackQuery;
-          if (!fallbackRes.error && fallbackRes.data) {
-            return fallbackRes.data;
+        if (res.error) {
+          // Log silencioso como warn para evitar erros vermelhos e travamento da UI
+          console.warn(
+            `[Supabase safeFetch] Tabela ou coluna "${tableName}" indisponível (${res.status || res.error.code}): ${res.error.message}`
+          );
+
+          // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400 / 42703), tenta sem o filtro
+          if (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo")) {
+            try {
+              let fallbackQuery = supabase.from(tableName as any).select("*");
+              if (orderColumn) {
+                fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+              }
+              const fallbackRes = await fallbackQuery;
+              if (!fallbackRes.error && fallbackRes.data) {
+                return fallbackRes.data;
+              }
+            } catch (fallbackErr) {
+              console.warn(`[Supabase safeFetch fallback] Tabela "${tableName}" falhou:`, fallbackErr);
+            }
           }
         }
-        return null;
-      } catch {
-        return null;
+        return [];
+      } catch (err) {
+        console.warn(`[Supabase safeFetch catch] Tabela "${tableName}" inacessível:`, err);
+        return [];
       }
     },
     []
