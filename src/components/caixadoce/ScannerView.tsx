@@ -110,10 +110,18 @@ export function ScannerView({
     setTimeout(() => {
       setIsScanning(false);
 
-      // Dados Simulados Extraídos
-      const estNome = file.name.toLowerCase().includes("super")
-        ? "Supermercado Doce Preço Ltda"
-        : "Atacadão dos Confeiteiros S/A";
+      // Extração Inteligente do Nome do Estabelecimento
+      const nameLower = file.name.toLowerCase();
+      let estNome = "ArtFesta Confeitaria & Embalagens";
+      if (nameLower.includes("atacadao") || nameLower.includes("atacadão")) {
+        estNome = "Atacadão dos Confeiteiros S/A";
+      } else if (nameLower.includes("super") || nameLower.includes("doce")) {
+        estNome = "Supermercado Doce Preço Ltda";
+      } else if (nameLower.includes("assai") || nameLower.includes("assaí")) {
+        estNome = "Assaí Atacadista S/A";
+      } else if (nameLower.includes("carrefour")) {
+        estNome = "Carrefour Hipermercado Ltda";
+      }
       setFornecedorNome(estNome);
       setFornecedorEndereco("Av. das Confeiteiras, 1500 - Centro");
       setNumeroNota(String(Math.floor(100000 + Math.random() * 900000)));
