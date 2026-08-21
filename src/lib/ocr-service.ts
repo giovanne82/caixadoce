@@ -50,8 +50,8 @@ Analise a imagem e extraia os dados estritamente no seguinte formato JSON:
 }
 Responda apenas com o JSON puro, sem blocos de código markdown ou texto extra.`;
 
-  // Lista de modelos suportados para evitar erro 404 NOT_FOUND
-  const modelos = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash"];
+  // Lista de modelos suportados pela API do Google Gemini (gemini-2.5-flash)
+  const modelos = ["gemini-2.5-flash", "gemini-2.5-flash-latest"];
   let lastError = "";
 
   for (const modelName of modelos) {
