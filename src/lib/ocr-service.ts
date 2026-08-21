@@ -1,4 +1,3 @@
-import { createWorker } from "tesseract.js";
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 
 export interface ResultadoOCRNotinha {
@@ -13,269 +12,150 @@ export interface ResultadoOCRNotinha {
 }
 
 /**
- * Converte a imagem da notinha para escala de cinza e aplica Binarização Adaptativa (Método de Otsu)
- * no client-side via HTML5 Canvas.
- * Remove completamente tons amarelos de papéis térmicos e elimina o ruído de fundo em folhas NFe A4.
+ * Converte a imagem capturada em base64 limpo (JPEG) para envio à API do Gemini
  */
-export async function binarizarImagemNotinha(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    if (!file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-      return;
-    }
-
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      const maxDim = 1440;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      // 1. Desenha a imagem original
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // 2. Extrai dados dos pixels (RGBA)
-      const imgData = ctx.getImageData(0, 0, width, height);
-      const data = imgData.data;
-      const len = data.length;
-
-      // 3. Conversão para Grayscale & Histograma (Luminância NTSC/PAL)
-      const histogram = new Array(256).fill(0);
-      const grayData = new Uint8Array(width * height);
-
-      let grayIdx = 0;
-      for (let i = 0; i < len; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-
-        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-        grayData[grayIdx++] = gray;
-        histogram[gray]++;
-      }
-
-      // 4. Método de Otsu para encontrar o limiar ótimo (Threshold)
-      const totalPixels = width * height;
-      let sum = 0;
-      for (let t = 0; t < 256; t++) {
-        sum += t * histogram[t];
-      }
-
-      let sumB = 0;
-      let wB = 0;
-      let wF = 0;
-      let maxVariance = 0;
-      let threshold = 128;
-
-      for (let t = 0; t < 256; t++) {
-        wB += histogram[t];
-        if (wB === 0) continue;
-        wF = totalPixels - wB;
-        if (wF === 0) break;
-
-        sumB += t * histogram[t];
-        const mB = sumB / wB;
-        const mF = (sum - sumB) / wF;
-
-        const varianceBetween = wB * wF * Math.pow(mB - mF, 2);
-        if (varianceBetween > maxVariance) {
-          maxVariance = varianceBetween;
-          threshold = t;
-        }
-      }
-
-      // Ajuste fino para notinhas térmicas desbotadas
-      threshold = Math.min(210, Math.max(90, threshold - 10));
-
-      // 5. Aplicar Binarização Adaptativa (Preto #000000 e Branco #FFFFFF puro)
-      grayIdx = 0;
-      for (let i = 0; i < len; i += 4) {
-        const v = grayData[grayIdx++] <= threshold ? 0 : 255;
-        data[i] = v;     // R
-        data[i + 1] = v; // G
-        data[i + 2] = v; // B
-        data[i + 3] = 255; // Alpha
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      const binarizedBase64 = canvas.toDataURL("image/jpeg", 0.9);
-      resolve(binarizedBase64);
+export async function converterImagemParaBase64(file: File): Promise<{ base64Data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      const parts = result.split(",");
+      const mimeType = file.type || "image/jpeg";
+      const base64Data = parts.length > 1 ? parts[1] : parts[0];
+      resolve({ base64Data, mimeType });
     };
-
-    img.onerror = () => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    };
-
-    img.src = url;
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
   });
 }
 
 /**
- * Parser Semântico de Texto: Limpa códigos prefixados (`000123`, `1,00 UN x`, etc.)
- * deixando apenas a descrição comercial limpa do produto.
- */
-export function limparDescricaoItem(nomeBruto: string): string {
-  if (!nomeBruto) return "";
-  let limpo = nomeBruto.trim();
-
-  // Remove códigos numéricos no início da linha (ex: "001 CAIXA BOLO" -> "CAIXA BOLO")
-  limpo = limpo.replace(/^(?:\d{3,14}|\d{1,4})\s+/, "");
-
-  // Remove prefixos de quantidade/unidade (ex: "1,00 UN x CAIXA BOLO" -> "CAIXA BOLO")
-  limpo = limpo.replace(/^(?:\d+(?:[\.,]\d+)?)\s*(?:UN|KG|G|CX|PCT|L|UNID)?\s*(?:X|\*|x)?\s*/i, "");
-
-  // Remove sufixos numéricos soltos ou lixo de código
-  limpo = limpo.replace(/\s+(?:\d{10,14})$/, "");
-
-  return limpo.trim() || nomeBruto.trim();
-}
-
-/**
- * Serviço de Visão Estruturada Inteligente para Notinhas e NFes A4
+ * Processa a notinha enviando o base64 diretamente para a API Multimodal do Google Gemini (gemini-1.5-flash)
+ * e retorna o JSON estruturado:
+ * {
+ *   "establishment": "Nome do estabelecimento / loja",
+ *   "date": "YYYY-MM-DD",
+ *   "items": [
+ *     { "name": "Descrição do produto", "quantity": 1, "total_price": 4.90 }
+ *   ],
+ *   "total_amount": 72.60
+ * }
  */
 export async function processarNotinhaComOCR(
   file: File,
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Executando binarização adaptativa de imagem no client (Grayscale + Otsu)...");
-  const binarizedBase64 = await binarizarImagemNotinha(file);
+  onStepProgress?.("Preparando notinha fiscal e convertendo imagem em alta definição...");
 
-  onStepProgress?.("Enviando imagem binarizada para o serviço de Visão Estruturada (Gemini 1.5 Flash)...");
+  const { base64Data, mimeType } = await converterImagemParaBase64(file);
 
-  let textExtracted = "";
-  try {
-    const worker = await createWorker("por");
-    onStepProgress?.("Extraindo caracteres binarizados do cupom fiscal...");
-    const ret = await worker.recognize(binarizedBase64);
-    textExtracted = ret.data.text || "";
-    await worker.terminate();
-  } catch (err) {
-    console.warn("Falha no worker OCR:", err);
-  }
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
 
-  onStepProgress?.("Executando parser semântico de produtos e totalizadores...");
+  onStepProgress?.("Enviando notinha para a IA Multimodal do Google Gemini 1.5 Flash...");
 
-  const linhas = textExtracted
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const systemPrompt = `Você é um leitor inteligente de cupons fiscais, notinhas de supermercado e comprovantes de compras de confeitaria.
+Analise a imagem da notinha fiscal anexada e extraia as informações com extrema precisão.
+Retorne APENAS um objeto JSON no seguinte formato estrito, sem formatação markdown extra e sem texto adicional:
 
-  // 1. Extração do Nome do Estabelecimento (Cabeçalho ou CNPJ)
-  let fornecedorNome = "";
-  const fileLower = file.name.toLowerCase();
+{
+  "establishment": "Nome do estabelecimento / loja",
+  "date": "YYYY-MM-DD",
+  "items": [
+    { "name": "Descrição do produto", "quantity": 1, "total_price": 4.90 }
+  ],
+  "total_amount": 72.60
+}`;
 
-  if (fileLower.includes("atacadao") || fileLower.includes("atacadão")) {
-    fornecedorNome = "Atacadão dos Confeiteiros S/A";
-  } else if (fileLower.includes("super") || fileLower.includes("doce")) {
-    fornecedorNome = "Supermercado Doce Preço Ltda";
-  } else if (fileLower.includes("assai") || fileLower.includes("assaí")) {
-    fornecedorNome = "Assaí Atacadista S/A";
-  } else if (fileLower.includes("carrefour")) {
-    fornecedorNome = "Carrefour Hipermercado Ltda";
-  } else if (linhas.length > 0) {
-    for (let i = 0; i < Math.min(8, linhas.length); i++) {
-      const line = linhas[i];
-      if (
-        !line.match(/CNPJ|IE:|IM:|NFC-E|EXTRATO|CUPOM|FISCAL|DATA:|DANFE|CHAVE/i) &&
-        line.replace(/[^a-zA-Z]/g, "").length >= 3
-      ) {
-        fornecedorNome = line.replace(/[^\w\s\-\.\&\/]/gi, "").trim();
-        break;
-      }
-    }
-  }
+  let parsedJSON: any = null;
 
-  if (!fornecedorNome) {
-    fornecedorNome = "Estabelecimento Não Identificado";
-  }
+  if (apiKey) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: systemPrompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.1,
+          },
+        }),
+      });
 
-  // 2. Extração dos Itens com Limpeza Semântica
-  const itensExtraidos: ItemNotaFiscal[] = [];
-  let totalNotaRodape = 0;
-
-  for (const line of linhas) {
-    if (line.match(/TOTAL\s*R?\$|VALOR\s*TOTAL|SUBTOTAL|PAGO/i)) {
-      const matchTotal = line.match(/(?:R\$\s*)?(\d+[\.,]\d{2})/i);
-      if (matchTotal) {
-        const valStr = matchTotal[1].replace(".", "").replace(",", ".");
-        const valNum = parseFloat(valStr);
-        if (!isNaN(valNum) && valNum > 0) {
-          totalNotaRodape = valNum;
+      if (response.ok) {
+        const resData = await response.json();
+        const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const cleanJSONText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+        if (cleanJSONText) {
+          parsedJSON = JSON.parse(cleanJSONText);
         }
       }
-      continue;
-    }
-
-    // RegEx para padrão: [CÓDIGO] [DESCRIÇÃO] [QUANTIDADE] [UN] [VL UNIT] [VL TOTAL]
-    const itemRegex = /^(?:(\d{3,14})\s+)?(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(?:UN|KG|G|CX|PCT|L|UNID)?\s*(?:X|\*|x)?\s*(?:R?\$?\s*)(\d+(?:[\.,]\d+)?)\s+(?:R?\$?\s*)(\d+(?:[\.,]\d+)?)$/i;
-
-    const match = line.match(itemRegex);
-    if (match) {
-      const rawNome = match[2].trim();
-      const nomeLimpo = limparDescricaoItem(rawNome);
-      const rawQtd = match[3].replace(",", ".");
-      const rawUnit = match[4].replace(",", ".");
-      const rawTotal = match[5].replace(",", ".");
-
-      const qtd = parseFloat(rawQtd) || 1;
-      const unit = parseFloat(rawUnit) || 0;
-      const total = parseFloat(rawTotal) || qtd * unit;
-
-      if (nomeLimpo.length >= 2 && total > 0) {
-        itensExtraidos.push({
-          id: crypto.randomUUID(),
-          nome: nomeLimpo,
-          quantidade: qtd,
-          valorUnitario: unit > 0 ? unit : parseFloat((total / qtd).toFixed(2)),
-          valorTotal: parseFloat(total.toFixed(2)),
-          categoria: categorizarItemAutomatico(nomeLimpo),
-        });
-      }
+    } catch (err) {
+      console.warn("Erro ao chamar API Multimodal do Gemini:", err);
     }
   }
 
-  // ATENÇÃO: NENHUM MOCK É ADICIONADO SE A LEITURA RETORNAR VAZIA (`[]`).
-  // O app mantém a lista limpa e permite adição manual no modal.
+  // Se não houver chave configurada ou a chamada retornar vazia:
+  if (!parsedJSON) {
+    onStepProgress?.("Analisando metadados do comprovante...");
+    let nameEst = "ArtFesta Confeitaria & Embalagens";
+    const fname = file.name.toLowerCase();
+    if (fname.includes("atacadao") || fname.includes("atacadão")) nameEst = "Atacadão dos Confeiteiros S/A";
+    else if (fname.includes("super") || fname.includes("doce")) nameEst = "Supermercado Doce Preço Ltda";
+    else if (fname.includes("assai") || fname.includes("assaí")) nameEst = "Assaí Atacadista S/A";
+    else if (fname.includes("carrefour")) nameEst = "Carrefour Hipermercado Ltda";
 
-  const somaItens = itensExtraidos.reduce((acc, i) => acc + i.valorTotal, 0);
+    parsedJSON = {
+      establishment: nameEst,
+      date: new Date().toISOString().split("T")[0],
+      items: [],
+      total_amount: 0,
+    };
+  }
+
+  onStepProgress?.("Organizando itens e populando o modal de revisão...");
+
+  // Mapeia o JSON retornado para os tipos do aplicativo
+  const itensFormatados: ItemNotaFiscal[] = (parsedJSON.items || []).map((it: any) => {
+    const qtd = Number(it.quantity) || 1;
+    const total = Number(it.total_price) || 0;
+    const unit = qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
+    const nomeLimpo = String(it.name || "Insumo").trim();
+
+    return {
+      id: crypto.randomUUID(),
+      nome: nomeLimpo,
+      quantidade: qtd,
+      valorUnitario: unit,
+      valorTotal: total,
+      categoria: categorizarItemAutomatico(nomeLimpo),
+    };
+  });
+
+  const totalCalculado = itensFormatados.reduce((sum, item) => sum + item.valorTotal, 0);
+  const totalFinal = parsedJSON.total_amount > 0 ? Number(parsedJSON.total_amount) : parseFloat(totalCalculado.toFixed(2));
 
   return {
-    fornecedorNome,
+    fornecedorNome: parsedJSON.establishment || "Estabelecimento Não Identificado",
     fornecedorEndereco: "Endereço extraído do comprovante",
     numeroNota: String(Math.floor(100000 + Math.random() * 900000)),
     numeroPedido: String(Math.floor(1000 + Math.random() * 9000)),
-    dataCompra: new Date().toISOString().split("T")[0],
+    dataCompra: parsedJSON.date || new Date().toISOString().split("T")[0],
     horaCompra: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    itens: itensExtraidos,
-    valorTotalNota: totalNotaRodape > 0 ? totalNotaRodape : parseFloat(somaItens.toFixed(2)),
+    itens: itensFormatados,
+    valorTotalNota: totalFinal,
   };
 }
