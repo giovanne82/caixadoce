@@ -1,23 +1,12 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -39,30 +28,18 @@ import {
   UploadCloud,
   Sparkles,
   CheckCircle2,
-  Building2,
   Trash2,
   Plus,
-  Cookie,
-  UtensilsCrossed,
-  User,
-  Package,
   Clock,
-  Check,
-  Tag,
-  Receipt,
   FileText,
-  ShoppingCart,
 } from "lucide-react";
 import {
   formatarMoeda,
   categorizarItemAutomatico,
-  correlacionarInsumosComItensNota,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
-  type CategoriaDespesaItem,
   type Encomenda,
   type ListaCompras,
-  LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -77,11 +54,7 @@ interface ScannerViewProps {
 
 export function ScannerView({
   despesas,
-  encomendas = [],
-  listasCompras: listasProp,
   onSalvarDespesa,
-  onConciliarInsumos,
-  onConciliarListasCompras,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,41 +76,7 @@ export function ScannerView({
   const [horaCompra, setHoraCompra] = useState("14:35:10");
 
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
-  const [conciliacoesSugeridas, setConciliacoesSugeridas] = useState<{
-    encomendaId: string;
-    insumoId: string;
-    insumoNome: string;
-    clienteNome: string;
-    selecionado: boolean;
-  }[]>([]);
-
-  // Seleção Múltipla de Listas de Compras Ativas
-  const [selectedListasIds, setSelectedListasIds] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
-
-  // Listas de compras ativas para seleção múltipla
-  const listasAtivas = useMemo(() => {
-    if (listasProp && listasProp.length > 0) {
-      return listasProp.filter((l) => l.status === "ativa");
-    }
-    try {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
-        if (saved) {
-          const parsed: ListaCompras[] = JSON.parse(saved);
-          return parsed.filter((l) => l.status === "ativa");
-        }
-      }
-    } catch {}
-    return LISTAS_COMPRAS_PADRAO.filter((l) => l.status === "ativa");
-  }, [listasProp]);
-
-  // Inicializa a seleção com todas as listas ativas ao abrir o modal
-  useEffect(() => {
-    if (modalRevisaoOpen) {
-      setSelectedListasIds(listasAtivas.map((l) => l.id));
-    }
-  }, [modalRevisaoOpen, listasAtivas]);
 
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,18 +100,20 @@ export function ScannerView({
     setScanStepMessage("Lendo metadados do cupom fiscal...");
 
     setTimeout(() => {
-      setScanStepMessage("Identificando insumos, embalagens e valores...");
+      setScanStepMessage("Identificando insumos e valores...");
     }, 1200);
 
     setTimeout(() => {
-      setScanStepMessage("Sugerindo categorização automática para o caixa...");
+      setScanStepMessage("Organizando itens do cupom...");
     }, 2400);
 
     setTimeout(() => {
       setIsScanning(false);
 
       // Dados Simulados Extraídos
-      const estNome = file.name.toLowerCase().includes("super") ? "Supermercado Doce Preço Ltda" : "Atacadão dos Confeiteiros S/A";
+      const estNome = file.name.toLowerCase().includes("super")
+        ? "Supermercado Doce Preço Ltda"
+        : "Atacadão dos Confeiteiros S/A";
       setFornecedorNome(estNome);
       setFornecedorEndereco("Av. das Confeiteiras, 1500 - Centro");
       setNumeroNota(String(Math.floor(100000 + Math.random() * 900000)));
@@ -217,34 +158,21 @@ export function ScannerView({
       ];
 
       setItensExtraidos(mockItens);
-
-      // Conciliação Sugerida com Encomendas da Agenda
-      if (encomendas.length > 0) {
-        const sugestoes = correlacionarInsumosComItensNota(encomendas, mockItens);
-        setConciliacoesSugeridas(sugestoes.map((s) => ({ ...s, selecionado: true })));
-      }
-
       setModalRevisaoOpen(true);
       toast.success("Leitura do cupom concluída com sucesso!");
     }, 3200);
   };
 
-  // Edição de Campos dos Itens Extraídos
-  const handleMudarCategoriaItem = (itemId: string, novaCategoria: CategoriaDespesaItem) => {
-    setItensExtraidos((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, categoria: novaCategoria } : item))
-    );
-  };
-
+  // Edição Simplificada dos Itens (Nome, Qtd, Valor Total)
   const handleEditarItem = (itemId: string, campo: keyof ItemNotaFiscal, valor: any) => {
     setItensExtraidos((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
         const atualizado = { ...item, [campo]: valor };
-        if (campo === "quantidade" || campo === "valorUnitario") {
+        if (campo === "quantidade" || campo === "valorTotal") {
           const qtd = campo === "quantidade" ? Number(valor) : item.quantidade;
-          const unit = campo === "valorUnitario" ? Number(valor) : item.valorUnitario;
-          atualizado.valorTotal = parseFloat((qtd * unit).toFixed(2));
+          const total = campo === "valorTotal" ? Number(valor) : item.valorTotal;
+          atualizado.valorUnitario = qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
         }
         return atualizado;
       })
@@ -267,13 +195,6 @@ export function ScannerView({
     setItensExtraidos((prev) => [...prev, novo]);
   };
 
-  // Alternar Seleção de Conciliação de Encomendas
-  const handleToggleConciliacao = (insumoId: string) => {
-    setConciliacoesSugeridas((prev) =>
-      prev.map((c) => (c.insumoId === insumoId ? { ...c, selecionado: !c.selecionado } : c))
-    );
-  };
-
   // Totais da Nota
   const totaisNota = useMemo(() => {
     let total = 0;
@@ -285,9 +206,10 @@ export function ScannerView({
     for (const item of itensExtraidos) {
       const v = item.valorTotal || 0;
       total += v;
-      if (item.categoria === "producao") producao += v;
-      else if (item.categoria === "utensilios") utensilios += v;
-      else if (item.categoria === "consumo_proprio") consumoProprio += v;
+      const cat = item.categoria || categorizarItemAutomatico(item.nome);
+      if (cat === "producao") producao += v;
+      else if (cat === "utensilios") utensilios += v;
+      else if (cat === "consumo_proprio") consumoProprio += v;
       else outros += v;
     }
 
@@ -300,7 +222,7 @@ export function ScannerView({
     };
   }, [itensExtraidos]);
 
-  // Salvar Despesa Confirmada & Executar Conciliação Múltipla com Listas de Compras
+  // Salvar Despesa Confirmada
   const handleSalvarDespesaConfirmada = async () => {
     if (!fornecedorNome || itensExtraidos.length === 0) {
       toast.error("Informe o estabelecimento e certifique-se de que há itens na notinha.");
@@ -309,7 +231,12 @@ export function ScannerView({
 
     setSalvando(true);
     try {
-      // 1. Salva despesa com metadados completos no caixa
+      const itensComFallback = itensExtraidos.map((item) => ({
+        ...item,
+        valorUnitario: item.valorUnitario || (item.quantidade > 0 ? parseFloat((item.valorTotal / item.quantidade).toFixed(2)) : item.valorTotal),
+        categoria: item.categoria || categorizarItemAutomatico(item.nome),
+      }));
+
       await onSalvarDespesa({
         estabelecimentoCodigo: "CD-1001",
         fornecedorNome,
@@ -323,90 +250,35 @@ export function ScannerView({
         valorUtensilios: totaisNota.utensilios,
         valorConsumoProprio: totaisNota.consumoProprio,
         valorOutros: totaisNota.outros,
-        itens: itensExtraidos,
+        itens: itensComFallback,
       });
 
-      // 2. Executa conciliação inteligente nas encomendas selecionadas
-      if (onConciliarInsumos && conciliacoesSugeridas.length > 0) {
-        const selecionadas = conciliacoesSugeridas
-          .filter((c) => c.selecionado)
-          .map((c) => ({ encomendaId: c.encomendaId, insumoId: c.insumoId }));
-
-        if (selecionadas.length > 0) {
-          await onConciliarInsumos(selecionadas);
-        }
-      }
-
-      // 3. Executa conciliação inteligente em MÚLTIPLAS LISTAS DE COMPRAS ATIVAS
-      if (selectedListasIds.length > 0) {
-        try {
-          const savedStr = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
-          let currentListas: ListaCompras[] = savedStr ? JSON.parse(savedStr) : LISTAS_COMPRAS_PADRAO;
-
-          let totalConciliados = 0;
-          const updated = currentListas.map((lista) => {
-            if (!selectedListasIds.includes(lista.id)) return lista;
-            const novosItens = lista.itens.map((item) => {
-              if (item.comprado) return item;
-              const match = itensExtraidos.some((itNota) =>
-                itNota.nome.toLowerCase().includes(item.nome.toLowerCase()) ||
-                item.nome.toLowerCase().includes(itNota.nome.toLowerCase())
-              );
-              if (match) {
-                totalConciliados++;
-                return { ...item, comprado: true };
-              }
-              return item;
-            });
-
-            const estsExistentes = lista.estabelecimentosVinculados || [];
-            const novosEsts = estsExistentes.includes(fornecedorNome)
-              ? estsExistentes
-              : [...estsExistentes, fornecedorNome];
-
-            return { ...lista, estabelecimentosVinculados: novosEsts, itens: novosItens };
-          });
-
-          localStorage.setItem("caixadoce_listas_compras_v2_CD-1001", JSON.stringify(updated));
-
-          if (onConciliarListasCompras) {
-            await onConciliarListasCompras(selectedListasIds, itensExtraidos);
-          }
-
-          if (totalConciliados > 0) {
-            toast.success(`${totalConciliados} insumo(s) marcados como comprados em ${selectedListasIds.length} lista(s)! 🎉`);
-          }
-        } catch {}
-      }
-
-      setSelectedFile(null);
-      setFilePreview(null);
-      setItensExtraidos([]);
-      setFornecedorNome("");
       setModalRevisaoOpen(false);
-      toast.success("Notinha processada e salva no caixa com sucesso!");
+      toast.success("Notinha salva no caixa com sucesso!");
+    } catch (e: any) {
+      toast.error(`Erro ao salvar notinha: ${e.message}`);
     } finally {
       setSalvando(false);
     }
   };
 
-  const ultimosRegistros = useMemo(() => despesas.slice(0, 10), [despesas]);
+  const ultimosRegistros = despesas.slice(0, 5);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-          Escanear Notinha <Camera className="w-6 h-6 text-primary" />
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Envie a foto ou PDF do cupom fiscal para ler itens, extrair metadados e conciliar com múltiplas listas de compras.
-        </p>
+    <div className="space-y-6">
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
+            Escanear Notinha <Camera className="w-6 h-6 text-primary" />
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Envie a foto ou PDF do cupom fiscal para ler itens e extrair metadados automaticamente.
+          </p>
+        </div>
       </div>
 
-      {/* ========================================================================= */}
       {/* 1. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
-      {/* ========================================================================= */}
       <Card className="border-2 border-dashed border-primary/40 bg-card/80 shadow-md">
         <CardContent className="p-8">
           <input
@@ -448,9 +320,7 @@ export function ScannerView({
         </CardContent>
       </Card>
 
-      {/* ========================================================================= */}
       {/* 2. ÚLTIMOS REGISTROS CAPTURADOS */}
-      {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -494,16 +364,16 @@ export function ScannerView({
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL DE REVISÃO E CONCILIAÇÃO MÚLTIPLA */}
+      {/* MODAL SIMPLIFICADO E LIMPO DE REVISÃO DA NOTINHA */}
       {/* ========================================================================= */}
       <Dialog open={modalRevisaoOpen} onOpenChange={setModalRevisaoOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <FileText className="w-5 h-5 text-primary" /> Revisar Dados da Notinha Lida
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Confira os dados extraídos pelo OCR, edite a categoria dos itens e selecione as listas de compras a vincular.
+              Confira os dados extraídos pelo OCR e edite os itens da notinha antes de salvar.
             </DialogDescription>
           </DialogHeader>
 
@@ -537,76 +407,21 @@ export function ScannerView({
               </div>
             </div>
 
-            {/* SEÇÃO: VINCULAR ITENS A MÚLTIPLAS LISTAS DE COMPRAS PENDENTES */}
-            <div className="p-3.5 rounded-2xl border-2 border-primary/40 bg-card space-y-2.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                  <ShoppingCart className="w-4 h-4 text-primary" /> Vincular itens a listas de compras pendentes:
-                </Label>
-                <Badge variant="secondary" className="text-[10px] font-bold">
-                  {selectedListasIds.length} lista(s) selecionada(s)
-                </Badge>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Selecione as listas ativas onde os insumos correspondentes desta notinha serão marcados como comprados automaticamente:
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                {listasAtivas.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic col-span-full py-1">
-                    Nenhuma lista de compras ativa encontrada.
-                  </p>
-                ) : (
-                  listasAtivas.map((lista) => {
-                    const isSelected = selectedListasIds.includes(lista.id);
-                    const pendentes = lista.itens.filter((i) => !i.comprado).length;
-
-                    return (
-                      <label
-                        key={lista.id}
-                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                          isSelected
-                            ? "bg-primary/10 border-primary text-foreground font-bold shadow-xs"
-                            : "bg-muted/30 border-border text-stone-500 hover:bg-muted/50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {
-                            if (isSelected) {
-                              setSelectedListasIds((prev) => prev.filter((id) => id !== lista.id));
-                            } else {
-                              setSelectedListasIds((prev) => [...prev, lista.id]);
-                            }
-                          }}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold truncate">{lista.nome}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {pendentes} item(ns) a comprar
-                          </div>
-                        </div>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Tabela de Itens Extraídos */}
+            {/* TABELA SIMPLIFICADA DE ITENS IDENTIFICADOS (NOME, QUANTIDADE E VALOR TOTAL) */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-foreground">Itens Identificados na Notinha ({itensExtraidos.length}):</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground">
+                  Itens Identificados na Notinha ({itensExtraidos.length}):
+                </Label>
+              </div>
+
               <div className="rounded-xl border border-border overflow-hidden">
                 <Table>
                   <TableHeader className="bg-muted/40">
                     <TableRow>
-                      <TableHead className="text-xs">Insumo / Produto</TableHead>
-                      <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
-                      <TableHead className="text-xs w-20">Unit.</TableHead>
-                      <TableHead className="text-xs w-20">Total</TableHead>
-                      <TableHead className="text-xs w-40">Categoria</TableHead>
+                      <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
+                      <TableHead className="text-xs w-20 text-center">Qtd</TableHead>
+                      <TableHead className="text-xs w-28 text-right">Valor Total</TableHead>
                       <TableHead className="text-xs text-right w-8"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -632,45 +447,10 @@ export function ScannerView({
                           <Input
                             type="number"
                             step="0.01"
-                            value={item.valorUnitario}
-                            onChange={(e) => handleEditarItem(item.id, "valorUnitario", e.target.value)}
-                            className="h-7 text-xs"
+                            value={item.valorTotal}
+                            onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
+                            className="h-7 text-xs text-right font-bold"
                           />
-                        </TableCell>
-                        <TableCell className="font-bold text-xs text-foreground">
-                          {formatarMoeda(item.valorTotal)}
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={item.categoria}
-                            onValueChange={(v: any) => handleMudarCategoriaItem(item.id, v)}
-                          >
-                            <SelectTrigger className="h-7 text-[11px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="producao">
-                                <span className="flex items-center gap-1.5 text-amber-600 font-semibold">
-                                  <Cookie className="w-3.5 h-3.5" /> Produção
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="utensilios">
-                                <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
-                                  <UtensilsCrossed className="w-3.5 h-3.5" /> Utensílios
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="consumo_proprio">
-                                <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
-                                  <User className="w-3.5 h-3.5" /> Consumo Pessoal
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="outros">
-                                <span className="flex items-center gap-1.5 text-stone-600 font-semibold">
-                                  <Package className="w-3.5 h-3.5" /> Outros
-                                </span>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -688,58 +468,40 @@ export function ScannerView({
                 </Table>
               </div>
 
-              <div className="flex justify-between items-center pt-1">
+              <div className="pt-1">
                 <Button variant="outline" size="sm" onClick={handleAdicionarItemManual} className="text-xs h-7">
                   <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Item
                 </Button>
               </div>
             </div>
 
-            {/* Totalizadores por Categoria */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border/60">
-              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs">
-                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">🍫 Produção</p>
-                <p className="text-sm font-extrabold text-amber-700 dark:text-amber-300 mt-0.5">
-                  {formatarMoeda(totaisNota.producao)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs">
-                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase">🥣 Utensílios</p>
-                <p className="text-sm font-extrabold text-blue-700 dark:text-blue-300 mt-0.5">
-                  {formatarMoeda(totaisNota.utensilios)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs">
-                <p className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase">🛒 Pessoal</p>
-                <p className="text-sm font-extrabold text-rose-700 dark:text-rose-300 mt-0.5">
-                  {formatarMoeda(totaisNota.consumoProprio)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-xs">
-                <p className="text-[10px] font-bold text-primary uppercase">💰 Total Notinha</p>
-                <p className="text-sm font-extrabold text-foreground mt-0.5">
-                  {formatarMoeda(totaisNota.total)}
-                </p>
-              </div>
+            {/* TOTAL DA NOTINHA EM DESTAQUE NO RODAPÉ */}
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F3EEF9] border border-[#8E7CC3]/30">
+              <span className="text-xs font-extrabold text-[#5B478E] uppercase tracking-wider">
+                Total da Notinha:
+              </span>
+              <span className="text-xl font-black text-[#2E1A47]">
+                {formatarMoeda(totaisNota.total)}
+              </span>
             </div>
           </div>
 
-          <DialogFooter className="pt-3 border-t flex justify-between">
+          <DialogFooter className="pt-3 border-t flex justify-between gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setModalRevisaoOpen(false)}
-              className="text-xs"
+              className="text-xs font-semibold"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSalvarDespesaConfirmada}
               disabled={salvando}
-              className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              className="font-bold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs"
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              {salvando ? "Salvando..." : "Confirmar & Conciliar Listas"}
+              {salvando ? "Salvando..." : "Salvar Notinha"}
             </Button>
           </DialogFooter>
         </DialogContent>
