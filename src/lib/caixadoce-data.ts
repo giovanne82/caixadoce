@@ -180,7 +180,7 @@ export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
     descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
     preco: 48.0,
     categoria: "Doces & Brigadeiros",
-    fotoUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80",
+    fotoUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=600&q=80",
     destaque: true,
     tempoPreparoHoras: 12,
     ativo: true,

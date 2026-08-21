@@ -270,12 +270,12 @@ export function ProductsView({
           </Button>
 
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => setModalQrOpen(true)}
-            className="h-8.5 text-xs text-white border-white/40 hover:bg-white/10"
+            className="h-8.5 font-bold text-xs bg-white text-gray-900 hover:bg-gray-50 border border-gray-200/80 shadow-sm"
           >
-            <QrCode className="w-3.5 h-3.5 mr-1" /> QR Code
+            <QrCode className="w-3.5 h-3.5 mr-1 text-purple-700" /> QR Code
           </Button>
 
           <a href={`/cardapio/${estabelecimentoCodigo}`} target="_blank" rel="noopener noreferrer">
