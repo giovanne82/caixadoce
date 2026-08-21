@@ -765,7 +765,7 @@ function PublicStoreView() {
                           ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
                         </p>
                         <p className="text-[10px] text-muted-foreground italic">
-                          💳 Taxa calculada com markup exato incluindo processamento Stripe + 1% taxa da plataforma.
+                          💳 Taxa de processamento da operadora de cartão.
                         </p>
                       </div>
                     </div>

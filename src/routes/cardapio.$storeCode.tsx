@@ -619,7 +619,7 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                             ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
                           </p>
                           <p className="text-[10px] text-muted-foreground italic">
-                            💳 Taxa calculada dinamicamente incluindo processamento Stripe + 1% taxa da plataforma.
+                            💳 Taxa de processamento da operadora de cartão.
                           </p>
                         </div>
                       </div>
