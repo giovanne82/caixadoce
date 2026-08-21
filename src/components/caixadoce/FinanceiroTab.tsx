@@ -50,9 +50,14 @@ import {
   User,
   PieChart,
   Layers,
+  Link as LinkIcon,
+  Copy,
+  Check,
+  MessageCircle,
 } from "lucide-react";
 import {
   formatarMoeda,
+  formatarWhatsappLink,
   CATEGORIAS_PADRAO,
   type TransacaoFinanceira,
   type TransacaoTipo,
@@ -60,6 +65,7 @@ import {
   type StatusTransacao,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { calculateDynamicTotal } from "@/lib/stripeFees";
 import { toast } from "sonner";
 
 interface FinanceiroTabProps {
@@ -83,7 +89,7 @@ export function FinanceiroTab({
   const [filtroStatus, setFiltroStatus] = useState<"todos" | StatusTransacao>("todos");
   const [lojaSelecionadaCard, setLojaSelecionadaCard] = useState<string | null>(null);
 
-  // Form State
+  // Form State Lançamento
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
   const [tipo, setTipo] = useState<TransacaoTipo>("receita");
@@ -92,6 +98,61 @@ export function FinanceiroTab({
   const [status, setStatus] = useState<StatusTransacao>("concluida");
   const [clienteOuFornecedor, setClienteOuFornecedor] = useState("");
   const [salvando, setSalvando] = useState(false);
+
+  // Form State Cobrança Avulsa (Link de Pagamento)
+  const [modalCobrancaOpen, setModalCobrancaOpen] = useState(false);
+  const [stepCobranca, setStepCobranca] = useState<1 | 2>(1);
+  const [cobrancaDescricao, setCobrancaDescricao] = useState("");
+  const [cobrancaValorLiquido, setCobrancaValorLiquido] = useState("");
+  const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
+
+  const valCobrancaLiquido = parseFloat(cobrancaValorLiquido) || 0;
+  const previewCobranca = useMemo(() => {
+    return calculateDynamicTotal(valCobrancaLiquido, 1, true);
+  }, [valCobrancaLiquido]);
+
+  const handleGerarLinkCobranca = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cobrancaDescricao || valCobrancaLiquido <= 0) {
+      toast.error("Informe a descrição e o valor líquido da cobrança.");
+      return;
+    }
+
+    const mockId = Math.floor(100000 + Math.random() * 900000);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://caixadoce.com.br";
+    const link = `${origin}/pagar/cbr_${mockId}`;
+    setCobrancaLinkGerado(link);
+    setStepCobranca(2);
+    toast.success("Link de cobrança avulsa gerado com sucesso!");
+  };
+
+  const handleCopiarLink = () => {
+    if (cobrancaLinkGerado && typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(cobrancaLinkGerado);
+      setLinkCopiado(true);
+      toast.success("Link de cobrança copiado para a área de transferência!");
+      setTimeout(() => setLinkCopiado(false), 3000);
+    }
+  };
+
+  const handleEnviarWhatsapp = () => {
+    if (!cobrancaLinkGerado || !cobrancaDescricao) return;
+    const msg = `Olá! Aqui está o link de pagamento referente a ${cobrancaDescricao}: ${cobrancaLinkGerado}`;
+    const linkWa = formatarWhatsappLink("", msg);
+    window.open(linkWa, "_blank");
+  };
+
+  const handleFecharModalCobranca = () => {
+    setModalCobrancaOpen(false);
+    setTimeout(() => {
+      setStepCobranca(1);
+      setCobrancaDescricao("");
+      setCobrancaValorLiquido("");
+      setCobrancaLinkGerado(null);
+      setLinkCopiado(false);
+    }, 200);
+  };
 
   // Métricas Globais de Compras & Despesas
   const metricasDespesas = useMemo(() => {
@@ -222,10 +283,19 @@ export function FinanceiroTab({
             Controle de entradas, saídas, emissão de comprovantes e fluxo de vendas.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={exportarCSV}>
             <Download className="w-4 h-4 mr-1.5" />
             Exportar CSV
+          </Button>
+          <Button
+            onClick={() => setModalCobrancaOpen(true)}
+            variant="outline"
+            size="sm"
+            className="font-bold border-primary/40 text-primary hover:bg-primary/10 shadow-xs"
+          >
+            <LinkIcon className="w-4 h-4 mr-1.5 text-primary" />
+            Gerar Link de Cobrança
           </Button>
           <Button onClick={() => setModalNovaTransacao(true)} className="font-semibold shadow-md">
             <Plus className="w-4 h-4 mr-1.5" />
@@ -618,6 +688,173 @@ export function FinanceiroTab({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE GERAR LINK DE COBRANÇA AVULSA (COM PREVIEW DINÂMICO DE TAXAS) */}
+      {/* ========================================================================= */}
+      <Dialog open={modalCobrancaOpen} onOpenChange={handleFecharModalCobranca}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+              <LinkIcon className="w-5 h-5 text-primary" /> Gerar Link de Cobrança Avulsa
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Crie um link de pagamento direto para seu cliente com repasse automático de taxas no cartão.
+            </DialogDescription>
+          </DialogHeader>
+
+          {stepCobranca === 1 ? (
+            <form onSubmit={handleGerarLinkCobranca} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cob-desc" className="text-xs font-bold">
+                  Descrição da Cobrança *
+                </Label>
+                <Input
+                  id="cob-desc"
+                  placeholder="Ex: Sinal do Bolo de Casamento, Encomenda Especial..."
+                  value={cobrancaDescricao}
+                  onChange={(e) => setCobrancaDescricao(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cob-val" className="text-xs font-bold">
+                  Valor líquido a receber (R$) *
+                </Label>
+                <Input
+                  id="cob-val"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  placeholder="Ex: 150.00"
+                  value={cobrancaValorLiquido}
+                  onChange={(e) => setCobrancaValorLiquido(e.target.value)}
+                  className="h-9 text-xs font-mono font-bold"
+                  required
+                />
+              </div>
+
+              {/* SIMULAÇÃO DE PREVISÃO DE TAXAS NA TELA */}
+              {valCobrancaLiquido > 0 && (
+                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Valor desejado para a loja:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {previewCobranca.formattedSubtotal}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                    <span>Taxa estimada no cartão (1x):</span>
+                    <span className="font-mono">{previewCobranca.formattedFeeAmount}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
+                    <span>Total inicial do cliente (1x):</span>
+                    <span className="font-mono text-primary text-sm">
+                      {previewCobranca.formattedTotalAmount}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic">
+                    💡 O cliente pagará a partir de <strong>{previewCobranca.formattedTotalAmount}</strong> (as taxas de parcelamento até 12x serão custeadas por ele na tela de pagamento).
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFecharModalCobranca}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!cobrancaDescricao || valCobrancaLiquido <= 0}
+                  className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  <LinkIcon className="w-4 h-4 mr-1.5" /> Gerar Link
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            /* STEP 2: SUCESSO E COMPARTILHAMENTO DO LINK */
+            <div className="space-y-4 py-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-extrabold text-foreground">Link de Cobrança Criado!</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Referente a <strong>"{cobrancaDescricao}"</strong> • Valor Líquido:{" "}
+                  <strong>{previewCobranca.formattedSubtotal}</strong>
+                </p>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase">
+                  Link de Pagamento Gerado
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={cobrancaLinkGerado || ""}
+                    readOnly
+                    className="h-9 text-xs font-mono bg-muted/50 border-primary/30"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopiarLink}
+                    className="h-9 px-3 shrink-0 font-bold"
+                  >
+                    {linkCopiado ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1 text-emerald-600" /> Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1" /> Copiar Link
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-muted/40 border border-border text-left space-y-1 text-xs">
+                <p className="text-muted-foreground">
+                  <strong>Como funciona para o cliente?</strong> Ao abrir o link, ele verá o detalhamento da cobrança e poderá pagar via Pix Direto ou no Cartão em até 12x com o acréscimo automático das taxas.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-3 border-t flex flex-col sm:flex-row gap-2 justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStepCobranca(1)}
+                  className="w-full sm:w-auto text-xs"
+                >
+                  Nova Cobrança
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleEnviarWhatsapp}
+                  className="w-full sm:w-auto font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar por WhatsApp
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
