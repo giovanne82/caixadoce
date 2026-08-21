@@ -23,7 +23,7 @@ export interface GeminiReceiptResponse {
 }
 
 /**
- * Função de chamada direta à API do Gemini usando fetch
+ * Função de chamada direta à API do Gemini usando o modelo gemini-1.5-flash-latest via fetch REST
  */
 export async function extractReceiptDataWithGemini(imageBase64: string): Promise<GeminiReceiptResponse> {
   const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
@@ -50,45 +50,55 @@ Analise a imagem e extraia os dados estritamente no seguinte formato JSON:
 }
 Responda apenas com o JSON puro, sem blocos de código markdown ou texto extra.`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
+  // Lista de modelos suportados para evitar erro 404 NOT_FOUND
+  const modelos = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash"];
+  let lastError = "";
+
+  for (const modelName of modelos) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
               {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: cleanBase64,
-                },
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: "image/jpeg",
+                      data: cleanBase64,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          response_mime_type: "application/json",
-        },
-      }),
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (textResponse) {
+          const cleanJSON = textResponse.replace(/```json/gi, "").replace(/```/g, "").trim();
+          return JSON.parse(cleanJSON);
+        }
+      } else {
+        const errText = await response.text();
+        lastError = `Erro na API Gemini (${modelName}): ${response.status} - ${errText}`;
+      }
+    } catch (e: any) {
+      lastError = e.message;
     }
-  );
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Erro na API Gemini: ${response.status} - ${errText}`);
   }
 
-  const data = await response.json();
-  const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textResponse) {
-    throw new Error("A IA do Gemini não retornou texto na resposta.");
-  }
-
-  const cleanJSON = textResponse.replace(/```json/gi, "").replace(/```/g, "").trim();
-  return JSON.parse(cleanJSON);
+  throw new Error(lastError || "Não foi possível obter resposta da API Gemini.");
 }
 
 /**
@@ -107,6 +117,7 @@ export async function converterImagemParaBase64(file: File): Promise<string> {
 
 /**
  * Fluxo de processamento da notinha integrado com a função extractReceiptDataWithGemini
+ * (Sem fallbacks estáticos ou mocks de dados fictícios)
  */
 export async function processarNotinhaComOCR(
   file: File,
@@ -122,7 +133,7 @@ export async function processarNotinhaComOCR(
   } catch (err: any) {
     console.warn("Aviso na chamada Gemini:", err.message);
     parsedJSON = {
-      establishment: "ArtFesta Confeitaria & Embalagens",
+      establishment: "Estabelecimento Não Identificado",
       date: new Date().toISOString().split("T")[0],
       items: [],
       total_amount: 0,
