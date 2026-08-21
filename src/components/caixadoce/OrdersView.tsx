@@ -196,9 +196,7 @@ export function OrdersView({
           });
           setLinkedMap(map);
         }
-      } catch (e) {
-        console.warn("Aviso ao carregar notinhas vinculadas do Supabase:", e);
-      }
+      } catch {}
     }
     carregarNotinhasPorLista();
   }, [encomendas]);

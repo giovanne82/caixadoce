@@ -139,7 +139,7 @@ export function FinanceiroTab({
   const handleEnviarWhatsapp = () => {
     if (!cobrancaLinkGerado || !cobrancaDescricao) return;
     const msg = `Olá! Aqui está o link de pagamento referente a ${cobrancaDescricao}: ${cobrancaLinkGerado}`;
-    const linkWa = formatarWhatsappLink("", msg);
+    const linkWa = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     window.open(linkWa, "_blank");
   };
 

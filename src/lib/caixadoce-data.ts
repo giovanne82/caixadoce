@@ -618,9 +618,12 @@ export function converterMoedaInputParaNumero(valorFormatado: string): number {
 
 export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
   const cleanPhone = (whatsapp || "").replace(/\D/g, "");
+  const textEncoded = mensagem ? encodeURIComponent(mensagem) : "";
+  if (!cleanPhone) {
+    return `https://api.whatsapp.com/send?text=${textEncoded}`;
+  }
   const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
-  const textEncoded = mensagem ? `?text=${encodeURIComponent(mensagem)}` : "";
-  return `https://wa.me/${formattedPhone}${textEncoded}`;
+  return `https://wa.me/${formattedPhone}${textEncoded ? `?text=${textEncoded}` : ""}`;
 }
 
 /**

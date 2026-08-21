@@ -132,11 +132,6 @@ function Index() {
         if (!res.error && res.data) return res.data;
 
         if (res.error) {
-          // Log silencioso como warn para evitar erros vermelhos e travamento da UI
-          console.warn(
-            `[Supabase safeFetch] Tabela ou coluna "${tableName}" indisponível (${res.status || res.error.code}): ${res.error.message}`
-          );
-
           // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400 / 42703), tenta sem o filtro
           if (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo")) {
             try {
@@ -148,14 +143,11 @@ function Index() {
               if (!fallbackRes.error && fallbackRes.data) {
                 return fallbackRes.data;
               }
-            } catch (fallbackErr) {
-              console.warn(`[Supabase safeFetch fallback] Tabela "${tableName}" falhou:`, fallbackErr);
-            }
+            } catch {}
           }
         }
         return [];
-      } catch (err) {
-        console.warn(`[Supabase safeFetch catch] Tabela "${tableName}" inacessível:`, err);
+      } catch {
         return [];
       }
     },
@@ -218,9 +210,7 @@ function Index() {
       }));
 
       setTransacoes(mapeadas);
-    } catch (e) {
-      console.warn("Erro ao buscar transações:", e);
-    }
+    } catch {}
   }, [activeCode, profile]);
 
   // 2. Carrega Encomendas e Datas Bloqueadas
@@ -288,9 +278,7 @@ function Index() {
         }));
         setEncomendas(mapeadas);
       }
-    } catch (e) {
-      console.warn("Erro ao buscar encomendas:", e);
-    }
+    } catch {}
 
     try {
       const data = await safeFetchSupabase("datas_bloqueadas", activeCode);
@@ -308,9 +296,7 @@ function Index() {
         }));
         setDatasBloqueadas(mapeadas);
       }
-    } catch (e) {
-      console.warn("Erro ao buscar datas bloqueadas:", e);
-    }
+    } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
   // 3. Carrega Despesas do Scanner
@@ -393,9 +379,7 @@ function Index() {
         }));
         setDespesas(mapeadas);
       }
-    } catch (e) {
-      console.warn("Erro ao buscar despesas:", e);
-    }
+    } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
   // 4. Carrega Clientes (Customers)
@@ -424,9 +408,7 @@ function Index() {
         }));
         setClientes(mapeados);
       }
-    } catch (e) {
-      console.warn("Erro ao buscar clientes:", e);
-    }
+    } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
   // 5. Carrega Produtos do Cardápio (Products)
@@ -459,9 +441,7 @@ function Index() {
         }));
         setProdutos(mapeados);
       }
-    } catch (e) {
-      console.warn("Erro ao buscar produtos:", e);
-    }
+    } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
   useEffect(() => {

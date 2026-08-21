@@ -150,9 +150,7 @@ export function DespesasView({
           });
           setLinkedMap(map);
         }
-      } catch (e) {
-        console.warn("Aviso ao carregar notinhas por lista do Supabase:", e);
-      }
+      } catch {}
     }
     carregarNotinhasPorLista();
   }, [estabelecimentoCodigo, listas]);
@@ -176,9 +174,7 @@ export function DespesasView({
           receipt_id: receiptId,
         },
       ]);
-    } catch (e) {
-      console.warn("Erro ao salvar vinculação no Supabase:", e);
-    }
+    } catch {}
     toast.success("Notinha vinculada a esta lista de compras!");
   };
 
@@ -195,9 +191,7 @@ export function DespesasView({
         .eq("estabelecimento_codigo", estabelecimentoCodigo)
         .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
-    } catch (e) {
-      console.warn("Erro ao desvincular do Supabase:", e);
-    }
+    } catch {}
     toast.info("Notinha desvinculada desta lista.");
   };
 
