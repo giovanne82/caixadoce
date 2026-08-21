@@ -140,7 +140,7 @@ export interface ProdutoCardapio {
   nome: string;
   descricao: string;
   preco: number;
-  categoria: "Bolos Decorados" | "Doces & Brigadeiros" | "Tortas & Sobremesas" | "Bentô Cakes" | "Kits Festa";
+  categoria: string;
   fotoUrl: string;
   destaque?: boolean;
   tempoPreparoHoras?: number;
@@ -709,6 +709,7 @@ export interface ListaCompras {
   nome: string;
   estabelecimentoCodigo?: string;
   estabelecimentosVinculados?: string[];
+  clienteTags?: string[];
   status: "ativa" | "concluida" | "arquivada";
   concluidaEm?: string;
   itens: ItemListaCompra[];
