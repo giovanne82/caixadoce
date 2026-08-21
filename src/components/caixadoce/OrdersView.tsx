@@ -5,6 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,22 +45,26 @@ import {
 } from "@/components/ui/table";
 import {
   Calendar as CalendarIcon,
-  List,
   Plus,
   Search,
+  Filter,
+  Clock,
+  MessageCircle,
   Lock,
   Unlock,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  MessageCircle,
-  Edit,
-  Trash2,
-  CheckCircle2,
-  AlertCircle,
+  PackageCheck,
   Truck,
   Store,
+  DollarSign,
+  Edit2,
+  Trash2,
+  AlertCircle,
+  CalendarDays,
   Sparkles,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -75,6 +88,22 @@ interface OrdersViewProps {
   onDesbloquearData: (id: string) => Promise<void>;
 }
 
+// Helpers de Estilo Semântico para Pílulas de Status
+function obterEstiloPilula(status: StatusEncomenda) {
+  switch (status) {
+    case "pendente":
+    case "em_producao":
+      return "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25";
+    case "pronta":
+    case "entregue":
+      return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25";
+    case "cancelada":
+      return "bg-stone-500/15 text-stone-700 dark:text-stone-300 border-stone-500/30";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
 export function OrdersView({
   encomendas,
   datasBloqueadas,
@@ -84,60 +113,48 @@ export function OrdersView({
   onBloquearData,
   onDesbloquearData,
 }: OrdersViewProps) {
-  const [viewMode, setViewMode] = useState<"calendar" | "list" | "week">("calendar");
+  // Visualização: 'mes' | 'semana' | 'lista'
+  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista">("mes");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [busca, setBusca] = useState("");
+
+  // Painel Lateral (Drawer) do Dia Selecionado
+  const [selectedDrawerDate, setSelectedDrawerDate] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Modais
+  const [modalEncomendaOpen, setModalEncomendaOpen] = useState(false);
+  const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Filtros da Lista
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [filtroPagamento, setFiltroPagamento] = useState<string>("todos");
+  const [busca, setBusca] = useState<string>("");
 
-  // State: Modal Encomenda (Criar / Editar)
-  const [modalEncomendaOpen, setModalEncomendaOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Formulário de Encomenda
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsapp, setClienteWhatsapp] = useState("");
   const [dataEntrega, setDataEntrega] = useState(new Date().toISOString().split("T")[0]);
   const [horarioEntrega, setHorarioEntrega] = useState("14:00");
   const [itens, setItens] = useState("");
-  const [valorTotal, setValorTotal] = useState("");
-  const [valorEntrada, setValorEntrada] = useState("");
+  const [valorTotal, setValorTotal] = useState<number | "">("");
+  const [valorEntrada, setValorEntrada] = useState<number | "">("");
   const [statusPagamento, setStatusPagamento] = useState<StatusPagamentoEncomenda>("pendente");
   const [status, setStatus] = useState<StatusEncomenda>("pendente");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [salvando, setSalvando] = useState(false);
 
-  // State: Modal Bloqueio de Data
-  const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
-  const [dataParaBloqueio, setDataParaBloqueio] = useState(new Date().toISOString().split("T")[0]);
+  // Formulário de Bloqueio de Data
+  const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
-  const [salvandoBloqueio, setSalvandoBloqueio] = useState(false);
 
-  // State: Detalhes de um Dia específico ao clicar no Calendário
-  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
-
-  // Encomendas Filtradas
-  const encomendasFiltradas = useMemo(() => {
-    return encomendas.filter((enc) => {
-      const matchBusca =
-        !busca ||
-        enc.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
-        enc.itens.toLowerCase().includes(busca.toLowerCase()) ||
-        enc.clienteWhatsapp.includes(busca);
-
-      const matchStatus = filtroStatus === "todos" || enc.status === filtroStatus;
-      const matchPag = filtroPagamento === "todos" || enc.statusPagamento === filtroPagamento;
-
-      return matchBusca && matchStatus && matchPag;
-    });
-  }, [encomendas, busca, filtroStatus, filtroPagamento]);
-
-  // Abertura para Criação
-  const handleOpenNova = (dataPreDefinida?: string) => {
+  // Abrir Modal de Criação (opcionalmente com data pré-definida)
+  const handleAbrirNovaEncomenda = (dataPredefinida?: string) => {
     setEditingId(null);
     setClienteNome("");
     setClienteWhatsapp("");
-    setDataEntrega(dataPreDefinida || new Date().toISOString().split("T")[0]);
+    setDataEntrega(dataPredefinida || new Date().toISOString().split("T")[0]);
     setHorarioEntrega("14:00");
     setItens("");
     setValorTotal("");
@@ -150,42 +167,32 @@ export function OrdersView({
     setModalEncomendaOpen(true);
   };
 
-  // Abertura para Edição
-  const handleOpenEditar = (enc: Encomenda) => {
-    setEditingId(enc.id);
-    setClienteNome(enc.clienteNome);
-    setClienteWhatsapp(enc.clienteWhatsapp);
-    setDataEntrega(enc.dataEntrega);
-    setHorarioEntrega(enc.horarioEntrega);
-    setItens(enc.itens);
-    setValorTotal(enc.valorTotal.toString());
-    setValorEntrada(enc.valorEntrada?.toString() || "");
-    setStatusPagamento(enc.statusPagamento);
-    setStatus(enc.status);
-    setTipoEntrega(enc.tipoEntrega || "retirada");
-    setEnderecoEntrega(enc.enderecoEntrega || "");
-    setObservacoes(enc.observacoes || "");
+  // Abrir Modal de Edição
+  const handleAbrirEdicao = (ord: Encomenda) => {
+    setEditingId(ord.id);
+    setClienteNome(ord.clienteNome);
+    setClienteWhatsapp(ord.clienteWhatsapp);
+    setDataEntrega(ord.dataEntrega);
+    setHorarioEntrega(ord.horarioEntrega || "14:00");
+    setItens(ord.itens);
+    setValorTotal(ord.valorTotal);
+    setValorEntrada(ord.valorEntrada || "");
+    setStatusPagamento(ord.statusPagamento);
+    setStatus(ord.status);
+    setTipoEntrega(ord.tipoEntrega || "retirada");
+    setEnderecoEntrega(ord.enderecoEntrega || "");
+    setObservacoes(ord.observacoes || "");
     setModalEncomendaOpen(true);
   };
 
-  // Salvar Encomenda (Submit)
-  const handleSubmitEncomenda = async (e: React.FormEvent) => {
+  // Salvar Encomenda (Criar ou Editar)
+  const handleSalvarEncomenda = async (e: React.FormEvent) => {
     e.preventDefault();
-    const totalNum = parseFloat(valorTotal.replace(",", "."));
-    const entradaNum = valorEntrada ? parseFloat(valorEntrada.replace(",", ".")) : 0;
-
-    if (!clienteNome || !itens || isNaN(totalNum)) {
-      toast.error("Preencha o nome do cliente, itens do pedido e o valor total.");
+    if (!clienteNome || !itens || valorTotal === "") {
+      toast.error("Preencha o nome do cliente, itens e valor total.");
       return;
     }
 
-    // Valida se a data está bloqueada
-    const isBloqueada = datasBloqueadas.some((d) => d.data === dataEntrega);
-    if (isBloqueada && !editingId) {
-      toast.warning("Aviso: Esta data está sinalizada como bloqueada na agenda.");
-    }
-
-    setSalvando(true);
     try {
       const payload = {
         clienteNome,
@@ -193,12 +200,12 @@ export function OrdersView({
         dataEntrega,
         horarioEntrega,
         itens,
-        valorTotal: totalNum,
-        valorEntrada: entradaNum,
+        valorTotal: Number(valorTotal),
+        valorEntrada: valorEntrada !== "" ? Number(valorEntrada) : 0,
         statusPagamento,
         status,
         tipoEntrega,
-        enderecoEntrega,
+        enderecoEntrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         observacoes,
       };
 
@@ -210,188 +217,267 @@ export function OrdersView({
         toast.success("Nova encomenda cadastrada com sucesso!");
       }
       setModalEncomendaOpen(false);
-    } finally {
-      setSalvando(false);
+    } catch {
+      toast.error("Erro ao salvar encomenda.");
     }
   };
 
   // Salvar Bloqueio de Data
   const handleSalvarBloqueio = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dataParaBloqueio) return;
-    setSalvandoBloqueio(true);
+    if (!dataBloqueio) return;
+
     try {
-      await onBloquearData(dataParaBloqueio, motivoBloqueio || "Agenda Lotada");
+      await onBloquearData(dataBloqueio, motivoBloqueio);
+      toast.success(`Data ${dataBloqueio} bloqueada no calendário.`);
       setModalBloqueioOpen(false);
-      toast.success(`Data ${dataParaBloqueio} bloqueada com sucesso!`);
-    } finally {
-      setSalvandoBloqueio(false);
+    } catch {
+      toast.error("Erro ao bloquear data.");
     }
   };
 
-  // Funções Auxiliares do Calendário
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  // Abrir Painel Lateral do Dia
+  const handleAbrirDrawerDia = (dataIso: string) => {
+    setSelectedDrawerDate(dataIso);
+    setDrawerOpen(true);
+  };
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const goToday = () => setCurrentDate(new Date());
+  // Dados das Encomendas no Dia Selecionado para o Drawer
+  const encomendasDoDiaDrawer = useMemo(() => {
+    if (!selectedDrawerDate) return [];
+    return encomendas.filter((e) => e.dataEntrega === selectedDrawerDate);
+  }, [encomendas, selectedDrawerDate]);
 
-  const nomeMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(currentDate);
+  const bloqueioDoDiaDrawer = useMemo(() => {
+    if (!selectedDrawerDate) return null;
+    return datasBloqueadas.find((b) => b.data === selectedDrawerDate) || null;
+  }, [datasBloqueadas, selectedDrawerDate]);
 
-  // Geração dos dias do mês
-  const calendarDays = useMemo(() => {
-    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Domingo
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
+  // Lista Filtrada para a Tabela
+  const encomendasFiltradas = useMemo(() => {
+    return encomendas.filter((e) => {
+      const matchStatus = filtroStatus === "todos" || e.status === filtroStatus;
+      const matchPagamento = filtroPagamento === "todos" || e.statusPagamento === filtroPagamento;
+      const matchBusca =
+        !busca ||
+        e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
+        e.itens.toLowerCase().includes(busca.toLowerCase()) ||
+        e.clienteWhatsapp.includes(busca);
+      return matchStatus && matchPagamento && matchBusca;
+    });
+  }, [encomendas, filtroStatus, filtroPagamento, busca]);
 
-    const days: { dateStr: string; dayNum: number; isCurrentMonth: boolean; isToday: boolean }[] = [];
-    const todayStr = new Date().toISOString().split("T")[0];
+  // Navegação de Período
+  const navegarPeriodo = (delta: number) => {
+    const nova = new Date(currentDate);
+    if (viewMode === "mes") {
+      nova.setMonth(nova.getMonth() + delta);
+    } else {
+      nova.setDate(nova.getDate() + delta * 7);
+    }
+    setCurrentDate(nova);
+  };
 
-    // Dias do mês anterior para preenchimento
-    for (let i = firstDayIndex - 1; i >= 0; i--) {
-      const d = daysInPrevMonth - i;
-      const prevDate = new Date(year, month - 1, d);
-      const str = prevDate.toISOString().split("T")[0];
-      days.push({ dateStr: str, dayNum: d, isCurrentMonth: false, isToday: str === todayStr });
+  // Grid do Calendário Mensal
+  const diasDoMesGrid = useMemo(() => {
+    const ano = currentDate.getFullYear();
+    const mes = currentDate.getMonth();
+
+    const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+    const ultimoDiaMes = new Date(ano, mes + 1, 0).getDate();
+    const ultimoDiaMesAnterior = new Date(ano, mes, 0).getDate();
+
+    const dias = [];
+
+    // Dias do mês anterior para completar a 1ª semana
+    for (let i = primeiroDiaSemana - 1; i >= 0; i--) {
+      const diaNum = ultimoDiaMesAnterior - i;
+      const dataIso = new Date(ano, mes - 1, diaNum).toISOString().split("T")[0];
+      dias.push({
+        dataIso,
+        diaNum,
+        foraDoMes: true,
+      });
     }
 
     // Dias do mês atual
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currDate = new Date(year, month, i);
-      const str = `${year}-${String(month + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
-      days.push({ dateStr: str, dayNum: i, isCurrentMonth: true, isToday: str === todayStr });
-    }
-
-    // Dias do próximo mês para completar grid de 35 ou 42 células
-    const remaining = (7 - (days.length % 7)) % 7;
-    for (let i = 1; i <= remaining; i++) {
-      const nextDate = new Date(year, month + 1, i);
-      const str = nextDate.toISOString().split("T")[0];
-      days.push({ dateStr: str, dayNum: i, isCurrentMonth: false, isToday: str === todayStr });
-    }
-
-    return days;
-  }, [year, month]);
-
-  // Dias da Semana Atual para Visualização Semanal
-  const weekDays = useMemo(() => {
-    const curr = new Date(currentDate);
-    const dayOfWeek = curr.getDay();
-    const startOfWeek = new Date(curr);
-    startOfWeek.setDate(curr.getDate() - dayOfWeek);
-
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfWeek);
-      d.setDate(startOfWeek.getDate() + i);
-      const str = d.toISOString().split("T")[0];
-      days.push({
-        date: d,
-        dateStr: str,
-        dayNum: d.getDate(),
-        weekday: new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(d),
+    for (let i = 1; i <= ultimoDiaMes; i++) {
+      const dataIso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+      dias.push({
+        dataIso,
+        diaNum: i,
+        foraDoMes: false,
       });
     }
-    return days;
+
+    // Dias do próximo mês para fechar a grade (múltiplo de 7)
+    const restante = 42 - dias.length;
+    for (let i = 1; i <= (restante > 7 ? restante - 7 : restante); i++) {
+      const dataIso = new Date(ano, mes + 1, i).toISOString().split("T")[0];
+      dias.push({
+        dataIso,
+        diaNum: i,
+        foraDoMes: true,
+      });
+    }
+
+    return dias;
   }, [currentDate]);
+
+  // Dias da Semana Atual
+  const diasDaSemanaGrid = useMemo(() => {
+    const inicio = new Date(currentDate);
+    const diaSemana = inicio.getDay();
+    inicio.setDate(inicio.getDate() - diaSemana);
+
+    const dias = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(inicio);
+      d.setDate(d.getDate() + i);
+      const dataIso = d.toISOString().split("T")[0];
+      dias.push({
+        dataIso,
+        diaNum: d.getDate(),
+        nomeSemana: ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][i],
+      });
+    }
+    return dias;
+  }, [currentDate]);
+
+  const nomeMesAno = currentDate.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Actions */}
+      {/* Header com Ações e Troca de Visualização */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Encomendas &amp; Calendário <CalendarIcon className="w-6 h-6 text-primary" />
+            Encomendas &amp; Calendário <CalendarDays className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Agendamento de pedidos, controle de produção, entregas e bloqueio de agenda.
+            Gerencie datas de entrega, bloqueios de agenda e pedidos com facilidade.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Alternador de Visualização */}
-          <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/50">
-            <Button
-              variant={viewMode === "calendar" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("calendar")}
-              className="h-8 text-xs font-semibold"
-            >
-              <CalendarIcon className="w-3.5 h-3.5 mr-1.5" /> Mês
-            </Button>
-            <Button
-              variant={viewMode === "week" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("week")}
-              className="h-8 text-xs font-semibold"
-            >
-              <Clock className="w-3.5 h-3.5 mr-1.5" /> Semana
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className="h-8 text-xs font-semibold"
-            >
-              <List className="w-3.5 h-3.5 mr-1.5" /> Lista
-            </Button>
-          </div>
-
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              setDataParaBloqueio(new Date().toISOString().split("T")[0]);
-              setModalBloqueioOpen(true);
-            }}
-            className="h-9 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50"
+            onClick={() => setModalBloqueioOpen(true)}
+            className="text-xs border-rose-500/40 text-rose-600 hover:bg-rose-500/10"
           >
             <Lock className="w-3.5 h-3.5 mr-1.5" /> Bloquear Data
           </Button>
 
-          <Button onClick={() => handleOpenNova()} className="h-9 font-semibold shadow-md">
+          <Button
+            size="sm"
+            onClick={() => handleAbrirNovaEncomenda()}
+            className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
+          >
             <Plus className="w-4 h-4 mr-1.5" /> Nova Encomenda
           </Button>
         </div>
       </div>
 
-      {/* Barra de Filtros e Busca */}
-      <Card className="border-border shadow-sm p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar cliente, item, whatsapp..."
-              className="pl-9 h-9 text-xs"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-            />
-          </div>
+      {/* Barra de Controle de Visualização e Filtros */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
+        {/* Alternador de Modo: Mês / Semana / Lista */}
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50">
+          <Button
+            variant={viewMode === "mes" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("mes")}
+            className="h-7 text-xs font-semibold"
+          >
+            Mensal
+          </Button>
+          <Button
+            variant={viewMode === "semana" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("semana")}
+            className="h-7 text-xs font-semibold"
+          >
+            Semanal
+          </Button>
+          <Button
+            variant={viewMode === "lista" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("lista")}
+            className="h-7 text-xs font-semibold"
+          >
+            Lista Completa
+          </Button>
+        </div>
 
-          <div>
-            <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v)}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Status de Produção" />
+        {/* Controles de Navegação de Data (se no modo calendário) */}
+        {viewMode !== "lista" && (
+          <div className="flex items-center gap-2 justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navegarPeriodo(-1)}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-bold text-foreground capitalize px-2 min-w-[140px] text-center">
+              {nomeMesAno}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navegarPeriodo(1)}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentDate(new Date())}
+              className="text-xs h-8 text-primary"
+            >
+              Hoje
+            </Button>
+          </div>
+        )}
+
+        {/* Filtros para o modo lista */}
+        {viewMode === "lista" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar cliente, item..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="h-8 text-xs pl-8"
+              />
+            </div>
+
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-8 text-xs w-36">
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os Status</SelectItem>
+                <SelectItem value="todos">Todos Status</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
                 <SelectItem value="em_producao">Em Produção</SelectItem>
-                <SelectItem value="pronta">Pronta p/ Entrega</SelectItem>
+                <SelectItem value="pronta">Pronta</SelectItem>
                 <SelectItem value="entregue">Entregue</SelectItem>
                 <SelectItem value="cancelada">Cancelada</SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
-          <div>
-            <Select value={filtroPagamento} onValueChange={(v) => setFiltroPagamento(v)}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Status de Pagamento" />
+            <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
+              <SelectTrigger className="h-8 text-xs w-36">
+                <SelectValue placeholder="Pagamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os Pagamentos</SelectItem>
+                <SelectItem value="todos">Todos Pagamentos</SelectItem>
                 <SelectItem value="pendente">Pendente (0%)</SelectItem>
                 <SelectItem value="sinal_pago">Sinal Pago (50%)</SelectItem>
                 <SelectItem value="pago_integral">100% Pago</SelectItem>
@@ -399,225 +485,116 @@ export function OrdersView({
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </Card>
+        )}
+      </div>
 
       {/* ========================================================================= */}
-      {/* 1. VISUALIZAÇÃO EM CALENDÁRIO MENSAL */}
+      {/* 1. VISUALIZAÇÃO EM CALENDÁRIO MENSAL (COM PÍLULAS COMPACTAS E CORES) */}
       {/* ========================================================================= */}
-      {viewMode === "calendar" && (
-        <Card className="border-border shadow-md overflow-hidden bg-card">
-          {/* Navegação do Mês */}
-          <div className="flex items-center justify-between p-4 border-b border-border/70 bg-muted/20">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-bold capitalize text-foreground">{nomeMes}</h3>
-              <Button variant="outline" size="sm" onClick={goToday} className="text-xs h-7 px-2.5">
-                Hoje
-              </Button>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button variant="outline" size="sm" onClick={prevMonth} className="h-8 w-8 p-0">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={nextMonth} className="h-8 w-8 p-0">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
+      {viewMode === "mes" && (
+        <Card className="border-border shadow-sm overflow-hidden bg-card">
           {/* Cabeçalho dos Dias da Semana */}
-          <div className="grid grid-cols-7 border-b border-border/70 text-center bg-muted/40 font-bold text-xs py-2 text-muted-foreground uppercase tracking-wider">
-            <span>Dom</span>
-            <span>Seg</span>
-            <span>Ter</span>
-            <span>Qua</span>
-            <span>Qui</span>
-            <span>Sex</span>
-            <span>Sáb</span>
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-xs font-bold text-muted-foreground py-2">
+            <div>Dom</div>
+            <div>Seg</div>
+            <div>Ter</div>
+            <div>Qua</div>
+            <div>Qui</div>
+            <div>Sex</div>
+            <div>Sáb</div>
           </div>
 
-          {/* Grid de Dias */}
-          <div className="grid grid-cols-7 divide-x divide-y divide-border/60 bg-background">
-            {calendarDays.map((d, index) => {
-              const ordersDoDia = encomendasFiltradas.filter((enc) => enc.dataEntrega === d.dateStr);
-              const bloqueio = datasBloqueadas.find((b) => b.data === d.dateStr);
+          {/* Grade dos Dias */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-border/60 bg-muted/10">
+            {diasDoMesGrid.map((dia, idx) => {
+              const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso);
+              const bloqueio = datasBloqueadas.find((b) => b.data === dia.dataIso);
+              const isHoje = dia.dataIso === new Date().toISOString().split("T")[0];
+
+              const totalCount = encomendasDoDia.length;
+              const maxExibir = 2;
+              const exibidas = encomendasDoDia.slice(0, maxExibir);
+              const restantes = totalCount - maxExibir;
 
               return (
                 <div
-                  key={`${d.dateStr}-${index}`}
-                  onClick={() => setDiaSelecionado(d.dateStr)}
-                  className={`min-h-[110px] p-2 flex flex-col justify-between transition-colors relative cursor-pointer hover:bg-muted/30 ${
-                    !d.isCurrentMonth ? "opacity-35 bg-muted/10" : ""
-                  } ${bloqueio ? "bg-rose-50/30 dark:bg-rose-950/20" : ""}`}
+                  key={`${dia.dataIso}-${idx}`}
+                  onClick={() => handleAbrirDrawerDia(dia.dataIso)}
+                  className={`min-h-[110px] sm:min-h-[125px] p-1.5 flex flex-col justify-between transition-all cursor-pointer group ${
+                    dia.foraDoMes ? "opacity-35 bg-muted/20" : "bg-card"
+                  } ${
+                    bloqueio
+                      ? "bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/30"
+                      : "hover:bg-primary/5 hover:border-primary/40"
+                  }`}
                 >
+                  {/* Topo da Célula: Número do Dia + Indicador de Bloqueio */}
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center ${
-                        d.isToday
-                          ? "bg-primary text-primary-foreground font-extrabold shadow-sm"
-                          : "text-foreground"
+                      className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                        isHoje
+                          ? "bg-primary text-primary-foreground font-black"
+                          : "text-foreground group-hover:text-primary"
                       }`}
                     >
-                      {d.dayNum}
+                      {dia.diaNum}
                     </span>
 
                     {bloqueio && (
-                      <span
-                        title={`Bloqueado: ${bloqueio.motivo}`}
-                        className="text-[10px] bg-rose-500 text-white font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
+                      <Badge
+                        variant="destructive"
+                        className="text-[9px] px-1.5 py-0 font-bold bg-rose-600 text-white flex items-center gap-0.5"
+                        title={`Agenda Fechada: ${bloqueio.motivo}`}
                       >
-                        <Lock className="w-2.5 h-2.5" /> Bloq
-                      </span>
+                        <Lock className="w-2.5 h-2.5" />
+                        <span className="hidden sm:inline">Fechada</span>
+                      </Badge>
                     )}
                   </div>
 
-                  {/* Lista de Encomendas do Dia */}
-                  <div className="space-y-1 my-1 overflow-y-auto max-h-[70px]">
-                    {ordersDoDia.map((enc) => {
-                      const cfg = STATUS_ENCOMENDA_CONFIG[enc.status] || STATUS_ENCOMENDA_CONFIG.pendente;
+                  {/* Pílulas Compactas das Encomendas: [Horário] Nome (Item) */}
+                  <div className="space-y-1 my-1 flex-1">
+                    {exibidas.map((ord) => {
+                      const estiloPilula = obterEstiloPilula(ord.status);
+                      const resumoItem = ord.itens.length > 18 ? `${ord.itens.substring(0, 18)}...` : ord.itens;
+
                       return (
                         <div
-                          key={enc.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEditar(enc);
-                          }}
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold truncate border ${cfg.color} hover:scale-102 transition-transform`}
-                          title={`${enc.horarioEntrega} - ${enc.clienteNome}: ${enc.itens}`}
+                          key={ord.id}
+                          className={`text-[10px] sm:text-[11px] font-semibold px-1.5 py-0.5 rounded-md border truncate shadow-2xs flex items-center gap-1 transition-transform group-hover:translate-x-0.5 ${estiloPilula}`}
+                          title={`${ord.horarioEntrega || "14:00"} ${ord.clienteNome} (${ord.itens}) - ${formatarMoeda(ord.valorTotal)}`}
                         >
-                          <span className="font-bold mr-1">{enc.horarioEntrega}</span>
-                          {enc.clienteNome.split(" ")[0]}
+                          <span className="font-mono font-bold shrink-0 opacity-80">
+                            {ord.horarioEntrega || "14:00"}
+                          </span>
+                          <span className="truncate">
+                            <strong>{ord.clienteNome}</strong> ({resumoItem})
+                          </span>
                         </div>
                       );
                     })}
-                  </div>
 
-                  {/* Rodapé da célula / Total de pedidos */}
-                  <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1 border-t border-border/30">
-                    <span>{ordersDoDia.length > 0 ? `${ordersDoDia.length} enc.` : ""}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenNova(d.dateStr);
-                      }}
-                      className="opacity-0 hover:opacity-100 group-hover:opacity-100 p-0.5 rounded hover:bg-primary/20 text-primary"
-                      title="Adicionar encomenda neste dia"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. VISUALIZAÇÃO SEMANAL */}
-      {/* ========================================================================= */}
-      {viewMode === "week" && (
-        <Card className="border-border shadow-md overflow-hidden bg-card">
-          <div className="flex items-center justify-between p-4 border-b border-border/70 bg-muted/20">
-            <div className="flex items-center gap-3">
-              <h3 className="text-base font-bold text-foreground">
-                Semana de {weekDays[0].dateStr.split("-").reverse().join("/")} a{" "}
-                {weekDays[6].dateStr.split("-").reverse().join("/")}
-              </h3>
-              <Button variant="outline" size="sm" onClick={goToday} className="text-xs h-7 px-2.5">
-                Hoje
-              </Button>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const d = new Date(currentDate);
-                  d.setDate(d.getDate() - 7);
-                  setCurrentDate(d);
-                }}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const d = new Date(currentDate);
-                  d.setDate(d.getDate() + 7);
-                  setCurrentDate(d);
-                }}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-border/60">
-            {weekDays.map((d) => {
-              const ordersDoDia = encomendasFiltradas.filter((enc) => enc.dataEntrega === d.dateStr);
-              const bloqueio = datasBloqueadas.find((b) => b.data === d.dateStr);
-              const isToday = d.dateStr === new Date().toISOString().split("T")[0];
-
-              return (
-                <div key={d.dateStr} className={`p-3 min-h-[280px] flex flex-col justify-between ${bloqueio ? "bg-rose-50/30 dark:bg-rose-950/20" : ""}`}>
-                  <div>
-                    <div className="flex items-center justify-between pb-2 border-b border-border/40 mb-3">
-                      <div>
-                        <span className="text-xs uppercase font-bold text-muted-foreground block">
-                          {d.weekday}
-                        </span>
-                        <span className={`text-lg font-extrabold ${isToday ? "text-primary" : "text-foreground"}`}>
-                          {d.dayNum}
-                        </span>
+                    {/* Etiqueta +X mais clicável */}
+                    {restantes > 0 && (
+                      <div className="text-[10px] font-extrabold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 px-1.5 py-0.5 rounded-md text-center">
+                        +{restantes} mais
                       </div>
-                      {bloqueio && (
-                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                          Bloqueado
-                        </Badge>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      {ordersDoDia.map((enc) => (
-                        <div
-                          key={enc.id}
-                          onClick={() => handleOpenEditar(enc)}
-                          className="p-2.5 rounded-lg border border-border/70 bg-card hover:border-primary/50 shadow-xs cursor-pointer space-y-1 transition-all"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-foreground flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-primary" /> {enc.horarioEntrega}
-                            </span>
-                            <Badge
-                              variant="secondary"
-                              className={`text-[9px] px-1.5 py-0 ${STATUS_ENCOMENDA_CONFIG[enc.status].color}`}
-                            >
-                              {STATUS_ENCOMENDA_CONFIG[enc.status].label}
-                            </Badge>
-                          </div>
-                          <p className="text-xs font-semibold text-foreground truncate">{enc.clienteNome}</p>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2">{enc.itens}</p>
-                          <div className="pt-1 text-[11px] font-bold text-emerald-600 flex justify-between">
-                            <span>{formatarMoeda(enc.valorTotal)}</span>
-                            {enc.tipoEntrega === "delivery" && <Truck className="w-3.5 h-3.5 text-blue-500" />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    )}
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenNova(d.dateStr)}
-                    className="w-full text-xs font-semibold text-primary mt-3 hover:bg-primary/10"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
-                  </Button>
+                  {/* Rodapé da Célula */}
+                  <div className="text-[9px] text-muted-foreground flex justify-between items-center opacity-70 group-hover:opacity-100">
+                    {totalCount > 0 ? (
+                      <span className="font-semibold text-foreground font-mono">
+                        {totalCount} ped.
+                      </span>
+                    ) : (
+                      <span></span>
+                    )}
+                    <span className="text-[9px] text-primary font-bold hidden sm:inline">
+                      Ver dia &gt;
+                    </span>
+                  </div>
                 </div>
               );
             })}
@@ -626,117 +603,185 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. VISUALIZAÇÃO EM LISTA / TABELA */}
+      {/* 2. VISUALIZAÇÃO EM CALENDÁRIO SEMANAL */}
       {/* ========================================================================= */}
-      {viewMode === "list" && (
+      {viewMode === "semana" && (
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          {diasDaSemanaGrid.map((dia) => {
+            const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso);
+            const bloqueio = datasBloqueadas.find((b) => b.data === dia.dataIso);
+            const isHoje = dia.dataIso === new Date().toISOString().split("T")[0];
+
+            return (
+              <Card
+                key={dia.dataIso}
+                onClick={() => handleAbrirDrawerDia(dia.dataIso)}
+                className={`border cursor-pointer transition-all flex flex-col justify-between ${
+                  bloqueio ? "bg-rose-500/10 border-rose-500/30" : "bg-card hover:border-primary/50 shadow-xs"
+                }`}
+              >
+                <CardHeader className="p-3 pb-2 border-b border-border/60 flex flex-row items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold uppercase text-muted-foreground">{dia.nomeSemana}</span>
+                    <h4 className={`text-base font-extrabold ${isHoje ? "text-primary font-black" : "text-foreground"}`}>
+                      {dia.diaNum}
+                    </h4>
+                  </div>
+                  {bloqueio && (
+                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-bold">
+                      <Lock className="w-3 h-3 mr-0.5" /> Fechada
+                    </Badge>
+                  )}
+                </CardHeader>
+
+                <CardContent className="p-2 space-y-1.5 flex-1 min-h-[140px]">
+                  {encomendasDoDia.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground text-center py-6">
+                      Livre
+                    </p>
+                  ) : (
+                    encomendasDoDia.map((ord) => {
+                      const estiloPilula = obterEstiloPilula(ord.status);
+                      return (
+                        <div
+                          key={ord.id}
+                          className={`p-1.5 rounded-lg border text-xs space-y-1 ${estiloPilula}`}
+                        >
+                          <div className="flex items-center justify-between font-bold">
+                            <span className="font-mono text-[10px]">{ord.horarioEntrega || "14:00"}</span>
+                            <span className="text-[10px]">{formatarMoeda(ord.valorTotal)}</span>
+                          </div>
+                          <p className="font-semibold text-xs truncate">{ord.clienteNome}</p>
+                          <p className="text-[10px] opacity-80 truncate">{ord.itens}</p>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+
+                <CardFooter className="p-2 border-t border-border/50 text-[10px] text-primary font-bold flex justify-between">
+                  <span>{encomendasDoDia.length} encomenda(s)</span>
+                  <span>Ver detalhes &gt;</span>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. VISUALIZAÇÃO EM LISTA / TABELA COMPLETA */}
+      {/* ========================================================================= */}
+      {viewMode === "lista" && (
         <Card className="border-border shadow-sm overflow-hidden bg-card">
           <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead>Data / Hora</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Itens / Pedido</TableHead>
-                <TableHead>Tipo Entrega</TableHead>
-                <TableHead>Valor Total</TableHead>
-                <TableHead>Pagamento</TableHead>
-                <TableHead>Status Produção</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead className="text-xs">Data &amp; Hora</TableHead>
+                <TableHead className="text-xs">Cliente</TableHead>
+                <TableHead className="text-xs">Itens do Pedido</TableHead>
+                <TableHead className="text-xs">Tipo Entrega</TableHead>
+                <TableHead className="text-xs">Valor Total</TableHead>
+                <TableHead className="text-xs">Pagamento</TableHead>
+                <TableHead className="text-xs">Status Produção</TableHead>
+                <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {encomendasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
-                    Nenhuma encomenda encontrada com os filtros selecionados.
+                  <TableCell colSpan={8} className="text-center py-10 text-xs text-muted-foreground">
+                    Nenhuma encomenda encontrada com os filtros atuais.
                   </TableCell>
                 </TableRow>
               ) : (
-                encomendasFiltradas.map((enc) => {
-                  const statusCfg = STATUS_ENCOMENDA_CONFIG[enc.status] || STATUS_ENCOMENDA_CONFIG.pendente;
-                  const pagCfg = STATUS_PAGAMENTO_CONFIG[enc.statusPagamento] || STATUS_PAGAMENTO_CONFIG.pendente;
+                encomendasFiltradas.map((ord) => {
+                  const statusCfg = STATUS_ENCOMENDA_CONFIG[ord.status];
+                  const pagCfg = STATUS_PAGAMENTO_CONFIG[ord.statusPagamento];
 
                   return (
-                    <TableRow key={enc.id} className="hover:bg-muted/20">
-                      <TableCell className="font-mono text-xs text-foreground">
-                        <div className="font-bold">{enc.dataEntrega.split("-").reverse().join("/")}</div>
-                        <div className="text-muted-foreground flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {enc.horarioEntrega}
+                    <TableRow key={ord.id} className="hover:bg-muted/20">
+                      <TableCell className="text-xs font-mono">
+                        <div className="font-bold text-foreground">
+                          {ord.dataEntrega.split("-").reverse().join("/")}
+                        </div>
+                        <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                          <Clock className="w-3 h-3 text-primary" /> {ord.horarioEntrega || "14:00"}
                         </div>
                       </TableCell>
+
                       <TableCell>
-                        <p className="font-semibold text-sm text-foreground">{enc.clienteNome}</p>
-                        {enc.clienteWhatsapp && (
+                        <div className="font-semibold text-xs text-foreground">{ord.clienteNome}</div>
+                        {ord.clienteWhatsapp && (
                           <a
-                            href={formatarWhatsappLink(
-                              enc.clienteWhatsapp,
-                              `Olá ${enc.clienteNome}! Passando para confirmar sua encomenda no CaixaDoce marcada para ${enc.dataEntrega.split("-").reverse().join("/")} às ${enc.horarioEntrega}.`
-                            )}
+                            href={formatarWhatsappLink(ord.clienteWhatsapp, `Olá ${ord.clienteNome}! Estamos preparando sua encomenda do CaixaDoce.`)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-0.5"
+                            className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline font-mono"
                           >
-                            <MessageCircle className="w-3.5 h-3.5" /> {enc.clienteWhatsapp}
+                            <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
                           </a>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[250px]">
-                        <p className="text-xs text-foreground line-clamp-2">{enc.itens}</p>
-                        {enc.observacoes && (
-                          <p className="text-[11px] text-amber-600 italic mt-0.5 line-clamp-1">
-                            Obs: {enc.observacoes}
-                          </p>
-                        )}
+
+                      <TableCell className="text-xs max-w-[220px] truncate text-muted-foreground" title={ord.itens}>
+                        {ord.itens}
                       </TableCell>
+
                       <TableCell className="text-xs">
-                        {enc.tipoEntrega === "delivery" ? (
-                          <span className="flex items-center gap-1 text-blue-600 font-medium">
+                        {ord.tipoEntrega === "delivery" ? (
+                          <span className="flex items-center gap-1 text-blue-600 font-semibold">
                             <Truck className="w-3.5 h-3.5" /> Delivery
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-muted-foreground font-medium">
+                          <span className="flex items-center gap-1 text-stone-600 font-semibold">
                             <Store className="w-3.5 h-3.5" /> Retirada
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="font-extrabold text-sm text-foreground">
-                        {formatarMoeda(enc.valorTotal)}
-                        {enc.valorEntrada && enc.valorEntrada > 0 ? (
-                          <p className="text-[10px] text-muted-foreground font-normal">
-                            Sinal: {formatarMoeda(enc.valorEntrada)}
-                          </p>
+
+                      <TableCell className="text-xs font-extrabold text-foreground">
+                        {formatarMoeda(ord.valorTotal)}
+                        {ord.valorEntrada && ord.valorEntrada > 0 ? (
+                          <div className="text-[10px] text-emerald-600 font-normal">
+                            Sinal: {formatarMoeda(ord.valorEntrada)}
+                          </div>
                         ) : null}
                       </TableCell>
-                      <TableCell>
-                        <span className={`text-xs font-semibold ${pagCfg.color}`}>
-                          {pagCfg.label}
+
+                      <TableCell className="text-xs">
+                        <span className={`font-semibold ${pagCfg?.color || ""}`}>
+                          {pagCfg?.label || ord.statusPagamento}
                         </span>
                       </TableCell>
+
                       <TableCell>
-                        <Badge variant="secondary" className={`text-xs ${statusCfg.color}`}>
-                          {statusCfg.label}
+                        <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
+                          {statusCfg?.label || ord.status}
                         </Badge>
                       </TableCell>
+
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenEditar(enc)}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                            onClick={() => handleAbrirEdicao(ord)}
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`Deseja realmente excluir a encomenda de "${enc.clienteNome}"?`)) {
-                                onExcluirEncomenda(enc.id);
+                              if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
+                                onExcluirEncomenda(ord.id);
                               }
                             }}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -750,104 +795,301 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR OU EDITAR ENCOMENDA */}
+      {/* 4. PAINEL LATERAL (DRAWER / SHEET) DE DETALHES DO DIA SELECIONADO */}
+      {/* ========================================================================= */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col justify-between">
+          <div>
+            <SheetHeader className="pb-3 border-b border-border/60">
+              <SheetTitle className="flex items-center gap-2 text-base">
+                <CalendarIcon className="w-5 h-5 text-primary" />
+                {selectedDrawerDate
+                  ? new Date(`${selectedDrawerDate}T12:00:00`).toLocaleDateString("pt-BR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })
+                  : "Entregas do Dia"}
+              </SheetTitle>
+              <SheetDescription className="text-xs">
+                Visualização detalhada de todas as encomendas e controle de agenda da data.
+              </SheetDescription>
+            </SheetHeader>
+
+            {/* Aviso de Bloqueio no Painel Lateral */}
+            {bloqueioDoDiaDrawer && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 font-semibold">
+                  <Lock className="w-4 h-4 shrink-0" />
+                  <span>Agenda Fechada: <strong>{bloqueioDoDiaDrawer.motivo}</strong></span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDesbloquearData(bloqueioDoDiaDrawer.id)}
+                  className="h-6 text-[10px] text-rose-600 border-rose-500/40 hover:bg-rose-500/20"
+                >
+                  <Unlock className="w-3 h-3 mr-1" /> Desbloquear
+                </Button>
+              </div>
+            )}
+
+            {/* Ação Rápida: Adicionar Encomenda para esta data */}
+            <div className="mt-4 flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  handleAbrirNovaEncomenda(selectedDrawerDate || undefined);
+                }}
+                className="w-full font-bold shadow-xs text-xs h-8.5"
+              >
+                <Plus className="w-4 h-4 mr-1.5" /> Adicionar Encomenda para este dia
+              </Button>
+            </div>
+
+            {/* Lista das Encomendas do Dia */}
+            <div className="mt-4 space-y-3">
+              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Entregas Agendadas ({encomendasDoDiaDrawer.length})
+              </h4>
+
+              {encomendasDoDiaDrawer.length === 0 ? (
+                <div className="py-10 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-border/50">
+                  Nenhuma encomenda agendada para este dia.
+                </div>
+              ) : (
+                encomendasDoDiaDrawer.map((ord) => {
+                  const statusCfg = STATUS_ENCOMENDA_CONFIG[ord.status];
+                  return (
+                    <Card key={ord.id} className="border-border shadow-xs bg-card overflow-hidden">
+                      <div className="p-3.5 space-y-3">
+                        {/* Topo do Card da Encomenda */}
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-black text-primary flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
+                          </span>
+                          <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
+                            {statusCfg?.label || ord.status}
+                          </Badge>
+                        </div>
+
+                        {/* Dados do Cliente e Contato WhatsApp */}
+                        <div>
+                          <p className="text-sm font-extrabold text-foreground">{ord.clienteNome}</p>
+                          {ord.clienteWhatsapp && (
+                            <a
+                              href={formatarWhatsappLink(ord.clienteWhatsapp, `Olá ${ord.clienteNome}! Entramos em contato referente a sua encomenda agendada para ${ord.dataEntrega.split("-").reverse().join("/")}.`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-semibold hover:underline mt-0.5"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>{ord.clienteWhatsapp} (Conversar)</span>
+                            </a>
+                          )}
+                        </div>
+
+                        {/* Itens e Detalhes */}
+                        <div className="p-2.5 rounded-lg bg-muted/40 text-xs space-y-1">
+                          <p className="font-medium text-foreground">{ord.itens}</p>
+                          {ord.observacoes && (
+                            <p className="text-[11px] text-muted-foreground italic">Obs: {ord.observacoes}</p>
+                          )}
+                        </div>
+
+                        {/* Valores e Entrega */}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
+                          <span className="font-extrabold text-foreground text-sm">
+                            {formatarMoeda(ord.valorTotal)}
+                          </span>
+                          <span className="text-muted-foreground text-[11px] font-medium">
+                            {ord.tipoEntrega === "delivery" ? "🚚 Delivery" : "🏬 Retirada"}
+                          </span>
+                        </div>
+
+                        {/* Alteração Rápida de Status */}
+                        <div className="space-y-1 pt-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground uppercase">Alterar Status:</Label>
+                          <Select
+                            value={ord.status}
+                            onValueChange={(v: StatusEncomenda) => {
+                              onEditarEncomenda(ord.id, { status: v });
+                              toast.success(`Status alterado para ${STATUS_ENCOMENDA_CONFIG[v].label}`);
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs font-semibold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pendente">Pendente</SelectItem>
+                              <SelectItem value="em_producao">Em Produção</SelectItem>
+                              <SelectItem value="pronta">Pronta p/ Entrega</SelectItem>
+                              <SelectItem value="entregue">Entregue</SelectItem>
+                              <SelectItem value="cancelada">Cancelada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Botões de Ação */}
+                        <div className="flex justify-end gap-1 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setDrawerOpen(false);
+                              handleAbrirEdicao(ord);
+                            }}
+                            className="h-7 text-xs px-2.5 font-semibold"
+                          >
+                            <Edit2 className="w-3 h-3 mr-1" /> Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
+                                onExcluirEncomenda(ord.id);
+                              }
+                            }}
+                            className="h-7 text-xs px-2 text-rose-600 hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <SheetFooter className="pt-4 border-t border-border/60">
+            <Button variant="outline" size="sm" onClick={() => setDrawerOpen(false)} className="w-full text-xs">
+              Fechar Painel
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ========================================================================= */}
+      {/* 5. MODAL: CADASTRAR OU EDITAR ENCOMENDA */}
       {/* ========================================================================= */}
       <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">
-              {editingId ? "Editar Encomenda" : "Nova Encomenda Manual"}
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              {editingId ? "Editar Encomenda" : "Cadastrar Nova Encomenda"}
             </DialogTitle>
-            <DialogDescription>
-              Preencha os dados do cliente, itens encomendados, prazos e pagamento.
+            <DialogDescription className="text-xs">
+              Preencha os detalhes do cliente, data, itens encomendados e valor.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmitEncomenda} className="space-y-4 py-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-nome">Nome do Cliente *</Label>
+          <form onSubmit={handleSalvarEncomenda} className="space-y-4 py-2">
+            {/* Cliente & WhatsApp */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="enc-nome" className="text-xs">Nome do Cliente *</Label>
                 <Input
                   id="enc-nome"
-                  placeholder="Ex: Amanda Nogueira"
+                  placeholder="Ex: Mariana Silva"
                   value={clienteNome}
                   onChange={(e) => setClienteNome(e.target.value)}
+                  className="h-8 text-xs font-semibold"
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-whats">WhatsApp do Cliente</Label>
+              <div className="space-y-1">
+                <Label htmlFor="enc-whats" className="text-xs">WhatsApp (com DDD)</Label>
                 <Input
                   id="enc-whats"
                   placeholder="(11) 98765-4321"
                   value={clienteWhatsapp}
                   onChange={(e) => setClienteWhatsapp(e.target.value)}
+                  className="h-8 text-xs"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-data">Data de Entrega / Retirada *</Label>
+            {/* Data & Horário */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="enc-data" className="text-xs">Data da Entrega / Retirada *</Label>
                 <Input
                   id="enc-data"
                   type="date"
                   value={dataEntrega}
                   onChange={(e) => setDataEntrega(e.target.value)}
+                  className="h-8 text-xs font-bold"
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-hora">Horário Previsto *</Label>
+              <div className="space-y-1">
+                <Label htmlFor="enc-hora" className="text-xs">Horário Previsto *</Label>
                 <Input
                   id="enc-hora"
                   type="time"
                   value={horarioEntrega}
                   onChange={(e) => setHorarioEntrega(e.target.value)}
+                  className="h-8 text-xs font-bold"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="enc-itens">Itens do Pedido &amp; Quantidades *</Label>
+            {/* Itens Encomendados */}
+            <div className="space-y-1">
+              <Label htmlFor="enc-itens" className="text-xs">Itens Pedidos / Descrição *</Label>
               <Textarea
                 id="enc-itens"
-                rows={3}
-                placeholder="Ex: 1x Bolo 2kg Ninho com Morango, 50x Brigadeiros Tradicionais, 25x Beijinhos"
+                rows={2}
+                placeholder="Ex: 1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga ao Leite"
                 value={itens}
                 onChange={(e) => setItens(e.target.value)}
+                className="text-xs"
                 required
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-valortotal">Valor Total (R$) *</Label>
+            {/* Valores & Sinal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="enc-valor" className="text-xs">Valor Total (R$) *</Label>
                 <Input
-                  id="enc-valortotal"
-                  placeholder="150,00"
+                  id="enc-valor"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
                   value={valorTotal}
-                  onChange={(e) => setValorTotal(e.target.value)}
+                  onChange={(e) => setValorTotal(e.target.value ? Number(e.target.value) : "")}
+                  className="h-8 text-xs font-black text-foreground"
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-valorentrada">Valor Sinal / Entrada (R$)</Label>
+              <div className="space-y-1">
+                <Label htmlFor="enc-sinal" className="text-xs">Sinal / Entrada Paga (R$)</Label>
                 <Input
-                  id="enc-valorentrada"
-                  placeholder="75,00"
+                  id="enc-sinal"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
                   value={valorEntrada}
-                  onChange={(e) => setValorEntrada(e.target.value)}
+                  onChange={(e) => setValorEntrada(e.target.value ? Number(e.target.value) : "")}
+                  className="h-8 text-xs text-emerald-600 font-semibold"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-statuspag">Status do Pagamento</Label>
-                <Select value={statusPagamento} onValueChange={(v: any) => setStatusPagamento(v)}>
-                  <SelectTrigger id="enc-statuspag">
+            {/* Status de Pagamento & Produção */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Status do Pagamento</Label>
+                <Select value={statusPagamento} onValueChange={(v: StatusPagamentoEncomenda) => setStatusPagamento(v)}>
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -859,10 +1101,10 @@ export function OrdersView({
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-statusprod">Status de Produção</Label>
-                <Select value={status} onValueChange={(v: any) => setStatus(v)}>
-                  <SelectTrigger id="enc-statusprod">
+              <div className="space-y-1">
+                <Label className="text-xs">Status de Produção</Label>
+                <Select value={status} onValueChange={(v: StatusEncomenda) => setStatus(v)}>
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -876,49 +1118,60 @@ export function OrdersView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="enc-tipoentrega">Modalidade de Entrega</Label>
-                <Select value={tipoEntrega} onValueChange={(v: any) => setTipoEntrega(v)}>
-                  <SelectTrigger id="enc-tipoentrega">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="retirada">Retirada no Balcão</SelectItem>
-                    <SelectItem value="delivery">Delivery / Entrega</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Modalidade de Entrega */}
+            <div className="space-y-2">
+              <Label className="text-xs">Modalidade de Entrega</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={tipoEntrega === "retirada" ? "default" : "outline"}
+                  onClick={() => setTipoEntrega("retirada")}
+                  className="h-8 text-xs font-semibold"
+                >
+                  <Store className="w-3.5 h-3.5 mr-1.5" /> Retirada no Balcão
+                </Button>
+                <Button
+                  type="button"
+                  variant={tipoEntrega === "delivery" ? "default" : "outline"}
+                  onClick={() => setTipoEntrega("delivery")}
+                  className="h-8 text-xs font-semibold"
+                >
+                  <Truck className="w-3.5 h-3.5 mr-1.5" /> Delivery / Entrega
+                </Button>
               </div>
-
-              {tipoEntrega === "delivery" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="enc-end">Endereço de Entrega</Label>
-                  <Input
-                    id="enc-end"
-                    placeholder="Rua, Número, Bairro, Complemento"
-                    value={enderecoEntrega}
-                    onChange={(e) => setEnderecoEntrega(e.target.value)}
-                  />
-                </div>
-              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="enc-obs">Observações / Detalhes Adicionais</Label>
+            {tipoEntrega === "delivery" && (
+              <div className="space-y-1">
+                <Label htmlFor="enc-end" className="text-xs">Endereço de Entrega</Label>
+                <Input
+                  id="enc-end"
+                  placeholder="Rua, Número, Bairro, Complemento"
+                  value={enderecoEntrega}
+                  onChange={(e) => setEnderecoEntrega(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
+
+            {/* Observações */}
+            <div className="space-y-1">
+              <Label htmlFor="enc-obs" className="text-xs">Observações / Detalhes</Label>
               <Input
                 id="enc-obs"
-                placeholder="Ex: Topo de bolo personalizado, sem lactose, laço dourado..."
+                placeholder="Ex: Nome no topo do bolo, vela inclusa, alergias..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
+                className="h-8 text-xs"
               />
             </div>
 
-            <DialogFooter className="pt-3 border-t">
-              <Button type="button" variant="outline" onClick={() => setModalEncomendaOpen(false)}>
+            <DialogFooter className="pt-2 border-t flex justify-between">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalEncomendaOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={salvando} className="font-semibold shadow-md">
-                {salvando ? "Salvando..." : editingId ? "Atualizar Encomenda" : "Cadastrar Encomenda"}
+              <Button type="submit" size="sm" className="font-bold shadow-md">
+                {editingId ? "Salvar Alterações" : "Cadastrar Encomenda"}
               </Button>
             </DialogFooter>
           </form>
@@ -926,87 +1179,82 @@ export function OrdersView({
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL: BLOQUEAR DATA NO CALENDÁRIO */}
+      {/* 6. MODAL: BLOQUEAR DATA NA AGENDA */}
       {/* ========================================================================= */}
       <Dialog open={modalBloqueioOpen} onOpenChange={setModalBloqueioOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-600">
-              <Lock className="w-5 h-5" /> Bloquear Data na Agenda
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+              <Lock className="w-5 h-5 text-rose-500" /> Bloquear Data na Agenda
             </DialogTitle>
-            <DialogDescription>
-              Marque dias em que você não aceitará novas encomendas (feriado, agenda lotada, etc.).
+            <DialogDescription className="text-xs">
+              Datas bloqueadas ficam marcadas como "Agenda Fechada" e impedem agendamentos públicos de clientes.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSalvarBloqueio} className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="bloq-data">Data a Bloquear</Label>
+            <div className="space-y-1">
+              <Label htmlFor="bloq-data" className="text-xs">Data a ser Bloqueada *</Label>
               <Input
                 id="bloq-data"
                 type="date"
-                value={dataParaBloqueio}
-                onChange={(e) => setDataParaBloqueio(e.target.value)}
+                value={dataBloqueio}
+                onChange={(e) => setDataBloqueio(e.target.value)}
+                className="h-8 text-xs font-bold"
                 required
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="bloq-motivo">Motivo do Bloqueio</Label>
+            <div className="space-y-1">
+              <Label htmlFor="bloq-motivo" className="text-xs">Motivo do Bloqueio *</Label>
               <Select value={motivoBloqueio} onValueChange={setMotivoBloqueio}>
-                <SelectTrigger id="bloq-motivo">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Agenda Lotada">Agenda Lotada</SelectItem>
                   <SelectItem value="Feriado / Recesso">Feriado / Recesso</SelectItem>
-                  <SelectItem value="Manutenção de Equipamentos">Manutenção de Equipamentos</SelectItem>
-                  <SelectItem value="Folga / Férias">Folga / Férias</SelectItem>
-                  <SelectItem value="Outro Motivo">Outro Motivo</SelectItem>
+                  <SelectItem value="Folga / Manutenção">Folga / Manutenção</SelectItem>
+                  <SelectItem value="Evento Externo">Evento Externo</SelectItem>
+                  <SelectItem value="Outro">Outro Motivo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalBloqueioOpen(false)}>
-                Cancelar
+            {/* Lista de Datas Já Bloqueadas */}
+            {datasBloqueadas.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-border/50">
+                <Label className="text-[11px] font-bold text-muted-foreground">Datas Já Bloqueadas:</Label>
+                <div className="max-h-28 overflow-y-auto space-y-1">
+                  {datasBloqueadas.map((b) => (
+                    <div key={b.id} className="flex items-center justify-between p-1.5 rounded-lg bg-muted/40 text-xs">
+                      <span className="font-mono font-bold text-foreground">
+                        {b.data.split("-").reverse().join("/")} ({b.motivo})
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDesbloquearData(b.id)}
+                        className="h-5 px-1.5 text-[10px] text-rose-600 hover:bg-rose-500/10"
+                      >
+                        <Unlock className="w-3 h-3 mr-1" /> Desbloquear
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="pt-2 border-t flex justify-between">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalBloqueioOpen(false)}>
+                Fechar
               </Button>
-              <Button type="submit" variant="destructive" disabled={salvandoBloqueio}>
-                {salvandoBloqueio ? "Bloqueando..." : "Confirmar Bloqueio"}
+              <Button type="submit" size="sm" className="font-bold bg-rose-600 hover:bg-rose-700 text-white">
+                <Lock className="w-3.5 h-3.5 mr-1" /> Confirmar Bloqueio
               </Button>
             </DialogFooter>
           </form>
-
-          {/* Lista de Datas Bloqueadas no momento */}
-          {datasBloqueadas.length > 0 && (
-            <div className="mt-4 pt-3 border-t space-y-2">
-              <h5 className="text-xs font-bold text-muted-foreground uppercase">Datas Atualmente Bloqueadas:</h5>
-              <div className="max-h-36 overflow-y-auto space-y-1.5">
-                {datasBloqueadas.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200 text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-foreground">
-                        {b.data.split("-").reverse().join("/")}
-                      </span>
-                      <span className="text-muted-foreground ml-2">({b.motivo})</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDesbloquearData(b.id)}
-                      className="h-6 px-2 text-rose-600 hover:bg-rose-100 text-[11px]"
-                      title="Desbloquear data"
-                    >
-                      <Unlock className="w-3 h-3 mr-1" /> Desbloquear
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>
