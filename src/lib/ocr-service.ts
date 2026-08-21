@@ -14,6 +14,8 @@ export interface ResultadoOCRNotinha {
 export interface GeminiReceiptResponse {
   establishment?: string;
   date?: string;
+  time?: string;
+  sale_number?: string;
   items?: Array<{
     name: string;
     quantity: number;
@@ -40,6 +42,8 @@ Analise a imagem e extraia os dados estritamente em JSON puro com este formato:
 {
   "establishment": "Nome do estabelecimento",
   "date": "YYYY-MM-DD",
+  "time": "HH:mm",
+  "sale_number": "número da NF, NFCe, NFe, pedido ou cupom",
   "items": [
     { "name": "Nome/Descrição do item", "quantity": 1, "total_price": 10.50 }
   ],
@@ -125,10 +129,10 @@ export async function processarNotinhaComOCR(
   return {
     fornecedorNome: parsedJSON.establishment || "Estabelecimento Não Identificado",
     fornecedorEndereco: "Endereço extraído do comprovante",
-    numeroNota: String(Math.floor(100000 + Math.random() * 900000)),
+    numeroNota: parsedJSON.sale_number ? String(parsedJSON.sale_number) : "",
     numeroPedido: String(Math.floor(1000 + Math.random() * 9000)),
     dataCompra: parsedJSON.date || new Date().toISOString().split("T")[0],
-    horaCompra: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    horaCompra: parsedJSON.time ? String(parsedJSON.time) : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     itens: itensFormatados,
     valorTotalNota: totalFinal,
   };

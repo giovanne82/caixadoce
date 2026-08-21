@@ -80,7 +80,9 @@ export function ScannerView({
   };
 
   const compartilharNotinhaWhatsApp = (despesa: DespesaNotaFiscal) => {
-    const mensagem = `*Resumo da Compra* 🧾\n🏪 *Estabelecimento:* ${despesa.fornecedorNome}\n📅 *Data:* ${despesa.dataCompra}\n💰 *Total:* ${formatarMoeda(despesa.valorTotal)}`;
+    const docTexto = despesa.numeroNota ? `\n📄 *Nº Documento:* ${despesa.numeroNota}` : "";
+    const horaTexto = despesa.horaCompra ? ` às ${despesa.horaCompra}` : "";
+    const mensagem = `*Resumo da Compra* 🧾\n🏪 *Estabelecimento:* ${despesa.fornecedorNome}${docTexto}\n📅 *Data:* ${despesa.dataCompra}${horaTexto}\n💰 *Total:* ${formatarMoeda(despesa.valorTotal)}`;
     const textoCodificado = encodeURIComponent(mensagem);
     window.open(`https://api.whatsapp.com/send?text=${textoCodificado}`, "_blank");
   };
@@ -334,9 +336,13 @@ export function ScannerView({
                     onClick={() => abrirDetalhesRegistro(d)}
                     className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
                   >
-                    <TableCell className="font-mono text-xs text-muted-foreground">{d.dataCompra}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      <div>{d.dataCompra}</div>
+                      {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
+                    </TableCell>
                     <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors">
-                      {d.fornecedorNome}
+                      <div>{d.fornecedorNome}</div>
+                      {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
                     </TableCell>
                     <TableCell className="font-bold text-xs text-emerald-600 text-right">
                       {formatarMoeda(d.valorTotal)}
@@ -381,7 +387,7 @@ export function ScannerView({
           <div className="space-y-4 py-2">
             {/* Metadados Fiscais */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
-              <div className="space-y-1">
+              <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="sc-forn" className="text-xs font-semibold">
                   Estabelecimento / Mercado
                 </Label>
@@ -395,16 +401,39 @@ export function ScannerView({
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="sc-data" className="text-xs font-semibold">
-                  Data da Compra
+                <Label htmlFor="sc-doc" className="text-xs font-semibold">
+                  Nº do Documento (NF / Pedido / Cupom)
                 </Label>
                 <Input
-                  id="sc-data"
-                  type="date"
-                  value={dataCompra}
-                  onChange={(e) => setDataCompra(e.target.value)}
-                  className="h-8 text-xs"
+                  id="sc-doc"
+                  value={numeroNota}
+                  placeholder="ex: NF 000379"
+                  onChange={(e) => setNumeroNota(e.target.value)}
+                  className="h-8 text-xs font-medium font-mono"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">
+                  Data e Hora da Compra
+                </Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input
+                    id="sc-data"
+                    type="date"
+                    value={dataCompra}
+                    onChange={(e) => setDataCompra(e.target.value)}
+                    className="h-8 text-xs px-2"
+                  />
+                  <Input
+                    id="sc-hora"
+                    type="text"
+                    placeholder="HH:mm"
+                    value={horaCompra}
+                    onChange={(e) => setHoraCompra(e.target.value)}
+                    className="h-8 text-xs px-2 font-mono"
+                  />
+                </div>
               </div>
             </div>
 
@@ -530,8 +559,16 @@ export function ScannerView({
                   <p className="text-sm font-bold text-foreground">{registroDetalhes.fornecedorNome}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Data da Compra</Label>
-                  <p className="text-sm font-semibold text-foreground">{registroDetalhes.dataCompra}</p>
+                  <Label className="text-xs text-muted-foreground">Número do Documento</Label>
+                  <p className="text-sm font-bold text-foreground font-mono">
+                    {registroDetalhes.numeroNota || "Não informado"}
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Data e Hora da Compra</Label>
+                  <p className="text-sm font-semibold text-foreground">
+                    {registroDetalhes.dataCompra}{registroDetalhes.horaCompra ? ` às ${registroDetalhes.horaCompra}` : ""}
+                  </p>
                 </div>
               </div>
 
