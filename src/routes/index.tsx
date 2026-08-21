@@ -117,17 +117,47 @@ function Index() {
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
   // 1. Carrega transações do Supabase / Cache Local
+  const safeFetchSupabase = useCallback(
+    async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[] | null> => {
+      try {
+        let query = supabase.from(tableName as any).select("*");
+        if (activeCode) {
+          query = query.eq("estabelecimento_codigo", activeCode);
+        }
+        if (orderColumn) {
+          query = query.order(orderColumn, { ascending });
+        }
+        const res = await query;
+
+        if (!res.error && res.data) return res.data;
+
+        // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400), tenta sem o filtro de estabelecimento
+        if (res.error && (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo"))) {
+          let fallbackQuery = supabase.from(tableName as any).select("*");
+          if (orderColumn) {
+            fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+          }
+          const fallbackRes = await fallbackQuery;
+          if (!fallbackRes.error && fallbackRes.data) {
+            return fallbackRes.data;
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
   const fetchTransacoes = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("transacoes_financeiras")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("created_at", { ascending: false });
+      const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_transacoes_${activeCode}`);
         if (raw) {
           setTransacoes(JSON.parse(raw));
@@ -186,13 +216,9 @@ function Index() {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("data_entrega", { ascending: true });
+      const data = await safeFetchSupabase("orders", activeCode, "data_entrega", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_orders_${activeCode}`);
         if (raw) {
           setEncomendas(JSON.parse(raw));
@@ -255,12 +281,9 @@ function Index() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("datas_bloqueadas")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode);
+      const data = await safeFetchSupabase("datas_bloqueadas", activeCode);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_datas_bloqueadas_${activeCode}`);
         if (raw) setDatasBloqueadas(JSON.parse(raw));
       } else {
@@ -276,20 +299,16 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar datas bloqueadas:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 3. Carrega Despesas do Scanner
   const fetchDespesas = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("data_compra", { ascending: false });
+      const data = await safeFetchSupabase("expenses", activeCode, "data_compra", false);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_expenses_${activeCode}`);
         if (raw) {
           setDespesas(JSON.parse(raw));
@@ -365,19 +384,15 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar despesas:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 4. Carrega Clientes (Customers)
   const fetchClientes = useCallback(async () => {
     if (!profile) return;
     try {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("name", { ascending: true });
+      const data = await safeFetchSupabase("customers", activeCode, "name", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_customers_${activeCode}`);
         if (raw) {
           setClientes(JSON.parse(raw));
@@ -400,19 +415,15 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar clientes:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 5. Carrega Produtos do Cardápio (Products)
   const fetchProdutos = useCallback(async () => {
     if (!profile) return;
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("estabelecimento_codigo", activeCode)
-        .order("name", { ascending: true });
+      const data = await safeFetchSupabase("products", activeCode, "name", true);
 
-      if (error || !data || data.length === 0) {
+      if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_cardapio_${activeCode}`);
         if (raw) {
           setProdutos(JSON.parse(raw));
@@ -439,7 +450,7 @@ function Index() {
     } catch (e) {
       console.warn("Erro ao buscar produtos:", e);
     }
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   useEffect(() => {
     fetchTransacoes();

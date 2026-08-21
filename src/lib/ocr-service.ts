@@ -28,17 +28,14 @@ export async function extractReceiptDataWithGemini(imageBase64: string): Promise
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: `Você é um leitor especialista em notas fiscais, NFC-e e cupons brasileiros. 
+  const body = {
+    contents: [
+      {
+        parts: [
+          {
+            text: `Você é um leitor especialista em notas fiscais, NFC-e e cupons brasileiros. 
 Analise a imagem e extraia os dados estritamente em JSON puro com este formato:
 {
   "establishment": "Nome do estabelecimento",
@@ -49,17 +46,25 @@ Analise a imagem e extraia os dados estritamente em JSON puro com este formato:
   "total_amount": 10.50
 }
 Responda apenas com o JSON sem formatação markdown.`
-            },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: cleanBase64
-              }
+          },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: cleanBase64
             }
-          ]
-        }
-      ]
-    })
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      response_mime_type: "application/json"
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
