@@ -113,9 +113,12 @@ export function ScannerView({
       setDataCompra(res.dataCompra);
       setHoraCompra(res.horaCompra);
       setItensExtraidos(res.itens);
-
       setModalRevisaoOpen(true);
-      toast.success("Leitura OCR do cupom fiscal concluída com sucesso! 🎉");
+      if (res.itens.length === 0) {
+        toast.info("Não foi possível identificar os produtos automaticamente. Adicione os itens no modal abaixo.");
+      } else {
+        toast.success(`Leitura de notinha concluída! ${res.itens.length} item(ns) identificado(s). 🎉`);
+      }
     } catch (e: any) {
       setIsScanning(false);
       toast.error(`Erro ao ler notinha: ${e.message}`);
