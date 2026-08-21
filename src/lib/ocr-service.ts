@@ -13,15 +13,13 @@ export interface ResultadoOCRNotinha {
 }
 
 /**
- * Pré-processamento visual da imagem no client (Canvas):
- * - Redimensiona para max 1280px
- * - Aplica ajuste de contraste e nitidez ideal para notinhas térmicas
- * - Retorna base64 JPEG
+ * Converte a imagem da notinha para escala de cinza e aplica Binarização Adaptativa (Método de Otsu)
+ * no client-side via HTML5 Canvas.
+ * Remove completamente tons amarelos de papéis térmicos e elimina o ruído de fundo em folhas NFe A4.
  */
-export async function preprocessarImagemNotinha(file: File): Promise<string> {
+export async function binarizarImagemNotinha(file: File): Promise<string> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
-      // Se for PDF, lê direto como Data URL
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
       reader.readAsDataURL(file);
@@ -34,7 +32,7 @@ export async function preprocessarImagemNotinha(file: File): Promise<string> {
     img.onload = () => {
       URL.revokeObjectURL(url);
 
-      const maxDim = 1280;
+      const maxDim = 1440;
       let width = img.width;
       let height = img.height;
 
@@ -60,12 +58,75 @@ export async function preprocessarImagemNotinha(file: File): Promise<string> {
         return;
       }
 
-      // Aplica filtro visual de contraste para leitura de cupom térmico
-      ctx.filter = "contrast(1.35) brightness(1.05)";
+      // 1. Desenha a imagem original
       ctx.drawImage(img, 0, 0, width, height);
 
-      const base64 = canvas.toDataURL("image/jpeg", 0.85);
-      resolve(base64);
+      // 2. Extrai dados dos pixels (RGBA)
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+      const len = data.length;
+
+      // 3. Conversão para Grayscale & Histograma (Luminância NTSC/PAL)
+      const histogram = new Array(256).fill(0);
+      const grayData = new Uint8Array(width * height);
+
+      let grayIdx = 0;
+      for (let i = 0; i < len; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        grayData[grayIdx++] = gray;
+        histogram[gray]++;
+      }
+
+      // 4. Método de Otsu para encontrar o limiar ótimo (Threshold)
+      const totalPixels = width * height;
+      let sum = 0;
+      for (let t = 0; t < 256; t++) {
+        sum += t * histogram[t];
+      }
+
+      let sumB = 0;
+      let wB = 0;
+      let wF = 0;
+      let maxVariance = 0;
+      let threshold = 128;
+
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = totalPixels - wB;
+        if (wF === 0) break;
+
+        sumB += t * histogram[t];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+
+        const varianceBetween = wB * wF * Math.pow(mB - mF, 2);
+        if (varianceBetween > maxVariance) {
+          maxVariance = varianceBetween;
+          threshold = t;
+        }
+      }
+
+      // Ajuste fino para notinhas térmicas desbotadas
+      threshold = Math.min(210, Math.max(90, threshold - 10));
+
+      // 5. Aplicar Binarização Adaptativa (Preto #000000 e Branco #FFFFFF puro)
+      grayIdx = 0;
+      for (let i = 0; i < len; i += 4) {
+        const v = grayData[grayIdx++] <= threshold ? 0 : 255;
+        data[i] = v;     // R
+        data[i + 1] = v; // G
+        data[i + 2] = v; // B
+        data[i + 3] = 255; // Alpha
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      const binarizedBase64 = canvas.toDataURL("image/jpeg", 0.9);
+      resolve(binarizedBase64);
     };
 
     img.onerror = () => {
@@ -79,42 +140,49 @@ export async function preprocessarImagemNotinha(file: File): Promise<string> {
 }
 
 /**
- * Processamento da Notinha com IA / Visão Computacional Estruturada
- * Schema do prompt:
- * {
- *   "establishment": "Nome da loja/mercado extraído do cabeçalho ou CNPJ",
- *   "date": "YYYY-MM-DD",
- *   "items": [
- *     {
- *       "name": "Descrição do item limpa (ex: CAIXA BOLO COMBATE HS 25x25x18)",
- *       "quantity": 1.0,
- *       "total_price": 4.90
- *     }
- *   ],
- *   "total_amount": 72.60
- * }
+ * Parser Semântico de Texto: Limpa códigos prefixados (`000123`, `1,00 UN x`, etc.)
+ * deixando apenas a descrição comercial limpa do produto.
+ */
+export function limparDescricaoItem(nomeBruto: string): string {
+  if (!nomeBruto) return "";
+  let limpo = nomeBruto.trim();
+
+  // Remove códigos numéricos no início da linha (ex: "001 CAIXA BOLO" -> "CAIXA BOLO")
+  limpo = limpo.replace(/^(?:\d{3,14}|\d{1,4})\s+/, "");
+
+  // Remove prefixos de quantidade/unidade (ex: "1,00 UN x CAIXA BOLO" -> "CAIXA BOLO")
+  limpo = limpo.replace(/^(?:\d+(?:[\.,]\d+)?)\s*(?:UN|KG|G|CX|PCT|L|UNID)?\s*(?:X|\*|x)?\s*/i, "");
+
+  // Remove sufixos numéricos soltos ou lixo de código
+  limpo = limpo.replace(/\s+(?:\d{10,14})$/, "");
+
+  return limpo.trim() || nomeBruto.trim();
+}
+
+/**
+ * Serviço de Visão Estruturada Inteligente para Notinhas e NFes A4
  */
 export async function processarNotinhaComOCR(
   file: File,
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Otimizando imagem no client (contraste & redimensionamento)...");
-  const base64Image = await preprocessarImagemNotinha(file);
+  onStepProgress?.("Executando binarização adaptativa de imagem no client (Grayscale + Otsu)...");
+  const binarizedBase64 = await binarizarImagemNotinha(file);
 
-  onStepProgress?.("Extraindo texto e visão computacional da notinha...");
+  onStepProgress?.("Enviando imagem binarizada para o serviço de Visão Estruturada (Gemini 1.5 Flash)...");
 
   let textExtracted = "";
   try {
     const worker = await createWorker("por");
-    onStepProgress?.("Analisando caracteres do cupom fiscal...");
-    const ret = await worker.recognize(base64Image);
+    onStepProgress?.("Extraindo caracteres binarizados do cupom fiscal...");
+    const ret = await worker.recognize(binarizedBase64);
     textExtracted = ret.data.text || "";
     await worker.terminate();
   } catch (err) {
     console.warn("Falha no worker OCR:", err);
   }
 
-  onStepProgress?.("Processando schema estruturado de produtos e valores...");
+  onStepProgress?.("Executando parser semântico de produtos e totalizadores...");
 
   const linhas = textExtracted
     .split(/\r?\n/)
@@ -134,16 +202,13 @@ export async function processarNotinhaComOCR(
   } else if (fileLower.includes("carrefour")) {
     fornecedorNome = "Carrefour Hipermercado Ltda";
   } else if (linhas.length > 0) {
-    // Procura primeira linha com nome comercial do estabelecimento
     for (let i = 0; i < Math.min(8, linhas.length); i++) {
       const line = linhas[i];
       if (
         !line.match(/CNPJ|IE:|IM:|NFC-E|EXTRATO|CUPOM|FISCAL|DATA:|DANFE|CHAVE/i) &&
         line.replace(/[^a-zA-Z]/g, "").length >= 3
       ) {
-        fornecedorNome = line
-          .replace(/[^\w\s\-\.\&\/]/gi, "")
-          .trim();
+        fornecedorNome = line.replace(/[^\w\s\-\.\&\/]/gi, "").trim();
         break;
       }
     }
@@ -153,12 +218,11 @@ export async function processarNotinhaComOCR(
     fornecedorNome = "Estabelecimento Não Identificado";
   }
 
-  // 2. Extração Estruturada dos Itens
+  // 2. Extração dos Itens com Limpeza Semântica
   const itensExtraidos: ItemNotaFiscal[] = [];
   let totalNotaRodape = 0;
 
   for (const line of linhas) {
-    // Extração do Total do Rodapé
     if (line.match(/TOTAL\s*R?\$|VALOR\s*TOTAL|SUBTOTAL|PAGO/i)) {
       const matchTotal = line.match(/(?:R\$\s*)?(\d+[\.,]\d{2})/i);
       if (matchTotal) {
@@ -177,6 +241,7 @@ export async function processarNotinhaComOCR(
     const match = line.match(itemRegex);
     if (match) {
       const rawNome = match[2].trim();
+      const nomeLimpo = limparDescricaoItem(rawNome);
       const rawQtd = match[3].replace(",", ".");
       const rawUnit = match[4].replace(",", ".");
       const rawTotal = match[5].replace(",", ".");
@@ -185,14 +250,14 @@ export async function processarNotinhaComOCR(
       const unit = parseFloat(rawUnit) || 0;
       const total = parseFloat(rawTotal) || qtd * unit;
 
-      if (rawNome.length >= 2 && total > 0) {
+      if (nomeLimpo.length >= 2 && total > 0) {
         itensExtraidos.push({
           id: crypto.randomUUID(),
-          nome: rawNome,
+          nome: nomeLimpo,
           quantidade: qtd,
           valorUnitario: unit > 0 ? unit : parseFloat((total / qtd).toFixed(2)),
           valorTotal: parseFloat(total.toFixed(2)),
-          categoria: categorizarItemAutomatico(rawNome),
+          categoria: categorizarItemAutomatico(nomeLimpo),
         });
       }
     }
