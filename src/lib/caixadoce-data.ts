@@ -19,6 +19,8 @@ export interface Estabelecimento {
   whatsapp?: string;
   email?: string;
   logoUrl?: string;
+  stripeAccountId?: string | null;
+  repassarTaxaStripe?: boolean;
 }
 
 export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
@@ -36,6 +38,8 @@ export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
   telefone: "(11) 99999-9999",
   whatsapp: "(11) 99999-9999",
   email: "contato@caixadoce.com.br",
+  stripeAccountId: null,
+  repassarTaxaStripe: true,
 };
 
 export type TransacaoTipo = "receita" | "despesa";

@@ -44,6 +44,7 @@ import {
   Phone,
   MapPin,
   ArrowRight,
+  CreditCard,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -54,6 +55,11 @@ import {
   type DataBloqueada,
   type Encomenda,
 } from "@/lib/caixadoce-data";
+import {
+  obterConfiguracoesStripeLoja,
+  calcularTaxaStripePassThrough,
+  createStripeSession,
+} from "@/lib/stripe-connect-service";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/agendar/$storeSlug")({
@@ -111,10 +117,12 @@ function PublicStoreView() {
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "entrega">("pix");
+  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao" | "entrega">("pix");
   const [enviandoPedido, setEnviandoPedido] = useState(false);
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
+
+  const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(cleanCode), [cleanCode]);
 
   // Carrega informações da loja e datas bloqueadas do Supabase / Storage
   useEffect(() => {
@@ -198,6 +206,13 @@ function PublicStoreView() {
     return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
   }, [carrinho]);
 
+  const { subtotal, taxaProcessamento, totalAPagar } = useMemo(() => {
+    return calcularTaxaStripePassThrough(
+      totalCarrinho,
+      metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
+    );
+  }, [totalCarrinho, metodoPagamento, stripeConfig]);
+
   const totalItensCount = useMemo(() => {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
@@ -226,6 +241,35 @@ function PublicStoreView() {
 
     if (tipoEntrega === "delivery" && !enderecoEntrega) {
       toast.error("Informe o endereço completo para entrega.");
+      return;
+    }
+
+    if (metodoPagamento === "cartao") {
+      setEnviandoPedido(true);
+      try {
+        const session = await createStripeSession({
+          establishmentCode: cleanCode,
+          customerName: clienteNome,
+          customerWhatsapp: clienteWhatsapp,
+          items: carrinho.map((it) => ({
+            name: it.produto.nome,
+            quantity: it.quantidade,
+            unitPrice: it.produto.preco,
+          })),
+          subtotal: totalCarrinho,
+          repassarTaxa: stripeConfig.repassarTaxaStripe,
+          stripeAccountId: stripeConfig.accountId,
+        });
+
+        toast.success(`Sessão no cartão gerada! Redirecionando para o Stripe Checkout (${formatarMoeda(totalAPagar)})...`);
+        setTimeout(() => {
+          window.open(session.checkoutUrl, "_blank");
+        }, 800);
+      } catch (err) {
+        toast.error("Erro ao gerar pagamento no cartão.");
+      } finally {
+        setEnviandoPedido(false);
+      }
       return;
     }
 
@@ -624,25 +668,61 @@ function PublicStoreView() {
 
                 {/* 4. Forma de Pagamento */}
                 <div className="space-y-2">
-                  <Label className="text-xs">Forma de Pagamento</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <Label className="text-xs font-bold text-foreground uppercase tracking-wider">Forma de Pagamento</Label>
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
                       type="button"
                       variant={metodoPagamento === "pix" ? "default" : "outline"}
                       onClick={() => setMetodoPagamento("pix")}
-                      className="h-8 text-xs font-semibold"
+                      className="h-8 text-[11px] font-semibold px-1"
                     >
-                      <QrCode className="w-3.5 h-3.5 mr-1.5" /> Pix Instantâneo
+                      <QrCode className="w-3.5 h-3.5 mr-1 text-emerald-500" /> Pix Direto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={metodoPagamento === "cartao" ? "default" : "outline"}
+                      onClick={() => setMetodoPagamento("cartao")}
+                      className="h-8 text-[11px] font-semibold px-1"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 mr-1 text-primary" /> Cartão (Stripe)
                     </Button>
                     <Button
                       type="button"
                       variant={metodoPagamento === "entrega" ? "default" : "outline"}
                       onClick={() => setMetodoPagamento("entrega")}
-                      className="h-8 text-xs font-semibold"
+                      className="h-8 text-[11px] font-semibold px-1"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Pagar na Entrega
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Na Entrega
                     </Button>
                   </div>
+
+                  {/* Exibição Transparente da Taxa quando o cliente escolhe Cartão */}
+                  {metodoPagamento === "cartao" && (
+                    <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5 text-xs mt-2">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal dos Produtos:</span>
+                        <span className="font-mono font-semibold">{formatarMoeda(subtotal)}</span>
+                      </div>
+                      {taxaProcessamento > 0 ? (
+                        <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                          <span>Taxa de Processamento (Cartão):</span>
+                          <span className="font-mono">{formatarMoeda(taxaProcessamento)}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between text-emerald-600 font-semibold">
+                          <span>Taxa de Processamento:</span>
+                          <span>Isento (absorvido pela loja)</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
+                        <span>Total a Pagar:</span>
+                        <span className="font-mono text-primary text-sm">{formatarMoeda(totalAPagar)}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground italic">
+                        💳 Acréscimo transparente de conveniência do cartão via Stripe.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Observações */}
@@ -661,8 +741,8 @@ function PublicStoreView() {
 
               <DialogFooter className="pt-2 border-t flex items-center justify-between">
                 <div className="text-left">
-                  <p className="text-[10px] text-muted-foreground">Total do Pedido:</p>
-                  <p className="text-base font-black text-foreground">{formatarMoeda(totalCarrinho)}</p>
+                  <p className="text-[10px] text-muted-foreground">Total a Pagar:</p>
+                  <p className="text-base font-black text-primary font-mono">{formatarMoeda(totalAPagar)}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -673,9 +753,20 @@ function PublicStoreView() {
                     onClick={handleFinalizarPedido}
                     disabled={enviandoPedido || isDataBloqueada || !clienteNome || !clienteWhatsapp}
                     size="sm"
-                    className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className={`font-bold shadow-md ${
+                      metodoPagamento === "cartao"
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    }`}
                   >
-                    {enviandoPedido ? "Confirmando..." : "Finalizar Pedido"}
+                    {metodoPagamento === "cartao" ? (
+                      <>
+                        <CreditCard className="w-3.5 h-3.5 mr-1" />
+                        {enviandoPedido ? "Gerando..." : "Pagar no Cartão"}
+                      </>
+                    ) : (
+                      <>{enviandoPedido ? "Confirmando..." : "Finalizar Pedido"}</>
+                    )}
                   </Button>
                 </div>
               </DialogFooter>

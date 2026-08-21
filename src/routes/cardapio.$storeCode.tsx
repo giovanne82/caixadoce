@@ -35,6 +35,8 @@ import {
   CheckCircle2,
   Trash2,
   Share2,
+  QrCode,
+  CreditCard,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -43,6 +45,11 @@ import {
   obterProdutosCardapio,
   type ProdutoCardapio,
 } from "@/lib/caixadoce-data";
+import {
+  obterConfiguracoesStripeLoja,
+  calcularTaxaStripePassThrough,
+  createStripeSession,
+} from "@/lib/stripe-connect-service";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/cardapio/$storeCode")({
@@ -78,6 +85,10 @@ function CardapioLojaView() {
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
+  const [processandoPagamento, setProcessandoPagamento] = useState(false);
+
+  const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
 
   useEffect(() => {
     const list = obterProdutosCardapio(code);
@@ -133,15 +144,51 @@ function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
   }, [carrinho]);
 
+  const { subtotal, taxaProcessamento, totalAPagar } = useMemo(() => {
+    return calcularTaxaStripePassThrough(
+      totalCarrinho,
+      metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
+    );
+  }, [totalCarrinho, metodoPagamento, stripeConfig]);
+
   const totalItensCarrinho = useMemo(() => {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
 
-  // Finalizar Encomenda no WhatsApp
-  const handleFinalizarPedido = (e: React.FormEvent) => {
+  // Finalizar Encomenda (Pix no WhatsApp ou Cartão na Stripe)
+  const handleFinalizarPedido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteNome || !clienteWhatsapp || !dataEntrega || carrinho.length === 0) {
       toast.error("Preencha seu nome, WhatsApp e data para entrega.");
+      return;
+    }
+
+    if (metodoPagamento === "cartao") {
+      setProcessandoPagamento(true);
+      try {
+        const session = await createStripeSession({
+          establishmentCode: code,
+          customerName: clienteNome,
+          customerWhatsapp: clienteWhatsapp,
+          items: carrinho.map((it) => ({
+            name: it.produto.nome,
+            quantity: it.quantidade,
+            unitPrice: it.produto.preco,
+          })),
+          subtotal: totalCarrinho,
+          repassarTaxa: stripeConfig.repassarTaxaStripe,
+          stripeAccountId: stripeConfig.accountId,
+        });
+
+        toast.success(`Sessão de pagamento no cartão criada! Redirecionando para o Stripe Checkout (Total: ${formatarMoeda(totalAPagar)})...`);
+        setTimeout(() => {
+          window.open(session.checkoutUrl, "_blank");
+        }, 800);
+      } catch (err) {
+        toast.error("Erro ao iniciar pagamento no cartão.");
+      } finally {
+        setProcessandoPagamento(false);
+      }
       return;
     }
 
@@ -163,6 +210,7 @@ Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
 📍 *Modalidade:* ${modalidade}
+💳 *Pagamento:* Pix Direto (Sem taxa)
 ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
 🛒 *Itens do Pedido:*
 ${resumoItens}
@@ -474,18 +522,62 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                     </div>
                   </div>
 
-                  {tipoEntrega === "delivery" && (
-                    <div className="space-y-1">
-                      <Label htmlFor="chk-end" className="text-xs">Endereço de Entrega</Label>
-                      <Input
-                        id="chk-end"
-                        placeholder="Rua, Número, Bairro, Complemento"
-                        value={enderecoEntrega}
-                        onChange={(e) => setEnderecoEntrega(e.target.value)}
-                        className="h-8 text-xs"
-                      />
+                  {/* FORMA DE PAGAMENTO */}
+                  <div className="space-y-2 pt-2 border-t border-border/60">
+                    <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Forma de Pagamento
+                    </Label>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={metodoPagamento === "pix" ? "default" : "outline"}
+                        onClick={() => setMetodoPagamento("pix")}
+                        className="h-9 text-xs font-bold flex items-center justify-center gap-1.5"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-emerald-500" />
+                        Pix Direto (Sem taxa)
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant={metodoPagamento === "cartao" ? "default" : "outline"}
+                        onClick={() => setMetodoPagamento("cartao")}
+                        className="h-9 text-xs font-bold flex items-center justify-center gap-1.5"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-primary" />
+                        Cartão (Stripe)
+                      </Button>
                     </div>
-                  )}
+
+                    {/* Exibição Transparente da Taxa quando o cliente escolhe Cartão */}
+                    {metodoPagamento === "cartao" && (
+                      <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in mt-2">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Subtotal dos Produtos:</span>
+                          <span className="font-mono font-semibold">{formatarMoeda(subtotal)}</span>
+                        </div>
+                        {taxaProcessamento > 0 ? (
+                          <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
+                            <span>Taxa de Processamento (Cartão):</span>
+                            <span className="font-mono">{formatarMoeda(taxaProcessamento)}</span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between text-emerald-600 font-semibold">
+                            <span>Taxa de Processamento:</span>
+                            <span>Isento (absorvido pela loja)</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-2 border-t border-primary/20 text-sm font-extrabold text-foreground">
+                          <span>Total a Pagar:</span>
+                          <span className="font-mono text-primary">{formatarMoeda(totalAPagar)}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground italic">
+                          💳 Acréscimo transparente de conveniência do cartão via Stripe.
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="space-y-1">
                     <Label htmlFor="chk-obs" className="text-xs">Observações (Opcional)</Label>
@@ -507,9 +599,23 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
               <Button
                 type="submit"
                 form="form-checkout"
-                className="w-full font-black text-xs bg-emerald-600 hover:bg-emerald-700 text-white h-10 shadow-md"
+                disabled={processandoPagamento}
+                className={`w-full font-black text-xs h-10 shadow-md ${
+                  metodoPagamento === "cartao"
+                    ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                }`}
               >
-                <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar Encomenda no WhatsApp
+                {metodoPagamento === "cartao" ? (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-1.5" />
+                    {processandoPagamento ? "Processando..." : `Pagar no Cartão (${formatarMoeda(totalAPagar)})`}
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar Encomenda no WhatsApp
+                  </>
+                )}
               </Button>
             </SheetFooter>
           )}
