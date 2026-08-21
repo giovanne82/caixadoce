@@ -932,6 +932,7 @@ function Index() {
             <OrdersView
               encomendas={encomendas}
               datasBloqueadas={datasBloqueadas}
+              despesas={despesas}
               clientes={clientes}
               produtos={produtos}
               estabelecimentoNome={activeName}

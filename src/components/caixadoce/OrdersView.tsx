@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -64,6 +66,16 @@ import {
   Send,
   Cake,
   User,
+  Receipt,
+  FileText,
+  Building2,
+  Eye,
+  Link2,
+  Unlink,
+  Cookie,
+  UtensilsCrossed,
+  Package,
+  MapPin,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -76,7 +88,10 @@ import {
   salvarNovoInsumoCatalogo,
   obterClientes,
   obterProdutosCardapio,
+  obterNotinhasVinculadasLista,
+  salvarNotinhasVinculadasLista,
   STATUS_ENCOMENDA_CONFIG,
+  CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
   type DataBloqueada,
   type StatusEncomenda,
@@ -85,12 +100,14 @@ import {
   type ItemPedidoEncomenda,
   type Cliente,
   type ProdutoCardapio,
+  type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 interface OrdersViewProps {
   encomendas: Encomenda[];
   datasBloqueadas: DataBloqueada[];
+  despesas?: DespesaNotaFiscal[];
   clientes?: Cliente[];
   produtos?: ProdutoCardapio[];
   estabelecimentoNome?: string;
@@ -120,6 +137,7 @@ function obterEstiloPilula(status: StatusEncomenda) {
 export function OrdersView({
   encomendas,
   datasBloqueadas,
+  despesas = [],
   clientes = [],
   produtos = [],
   estabelecimentoNome = "CaixaDoce",
@@ -145,6 +163,105 @@ export function OrdersView({
   const [modalEncomendaOpen, setModalEncomendaOpen] = useState(false);
   const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Notinhas Vinculadas à Lista de Compras
+  const [linkedReceiptIds, setLinkedReceiptIds] = useState<string[]>(() =>
+    obterNotinhasVinculadasLista("CD-1001")
+  );
+  const [buscaNotinha, setBuscaNotinha] = useState("");
+  const [dropdownNotinhasAberto, setDropdownNotinhasAberto] = useState(false);
+  const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
+
+  // Carregar vinculações do Supabase no mount
+  useEffect(() => {
+    async function carregarNotinhasVinculadasSupabase() {
+      try {
+        const { data, error } = await supabase
+          .from("shopping_list_receipts")
+          .select("receipt_id")
+          .eq("estabelecimento_codigo", "CD-1001");
+
+        if (!error && data && data.length > 0) {
+          const ids = data.map((d: any) => String(d.receipt_id));
+          setLinkedReceiptIds(ids);
+          salvarNotinhasVinculadasLista("CD-1001", ids);
+        }
+      } catch (e) {
+        console.warn("Aviso ao carregar notinhas vinculadas do Supabase:", e);
+      }
+    }
+    carregarNotinhasVinculadasSupabase();
+  }, []);
+
+  // Handler para Vincular Notinha
+  const handleVincularNotinha = async (receiptId: string) => {
+    if (linkedReceiptIds.includes(receiptId)) return;
+
+    const novosIds = [...linkedReceiptIds, receiptId];
+    setLinkedReceiptIds(novosIds);
+    salvarNotinhasVinculadasLista("CD-1001", novosIds);
+    setBuscaNotinha("");
+    setDropdownNotinhasAberto(false);
+
+    try {
+      await supabase.from("shopping_list_receipts").insert([
+        {
+          estabelecimento_codigo: "CD-1001",
+          receipt_id: receiptId,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao vincular no Supabase:", e);
+    }
+    toast.success("Notinha vinculada à Lista de Compras!");
+  };
+
+  // Handler para Desvincular Notinha
+  const handleDesvincularNotinha = async (receiptId: string) => {
+    const novosIds = linkedReceiptIds.filter((id) => id !== receiptId);
+    setLinkedReceiptIds(novosIds);
+    salvarNotinhasVinculadasLista("CD-1001", novosIds);
+
+    try {
+      await supabase
+        .from("shopping_list_receipts")
+        .delete()
+        .eq("estabelecimento_codigo", "CD-1001")
+        .eq("receipt_id", receiptId);
+    } catch (e) {
+      console.warn("Aviso ao desvincular do Supabase:", e);
+    }
+    toast.info("Notinha desvinculada.");
+  };
+
+  // Objetos das Notinhas Vinculadas
+  const notinhasVinculadasObjetos = useMemo(() => {
+    return despesas.filter((d) => linkedReceiptIds.includes(d.id));
+  }, [despesas, linkedReceiptIds]);
+
+  // Soma Total dos Valores das Notinhas Vinculadas
+  const somaNotinhasVinculadas = useMemo(() => {
+    return notinhasVinculadasObjetos.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
+  }, [notinhasVinculadasObjetos]);
+
+  // Sugestões de Notinhas para Autocomplete/Combobox (Busca por Estabelecimento, Data, Valor ou N° Nota/Pedido)
+  const sugestoesNotinhas = useMemo(() => {
+    const termo = buscaNotinha.trim().toLowerCase();
+    return despesas.filter((d) => {
+      if (linkedReceiptIds.includes(d.id)) return false;
+      if (!termo) return true;
+      const fornecedorMatch = d.fornecedorNome.toLowerCase().includes(termo);
+      const dataMatch =
+        d.dataCompra.toLowerCase().includes(termo) ||
+        d.dataCompra.split("-").reverse().join("/").includes(termo);
+      const valorMatch =
+        String(d.valorTotal).includes(termo) ||
+        formatarMoeda(d.valorTotal).toLowerCase().includes(termo);
+      const notaMatch = (d.numeroNota || "").toLowerCase().includes(termo);
+      const pedidoMatch = (d.numeroPedido || "").toLowerCase().includes(termo);
+      return fornecedorMatch || dataMatch || valorMatch || notaMatch || pedidoMatch;
+    }).slice(0, 8);
+  }, [despesas, linkedReceiptIds, buscaNotinha]);
 
   // Catálogo de Insumos & Produtos & Clientes
   const catalogoInsumos = useMemo(() => obterCatalogoInsumos("CD-1001"), []);
@@ -243,7 +360,6 @@ export function OrdersView({
       setItensTags((prev) => [...prev, novoItem]);
     }
 
-    // Auto-calcula o valor total somando itens se ainda não preenchido
     if (precoSugerido && precoSugerido > 0) {
       const valorAtual = converterMoedaInputParaNumero(valorTotalFormatado);
       const novoValor = valorAtual + precoSugerido;
@@ -338,7 +454,6 @@ export function OrdersView({
     if (ord.itensDetalhes && ord.itensDetalhes.length > 0) {
       setItensTags(ord.itensDetalhes);
     } else if (ord.itens) {
-      // Fallback para itens textuais
       setItensTags([{ id: crypto.randomUUID(), nome: ord.itens, quantidade: 1 }]);
     } else {
       setItensTags([]);
@@ -402,7 +517,6 @@ export function OrdersView({
         toast.success("Nova encomenda cadastrada com sucesso!");
       }
 
-      // Salva cliente automaticamente na base de clientes se não cadastrado
       if (onCriarClienteRapido && !clienteId && clienteNome && clienteWhatsapp) {
         onCriarClienteRapido(clienteNome, clienteWhatsapp, enderecoEntrega);
       }
@@ -892,7 +1006,7 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA (SEM COLUNA STATUS / COM BOTÃO ENVIAR CLIENTE) */}
+      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA */}
       {/* ========================================================================= */}
       {viewMode === "lista" && (
         <Card className="border-border shadow-sm overflow-hidden bg-card">
@@ -1003,7 +1117,6 @@ export function OrdersView({
                         )}
                       </TableCell>
 
-                      {/* AÇÕES COM BOTÃO 'ENVIAR PARA CLIENTE' NO WHATSAPP */}
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
@@ -1091,7 +1204,8 @@ export function OrdersView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Cards de Métricas (Incluindo Soma Total Notinhas Vinculadas) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="border-border shadow-xs p-3">
               <p className="text-[11px] font-bold text-muted-foreground uppercase">Total de Insumos</p>
               <p className="text-2xl font-black text-foreground mt-0.5">{listaComprasDados.totalInsumos}</p>
@@ -1104,8 +1218,127 @@ export function OrdersView({
               <p className="text-[11px] font-bold text-amber-600 uppercase">🟡 Pendentes de Compra</p>
               <p className="text-2xl font-black text-amber-600 mt-0.5">{listaComprasDados.pendentes}</p>
             </Card>
+            <Card className="border-2 border-primary/40 bg-card shadow-xs p-3">
+              <p className="text-[11px] font-bold text-primary uppercase flex items-center gap-1">
+                <Receipt className="w-3.5 h-3.5" /> Soma Notinhas Vinculadas
+              </p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{formatarMoeda(somaNotinhasVinculadas)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {notinhasVinculadasObjetos.length} notinha(s) associada(s)
+              </p>
+            </Card>
           </div>
 
+          {/* COMPONENTE DE BUSCA E VINCULAÇÃO (AUTOCOMPLETE / COMBOBOX DE NOTINHAS) */}
+          <Card className="border-border shadow-sm p-4 bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-primary" /> Vincular Notinha Fiscal / Cupom à Lista de Compras
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                Associe comprovantes físicos a esta lista de insumos
+              </span>
+            </div>
+
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar notinha para vincular (por loja, data, valor, n° nota/pedido)..."
+                  value={buscaNotinha}
+                  onChange={(e) => {
+                    setBuscaNotinha(e.target.value);
+                    setDropdownNotinhasAberto(true);
+                  }}
+                  onFocus={() => setDropdownNotinhasAberto(true)}
+                  className="h-9 pl-9 text-xs"
+                />
+              </div>
+
+              {/* Dropdown Flutuante de Autocomplete de Notinhas */}
+              {dropdownNotinhasAberto && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                  {sugestoesNotinhas.length > 0 ? (
+                    sugestoesNotinhas.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => handleVincularNotinha(n.id)}
+                        className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-primary shrink-0" />
+                          <div>
+                            <p className="font-bold text-foreground">{n.fornecedorNome}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-black text-foreground">
+                          {formatarMoeda(n.valorTotal)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-xs text-muted-foreground">
+                      {despesas.length === 0
+                        ? "Nenhuma notinha capturada no sistema ainda."
+                        : "Nenhuma notinha encontrada para o filtro ou todas já estão vinculadas."}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* SEÇÃO 'NOTINHAS VINCULADAS' COM CHIPS E ABERTURA DE MODAL */}
+          <Card className="border-border shadow-sm p-4 bg-card space-y-3">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-primary" /> Notinhas Vinculadas ({notinhasVinculadasObjetos.length})
+              </h4>
+              <span className="text-[11px] text-muted-foreground">
+                Clique sobre o chip para ver detalhes da notinha
+              </span>
+            </div>
+
+            {notinhasVinculadasObjetos.length === 0 ? (
+              <div className="py-6 text-center text-xs text-muted-foreground italic bg-muted/20 rounded-xl border border-border/40">
+                Nenhuma notinha vinculada a esta lista. Use o campo acima para buscar e associar notinhas fiscais capturadas!
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {notinhasVinculadasObjetos.map((notinha) => (
+                  <div
+                    key={notinha.id}
+                    onClick={() => setNotaDetalheSelecionada(notinha)}
+                    className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 text-xs font-semibold shadow-2xs transition-all select-none"
+                    title="Clique para visualizar detalhes desta notinha"
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span>
+                      <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
+                      <span className="font-mono font-bold text-primary">{formatarMoeda(notinha.valorTotal)}</span>
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDesvincularNotinha(notinha.id);
+                      }}
+                      className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 hover:text-rose-600 text-muted-foreground transition-colors"
+                      title="Desvincular Notinha"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Tabela ou Agrupamento de Insumos da Lista */}
           {abaCompras === "encomenda" ? (
             <div className="space-y-4">
               {listaComprasDados.encomendasComInsumos.length === 0 ? (
@@ -1218,6 +1451,121 @@ export function OrdersView({
             </Card>
           )}
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: DETALHES DA NOTINHA SELECIONADA A PARTIR DO CHIP */}
+      {/* ========================================================================= */}
+      {notaDetalheSelecionada && (
+        <Dialog open={!!notaDetalheSelecionada} onOpenChange={() => setNotaDetalheSelecionada(null)}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+                <Building2 className="w-5 h-5 text-primary" /> {notaDetalheSelecionada.fornecedorNome}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° da Nota:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaDetalheSelecionada.numeroNota || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> N° do Pedido:
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {notaDetalheSelecionada.numeroPedido || "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Data &amp; Hora:
+                  </span>
+                  <p className="font-mono text-foreground mt-0.5">
+                    {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}{" "}
+                    {notaDetalheSelecionada.horaCompra ? `às ${notaDetalheSelecionada.horaCompra}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Endereço:
+                  </span>
+                  <p className="text-foreground truncate mt-0.5" title={notaDetalheSelecionada.fornecedorEndereco}>
+                    {notaDetalheSelecionada.fornecedorEndereco || "Local físico"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/70 overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead className="text-xs">Item / Descrição</TableHead>
+                      <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                      <TableHead className="text-xs w-20">Unit.</TableHead>
+                      <TableHead className="text-xs w-20">Total</TableHead>
+                      <TableHead className="text-xs">Categoria</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notaDetalheSelecionada.itens.map((it) => {
+                      const cfg = CATEGORIAS_DESPESA_CONFIG[it.categoria] || CATEGORIAS_DESPESA_CONFIG.outros;
+                      return (
+                        <TableRow key={it.id}>
+                          <TableCell className="text-xs font-semibold text-foreground">{it.nome}</TableCell>
+                          <TableCell className="text-xs text-center font-mono">{it.quantidade}</TableCell>
+                          <TableCell className="text-xs">{formatarMoeda(it.valorUnitario)}</TableCell>
+                          <TableCell className="text-xs font-bold text-foreground">
+                            {formatarMoeda(it.valorTotal)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-[10px] ${cfg.badgeClass}`}>
+                              {cfg.label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold flex justify-between">
+                  <span>🍫 Produção (Doces):</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorProducao)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold flex justify-between">
+                  <span>🥣 Utensílios:</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorUtensilios)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold flex justify-between">
+                  <span>🛒 Consumo Pessoal:</span>
+                  <span>{formatarMoeda(notaDetalheSelecionada.valorConsumoProprio)}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-stone-500/10 text-stone-700 dark:text-stone-300 font-semibold flex justify-between">
+                  <span>💰 Total Notinha:</span>
+                  <span className="font-extrabold">{formatarMoeda(notaDetalheSelecionada.valorTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button onClick={() => setNotaDetalheSelecionada(null)} className="text-xs font-semibold">
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* ========================================================================= */}
@@ -1402,7 +1750,7 @@ export function OrdersView({
       </Sheet>
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA (COM AUTOCOMPLETE DE CLIENTE & TAGS DE PRODUTOS) */}
+      {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA */}
       {/* ========================================================================= */}
       <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
@@ -1438,7 +1786,6 @@ export function OrdersView({
                   required
                 />
 
-                {/* Dropdown de Clientes Cadastrados */}
                 {dropdownClientesAberto && sugestoesClientes.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-40 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1 block">
@@ -1497,7 +1844,7 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* 3. ITENS PEDIDOS: TAGS/CHIPS COM QUANTIDADE (PRODUTOS DO CARDÁPIO) */}
+            {/* 3. ITENS PEDIDOS: TAGS/CHIPS COM QUANTIDADE */}
             <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -1506,7 +1853,6 @@ export function OrdersView({
                 <span className="text-[10px] text-muted-foreground">{itensTags.length} item(ns) selecionado(s)</span>
               </div>
 
-              {/* Chips de Itens com Quantidade: [ Nome | Qtd: [1] ] [x] */}
               <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
                 {itensTags.length === 0 ? (
                   <span className="text-[11px] text-muted-foreground italic">
@@ -1542,7 +1888,6 @@ export function OrdersView({
                 )}
               </div>
 
-              {/* Input com Dropdown Flutuante de Produtos */}
               <div className="relative">
                 <div className="flex gap-2">
                   <Input
@@ -1572,7 +1917,6 @@ export function OrdersView({
                   </Button>
                 </div>
 
-                {/* Dropdown Flutuante de Produtos */}
                 {dropdownItensAberto && buscaItemProduto.trim().length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
                     {sugestoesProdutos.length > 0 ? (

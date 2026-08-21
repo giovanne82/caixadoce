@@ -652,6 +652,24 @@ ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : "
 Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
 }
 
+export function obterNotinhasVinculadasLista(estabelecimentoCodigo?: string): string[] {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function salvarNotinhasVinculadasLista(estabelecimentoCodigo: string, receiptIds: string[]) {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_linked_receipts_${code}`, JSON.stringify(receiptIds));
+  } catch (e) {
+    console.warn("Erro ao salvar notinhas vinculadas:", e);
+  }
+}
+
 export function gerarCodigoEstabelecimento(): string {
   const num = Math.floor(1000 + Math.random() * 9000);
   return `CD-${num}`;
