@@ -178,7 +178,16 @@ export function LoginView({ onSuccess }: LoginViewProps) {
       await loginWithEmail(syntheticEmail, colabPin);
       onSuccess?.();
     } catch (error: any) {
-      toast.error("Credenciais inválidas. Verifique o Código da Loja e o PIN de Acesso.");
+      if (
+        error?.status === 429 ||
+        error?.message?.toLowerCase().includes("too_many_requests") ||
+        error?.message?.toLowerCase().includes("rate limit") ||
+        error?.message?.toLowerCase().includes("exceeded")
+      ) {
+        toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
+      } else {
+        toast.error("Credenciais inválidas. Verifique o Código da Loja e o PIN de Acesso.");
+      }
     } finally {
       setLoading(false);
     }

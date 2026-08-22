@@ -168,6 +168,50 @@ export function ColaboradoresTab() {
     toast.info("Status do colaborador atualizado.");
   };
 
+  const [modalResetPinOpen, setModalResetPinOpen] = useState(false);
+  const [colabSelecionado, setColabSelecionado] = useState<Colaborador | null>(null);
+  const [novoPin, setNovoPin] = useState("");
+  const [salvandoPin, setSalvandoPin] = useState(false);
+
+  const handleAbrirModalRedefinirPin = (colab: Colaborador) => {
+    setColabSelecionado(colab);
+    setNovoPin("");
+    setModalResetPinOpen(true);
+  };
+
+  const handleSalvarNovoPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!colabSelecionado) return;
+    if (!/^\d{4,6}$/.test(novoPin)) {
+      toast.error("O PIN deve conter entre 4 e 6 números.");
+      return;
+    }
+
+    setSalvandoPin(true);
+    try {
+      const listaAtualizada = colaboradores.map((c) =>
+        c.id === colabSelecionado.id ? { ...c, pin: novoPin } : c
+      );
+      salvarLista(listaAtualizada);
+
+      try {
+        await supabase
+          .from("colaboradores")
+          .update({ pin: novoPin })
+          .eq("id", colabSelecionado.id);
+      } catch (err) {
+        console.warn("Aviso ao atualizar PIN no Supabase:", err);
+      }
+
+      setModalResetPinOpen(false);
+      setColabSelecionado(null);
+      setNovoPin("");
+      toast.success(`PIN do colaborador ${colabSelecionado.nome} redefinido com sucesso!`);
+    } finally {
+      setSalvandoPin(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -249,14 +293,26 @@ export function ColaboradoresTab() {
                     </button>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemover(colab.id)}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAbrirModalRedefinirPin(colab)}
+                        title="Redefinir PIN de Acesso"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemover(colab.id)}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
+                        title="Excluir Colaborador"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -337,6 +393,45 @@ export function ColaboradoresTab() {
               </Button>
               <Button type="submit" disabled={salvando}>
                 {salvando ? "Salvando..." : "Salvar Colaborador"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Redefinir PIN de Acesso */}
+      <Dialog open={modalResetPinOpen} onOpenChange={setModalResetPinOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" /> Redefinir PIN de Acesso
+            </DialogTitle>
+            <DialogDescription>
+              Altere o PIN numérico do colaborador <strong>{colabSelecionado?.nome}</strong> para acesso ao PDV.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSalvarNovoPin} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="reset-new-pin">Novo PIN (4 a 6 números)</Label>
+              <Input
+                id="reset-new-pin"
+                type="password"
+                placeholder="Ex: 5678"
+                maxLength={6}
+                value={novoPin}
+                onChange={(e) => setNovoPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                autoFocus
+              />
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setModalResetPinOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={salvandoPin}>
+                {salvandoPin ? "Salvando..." : "Atualizar PIN"}
               </Button>
             </DialogFooter>
           </form>

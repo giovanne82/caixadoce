@@ -160,6 +160,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Timeout de Sessão: Listener de Inatividade (Auto-Logout PDV 4h)
+  useEffect(() => {
+    const isColab = profile?.role === "operador" || user?.email?.endsWith(".caixadoce.app");
+    if (!user || !isColab) return;
+
+    const TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 horas
+    let timer: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        toast.warning("Sessão encerra automaticamente após 4 horas de inatividade no PDV.");
+        logout();
+      }, TIMEOUT_MS);
+    };
+
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart", "click"];
+    events.forEach((ev) => window.addEventListener(ev, resetInactivityTimer, { passive: true }));
+
+    resetInactivityTimer();
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach((ev) => window.removeEventListener(ev, resetInactivityTimer));
+    };
+  }, [user, profile?.role]);
+
   const userEstabelecimentos = useMemo(() => {
     return estabelecimentos;
   }, [estabelecimentos]);
@@ -168,6 +195,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        // Captura de limite de tentativas (Rate Limit / Too Many Requests)
+        if (
+          error.status === 429 ||
+          error.message?.toLowerCase().includes("too_many_requests") ||
+          error.message?.toLowerCase().includes("rate limit") ||
+          error.message?.toLowerCase().includes("exceeded")
+        ) {
+          toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
+          throw error;
+        }
+
         // Fallback local caso offline ou cadastrado em memoria/localState
         if (password.length >= 4) {
           const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
