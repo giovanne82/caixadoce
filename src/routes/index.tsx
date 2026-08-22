@@ -919,7 +919,7 @@ function Index() {
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="-mx-4 overflow-x-auto px-4">
+          <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
               {podeAcessarAba("scanner") && (
                 <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
@@ -1053,78 +1053,80 @@ function Index() {
         </Tabs>
       </main>
 
-      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white sm:hidden py-1.5 px-2 shadow-2xl">
-        <div className="flex items-center justify-around gap-1">
-          <button
-            onClick={() => setActiveTab("scanner")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Camera className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Escanear</span>
-          </button>
+      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Compacta) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white md:hidden py-1 px-1 shadow-2xl">
+        <div className="grid grid-cols-6 w-full items-center text-center">
+          {podeAcessarAba("scanner") && (
+            <button
+              onClick={() => setActiveTab("scanner")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Camera className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Escanear</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("despesas")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Layers className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Compras</span>
-          </button>
+          {podeAcessarAba("despesas") && (
+            <button
+              onClick={() => setActiveTab("despesas")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Layers className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Compras</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("encomendas")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <CalendarDays className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Calendário</span>
-          </button>
+          {podeAcessarAba("encomendas") && (
+            <button
+              onClick={() => setActiveTab("encomendas")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <CalendarDays className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Agenda</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("produtos")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Cake className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Cardápio</span>
-          </button>
+          {podeAcessarAba("produtos") && (
+            <button
+              onClick={() => setActiveTab("produtos")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Cake className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Cardápio</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("financeiro")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <DollarSign className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Financeiro</span>
-          </button>
+          {podeAcessarAba("financeiro") && (
+            <button
+              onClick={() => setActiveTab("financeiro")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <DollarSign className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Financeiro</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("config")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "config" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Settings className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Configurações</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("plano")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <CreditCard className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Meu Plano</span>
-          </button>
+          {(podeAcessarAba("config") || podeAcessarAba("plano")) && (
+            <button
+              onClick={() => setActiveTab("config")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "config" || activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Settings className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Ajustes</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
