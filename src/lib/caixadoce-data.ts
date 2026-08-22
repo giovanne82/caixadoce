@@ -829,3 +829,38 @@ export const LISTAS_COMPRAS_PADRAO: ListaCompras[] = [
     createdAt: new Date().toISOString(),
   },
 ];
+
+export function formatarCpfCnpj(val: string): string {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 14);
+
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  return digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+}
+
+export function formatarCodigoLoja(val: string): string {
+  if (!val) return "";
+  const upper = val.toUpperCase().trim();
+  const clean = upper.replace(/[^A-Z0-9]/g, "");
+
+  if (clean.startsWith("CD")) {
+    const numPart = clean.slice(2);
+    return numPart ? `CD-${numPart}` : "CD";
+  }
+
+  if (/^\d+$/.test(clean)) {
+    return `CD-${clean}`;
+  }
+
+  return upper;
+}

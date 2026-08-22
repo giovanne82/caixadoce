@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
+import { formatarCpfCnpj } from "@/lib/caixadoce-data";
 
 export function ConfiguracoesTab() {
   const {
@@ -244,8 +245,17 @@ export function ConfiguracoesTab() {
                     <Input
                       id="est-doc"
                       value={numDoc}
-                      onChange={(e) => setNumDoc(e.target.value)}
-                      placeholder="00.000.000/0001-00"
+                      onChange={(e) => {
+                        const formatted = formatarCpfCnpj(e.target.value);
+                        setNumDoc(formatted);
+                        const digits = e.target.value.replace(/\D/g, "");
+                        if (digits.length > 11) {
+                          setTipoDoc("CNPJ");
+                        } else if (digits.length > 0) {
+                          setTipoDoc("CPF");
+                        }
+                      }}
+                      placeholder="000.000.000-00 ou 00.000.000/0001-00"
                     />
                   </div>
                 </div>

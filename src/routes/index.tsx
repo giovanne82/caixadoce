@@ -114,6 +114,22 @@ function Index() {
   const activeCode = profile?.establishmentCode || "CD-1001";
   const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
+  const podeAcessarAba = useCallback((abaId: string): boolean => {
+    if (!profile || profile.role === "admin") return true;
+    const permitidas = profile.abasPermitidas || ["dashboard", "scanner", "despesas", "encomendas", "produtos", "financeiro"];
+    if (abaId === "scanner") return permitidas.includes("scanner") || permitidas.includes("dashboard");
+    return permitidas.includes(abaId);
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
+      const permitidas = profile.abasPermitidas || ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
+      const primeira = permitidas.find((a) => podeAcessarAba(a)) || "despesas";
+      toast.error("Acesso Negado: Você não possui permissão para acessar este módulo.");
+      setActiveTab(primeira);
+    }
+  }, [activeTab, profile, podeAcessarAba]);
+
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
   // 1. Carrega transações do Supabase / Cache Local com interceptação silenciosa de erros (400 / 404 / tabela inexistente)
@@ -928,27 +944,41 @@ function Index() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="-mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
-              <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Camera className="w-4 h-4 text-primary" /> Escanear
-              </TabsTrigger>
-              <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Layers className="w-4 h-4 text-primary" /> Lista de Compras
-              </TabsTrigger>
-              <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
-                <CalendarDays className="w-4 h-4 text-primary" /> Calendário
-              </TabsTrigger>
-              <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Cake className="w-4 h-4 text-primary" /> Cardápio
-              </TabsTrigger>
-              <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
-                <DollarSign className="w-4 h-4" /> Financeiro
-              </TabsTrigger>
-              <TabsTrigger value="config" className="flex items-center gap-1.5 font-semibold text-xs">
-                <Settings className="w-4 h-4" /> Configurações
-              </TabsTrigger>
-              <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
-                <CreditCard className="w-4 h-4" /> Meu Plano
-              </TabsTrigger>
+              {podeAcessarAba("scanner") && (
+                <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <Camera className="w-4 h-4 text-primary" /> Escanear
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("despesas") && (
+                <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <Layers className="w-4 h-4 text-primary" /> Lista de Compras
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("encomendas") && (
+                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <CalendarDays className="w-4 h-4 text-primary" /> Calendário
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("produtos") && (
+                <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <Cake className="w-4 h-4 text-primary" /> Cardápio
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("financeiro") && (
+                <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <DollarSign className="w-4 h-4" /> Financeiro
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("config") && (
+                <TabsTrigger value="config" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <Settings className="w-4 h-4" /> Configurações
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("plano") && (
+                <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
+                  <CreditCard className="w-4 h-4" /> Meu Plano
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 

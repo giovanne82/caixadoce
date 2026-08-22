@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, MailCheck } from "lucide-react";
+import { formatarCodigoLoja } from "@/lib/caixadoce-data";
 
 interface LoginViewProps {
   onSuccess?: () => void;
@@ -344,7 +345,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                         placeholder="Ex: CD-1001 ou colaborador@CD-1001"
                         className="pl-9 font-mono uppercase font-bold"
                         value={colabCodigoLoja}
-                        onChange={(e) => setColabCodigoLoja(e.target.value)}
+                        onChange={(e) => setColabCodigoLoja(formatarCodigoLoja(e.target.value))}
                         required
                       />
                     </div>

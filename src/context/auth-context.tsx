@@ -62,6 +62,7 @@ export type StaffProfile = {
   responsavel?: string;
   telefone?: string;
   whatsapp?: string;
+  abasPermitidas?: string[];
 };
 
 export type UserProfile = StaffProfile;
@@ -101,6 +102,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>(INITIAL_ESTABELECIMENTOS);
   const [isMounted, setIsMounted] = useState(false);
 
+  // Helper centralizado para montagem do perfil com tenant estrito da loja Master e permissoes
+  const buildProfileForUser = (authUser: any, emailStr: string): UserProfile => {
+    const isColab = emailStr.includes("@") && (emailStr.endsWith(".caixadoce.app") || authUser?.user_metadata?.role === "colaborador" || authUser?.user_metadata?.role === "operador");
+    
+    let rawCode = authUser?.user_metadata?.establishmentCode || authUser?.user_metadata?.establishment_code;
+    if (!rawCode && isColab && emailStr.includes("@")) {
+      rawCode = emailStr.split("@")[1].replace(".caixadoce.app", "");
+    }
+    if (!rawCode) {
+      rawCode = ESTABELECIMENTO_PADRAO.codigo;
+    }
+
+    const formattedCode = rawCode.toUpperCase().startsWith("CD-")
+      ? rawCode.toUpperCase()
+      : rawCode.length === 4 && !isNaN(Number(rawCode))
+      ? `CD-${rawCode}`
+      : rawCode.toUpperCase();
+
+    const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode) || ESTABELECIMENTO_PADRAO;
+
+    let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
+    if (isColab && !abasPermitidas) {
+      try {
+        const rawColabs = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
+        if (rawColabs) {
+          const colabs = JSON.parse(rawColabs);
+          const colabCleanName = emailStr.split("@")[0].toLowerCase();
+          const matchColab = colabs.find((c: any) =>
+            c.email?.toLowerCase().startsWith(colabCleanName) ||
+            c.nome?.toLowerCase().replace(/[^a-z0-9]/g, "") === colabCleanName
+          );
+          if (matchColab?.abasPermitidas) {
+            abasPermitidas = matchColab.abasPermitidas;
+          }
+        }
+      } catch {}
+    }
+
+    if (isColab && !abasPermitidas) {
+      abasPermitidas = ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
+    }
+
+    return {
+      role: isColab ? "operador" : "admin",
+      establishmentCode: masterEst.codigo || formattedCode,
+      establishmentName: masterEst.nome || `Confeitaria ${formattedCode}`,
+      establishmentAddress: masterEst.endereco || ESTABELECIMENTO_PADRAO.endereco,
+      chavePix: masterEst.chavePix || ESTABELECIMENTO_PADRAO.chavePix,
+      tipoChavePix: masterEst.tipoChavePix || ESTABELECIMENTO_PADRAO.tipoChavePix,
+      abasPermitidas: isColab ? abasPermitidas : undefined,
+    };
+  };
+
   // Inicialização e Carregamento de Sessão
   useEffect(() => {
     setIsMounted(true);
@@ -133,19 +187,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         localStorage.setItem("caixadoce_user", JSON.stringify(u));
 
-        // Se ainda não houver perfil selecionado, monta perfil padrão de Admin
+        // Monta ou atualiza o perfil garantindo o vinculo correto com a loja Master
         setProfile((prev) => {
-          if (prev) return prev;
-          const defaultProf: UserProfile = {
-            role: "admin",
-            establishmentCode: ESTABELECIMENTO_PADRAO.codigo,
-            establishmentName: ESTABELECIMENTO_PADRAO.nome,
-            establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
-            chavePix: ESTABELECIMENTO_PADRAO.chavePix,
-            tipoChavePix: ESTABELECIMENTO_PADRAO.tipoChavePix,
-          };
-          localStorage.setItem("caixadoce_profile", JSON.stringify(defaultProf));
-          return defaultProf;
+          if (prev && prev.establishmentCode && prev.role !== "operador") return prev;
+          const prof = buildProfileForUser(session.user, u.email);
+          localStorage.setItem("caixadoce_profile", JSON.stringify(prof));
+          return prof;
         });
       } else if (event === "SIGNED_OUT") {
         setUser(null);
@@ -158,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [estabelecimentos]);
 
   // Timeout de Sessão: Listener de Inatividade (Auto-Logout PDV 4h)
   useEffect(() => {
@@ -209,14 +256,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fallback local caso offline ou cadastrado em memoria/localState
         if (password.length >= 4) {
           const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
-          const rawCode = isCollaboratorSynthetic
-            ? email.split("@")[1].replace(".caixadoce.app", "")
-            : ESTABELECIMENTO_PADRAO.codigo;
-          const formattedCode = rawCode.toUpperCase().startsWith("CD-")
-            ? rawCode.toUpperCase()
-            : rawCode.length === 4 && !isNaN(Number(rawCode))
-            ? `CD-${rawCode}`
-            : rawCode.toUpperCase();
           const nameFromEmail = email.split("@")[0];
 
           const fallbackUser: User = {
@@ -225,12 +264,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email,
             provider: "email",
           };
-          const fallbackProfile: UserProfile = {
-            role: isCollaboratorSynthetic ? "operador" : "admin",
-            establishmentCode: formattedCode,
-            establishmentName: `Confeitaria ${formattedCode}`,
-            establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
-          };
+
+          const fallbackProfile = buildProfileForUser(null, email);
           setUser(fallbackUser);
           setProfile(fallbackProfile);
           localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
@@ -249,8 +284,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar: data.user.user_metadata?.avatar_url || "",
           provider: "email",
         };
+        const loggedProfile = buildProfileForUser(data.user, email);
         setUser(loggedUser);
+        setProfile(loggedProfile);
         localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
         toast.success("Bem-vindo ao CaixaDoce!");
       }
     } catch (err: any) {
