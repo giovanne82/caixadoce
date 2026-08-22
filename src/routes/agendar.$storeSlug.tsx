@@ -52,6 +52,7 @@ import {
   obterProdutosCardapio,
   obterRegrasAgendamento,
   calcularRegrasAgendamentoCarrinho,
+  formatarBadgeDisponibilidadeProduto,
   validarDataEntrega,
   validarHorarioEntrega,
   ESTABELECIMENTO_PADRAO,
@@ -109,7 +110,16 @@ function PublicStoreView() {
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + (regras.antecedenciaMinimaDias || 0));
-    return d.toISOString().split("T")[0];
+    let safety = 0;
+    const permitidos = regras.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6];
+    while (permitidos.length > 0 && !permitidos.includes(d.getDay()) && safety < 7) {
+      d.setDate(d.getDate() + 1);
+      safety++;
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }, [regras]);
 
   const handleDataEntregaChange = (val: string) => {
@@ -565,11 +575,18 @@ function PublicStoreView() {
                     DESTAQUE
                   </span>
                 )}
-                {prod.tempoPreparoHoras && (
-                  <span className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-400" /> Antecedência: {prod.tempoPreparoHoras}h
-                  </span>
-                )}
+                {(() => {
+                  const disp = formatarBadgeDisponibilidadeProduto(prod);
+                  return disp.isProntaEntrega ? (
+                    <span className="absolute bottom-2 right-2 bg-emerald-950/80 backdrop-blur-md text-emerald-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                      {disp.texto}
+                    </span>
+                  ) : (
+                    <span className="absolute bottom-2 right-2 bg-purple-950/80 backdrop-blur-md text-purple-300 text-[10px] px-2.5 py-0.5 rounded-full font-semibold border border-purple-500/30 flex items-center gap-1">
+                      {disp.texto}
+                    </span>
+                  );
+                })()}
               </div>
 
               <CardHeader className="pb-2">

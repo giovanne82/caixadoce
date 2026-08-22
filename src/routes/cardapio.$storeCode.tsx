@@ -52,6 +52,7 @@ import {
   obterProdutosCardapio,
   obterRegrasAgendamento,
   calcularRegrasAgendamentoCarrinho,
+  formatarBadgeDisponibilidadeProduto,
   validarDataEntrega,
   validarHorarioEntrega,
   type ProdutoCardapio,
@@ -113,7 +114,16 @@ function CardapioLojaView() {
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + (regras.antecedenciaMinimaDias || 0));
-    return d.toISOString().split("T")[0];
+    let safety = 0;
+    const permitidos = regras.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6];
+    while (permitidos.length > 0 && !permitidos.includes(d.getDay()) && safety < 7) {
+      d.setDate(d.getDate() + 1);
+      safety++;
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }, [regras]);
 
   const handleDataEntregaChange = (val: string) => {
@@ -388,15 +398,24 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                 </CardHeader>
               </div>
 
-              <CardFooter className="p-4 pt-2 border-t border-border/50 flex items-center justify-between">
-                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-primary" /> Antecedência: ~{prod.tempoPreparoHoras || 24}h
-                </span>
+              <CardFooter className="p-4 pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                {(() => {
+                  const disp = formatarBadgeDisponibilidadeProduto(prod);
+                  return disp.isProntaEntrega ? (
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                      {disp.texto}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 flex items-center gap-1">
+                      {disp.texto}
+                    </span>
+                  );
+                })()}
 
                 <Button
                   size="sm"
                   onClick={() => handleAdicionarAoCarrinho(prod)}
-                  className="font-bold text-xs shadow-xs h-8 px-3.5"
+                  className="font-bold text-xs shadow-xs h-8 px-3.5 shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5 mr-1" /> Pedir
                 </Button>

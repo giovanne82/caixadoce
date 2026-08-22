@@ -1240,24 +1240,71 @@ export function validarHorarioEntrega(
   return { valido: true };
 }
 
+export function formatarBadgeDisponibilidadeProduto(prod: ProdutoCardapio): {
+  texto: string;
+  isProntaEntrega: boolean;
+} {
+  const isPronta = prod.availability_type === "pronta_entrega";
+
+  if (isPronta) {
+    if (prod.available_days && prod.available_days.length > 0 && prod.available_days.length < 7) {
+      const DIAS_SIGLAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      const ordenados = [...prod.available_days].sort((a, b) => a - b);
+      const primeiro = DIAS_SIGLAS[ordenados[0]];
+      const ultimo = DIAS_SIGLAS[ordenados[ordenados.length - 1]];
+      const diasTexto = ordenados.length === 1 ? primeiro : `${primeiro} a ${ultimo}`;
+      return {
+        texto: `⚡ Pronta Entrega (${diasTexto})`,
+        isProntaEntrega: true,
+      };
+    }
+    return {
+      texto: "⚡ Pronta Entrega",
+      isProntaEntrega: true,
+    };
+  }
+
+  // Sob Encomenda
+  const diasLead = prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1);
+  if (diasLead === 0) {
+    return {
+      texto: "🕒 Encomenda no mesmo dia",
+      isProntaEntrega: false,
+    };
+  } else if (diasLead === 1) {
+    return {
+      texto: "🕒 Antecedência: ~24h",
+      isProntaEntrega: false,
+    };
+  } else {
+    return {
+      texto: `🕒 Antecedência: ${diasLead} dia(s)`,
+      isProntaEntrega: false,
+    };
+  }
+}
+
 export function calcularRegrasAgendamentoCarrinho(
   regrasLoja: RegrasAgendamento,
   itensCarrinho: { produto: ProdutoCardapio; quantidade: number }[]
 ): RegrasAgendamento {
   if (!itensCarrinho || itensCarrinho.length === 0) return regrasLoja;
 
-  let maxLeadTime = regrasLoja.antecedenciaMinimaDias || 0;
+  const todosProntaEntrega = itensCarrinho.every(
+    (item) => item.produto.availability_type === "pronta_entrega"
+  );
+
+  let maxLeadTime = todosProntaEntrega ? 0 : (regrasLoja.antecedenciaMinimaDias || 0);
   let diasPermitidos = [...(regrasLoja.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6])];
 
   itensCarrinho.forEach(({ produto }) => {
-    // 1. Maior prazo de antecedência exigido no carrinho
-    if (produto.availability_type === "encomenda" || produto.min_lead_time_days !== undefined) {
-      const leadTime = produto.min_lead_time_days ?? (produto.tempoPreparoHoras ? Math.ceil(produto.tempoPreparoHoras / 24) : 0);
-      if (leadTime > maxLeadTime) {
-        maxLeadTime = leadTime;
-      }
-    } else if (produto.tempoPreparoHoras && produto.tempoPreparoHoras > 0) {
-      const leadTime = Math.ceil(produto.tempoPreparoHoras / 24);
+    // 1. Maior prazo de antecedência exigido pelos produtos de encomenda
+    const isEncomenda = produto.availability_type !== "pronta_entrega";
+
+    if (isEncomenda) {
+      const leadTime =
+        produto.min_lead_time_days ??
+        (produto.tempoPreparoHoras ? Math.ceil(produto.tempoPreparoHoras / 24) : 1);
       if (leadTime > maxLeadTime) {
         maxLeadTime = leadTime;
       }
