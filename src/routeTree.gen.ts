@@ -15,6 +15,7 @@ import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
 import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
 import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
+import { Route as PagarCobrancaIdRouteImport } from './routes/pagar.$cobrancaId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const CardapioStoreCodeRoute = CardapioStoreCodeRouteImport.update({
   path: '/cardapio/$storeCode',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PagarCobrancaIdRoute = PagarCobrancaIdRouteImport.update({
+  id: '/pagar/$cobrancaId',
+  path: '/pagar/$cobrancaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/cardapio': typeof CardapioIndexRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
+  '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
+    | '/pagar/$cobrancaId'
     | '/cardapio/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
+    | '/pagar/$cobrancaId'
     | '/cardapio'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
+    | '/pagar/$cobrancaId'
     | '/cardapio/'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
   CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
+  PagarCobrancaIdRoute: typeof PagarCobrancaIdRoute
   CardapioIndexRoute: typeof CardapioIndexRoute
 }
 
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CardapioStoreCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pagar/$cobrancaId': {
+      id: '/pagar/$cobrancaId'
+      path: '/pagar/$cobrancaId'
+      fullPath: '/pagar/$cobrancaId'
+      preLoaderRoute: typeof PagarCobrancaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
   CardapioStoreCodeRoute: CardapioStoreCodeRoute,
+  PagarCobrancaIdRoute: PagarCobrancaIdRoute,
   CardapioIndexRoute: CardapioIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -43,10 +43,70 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// Mapeamento em memória de links curtos de cobrança (cobrancaId -> Stripe Checkout Session URL)
+const paymentLinksMap = new Map<string, { url: string; description?: string; amount?: number; createdAt: number }>();
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
+
+      // Proxy Handler para Redirecionamento 302 direto no Servidor (/pagar/*)
+      if (url.pathname.startsWith("/pagar/") && request.method === "GET") {
+        const cobrancaId = url.pathname.replace("/pagar/", "").trim();
+        if (cobrancaId) {
+          const entry = paymentLinksMap.get(cobrancaId);
+          if (entry && entry.url) {
+            return Response.redirect(entry.url, 302);
+          }
+
+          if (cobrancaId.startsWith("cs_")) {
+            try {
+              const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+              if (stripeSecretKey) {
+                const stripe = new Stripe(stripeSecretKey);
+                const session = await stripe.checkout.sessions.retrieve(cobrancaId);
+                if (session.url) {
+                  return Response.redirect(session.url, 302);
+                }
+              }
+            } catch (err) {
+              console.error("[Stripe Redirect Error]", err);
+            }
+          }
+        }
+      }
+
+      // Endpoint para resolução assíncrona do link curto de cobrança (/api/resolve-pay-link?id=...)
+      if (url.pathname === "/api/resolve-pay-link" && request.method === "GET") {
+        const id = url.searchParams.get("id") || "";
+        let entry = paymentLinksMap.get(id);
+
+        if (!entry && id.startsWith("cs_")) {
+          try {
+            const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+            if (stripeSecretKey) {
+              const stripe = new Stripe(stripeSecretKey);
+              const session = await stripe.checkout.sessions.retrieve(id);
+              if (session.url) {
+                entry = { url: session.url, description: "Cobrança Stripe", amount: (session.amount_total || 0) / 100, createdAt: Date.now() };
+              }
+            }
+          } catch {}
+        }
+
+        if (entry && entry.url) {
+          return new Response(
+            JSON.stringify({ success: true, url: entry.url, description: entry.description, amount: entry.amount }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: false, error: "Link de cobrança não encontrado ou expirado." }),
+          { status: 404, headers: { "content-type": "application/json" } }
+        );
+      }
 
       // Handler para criação de Sessão de Checkout do Stripe (Cobrança Avulsa & Pedidos)
       if (url.pathname === "/api/create-checkout-session" && request.method === "POST") {
@@ -161,10 +221,35 @@ export default {
             );
           }
 
-          return new Response(JSON.stringify({ id: session.id, url: session.url }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
+          const cobrancaId = `cob_${Date.now().toString(36)}${Math.random().toString(36).substring(2, 6)}`;
+          const shortPayUrl = `${origin}/pagar/${cobrancaId}`;
+
+          paymentLinksMap.set(cobrancaId, {
+            url: session.url,
+            description: payload.description || "Cobrança CaixaDoce",
+            amount: payload.amount || 0,
+            createdAt: Date.now(),
           });
+
+          paymentLinksMap.set(session.id, {
+            url: session.url,
+            description: payload.description || "Cobrança CaixaDoce",
+            amount: payload.amount || 0,
+            createdAt: Date.now(),
+          });
+
+          return new Response(
+            JSON.stringify({
+              id: session.id,
+              cobrancaId,
+              shortPayUrl,
+              url: session.url,
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }
+          );
         } catch (err: any) {
           return new Response(
             JSON.stringify({

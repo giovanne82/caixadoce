@@ -174,15 +174,16 @@ export function FinanceiroTab({
 
       const data = await res.json();
 
-      if (!res.ok || !data.url) {
+      if (!res.ok || (!data.shortPayUrl && !data.url)) {
         throw new Error(data.error || "Erro ao comunicar com a API do Stripe");
       }
 
-      setCobrancaLinkGerado(data.url);
+      const shortUrl = data.shortPayUrl || `${window.location.origin}/pagar/${data.cobrancaId || data.id}`;
+      setCobrancaLinkGerado(shortUrl);
       setStepCobranca(2);
-      toast.success("Link de cobrança gerado no Stripe com sucesso!");
+      toast.success("Link curto de cobrança gerado com sucesso! 🎉");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao gerar link de pagamento no Stripe.");
+      toast.error(err.message || "Erro ao gerar link de pagamento.");
     } finally {
       setGerandoLink(false);
     }
@@ -192,16 +193,17 @@ export function FinanceiroTab({
     if (cobrancaLinkGerado && typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(cobrancaLinkGerado);
       setLinkCopiado(true);
-      toast.success("Link de cobrança copiado para a área de transferência!");
+      toast.success("Link curto de cobrança copiado!");
       setTimeout(() => setLinkCopiado(false), 3000);
     }
   };
 
   const handleEnviarWhatsapp = () => {
     if (!cobrancaLinkGerado || !cobrancaDescricao) return;
-    const msg = `Olá! Aqui está o link de pagamento referente a ${cobrancaDescricao}: ${cobrancaLinkGerado}`;
+    const msg = `Olá! Aqui está o seu link de pagamento referente a "${cobrancaDescricao}": ${cobrancaLinkGerado}`;
     const linkWa = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     window.open(linkWa, "_blank");
+    toast.success("Mensagem com o link curto aberta no WhatsApp!");
   };
 
   const handleFecharModalCobranca = () => {
