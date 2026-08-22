@@ -20,7 +20,6 @@ export {
 };
 
 export const SCANNER_RETRY_CONFIG = {
-  maxRetries: 2, // 2 retentativas (total 3 chamadas)
-  delayMs: 1500, // 1,5 segundos de intervalo entre tentativas
-  retryStatuses: [503, 429], // Status 503 (Service Unavailable) ou 429 (Rate Limit)
+  maxRetries: 4, // 4 retentativas (total 5 chamadas)
+  delayMs: 1000, // Backoff progressivo entre tentativas
 };

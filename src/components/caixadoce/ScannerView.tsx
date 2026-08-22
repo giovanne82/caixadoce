@@ -140,7 +140,7 @@ export function ScannerView({
       }
     } catch (e: any) {
       setIsScanning(false);
-      toast.error(`Erro ao ler notinha: ${e.message}`);
+      toast.error(e.message || "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.");
     }
   };
 

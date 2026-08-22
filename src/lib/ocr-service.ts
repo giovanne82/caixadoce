@@ -75,9 +75,8 @@ Responda apenas com o JSON sem formatação markdown.`
     }
   };
 
-  const MAX_TENTATIVAS = 3;
-  const DELAY_RETRY_MS = 1500;
-  let ultimoErro: Error | null = null;
+  const MAX_TENTATIVAS = 5;
+  const MENSAGEM_ERRO_ALTO_VOLUME = "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
 
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
@@ -97,15 +96,15 @@ Responda apenas com o JSON sem formatação markdown.`
         const errText = await response.text();
         const status = response.status;
 
-        // Se for 503 (Service Unavailable) ou 429 (Rate Limit) e ainda houver tentativas restantes
-        if ((status === 503 || status === 429) && tentativa < MAX_TENTATIVAS) {
-          console.warn(`[Gemini API] Erro HTTP ${status}. Retentando em ${DELAY_RETRY_MS}ms (Tentativa ${tentativa}/${MAX_TENTATIVAS})...`);
+        if (tentativa < MAX_TENTATIVAS) {
+          const delayMs = 1000 * tentativa;
+          console.warn(`[Gemini API] Erro HTTP ${status}. Retentando em ${delayMs}ms (Tentativa ${tentativa}/${MAX_TENTATIVAS})...`);
           onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
-          await sleep(DELAY_RETRY_MS);
+          await sleep(delayMs);
           continue;
         }
 
-        throw new Error(`Erro na API Gemini (${status}): ${errText}`);
+        throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
       }
 
       const data = await response.json();
@@ -114,25 +113,19 @@ Responda apenas com o JSON sem formatação markdown.`
       return JSON.parse(jsonClean);
 
     } catch (err: any) {
-      ultimoErro = err;
-      const isRetryable =
-        err?.message?.includes("503") ||
-        err?.message?.includes("429") ||
-        err?.name === "TypeError"; // Erro de rede
-
-      if (isRetryable && tentativa < MAX_TENTATIVAS) {
-        console.warn(`[Gemini API] Falha na tentativa ${tentativa}/${MAX_TENTATIVAS}: ${err.message}. Aguardando ${DELAY_RETRY_MS}ms...`);
+      if (tentativa < MAX_TENTATIVAS) {
+        const delayMs = 1000 * tentativa;
+        console.warn(`[Gemini API] Falha na tentativa ${tentativa}/${MAX_TENTATIVAS}: ${err.message}. Aguardando ${delayMs}ms...`);
         onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
-        await sleep(DELAY_RETRY_MS);
+        await sleep(delayMs);
         continue;
       }
 
-      // Se não for retentável ou já atingiu o máximo de tentativas, estoura a exceção
-      throw err;
+      throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
     }
   }
 
-  throw ultimoErro || new Error("Falha ao comunicar com a API do Gemini após 3 tentativas.");
+  throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
 }
 
 export async function converterImagemParaBase64(file: File): Promise<string> {
