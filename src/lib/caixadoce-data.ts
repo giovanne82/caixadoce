@@ -67,7 +67,7 @@ export interface Colaborador {
   nome: string;
   email: string;
   telefone?: string;
-  funcao: "admin" | "gerente" | "operador";
+  funcao?: "admin" | "gerente" | "operador";
   ativo: boolean;
   dataCadastro: string;
   abasPermitidas: string[];

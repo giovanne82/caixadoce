@@ -12,13 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -47,6 +40,14 @@ const ABAS_DISPONIVEIS = [
   { id: "plano", label: "Meu Plano & Stripe" },
 ];
 
+function formatarTelefoneBR(val: string): string {
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits ? `(${digits}` : "";
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
 export function ColaboradoresTab() {
   const { profile } = useAuth();
   const activeCode = profile?.establishmentCode || "CD-1001";
@@ -64,7 +65,6 @@ export function ColaboradoresTab() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [funcao, setFuncao] = useState<"admin" | "gerente" | "operador">("operador");
   const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["dashboard", "financeiro"]);
   const [salvando, setSalvando] = useState(false);
 
@@ -98,10 +98,9 @@ export function ColaboradoresTab() {
         nome,
         email,
         telefone,
-        funcao,
         ativo: true,
         dataCadastro: new Date().toLocaleDateString("pt-BR"),
-        abasPermitidas: funcao === "admin" ? ABAS_DISPONIVEIS.map((a) => a.id) : abasPermitidas,
+        abasPermitidas,
       };
 
       salvarLista([novo, ...colaboradores]);
@@ -150,7 +149,6 @@ export function ColaboradoresTab() {
             <TableRow className="bg-muted/40">
               <TableHead>Nome</TableHead>
               <TableHead>Contato</TableHead>
-              <TableHead>Função</TableHead>
               <TableHead>Permissões</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -159,7 +157,7 @@ export function ColaboradoresTab() {
           <TableBody>
             {colaboradores.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
                   Nenhum colaborador adicional cadastrado. Clique em "+ Novo Colaborador" para convidar sua equipe.
                 </TableCell>
               </TableRow>
@@ -181,12 +179,7 @@ export function ColaboradoresTab() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="capitalize text-xs font-semibold">
-                      {colab.funcao}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                    <div className="flex flex-wrap gap-1 max-w-[240px]">
                       {colab.abasPermitidas.map((aba) => (
                         <span
                           key={aba}
@@ -270,46 +263,30 @@ export function ColaboradoresTab() {
                   id="colab-tel"
                   placeholder="(11) 98888-7777"
                   value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
+                  onChange={(e) => setTelefone(formatarTelefoneBR(e.target.value))}
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="colab-funcao">Nível de Função</Label>
-              <Select value={funcao} onValueChange={(v: any) => setFuncao(v)}>
-                <SelectTrigger id="colab-funcao">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="operador">Operador (Apenas Vendas &amp; Caixa)</SelectItem>
-                  <SelectItem value="gerente">Gerente (Acesso Financeiro &amp; Relatórios)</SelectItem>
-                  <SelectItem value="admin">Administrador (Acesso Total)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {funcao !== "admin" && (
-              <div className="space-y-2 pt-2 border-t">
-                <Label className="text-xs font-bold text-muted-foreground uppercase">
-                  Módulos e Abas Permitidas
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {ABAS_DISPONIVEIS.map((aba) => (
-                    <div key={aba.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`perm-${aba.id}`}
-                        checked={abasPermitidas.includes(aba.id)}
-                        onCheckedChange={() => handleToggleAba(aba.id)}
-                      />
-                      <Label htmlFor={`perm-${aba.id}`} className="text-xs font-normal cursor-pointer">
-                        {aba.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">
+                Módulos e Abas Permitidas
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {ABAS_DISPONIVEIS.map((aba) => (
+                  <div key={aba.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`perm-${aba.id}`}
+                      checked={abasPermitidas.includes(aba.id)}
+                      onCheckedChange={() => handleToggleAba(aba.id)}
+                    />
+                    <Label htmlFor={`perm-${aba.id}`} className="text-xs font-normal cursor-pointer">
+                      {aba.label}
+                    </Label>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={() => setModalNovo(false)}>
