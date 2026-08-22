@@ -235,6 +235,23 @@ export function DespesasView({
   const [editNovoItemQtd, setEditNovoItemQtd] = useState(1);
   const [editNovoItemUnidade, setEditNovoItemUnidade] = useState("un");
 
+  // Autocomplete de Sugestões de Insumos para Lista de Compras
+  const catalogoInsumos = useMemo(() => obterCatalogoInsumos(estabelecimentoCodigo), [estabelecimentoCodigo]);
+
+  const [dropdownCriarInsumosAberto, setDropdownCriarInsumosAberto] = useState(false);
+  const sugestoesInsumosCriacao = useMemo(() => {
+    const termo = modalItemNome.trim().toLowerCase();
+    if (!termo) return [];
+    return catalogoInsumos.filter((i) => i.nome.toLowerCase().includes(termo)).slice(0, 8);
+  }, [modalItemNome, catalogoInsumos]);
+
+  const [dropdownEditarInsumosAberto, setDropdownEditarInsumosAberto] = useState(false);
+  const sugestoesInsumosEdicao = useMemo(() => {
+    const termo = editNovoItemNome.trim().toLowerCase();
+    if (!termo) return [];
+    return catalogoInsumos.filter((i) => i.nome.toLowerCase().includes(termo)).slice(0, 8);
+  }, [editNovoItemNome, catalogoInsumos]);
+
   // Filtro de Busca
   const [busca, setBusca] = useState("");
 
@@ -792,12 +809,16 @@ export function DespesasView({
 
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
-              <div className="sm:col-span-8 space-y-1">
+              <div className="sm:col-span-8 space-y-1 relative">
                 <Label className="text-xs font-semibold">Produto / Insumo</Label>
                 <Input
-                  placeholder="Ex: Leite Condensado Moça..."
+                  placeholder="Buscar ou digitar insumo (ex: Leite Condensado, Chantilly)..."
                   value={modalItemNome}
-                  onChange={(e) => setModalItemNome(e.target.value)}
+                  onChange={(e) => {
+                    setModalItemNome(e.target.value);
+                    setDropdownCriarInsumosAberto(true);
+                  }}
+                  onFocus={() => setDropdownCriarInsumosAberto(true)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -806,6 +827,25 @@ export function DespesasView({
                   }}
                   className="h-8 text-xs"
                 />
+                {dropdownCriarInsumosAberto && sugestoesInsumosCriacao.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                    {sugestoesInsumosCriacao.map((sug) => (
+                      <div
+                        key={sug.id}
+                        onClick={() => {
+                          setModalItemNome(sug.nome);
+                          setDropdownCriarInsumosAberto(false);
+                        }}
+                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
+                      >
+                        <span>{sug.nome}</span>
+                        <Badge variant="outline" className="text-[10px] bg-primary/5">
+                          {sug.categoria || "Insumo"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-4 space-y-1">
                 <Label className="text-xs font-semibold">Quantidade</Label>
@@ -892,14 +932,43 @@ export function DespesasView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
-              <div className="sm:col-span-8 space-y-1">
-                <Label className="text-xs font-semibold">Novo Produto</Label>
+              <div className="sm:col-span-8 space-y-1 relative">
+                <Label className="text-xs font-semibold">Novo Produto / Insumo</Label>
                 <Input
-                  placeholder="Nome do insumo..."
+                  placeholder="Buscar ou digitar insumo (ex: Leite Condensado, Chantilly)..."
                   value={editNovoItemNome}
-                  onChange={(e) => setEditNovoItemNome(e.target.value)}
+                  onChange={(e) => {
+                    setEditNovoItemNome(e.target.value);
+                    setDropdownEditarInsumosAberto(true);
+                  }}
+                  onFocus={() => setDropdownEditarInsumosAberto(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAdicionarItemEdicao();
+                    }
+                  }}
                   className="h-8 text-xs"
                 />
+                {dropdownEditarInsumosAberto && sugestoesInsumosEdicao.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                    {sugestoesInsumosEdicao.map((sug) => (
+                      <div
+                        key={sug.id}
+                        onClick={() => {
+                          setEditNovoItemNome(sug.nome);
+                          setDropdownEditarInsumosAberto(false);
+                        }}
+                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
+                      >
+                        <span>{sug.nome}</span>
+                        <Badge variant="outline" className="text-[10px] bg-primary/5">
+                          {sug.categoria || "Insumo"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-4 space-y-1">
                 <Label className="text-xs font-semibold">Quantidade</Label>
