@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,10 +33,12 @@ import {
   CheckCircle2,
   UserCheck,
   CreditCard,
+  MapPin,
+  Loader2,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
-import { formatarCpfCnpj } from "@/lib/caixadoce-data";
+import { formatarCpfCnpj, formatarCep } from "@/lib/caixadoce-data";
 
 export function ConfiguracoesTab() {
   const {
@@ -57,7 +59,6 @@ export function ConfiguracoesTab() {
 
   // Establishment Form
   const [nomeEst, setNomeEst] = useState(profile?.establishmentName || "");
-  const [enderecoEst, setEnderecoEst] = useState(profile?.establishmentAddress || "");
   const [responsavelEst, setResponsavelEst] = useState(profile?.responsavel || user?.name || "");
   const [telEst, setTelEst] = useState(profile?.telefone || "");
   const [chavePix, setChavePix] = useState(profile?.chavePix || "");
@@ -65,6 +66,54 @@ export function ConfiguracoesTab() {
   const [tipoDoc, setTipoDoc] = useState(profile?.tipoDocumento || "CNPJ");
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
+
+  // Endereço Estruturado via CEP
+  const numeroInputRef = useRef<HTMLInputElement>(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepEst, setCepEst] = useState(() => {
+    const raw = profile?.establishmentAddress || "";
+    const cepMatch = raw.match(/CEP:\s*(\d{5}-?\d{3})/i);
+    return cepMatch ? cepMatch[1] : "";
+  });
+  const [logradouroEst, setLogradouroEst] = useState(() => {
+    const raw = profile?.establishmentAddress || "";
+    if (raw.includes(",")) return raw.split(",")[0].trim();
+    return raw;
+  });
+  const [numeroEst, setNumeroEst] = useState("");
+  const [complementoEst, setComplementoEst] = useState("");
+  const [bairroEst, setBairroEst] = useState("");
+  const [cidadeEst, setCidadeEst] = useState("São Paulo");
+  const [ufEst, setUfEst] = useState("SP");
+
+  const buscarCepViaCep = async (cepInput: string) => {
+    const cleanCep = cepInput.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
+
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        toast.error("CEP não encontrado. Verifique os dígitos informados.");
+        return;
+      }
+
+      setLogradouroEst(data.logradouro || "");
+      setBairroEst(data.bairro || "");
+      setCidadeEst(data.localidade || "");
+      setUfEst(data.uf || "");
+      toast.success("Endereço localizado via CEP!");
+
+      setTimeout(() => {
+        numeroInputRef.current?.focus();
+      }, 100);
+    } catch {
+      toast.error("Falha ao consultar o CEP. Preencha os campos de endereço manualmente.");
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
 
   // Security Form
   const [novaSenha, setNovaSenha] = useState("");
@@ -89,9 +138,13 @@ export function ConfiguracoesTab() {
     e.preventDefault();
     setSalvandoEst(true);
     try {
+      const enderecoFinal = cepEst
+        ? `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`
+        : logradouroEst;
+
       await updateEstablishmentDetails({
         nome: nomeEst,
-        endereco: enderecoEst,
+        endereco: enderecoFinal,
         responsavel: responsavelEst,
         telefone: telEst,
         chavePix,
@@ -252,14 +305,132 @@ export function ConfiguracoesTab() {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="est-end">Endereço Completo</Label>
-                  <Input
-                    id="est-end"
-                    value={enderecoEst}
-                    onChange={(e) => setEnderecoEst(e.target.value)}
-                    placeholder="Rua, Número, Bairro, Cidade - UF"
-                  />
+                {/* SEÇÃO DE ENDEREÇO ESTRUTURADO COM VIA CEP */}
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-primary" /> Endereço do Estabelecimento
+                  </h4>
+
+                  {/* Linha 1: CEP (com Busca ViaCEP) + Logradouro */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <Label htmlFor="est-cep" className="flex items-center gap-1">
+                        CEP <span className="text-rose-500">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="est-cep"
+                          value={cepEst}
+                          onChange={(e) => {
+                            const formatted = formatarCep(e.target.value);
+                            setCepEst(formatted);
+                            const clean = e.target.value.replace(/\D/g, "");
+                            if (clean.length === 8) {
+                              buscarCepViaCep(clean);
+                            }
+                          }}
+                          onBlur={() => {
+                            const clean = cepEst.replace(/\D/g, "");
+                            if (clean.length === 8) {
+                              buscarCepViaCep(clean);
+                            }
+                          }}
+                          placeholder="00000-000"
+                          className="pr-8 font-mono"
+                          required
+                        />
+                        {buscandoCep && (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin absolute right-2.5 top-2.5" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="est-logradouro">
+                        Logradouro / Endereço <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        id="est-logradouro"
+                        value={logradouroEst}
+                        onChange={(e) => setLogradouroEst(e.target.value)}
+                        placeholder="Rua, Avenida, Alameda..."
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 2: Número + Complemento */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <Label htmlFor="est-numero">
+                        Número <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        ref={numeroInputRef}
+                        id="est-numero"
+                        value={numeroEst}
+                        onChange={(e) => setNumeroEst(e.target.value)}
+                        placeholder="Ex: 123 ou S/N"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="est-complemento">
+                        Complemento <span className="text-xs text-muted-foreground">(Opcional)</span>
+                      </Label>
+                      <Input
+                        id="est-complemento"
+                        value={complementoEst}
+                        onChange={(e) => setComplementoEst(e.target.value)}
+                        placeholder="Ex: Sala 02, Bloco B, Térreo"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 3: Bairro + Cidade + Estado (UF) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <Label htmlFor="est-bairro">
+                        Bairro <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        id="est-bairro"
+                        value={bairroEst}
+                        onChange={(e) => setBairroEst(e.target.value)}
+                        placeholder="Bairro"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <Label htmlFor="est-cidade">
+                        Cidade <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        id="est-cidade"
+                        value={cidadeEst}
+                        onChange={(e) => setCidadeEst(e.target.value)}
+                        placeholder="Cidade"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-1">
+                      <Label htmlFor="est-uf">
+                        Estado (UF) <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        id="est-uf"
+                        value={ufEst}
+                        onChange={(e) => setUfEst(e.target.value.toUpperCase().slice(0, 2))}
+                        placeholder="SP"
+                        maxLength={2}
+                        className="font-mono uppercase"
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

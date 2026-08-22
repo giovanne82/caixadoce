@@ -1120,3 +1120,10 @@ export function formatarCodigoLoja(val: string): string {
 
   return upper;
 }
+
+export function formatarCep(val: string): string {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
