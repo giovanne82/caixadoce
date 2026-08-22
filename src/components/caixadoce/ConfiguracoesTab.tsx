@@ -46,9 +46,6 @@ import { toast } from "sonner";
 import {
   formatarCpfCnpj,
   formatarCep,
-  obterRegrasAgendamento,
-  salvarRegrasAgendamentoStorage,
-  type RegrasAgendamento,
 } from "@/lib/caixadoce-data";
 
 export function ConfiguracoesTab() {
@@ -123,24 +120,6 @@ export function ConfiguracoesTab() {
       toast.error("Falha ao consultar o CEP. Preencha os campos de endereço manualmente.");
     } finally {
       setBuscandoCep(false);
-    }
-  };
-
-  // Regras de Agendamento
-  const [regrasAgendamento, setRegrasAgendamento] = useState<RegrasAgendamento>(() =>
-    obterRegrasAgendamento(activeCode)
-  );
-  const [novaDataBloqueadaInput, setNovaDataBloqueadaInput] = useState("");
-  const [salvandoRegras, setSalvandoRegras] = useState(false);
-
-  const handleSalvarRegrasAgendamento = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSalvandoRegras(true);
-    try {
-      salvarRegrasAgendamentoStorage(activeCode, regrasAgendamento);
-      toast.success("Regras de agendamento e expediente salvas com sucesso!");
-    } finally {
-      setSalvandoRegras(false);
     }
   };
 
@@ -251,14 +230,11 @@ export function ConfiguracoesTab() {
       </Card>
 
       <Tabs defaultValue="empresa" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3">
-          <TabsTrigger value="empresa" className="flex items-center gap-1.5">
+        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-2">
+          <TabsTrigger value="empresa" className="flex items-center gap-1.5 font-bold">
             <Building2 className="w-4 h-4" /> Perfil &amp; Estabelecimento
           </TabsTrigger>
-          <TabsTrigger value="regras" className="flex items-center gap-1.5">
-            <CalendarIcon className="w-4 h-4" /> Regras de Encomenda
-          </TabsTrigger>
-          <TabsTrigger value="seguranca" className="flex items-center gap-1.5">
+          <TabsTrigger value="seguranca" className="flex items-center gap-1.5 font-bold">
             <Lock className="w-4 h-4" /> Segurança
           </TabsTrigger>
         </TabsList>
@@ -537,201 +513,6 @@ export function ConfiguracoesTab() {
               </form>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* TAB: REGRAS DE ENCOMENDA & AGENDA */}
-        <TabsContent value="regras" className="space-y-6">
-          <Card className="border-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-primary" /> Regras de Agendamento &amp; Cardápio Público
-              </CardTitle>
-              <CardDescription>
-                Configure os limites de antecedência, expediente e bloqueio de datas para encomendas de clientes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSalvarRegrasAgendamento} className="space-y-6 max-w-xl">
-                {/* 1. Antecedência Mínima */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="reg-antecedencia" className="font-bold">
-                    Antecedência Mínima de Encomenda (em Dias)
-                  </Label>
-                  <Input
-                    id="reg-antecedencia"
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={regrasAgendamento.antecedenciaMinimaDias}
-                    onChange={(e) =>
-                      setRegrasAgendamento((prev) => ({
-                        ...prev,
-                        antecedenciaMinimaDias: Math.max(0, parseInt(e.target.value) || 0),
-                      }))
-                    }
-                    className="font-mono font-bold"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    0 = Aceita no mesmo dia | 1 = Mínimo de 24h de antecedência | 2 = 48h de antecedência.
-                  </p>
-                </div>
-
-                {/* 2. Horário de Atendimento / Expediente */}
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="reg-abertura" className="font-bold">Horário de Abertura</Label>
-                    <Input
-                      id="reg-abertura"
-                      type="time"
-                      value={regrasAgendamento.horarioAbertura}
-                      onChange={(e) =>
-                        setRegrasAgendamento((prev) => ({
-                          ...prev,
-                          horarioAbertura: e.target.value,
-                        }))
-                      }
-                      className="font-mono font-bold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="reg-fechamento" className="font-bold">Horário de Encerramento</Label>
-                    <Input
-                      id="reg-fechamento"
-                      type="time"
-                      value={regrasAgendamento.horarioFechamento}
-                      onChange={(e) =>
-                        setRegrasAgendamento((prev) => ({
-                          ...prev,
-                          horarioFechamento: e.target.value,
-                        }))
-                      }
-                      className="font-mono font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Dias da Semana Funcionamento */}
-                <div className="space-y-2 pt-2 border-t border-border">
-                  <Label className="font-bold">Dias da Semana com Entregas/Retiradas Ativas</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                    {[
-                      { id: 1, label: "Segunda" },
-                      { id: 2, label: "Terça" },
-                      { id: 3, label: "Quarta" },
-                      { id: 4, label: "Quinta" },
-                      { id: 5, label: "Sexta" },
-                      { id: 6, label: "Sábado" },
-                      { id: 0, label: "Domingo" },
-                    ].map((d) => {
-                      const ativo = regrasAgendamento.diasSemanaDisponiveis.includes(d.id);
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => {
-                            setRegrasAgendamento((prev) => {
-                              const novas = ativo
-                                ? prev.diasSemanaDisponiveis.filter((x) => x !== d.id)
-                                : [...prev.diasSemanaDisponiveis, d.id];
-                              return { ...prev, diasSemanaDisponiveis: novas };
-                            });
-                          }}
-                          className={`flex items-center gap-2 p-2 rounded-xl border text-xs font-semibold transition-all ${
-                            ativo
-                              ? "bg-purple-50 dark:bg-purple-950/40 border-purple-500 text-purple-700 dark:text-purple-300"
-                              : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
-                          }`}
-                        >
-                          <div
-                            className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                              ativo ? "bg-purple-600 border-purple-600 text-white" : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {ativo && <Check className="w-3 h-3" />}
-                          </div>
-                          <span>{d.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 4. Datas Bloqueadas Manualmente (Agenda Cheia / Recesso) */}
-                <div className="space-y-3 pt-2 border-t border-border">
-                  <Label className="font-bold">Bloqueio de Datas Específicas (Agenda Cheia ou Recesso)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="date"
-                      value={novaDataBloqueadaInput}
-                      onChange={(e) => setNovaDataBloqueadaInput(e.target.value)}
-                      className="font-mono text-xs font-bold"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        if (!novaDataBloqueadaInput) return;
-                        if (regrasAgendamento.datasBloqueadas.includes(novaDataBloqueadaInput)) {
-                          toast.warning("Esta data já está bloqueada.");
-                          return;
-                        }
-                        setRegrasAgendamento((prev) => ({
-                          ...prev,
-                          datasBloqueadas: [...prev.datasBloqueadas, novaDataBloqueadaInput].sort(),
-                        }));
-                        setNovaDataBloqueadaInput("");
-                        toast.success("Data adicionada aos bloqueios!");
-                      }}
-                      className="shrink-0 font-semibold"
-                    >
-                      <Plus className="w-4 h-4 mr-1" /> Bloquear Data
-                    </Button>
-                  </div>
-
-                  {regrasAgendamento.datasBloqueadas.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {regrasAgendamento.datasBloqueadas.map((dt) => (
-                        <Badge
-                          key={dt}
-                          variant="secondary"
-                          className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 px-2.5 py-1 text-xs font-mono font-bold flex items-center gap-1.5"
-                        >
-                          {dt}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRegrasAgendamento((prev) => ({
-                                ...prev,
-                                datasBloqueadas: prev.datasBloqueadas.filter((d) => d !== dt),
-                              }));
-                            }}
-                            className="hover:text-rose-900 dark:hover:text-white"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">Nenhuma data bloqueada manualmente.</p>
-                  )}
-                </div>
-
-                <Button type="submit" disabled={salvandoRegras} className="font-semibold shadow-md">
-                  <Save className="w-4 h-4 mr-1.5" />
-                  {salvandoRegras ? "Salvando..." : "Salvar Regras de Encomenda"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TAB: EQUIPE */}
-        <TabsContent value="equipe">
-          {/* SEÇÃO DE EQUIPE & COLABORADORES INTEGRADA NA ABA DE ESTABELECIMENTO */}
-          <div className="pt-6 border-t border-border mt-6">
-            <ColaboradoresTab />
-          </div>
         </TabsContent>
 
         {/* TAB: SEGURANÇA */}
