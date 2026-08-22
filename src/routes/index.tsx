@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
+import { ScannerProvider, useScanner } from "@/context/scanner-context";
 import { supabase } from "@/integrations/supabase/client";
 
 // Components
@@ -87,6 +88,34 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       >
         <Sparkles className="w-4 h-4 mr-2" /> Ver Plano &amp; Desbloquear Acesso Completo
       </Button>
+    </div>
+  );
+}
+
+function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string; onNavigateTab: (tab: string) => void }) {
+  const { isScanning, scanStepMessage } = useScanner();
+
+  if (!isScanning) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-2 text-xs font-bold shadow-md flex items-center justify-between gap-3 animate-fade-in sticky top-[57px] z-30">
+      <div className="flex items-center gap-2 truncate">
+        <Sparkles className="w-4 h-4 text-amber-200 animate-spin shrink-0" />
+        <span className="truncate">
+          ⚡ <strong>Processando leitura da notinha em segundo plano...</strong>{" "}
+          <span className="font-mono text-amber-100 font-normal">({scanStepMessage || "Aguarde..."})</span>
+        </span>
+      </div>
+      {activeTab !== "scanner" && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onNavigateTab("scanner")}
+          className="h-6 text-[10px] font-extrabold bg-white/20 hover:bg-white/30 text-white border border-white/40 shadow-xs shrink-0"
+        >
+          Ver no Scanner
+        </Button>
+      )}
     </div>
   );
 }
@@ -787,9 +816,10 @@ function Index() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16 sm:pb-12">
-      {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
-      <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
+    <ScannerProvider>
+      <div className="min-h-screen bg-background pb-16 sm:pb-12">
+        {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
+        <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Logo & Identidade */}
@@ -843,6 +873,9 @@ function Index() {
           </div>
         </div>
       </header>
+
+      {/* Banner Discreto de Leitura OCR em Background */}
+      <ScannerProgressBanner activeTab={activeTab} onNavigateTab={setActiveTab} />
 
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6">
@@ -1056,5 +1089,6 @@ function Index() {
         </div>
       </nav>
     </div>
-  );
+  </ScannerProvider>
+);
 }
