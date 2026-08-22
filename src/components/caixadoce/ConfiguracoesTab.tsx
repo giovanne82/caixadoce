@@ -142,21 +142,19 @@ export function ConfiguracoesTab() {
         </p>
       </div>
 
-      <Tabs defaultValue="perfil" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3">
-          <TabsTrigger value="perfil" className="flex items-center gap-1.5">
-            <User className="w-4 h-4" /> Perfil Pessoal
-          </TabsTrigger>
+      <Tabs defaultValue="empresa" className="space-y-6">
+        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-2">
           <TabsTrigger value="empresa" className="flex items-center gap-1.5">
-            <Building2 className="w-4 h-4" /> Estabelecimento / Pix
+            <Building2 className="w-4 h-4" /> Perfil &amp; Estabelecimento
           </TabsTrigger>
           <TabsTrigger value="seguranca" className="flex items-center gap-1.5">
             <Lock className="w-4 h-4" /> Segurança
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB: PERFIL PESSOAL */}
-        <TabsContent value="perfil">
+        {/* TAB: PERFIL & ESTABELECIMENTO */}
+        <TabsContent value="empresa" className="space-y-6">
+          {/* CARD: DADOS DO USUÁRIO */}
           <Card className="border-border shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-bold text-foreground">Dados do Usuário</CardTitle>
@@ -180,15 +178,13 @@ export function ConfiguracoesTab() {
                 </div>
                 <Button type="submit" disabled={salvandoUser} className="font-semibold shadow-sm">
                   <Save className="w-4 h-4 mr-1.5" />
-                  {salvandoUser ? "Salvando..." : "Salvar Alterações"}
+                  {salvandoUser ? "Salvando..." : "Salvar Alterações do Perfil"}
                 </Button>
               </form>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* TAB: ESTABELECIMENTO & PIX (INCLUI EQUIPE & COLABORADORES) */}
-        <TabsContent value="empresa" className="space-y-6">
+          {/* CARD: DADOS DO ESTABELECIMENTO & PIX */}
           <Card className="border-border shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-bold text-foreground">
