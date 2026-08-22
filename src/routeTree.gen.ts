@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
@@ -20,6 +21,11 @@ import { Route as PagarCobrancaIdRouteImport } from './routes/pagar.$cobrancaId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LandingRoute = LandingRouteImport.update({
+  id: '/landing',
+  path: '/landing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -55,6 +61,7 @@ const PagarCobrancaIdRoute = PagarCobrancaIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/landing'
     | '/login'
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/landing'
     | '/login'
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/landing'
     | '/login'
     | '/pedido-confirmado'
     | '/agendar/$storeSlug'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/landing': {
+      id: '/landing'
+      path: '/landing'
+      fullPath: '/landing'
+      preLoaderRoute: typeof LandingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
