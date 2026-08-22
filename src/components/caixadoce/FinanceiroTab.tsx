@@ -59,6 +59,7 @@ import {
   Sparkles,
   QrCode,
   ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -126,14 +127,23 @@ export function FinanceiroTab({
     }
   };
 
-  // Form State Cobrança Avulsa (Link de Pagamento Stripe)
+  // Form State Cobrança Avulsa & Trava Educativa Stripe
   const [modalCobrancaOpen, setModalCobrancaOpen] = useState(false);
+  const [modalEducativoStripeOpen, setModalEducativoStripeOpen] = useState(false);
   const [stepCobranca, setStepCobranca] = useState<1 | 2>(1);
   const [cobrancaDescricao, setCobrancaDescricao] = useState("");
   const [cobrancaValorLiquido, setCobrancaValorLiquido] = useState("");
   const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
+
+  const handleAbrirModalCobranca = () => {
+    if (stripeConfig.status !== "connected") {
+      setModalEducativoStripeOpen(true);
+    } else {
+      setModalCobrancaOpen(true);
+    }
+  };
 
   const valCobrancaLiquido = parseFloat(cobrancaValorLiquido) || 0;
   const previewCobranca = useMemo(() => {
@@ -397,7 +407,7 @@ export function FinanceiroTab({
             <CardContent className="pt-0">
               <Button
                 type="button"
-                onClick={() => setModalCobrancaOpen(true)}
+                onClick={handleAbrirModalCobranca}
                 size="lg"
                 className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
               >
@@ -423,8 +433,11 @@ export function FinanceiroTab({
                   </Badge>
                 )}
               </div>
-              <CardDescription className="text-xs">
-                Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.
+              <CardDescription className="text-xs space-y-1">
+                <span>Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.</span>
+                <span className="block text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-xl border border-border mt-1.5 leading-relaxed font-medium">
+                  Para receber pagamentos por cartão, você precisa conectar sua conta. Utilizamos a Stripe, o sistema de pagamentos mais seguro e utilizado no mundo, para garantir que o dinheiro caia diretamente na sua conta bancária.
+                </span>
               </CardDescription>
             </CardHeader>
 
@@ -1035,6 +1048,50 @@ export function FinanceiroTab({
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL EDUCATIVO & TRAVA DE SEGURANÇA STRIPE */}
+      {/* ========================================================================= */}
+      <Dialog open={modalEducativoStripeOpen} onOpenChange={setModalEducativoStripeOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center mb-1">
+              <ShieldCheck className="w-7 h-7 text-indigo-600" />
+            </div>
+            <DialogTitle className="text-base font-extrabold text-foreground">
+              Conecte sua Conta Stripe para Gerar Links
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1 leading-relaxed">
+              Para receber pagamentos por cartão, você precisa conectar sua conta. Utilizamos a Stripe, o sistema de pagamentos mais seguro e utilizado no mundo, para garantir que o dinheiro caia diretamente na sua conta bancária.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 border-t flex flex-col sm:flex-row gap-2 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalEducativoStripeOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setModalEducativoStripeOpen(false);
+                handleConectarStripe();
+              }}
+              disabled={conectandoStripe}
+              className="font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-md gap-1.5"
+            >
+              <CreditCard className="w-4 h-4" />
+              {conectandoStripe ? "Conectando..." : "Criar Conta / Conectar Stripe"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

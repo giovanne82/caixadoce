@@ -72,12 +72,12 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo dos Planos Pagos</h3>
+        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Mensal</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 30 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras Ilimitada).
+          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras, Painel Financeiro e Cardápio).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-          Assine o Plano Mensal (R$ 24,90) ou Anual (R$ 19,90/mês) para desbloquear o Scanner com IA, Calendário, Cardápio Digital e Financeiro!
+          Assine o Plano Mensal (R$ 14,90/mês) para desbloquear o acesso completo.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
         onClick={onIrParaPlano}
         className="font-extrabold shadow-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs py-5 px-6"
       >
-        <Sparkles className="w-4 h-4 mr-2" /> Ver Planos &amp; Desbloquear Acesso Completo
+        <Sparkles className="w-4 h-4 mr-2" /> Ver Plano &amp; Desbloquear Acesso Completo
       </Button>
     </div>
   );
