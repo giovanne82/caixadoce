@@ -119,14 +119,15 @@ export default {
             );
           }
 
+          const storeCode = payload.establishmentCode || "CD-1001";
           const sessionOptions: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ["card"],
             mode: "payment",
             line_items: lineItems,
-            success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${origin}/?checkout=cancel`,
+            success_url: `${origin}/pedido-confirmado?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${origin}/cardapio/${storeCode}`,
             metadata: {
-              establishmentCode: payload.establishmentCode || "CD-1001",
+              establishmentCode: storeCode,
               customerName: payload.customerName || "",
               customerWhatsapp: payload.customerWhatsapp || "",
             },
