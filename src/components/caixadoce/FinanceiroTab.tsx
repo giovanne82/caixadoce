@@ -160,12 +160,16 @@ export function FinanceiroTab({
       });
 
       const data = await res.json();
-      const realLink = data.url || `https://checkout.stripe.com/pay/cs_cbr_${Date.now()}`;
-      setCobrancaLinkGerado(realLink);
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Erro ao comunicar com a API do Stripe");
+      }
+
+      setCobrancaLinkGerado(data.url);
       setStepCobranca(2);
       toast.success("Link de cobrança gerado no Stripe com sucesso!");
-    } catch {
-      toast.error("Erro ao gerar link de pagamento no Stripe.");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar link de pagamento no Stripe.");
     } finally {
       setGerandoLink(false);
     }

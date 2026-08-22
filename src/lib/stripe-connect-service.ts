@@ -154,6 +154,43 @@ export async function createStripeSession(payload: CreateStripeSessionPayload): 
     installmentValue: feeResult.installmentValue,
   });
 
+  try {
+    const res = await fetch("/api/create-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        establishmentCode: payload.establishmentCode,
+        customerName: payload.customerName,
+        customerWhatsapp: payload.customerWhatsapp,
+        items: payload.items,
+        repassarTaxa,
+        installments: feeResult.installments,
+        feeAmount: feeResult.feeAmount,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.url) {
+        return {
+          sessionId: data.id || `cs_${Date.now()}`,
+          checkoutUrl: data.url,
+          feeResult,
+          lineItems,
+          feeItem:
+            repassarTaxa && feeResult.feeAmount > 0
+              ? {
+                  name: `Taxa de Conveniência (${feeResult.installments}x no Cartão)`,
+                  amount: feeResult.feeAmount,
+                }
+              : undefined,
+        };
+      }
+    }
+  } catch {
+    // Fallback silencioso
+  }
+
   const mockSessionId = `cs_stripe_${Date.now()}`;
   return {
     sessionId: mockSessionId,

@@ -54,18 +54,14 @@ export default {
           const bodyText = await request.text();
           const payload = JSON.parse(bodyText);
 
-          const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
-
-          // Se a chave for mock de desenvolvimento local sem env configurada
-          if (stripeSecretKey === "sk_test_mock") {
-            const mockId = `cs_test_${Date.now()}`;
+          const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+          if (!stripeSecretKey) {
             return new Response(
               JSON.stringify({
-                id: mockId,
-                url: `https://checkout.stripe.com/pay/${mockId}`,
+                error: "Chave secreta do Stripe (STRIPE_SECRET_KEY) não encontrada nas variáveis de ambiente.",
               }),
               {
-                status: 200,
+                status: 400,
                 headers: { "content-type": "application/json" },
               }
             );
@@ -116,6 +112,13 @@ export default {
             }
           }
 
+          if (lineItems.length === 0) {
+            return new Response(
+              JSON.stringify({ error: "Nenhum item informado para criar a sessão de pagamento." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
           const sessionOptions: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ["card"],
             mode: "payment",
@@ -135,20 +138,24 @@ export default {
 
           const session = await stripe.checkout.sessions.create(sessionOptions, requestOptions);
 
+          if (!session.url) {
+            return new Response(
+              JSON.stringify({ error: "URL da sessão de checkout não foi gerada pelo Stripe." }),
+              { status: 500, headers: { "content-type": "application/json" } }
+            );
+          }
+
           return new Response(JSON.stringify({ id: session.id, url: session.url }), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
         } catch (err: any) {
-          const fallbackId = `cs_fallback_${Date.now()}`;
           return new Response(
             JSON.stringify({
-              id: fallbackId,
-              url: `https://checkout.stripe.com/pay/${fallbackId}`,
-              error: err.message,
+              error: err?.message || "Erro ao comunicar com a API do Stripe.",
             }),
             {
-              status: 200,
+              status: 400,
               headers: { "content-type": "application/json" },
             }
           );
