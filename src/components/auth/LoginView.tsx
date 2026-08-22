@@ -151,25 +151,34 @@ export function LoginView({ onSuccess }: LoginViewProps) {
 
   const handleLoginColaborador = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!colabNome || !colabCodigoLoja || !colabPin) {
-      toast.error("Preencha o Nome do Colaborador, Código da Loja e o PIN.");
+    if (!colabCodigoLoja || !colabPin) {
+      toast.error("Preencha o Código da Loja e o PIN de Acesso.");
       return;
     }
     if (!/^\d{4,6}$/.test(colabPin)) {
-      toast.error("O PIN deve conter entre 4 e 6 dígitos numéricos.");
+      toast.error("O PIN de Acesso deve conter entre 4 e 6 dígitos numéricos.");
       return;
     }
 
     setLoading(true);
     try {
-      const cleanName = colabNome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-      const cleanCode = colabCodigoLoja.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      let rawName = colabNome.trim();
+      let rawCode = colabCodigoLoja.trim();
+
+      if (rawCode.includes("@")) {
+        const parts = rawCode.split("@");
+        rawName = parts[0];
+        rawCode = parts[1];
+      }
+
+      const cleanName = (rawName || "colaborador").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const cleanCode = rawCode.toLowerCase().replace(/[^a-z0-9]/g, "");
       const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
 
       await loginWithEmail(syntheticEmail, colabPin);
       onSuccess?.();
     } catch (error: any) {
-      toast.error("Credenciais inválidas. Verifique o Nome, Código da Loja e o PIN.");
+      toast.error("Credenciais inválidas. Verifique o Código da Loja e o PIN de Acesso.");
     } finally {
       setLoading(false);
     }
@@ -318,40 +327,30 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 /* FORMULÁRIO DE LOGIN DE COLABORADOR (CÓDIGO DA LOJA + PIN) */
                 <form onSubmit={handleLoginColaborador} className="space-y-4 pt-1">
                   <div className="space-y-1.5">
-                    <Label htmlFor="colab-login-name">Nome / Login do Colaborador</Label>
+                    <Label htmlFor="colab-login-code">Código da Loja</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="colab-login-name"
-                        placeholder="Ex: Carlos Eduardo"
-                        className="pl-9"
-                        value={colabNome}
-                        onChange={(e) => setColabNome(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="colab-login-code">Código da Loja</Label>
-                      <Input
                         id="colab-login-code"
-                        placeholder="Ex: CD-1001"
-                        className="font-mono uppercase font-bold"
+                        placeholder="Ex: CD-1001 ou colaborador@CD-1001"
+                        className="pl-9 font-mono uppercase font-bold"
                         value={colabCodigoLoja}
                         onChange={(e) => setColabCodigoLoja(e.target.value)}
                         required
                       />
                     </div>
+                  </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="colab-login-pin">PIN de Acesso</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="colab-login-pin">PIN de Acesso</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="colab-login-pin"
                         type="password"
                         placeholder="4 a 6 números"
                         maxLength={6}
+                        className="pl-9"
                         value={colabPin}
                         onChange={(e) => setColabPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                         required
