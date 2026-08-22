@@ -1127,3 +1127,112 @@ export function formatarCep(val: string): string {
   if (digits.length <= 5) return digits;
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
+
+// ==============================================================================
+// REGRAS DE AGENDAMENTO E BLOQUEIO DE DATAS (SCHEDULING RULES)
+// ==============================================================================
+
+export interface RegrasAgendamento {
+  antecedenciaMinimaDias: number; // 0 = mesmo dia, 1 = 24h, 2 = 48h...
+  diasSemanaDisponiveis: number[]; // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  datasBloqueadas: string[]; // YYYY-MM-DD
+  horarioAbertura: string; // Ex: "09:00"
+  horarioFechamento: string; // Ex: "18:00"
+}
+
+export const REGRAS_AGENDAMENTO_PADRAO: RegrasAgendamento = {
+  antecedenciaMinimaDias: 1,
+  diasSemanaDisponiveis: [1, 2, 3, 4, 5, 6], // Segunda a Sábado por padrão
+  datasBloqueadas: [],
+  horarioAbertura: "09:00",
+  horarioFechamento: "18:00",
+};
+
+export function obterRegrasAgendamento(estabelecimentoCodigo?: string): RegrasAgendamento {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
+    }
+  } catch {}
+  return REGRAS_AGENDAMENTO_PADRAO;
+}
+
+export function salvarRegrasAgendamentoStorage(estabelecimentoCodigo: string, regras: RegrasAgendamento) {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_regras_agendamento_${code}`, JSON.stringify(regras));
+  } catch (e) {
+    console.warn("Erro ao salvar regras de agendamento:", e);
+  }
+}
+
+export function validarDataEntrega(
+  dataIso: string,
+  regras: RegrasAgendamento
+): { valida: boolean; motivo?: string } {
+  if (!dataIso) return { valida: false, motivo: "Selecione uma data para a encomenda." };
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const parts = dataIso.split("-").map(Number);
+  if (parts.length !== 3) return { valida: false, motivo: "Data em formato inválido." };
+  const [ano, mes, dia] = parts;
+  const dataAlvo = new Date(ano, mes - 1, dia);
+  dataAlvo.setHours(0, 0, 0, 0);
+
+  // 1. Antecedência Mínima
+  const diffTime = dataAlvo.getTime() - hoje.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < (regras.antecedenciaMinimaDias || 0)) {
+    if (regras.antecedenciaMinimaDias === 0) {
+      if (diffDays < 0) return { valida: false, motivo: "A data informada já passou." };
+    } else {
+      return {
+        valida: false,
+        motivo: `Encomendas devem ser feitas com no mínimo ${regras.antecedenciaMinimaDias} dia(s) de antecedência.`,
+      };
+    }
+  }
+
+  // 2. Dias da Semana Disponíveis
+  const diaSemana = dataAlvo.getDay(); // 0 = Dom, 1 = Seg, etc.
+  if (!regras.diasSemanaDisponiveis || !regras.diasSemanaDisponiveis.includes(diaSemana)) {
+    const NOMES_DIAS = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+    return {
+      valida: false,
+      motivo: `A loja não realiza entregas em ${NOMES_DIAS[diaSemana]}s.`,
+    };
+  }
+
+  // 3. Datas Bloqueadas Manualmente (Agenda Cheia / Recesso)
+  if (regras.datasBloqueadas && regras.datasBloqueadas.includes(dataIso)) {
+    return {
+      valida: false,
+      motivo: "Esta data está indisponível na agenda da loja (agenda cheia ou recesso).",
+    };
+  }
+
+  return { valida: true };
+}
+
+export function validarHorarioEntrega(
+  horario: string,
+  regras: RegrasAgendamento
+): { valido: boolean; motivo?: string } {
+  if (!horario) return { valido: true };
+
+  const hForm = horario.trim();
+  if (hForm < regras.horarioAbertura || hForm > regras.horarioFechamento) {
+    return {
+      valido: false,
+      motivo: `Horário fora do expediente da loja (${regras.horarioAbertura} às ${regras.horarioFechamento}).`,
+    };
+  }
+
+  return { valido: true };
+}

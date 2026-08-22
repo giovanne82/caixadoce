@@ -50,6 +50,9 @@ import {
   formatarWhatsappLink,
   aplicarMascaraTelefone,
   obterProdutosCardapio,
+  obterRegrasAgendamento,
+  validarDataEntrega,
+  validarHorarioEntrega,
   type ProdutoCardapio,
 } from "@/lib/caixadoce-data";
 import {
@@ -100,6 +103,35 @@ function CardapioLojaView() {
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
+  const regras = useMemo(() => obterRegrasAgendamento(code), [code]);
+
+  const dataMinimaStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + (regras.antecedenciaMinimaDias || 0));
+    return d.toISOString().split("T")[0];
+  }, [regras]);
+
+  const handleDataEntregaChange = (val: string) => {
+    if (!val) {
+      setDataEntrega("");
+      return;
+    }
+    const valRes = validarDataEntrega(val, regras);
+    if (!valRes.valida) {
+      toast.error(valRes.motivo || "Data indisponível para encomenda.");
+      setDataEntrega("");
+      return;
+    }
+    setDataEntrega(val);
+  };
+
+  const handleHorarioEntregaChange = (val: string) => {
+    setHorarioEntrega(val);
+    const horRes = validarHorarioEntrega(val, regras);
+    if (!horRes.valido) {
+      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
+    }
+  };
 
   useEffect(() => {
     const list = obterProdutosCardapio(code);
@@ -495,29 +527,41 @@ Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="chk-data" className="text-xs">Data Desejada *</Label>
-                      <Input
-                        id="chk-data"
-                        type="date"
-                        value={dataEntrega}
-                        onChange={(e) => setDataEntrega(e.target.value)}
-                        className="h-8 text-xs font-bold"
-                        required
-                      />
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="chk-data" className="text-xs">Data Desejada *</Label>
+                        <Input
+                          id="chk-data"
+                          type="date"
+                          min={dataMinimaStr}
+                          value={dataEntrega}
+                          onChange={(e) => handleDataEntregaChange(e.target.value)}
+                          className="h-8 text-xs font-bold font-mono"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="chk-hora" className="text-xs">Horário Previsto *</Label>
+                        <Input
+                          id="chk-hora"
+                          type="time"
+                          value={horarioEntrega}
+                          onChange={(e) => handleHorarioEntregaChange(e.target.value)}
+                          className="h-8 text-xs font-bold font-mono"
+                          required
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="chk-hora" className="text-xs">Horário Previsto *</Label>
-                      <Input
-                        id="chk-hora"
-                        type="time"
-                        value={horarioEntrega}
-                        onChange={(e) => setHorarioEntrega(e.target.value)}
-                        className="h-8 text-xs font-bold"
-                        required
-                      />
-                    </div>
+                    {/* Mensagem Informativa de Regras de Encomenda */}
+                    <p className="text-[10px] text-purple-700 dark:text-purple-300 bg-purple-500/10 p-1.5 rounded-md border border-purple-500/20 font-medium flex items-center gap-1.5 mt-1">
+                      <Clock className="w-3 h-3 text-purple-600 shrink-0" />
+                      <span>
+                        {regras.antecedenciaMinimaDias === 0
+                          ? `Aceitamos encomendas no mesmo dia. Expediente: ${regras.horarioAbertura} às ${regras.horarioFechamento}.`
+                          : `Encomendas com no mínimo ${regras.antecedenciaMinimaDias} dia(s) de antecedência. Expediente: ${regras.horarioAbertura} às ${regras.horarioFechamento}.`}
+                      </span>
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
