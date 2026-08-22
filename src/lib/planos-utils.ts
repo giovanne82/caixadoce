@@ -117,7 +117,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string): InfoPlanoEsta
         const inicio = new Date(parsed.dataInicio).getTime();
         const agora = new Date().getTime();
         const diasDecorridos = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24));
-        const diasRestantes = Math.max(0, 30 - diasDecorridos);
+        const diasRestantes = Math.max(0, 14 - diasDecorridos);
         if (diasRestantes <= 0) {
           return {
             ...parsed,
@@ -136,9 +136,9 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string): InfoPlanoEsta
   } catch {}
 
   return {
-    planoId: "anual",
+    planoId: "mensal",
     status: "trial",
-    diasRestantesTrial: 30,
+    diasRestantesTrial: 14,
     dataInicio: new Date().toISOString(),
   };
 }
@@ -147,7 +147,8 @@ export function verificarAcessoModulo(
   modulo: "despesas" | "scanner" | "encomendas" | "produtos" | "financeiro",
   infoPlano: InfoPlanoEstabelecimento
 ): boolean {
-  if (modulo === "despesas") return true;
+  // Usuários no plano gratuito DEVEM ter acesso total às abas 'Financeiro', 'Cardápio' (produtos) e 'Lista de Compras' (despesas)
+  if (modulo === "despesas" || modulo === "financeiro" || modulo === "produtos") return true;
 
   if (infoPlano.status === "trial") return true;
   if (infoPlano.status === "ativo") {

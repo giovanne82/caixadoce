@@ -120,6 +120,15 @@ export default {
           }
 
           const storeCode = payload.establishmentCode || "CD-1001";
+
+          // Comissão de 1.5% retida pela plataforma CaixaDoce em cada transação via Stripe Connect
+          const totalCentavos = lineItems.reduce((acc, item) => {
+            const unit = item.price_data?.unit_amount || 0;
+            const qty = Number(item.quantity) || 1;
+            return acc + unit * qty;
+          }, 0);
+          const applicationFeeAmount = Math.round(totalCentavos * 0.015); // 1,5% de comissão da plataforma
+
           const sessionOptions: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ["card"],
             mode: "payment",
@@ -132,6 +141,12 @@ export default {
               customerWhatsapp: payload.customerWhatsapp || "",
             },
           };
+
+          if (payload.stripeAccountId) {
+            sessionOptions.payment_intent_data = {
+              application_fee_amount: applicationFeeAmount,
+            };
+          }
 
           const requestOptions = payload.stripeAccountId
             ? { stripeAccount: payload.stripeAccountId }
