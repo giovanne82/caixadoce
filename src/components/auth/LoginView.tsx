@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Button } from "@/components/ui/button";
@@ -207,7 +208,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
           <CardDescription>
             {activeTab === "login"
               ? "Gerencie suas finanças, vendas e equipe com facilidade"
-              : "Experimente 30 dias grátis com todos os recursos liberados"}
+              : "Experimente 14 dias grátis com todos os recursos liberados"}
           </CardDescription>
         </CardHeader>
 
@@ -476,7 +477,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs text-foreground flex items-center gap-2.5">
                   <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
                   <span>
-                    Inclui <strong>30 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
+                    Inclui <strong>14 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
                   </span>
                 </div>
 
@@ -489,11 +490,17 @@ export function LoginView({ onSuccess }: LoginViewProps) {
           </Tabs>
         </CardContent>
 
-        <CardFooter className="flex flex-col items-center justify-center border-t border-border/50 py-4 text-xs text-muted-foreground">
+        <CardFooter className="flex flex-col items-center justify-center border-t border-border/50 py-4 space-y-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5 font-medium">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
             Conexão segura criptografada com Supabase &amp; Stripe
           </div>
+          <Link
+            to="/landing"
+            className="text-purple-600 dark:text-purple-400 font-extrabold hover:underline flex items-center gap-1 transition-colors pt-1"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Conheça a Apresentação &amp; Recursos do CaixaDoce
+          </Link>
         </CardFooter>
       </Card>
 

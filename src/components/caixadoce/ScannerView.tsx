@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -43,7 +43,7 @@ import {
   type Encomenda,
   type ListaCompras,
 } from "@/lib/caixadoce-data";
-import { processarNotinhaComOCR } from "@/lib/ocr-service";
+import { useScanner } from "@/context/scanner-context";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
@@ -61,14 +61,17 @@ export function ScannerView({
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados do Scanner e Upload
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanStepMessage, setScanStepMessage] = useState("");
-
-  // Modal de Revisão dos Dados Extraídos
-  const [modalRevisaoOpen, setModalRevisaoOpen] = useState(false);
+  // Contexto Global de Leitura OCR em Background
+  const {
+    isScanning,
+    scanStepMessage,
+    selectedFile,
+    filePreview,
+    extractedData,
+    modalRevisaoOpen,
+    setModalRevisaoOpen,
+    processarArquivoOCR,
+  } = useScanner();
 
   // Modal de Visualização de Detalhes da Notinha
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
@@ -87,7 +90,7 @@ export function ScannerView({
     window.open(`https://api.whatsapp.com/send?text=${textoCodificado}`, "_blank");
   };
 
-  // Metadados Fiscais Extraídos
+  // Metadados Fiscais Extraídos (Sincronizados com o Contexto Global)
   const [fornecedorNome, setFornecedorNome] = useState("");
   const [fornecedorEndereco, setFornecedorEndereco] = useState("");
   const [numeroNota, setNumeroNota] = useState("");
@@ -98,49 +101,24 @@ export function ScannerView({
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  // Sincronizar dados extraídos do contexto global com os campos editáveis locais
+  useEffect(() => {
+    if (extractedData) {
+      setFornecedorNome(extractedData.fornecedorNome || "");
+      setFornecedorEndereco(extractedData.fornecedorEndereco || "");
+      setNumeroNota(extractedData.numeroNota || "");
+      setNumeroPedido(extractedData.numeroPedido || "");
+      setDataCompra(extractedData.dataCompra || new Date().toISOString().split("T")[0]);
+      setHoraCompra(extractedData.horaCompra || "14:35:10");
+      setItensExtraidos(extractedData.itens || []);
+    }
+  }, [extractedData]);
+
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onloadend = () => setFilePreview(reader.result as string);
-        reader.readAsDataURL(file);
-      } else {
-        setFilePreview(null);
-      }
-      processarOCRReal(file);
-    }
-  };
-
-  // Leitura com IA do Google Gemini (extractReceiptDataWithGemini)
-  const processarOCRReal = async (file: File) => {
-    setIsScanning(true);
-    setScanStepMessage("Processando notinha...");
-
-    try {
-      const res = await processarNotinhaComOCR(file, (msg) => {
-        setScanStepMessage(msg);
-      });
-
-      setIsScanning(false);
-      setFornecedorNome(res.fornecedorNome);
-      setFornecedorEndereco(res.fornecedorEndereco);
-      setNumeroNota(res.numeroNota);
-      setNumeroPedido(res.numeroPedido);
-      setDataCompra(res.dataCompra);
-      setHoraCompra(res.horaCompra);
-      setItensExtraidos(res.itens);
-      setModalRevisaoOpen(true);
-      if (res.itens.length === 0) {
-        toast.info("Não foi possível identificar os produtos automaticamente. Adicione os itens no modal abaixo.");
-      } else {
-        toast.success(`Leitura de notinha concluída! ${res.itens.length} item(ns) identificado(s). 🎉`);
-      }
-    } catch (e: any) {
-      setIsScanning(false);
-      toast.error(`Erro ao ler notinha: ${e.message}`);
+      processarArquivoOCR(file);
     }
   };
 

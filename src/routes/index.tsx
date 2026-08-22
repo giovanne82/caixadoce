@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
+import { ScannerProvider, useScanner } from "@/context/scanner-context";
 import { supabase } from "@/integrations/supabase/client";
 
 // Components
@@ -72,12 +73,12 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo dos Planos Pagos</h3>
+        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Mensal</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 30 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras Ilimitada).
+          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras, Painel Financeiro e Cardápio).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-          Assine o Plano Mensal (R$ 24,90) ou Anual (R$ 19,90/mês) para desbloquear o Scanner com IA, Calendário, Cardápio Digital e Financeiro!
+          Assine o Plano Mensal (R$ 14,90/mês) para desbloquear o acesso completo.
         </p>
       </div>
 
@@ -85,8 +86,36 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
         onClick={onIrParaPlano}
         className="font-extrabold shadow-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs py-5 px-6"
       >
-        <Sparkles className="w-4 h-4 mr-2" /> Ver Planos &amp; Desbloquear Acesso Completo
+        <Sparkles className="w-4 h-4 mr-2" /> Ver Plano &amp; Desbloquear Acesso Completo
       </Button>
+    </div>
+  );
+}
+
+function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string; onNavigateTab: (tab: string) => void }) {
+  const { isScanning, scanStepMessage } = useScanner();
+
+  if (!isScanning) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-2 text-xs font-bold shadow-md flex items-center justify-between gap-3 animate-fade-in sticky top-[57px] z-30">
+      <div className="flex items-center gap-2 truncate">
+        <Sparkles className="w-4 h-4 text-amber-200 animate-spin shrink-0" />
+        <span className="truncate">
+          ⚡ <strong>Processando leitura da notinha em segundo plano...</strong>{" "}
+          <span className="font-mono text-amber-100 font-normal">({scanStepMessage || "Aguarde..."})</span>
+        </span>
+      </div>
+      {activeTab !== "scanner" && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onNavigateTab("scanner")}
+          className="h-6 text-[10px] font-extrabold bg-white/20 hover:bg-white/30 text-white border border-white/40 shadow-xs shrink-0"
+        >
+          Ver no Scanner
+        </Button>
+      )}
     </div>
   );
 }
@@ -182,32 +211,8 @@ function Index() {
         if (raw) {
           setTransacoes(JSON.parse(raw));
         } else {
-          const demos: TransacaoFinanceira[] = [
-            {
-              id: "tr-1",
-              descricao: "Venda Caixa de Brigadeiros Gourmet (12 un)",
-              valor: 48.0,
-              tipo: "receita",
-              categoria: "Venda Direta / Balcão",
-              data: new Date().toLocaleDateString("pt-BR"),
-              metodoPagamento: "pix",
-              status: "concluida",
-              clienteOuFornecedor: "Fernanda Costa",
-            },
-            {
-              id: "tr-2",
-              descricao: "Encomenda Bolo Vulcão Ninho com Nutella",
-              valor: 110.0,
-              tipo: "receita",
-              categoria: "Encomenda Especial",
-              data: new Date().toLocaleDateString("pt-BR"),
-              metodoPagamento: "cartao_credito",
-              status: "concluida",
-              clienteOuFornecedor: "Lucas Martins",
-            },
-          ];
-          setTransacoes(demos);
-          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(demos));
+          setTransacoes([]);
+          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify([]));
         }
         return;
       }
@@ -226,9 +231,8 @@ function Index() {
         origem: d.origem || (d.descricao?.includes("Stripe") || d.categoria?.includes("Stripe") ? "Stripe" : "Manual"),
       }));
 
-      setTransacoes(mapeadas);
     } catch {}
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 2. Carrega Encomendas e Datas Bloqueadas
   const fetchEncomendasECalendario = useCallback(async () => {
@@ -242,35 +246,8 @@ function Index() {
         if (raw) {
           setEncomendas(JSON.parse(raw));
         } else {
-          const hoje = new Date().toISOString().split("T")[0];
-          const demoOrders: Encomenda[] = [
-            {
-              id: "ord-1",
-              estabelecimentoCodigo: activeCode,
-              clienteNome: "Camila Guimarães",
-              clienteWhatsapp: "(11) 98765-4321",
-              dataEntrega: hoje,
-              horarioEntrega: "15:30",
-              itens: "1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga",
-              itensDetalhes: [
-                { id: "it-1", nome: "Bolo Red Velvet Especial", quantidade: 1, precoUnitario: 140 },
-                { id: "it-2", nome: "Caixa Brigadeiros Gourmet (12 un)", quantidade: 1, precoUnitario: 48 },
-              ],
-              insumosNecessarios: [
-                { id: "ins-tag-1", nome: "Leite Condensado Moça 395g", quantidade: 3, comprado: false },
-                { id: "ins-tag-2", nome: "Cobertura Harald Melken Ao Leite", quantidade: 1, comprado: false },
-                { id: "ins-tag-3", nome: "Chantilly Norcau Chanty 1L", quantidade: 2, comprado: true },
-              ],
-              valorTotal: 188.0,
-              valorEntrada: 90.0,
-              statusPagamento: "sinal_pago",
-              status: "em_producao",
-              tipoEntrega: "retirada",
-              observacoes: "Vela decorativa dourada inclusa",
-            },
-          ];
-          setEncomendas(demoOrders);
-          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(demoOrders));
+          setEncomendas([]);
+          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeadas: Encomenda[] = data.map((d: any) => ({
@@ -328,51 +305,8 @@ function Index() {
         if (raw) {
           setDespesas(JSON.parse(raw));
         } else {
-          const demoDespesas: DespesaNotaFiscal[] = [
-            {
-              id: "exp-1",
-              estabelecimentoCodigo: activeCode,
-              fornecedorNome: "ArtFesta Confeitaria & Embalagens",
-              fornecedorEndereco: "Av. das Américas, 1200 - Centro",
-              numeroNota: "NFC-e 000.142.890",
-              numeroPedido: "PED-84920",
-              dataCompra: new Date().toISOString().split("T")[0],
-              horaCompra: "14:35:10",
-              valorTotal: 289.40,
-              valorProducao: 245.00,
-              valorUtensilios: 44.40,
-              valorConsumoProprio: 0.00,
-              valorOutros: 0.00,
-              itens: [
-                {
-                  id: "it-1",
-                  nome: "LEITE CONDENSADO MOÇA 395G",
-                  quantidade: 24,
-                  valorUnitario: 6.89,
-                  valorTotal: 165.36,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-2",
-                  nome: "COBERTURA SICAO AO LEITE 1.01KG",
-                  quantidade: 2,
-                  valorUnitario: 39.82,
-                  valorTotal: 79.64,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-3",
-                  nome: "CAKE BOARD MDF REDONDO 25CM",
-                  quantidade: 8,
-                  valorUnitario: 5.55,
-                  valorTotal: 44.40,
-                  categoria: "utensilios",
-                },
-              ],
-            },
-          ];
-          setDespesas(demoDespesas);
-          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(demoDespesas));
+          setDespesas([]);
+          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
@@ -410,8 +344,8 @@ function Index() {
         if (raw) {
           setClientes(JSON.parse(raw));
         } else {
-          setClientes(CLIENTES_PADRAO);
-          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(CLIENTES_PADRAO));
+          setClientes([]);
+          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeados: Cliente[] = data.map((c: any) => ({
@@ -439,8 +373,8 @@ function Index() {
         if (raw) {
           setProdutos(JSON.parse(raw));
         } else {
-          setProdutos(CATALOGO_PRODUTOS_PADRAO);
-          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(CATALOGO_PRODUTOS_PADRAO));
+          setProdutos([]);
+          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
@@ -461,13 +395,45 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
+  // 6. Carrega Listas de Compras (ListasCompras) do Supabase ou Cache Local
+  const fetchListasCompras = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
+
+      if (!data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_listas_compras_v2_${activeCode}`);
+        if (raw) {
+          try {
+            setListasCompras(JSON.parse(raw));
+          } catch {}
+        }
+      } else {
+        const mapeadas: ListaCompras[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          nome: d.nome || d.name,
+          data: d.data || new Date().toISOString().split("T")[0],
+          status: d.status || "pendente",
+          itens: Array.isArray(d.itens) ? d.itens : Array.isArray(d.items) ? d.items : [],
+          valorEstimado: d.valor_estimado ? Number(d.valor_estimado) : 0,
+          comprovanteUrl: d.comprovante_url,
+          createdAt: d.created_at || d.data || new Date().toISOString(),
+        }));
+        setListasCompras(mapeadas);
+        localStorage.setItem(`caixadoce_listas_compras_v2_${activeCode}`, JSON.stringify(mapeadas));
+      }
+    } catch {}
+  }, [activeCode, profile, safeFetchSupabase]);
+
   useEffect(() => {
     fetchTransacoes();
     fetchEncomendasECalendario();
     fetchDespesas();
     fetchClientes();
     fetchProdutos();
-  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos]);
+    fetchListasCompras();
+  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
@@ -882,9 +848,10 @@ function Index() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16 sm:pb-12">
-      {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
-      <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
+    <ScannerProvider>
+      <div className="min-h-screen bg-background pb-16 sm:pb-12">
+        {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
+        <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Bloco Esquerda: Logo + Informações do Estabelecimento/Usuário em Coluna */}
@@ -953,10 +920,13 @@ function Index() {
         </div>
       </header>
 
+      {/* Banner Discreto de Leitura OCR em Background */}
+      <ScannerProgressBanner activeTab={activeTab} onNavigateTab={setActiveTab} />
+
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="-mx-4 overflow-x-auto px-4">
+          <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
               {podeAcessarAba("scanner") && (
                 <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
@@ -1090,80 +1060,83 @@ function Index() {
         </Tabs>
       </main>
 
-      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white sm:hidden py-1.5 px-2 shadow-2xl">
-        <div className="flex items-center justify-around gap-1">
-          <button
-            onClick={() => setActiveTab("scanner")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Camera className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Escanear</span>
-          </button>
+      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Compacta) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white md:hidden py-1 px-1 shadow-2xl">
+        <div className="grid grid-cols-6 w-full items-center text-center">
+          {podeAcessarAba("scanner") && (
+            <button
+              onClick={() => setActiveTab("scanner")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Camera className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Escanear</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("despesas")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Layers className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Compras</span>
-          </button>
+          {podeAcessarAba("despesas") && (
+            <button
+              onClick={() => setActiveTab("despesas")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Layers className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Compras</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("encomendas")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <CalendarDays className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Calendário</span>
-          </button>
+          {podeAcessarAba("encomendas") && (
+            <button
+              onClick={() => setActiveTab("encomendas")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <CalendarDays className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Agenda</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("produtos")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Cake className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Cardápio</span>
-          </button>
+          {podeAcessarAba("produtos") && (
+            <button
+              onClick={() => setActiveTab("produtos")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Cake className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Cardápio</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("financeiro")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <DollarSign className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Financeiro</span>
-          </button>
+          {podeAcessarAba("financeiro") && (
+            <button
+              onClick={() => setActiveTab("financeiro")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <DollarSign className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Financeiro</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab("config")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "config" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <Settings className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Configurações</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("plano")}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-              activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-            }`}
-          >
-            <CreditCard className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Meu Plano</span>
-          </button>
+          {(podeAcessarAba("config") || podeAcessarAba("plano")) && (
+            <button
+              onClick={() => setActiveTab("config")}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
+                activeTab === "config" || activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              }`}
+            >
+              <Settings className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Ajustes</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
-  );
+  </ScannerProvider>
+);
 }

@@ -57,6 +57,9 @@ import {
   Check,
   MessageCircle,
   Sparkles,
+  QrCode,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -124,14 +127,23 @@ export function FinanceiroTab({
     }
   };
 
-  // Form State Cobrança Avulsa (Link de Pagamento Stripe)
+  // Form State Cobrança Avulsa & Trava Educativa Stripe
   const [modalCobrancaOpen, setModalCobrancaOpen] = useState(false);
+  const [modalEducativoStripeOpen, setModalEducativoStripeOpen] = useState(false);
   const [stepCobranca, setStepCobranca] = useState<1 | 2>(1);
   const [cobrancaDescricao, setCobrancaDescricao] = useState("");
   const [cobrancaValorLiquido, setCobrancaValorLiquido] = useState("");
   const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
+
+  const handleAbrirModalCobranca = () => {
+    if (stripeConfig.status !== "connected") {
+      setModalEducativoStripeOpen(true);
+    } else {
+      setModalCobrancaOpen(true);
+    }
+  };
 
   const valCobrancaLiquido = parseFloat(cobrancaValorLiquido) || 0;
   const previewCobranca = useMemo(() => {
@@ -162,15 +174,16 @@ export function FinanceiroTab({
 
       const data = await res.json();
 
-      if (!res.ok || !data.url) {
+      if (!res.ok || (!data.shortPayUrl && !data.url)) {
         throw new Error(data.error || "Erro ao comunicar com a API do Stripe");
       }
 
-      setCobrancaLinkGerado(data.url);
+      const shortUrl = data.shortPayUrl || `${window.location.origin}/pagar/${data.cobrancaId || data.id}`;
+      setCobrancaLinkGerado(shortUrl);
       setStepCobranca(2);
-      toast.success("Link de cobrança gerado no Stripe com sucesso!");
+      toast.success("Link curto de cobrança gerado com sucesso! 🎉");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao gerar link de pagamento no Stripe.");
+      toast.error(err.message || "Erro ao gerar link de pagamento.");
     } finally {
       setGerandoLink(false);
     }
@@ -180,16 +193,17 @@ export function FinanceiroTab({
     if (cobrancaLinkGerado && typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(cobrancaLinkGerado);
       setLinkCopiado(true);
-      toast.success("Link de cobrança copiado para a área de transferência!");
+      toast.success("Link curto de cobrança copiado!");
       setTimeout(() => setLinkCopiado(false), 3000);
     }
   };
 
   const handleEnviarWhatsapp = () => {
     if (!cobrancaLinkGerado || !cobrancaDescricao) return;
-    const msg = `Olá! Aqui está o link de pagamento referente a ${cobrancaDescricao}: ${cobrancaLinkGerado}`;
+    const msg = `Olá! Aqui está o seu link de pagamento referente a "${cobrancaDescricao}": ${cobrancaLinkGerado}`;
     const linkWa = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     window.open(linkWa, "_blank");
+    toast.success("Mensagem com o link curto aberta no WhatsApp!");
   };
 
   const handleFecharModalCobranca = () => {
@@ -204,6 +218,7 @@ export function FinanceiroTab({
   };
 
   const [modalNovaTransacao, setModalNovaTransacao] = useState(false);
+
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "receita" | "despesa">("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | StatusTransacao>("todos");
@@ -362,17 +377,48 @@ export function FinanceiroTab({
       </div>
 
       {/* ========================================================================= */}
-      {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (STRIPE CONNECT & COBRANÇA AVULSA) */}
+      {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (COBRANÇA AVULSA & STRIPE CONNECT) */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
             Recebimentos &amp; Integrações <CreditCard className="w-4 h-4 text-primary" />
           </h3>
+          <span className="text-xs text-muted-foreground">
+            Formas de cobrança e gateways de pagamento
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* CARD 1: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) */}
+          {/* CARD 1: COBRANÇA AVULSA / LINK DE PAGAMENTO (POSICIONADO À ESQUERDA) */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4 text-primary" /> Cobrança Avulsa / Link
+                </CardTitle>
+                <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 font-bold">
+                  Link Direto
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Crie um link de pagamento com o valor que desejar e permita que seu cliente pague no cartão de crédito na quantidade de parcelas que ele preferir ou via Pix.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="pt-0">
+              <Button
+                type="button"
+                onClick={handleAbrirModalCobranca}
+                size="lg"
+                className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
+              >
+                <LinkIcon className="w-4 h-4" /> Gerar Link de Cobrança
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* CARD 2: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) (POSICIONADO À DIREITA) */}
           <Card className="border-border shadow-sm flex flex-col justify-between">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
@@ -389,8 +435,11 @@ export function FinanceiroTab({
                   </Badge>
                 )}
               </div>
-              <CardDescription className="text-xs">
-                Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.
+              <CardDescription className="text-xs space-y-1">
+                <span>Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.</span>
+                <span className="block text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-xl border border-border mt-1.5 leading-relaxed font-medium">
+                  Para receber pagamentos por cartão, você precisa conectar sua conta. Utilizamos a Stripe, o sistema de pagamentos mais seguro e utilizado no mundo, para garantir que o dinheiro caia diretamente na sua conta bancária.
+                </span>
               </CardDescription>
             </CardHeader>
 
@@ -432,34 +481,6 @@ export function FinanceiroTab({
                   className="data-[state=checked]:bg-primary"
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* CARD 2: COBRANÇA AVULSA / LINK DE PAGAMENTO */}
-          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-sm flex flex-col justify-between">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <LinkIcon className="w-4 h-4 text-primary" /> Cobrança Avulsa / Link
-                </CardTitle>
-                <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 font-bold">
-                  Link Direto
-                </Badge>
-              </div>
-              <CardDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
-                Crie um link de pagamento com o valor que desejar e permita que seu cliente pague no cartão de crédito na quantidade de parcelas que ele preferir.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="pt-0">
-              <Button
-                type="button"
-                onClick={() => setModalCobrancaOpen(true)}
-                size="lg"
-                className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
-              >
-                <LinkIcon className="w-4 h-4" /> Gerar Link de Cobrança
-              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1029,6 +1050,50 @@ export function FinanceiroTab({
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL EDUCATIVO & TRAVA DE SEGURANÇA STRIPE */}
+      {/* ========================================================================= */}
+      <Dialog open={modalEducativoStripeOpen} onOpenChange={setModalEducativoStripeOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center mb-1">
+              <ShieldCheck className="w-7 h-7 text-indigo-600" />
+            </div>
+            <DialogTitle className="text-base font-extrabold text-foreground">
+              Conecte sua Conta Stripe para Gerar Links
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1 leading-relaxed">
+              Para receber pagamentos por cartão, você precisa conectar sua conta. Utilizamos a Stripe, o sistema de pagamentos mais seguro e utilizado no mundo, para garantir que o dinheiro caia diretamente na sua conta bancária.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 border-t flex flex-col sm:flex-row gap-2 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalEducativoStripeOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setModalEducativoStripeOpen(false);
+                handleConectarStripe();
+              }}
+              disabled={conectandoStripe}
+              className="font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-md gap-1.5"
+            >
+              <CreditCard className="w-4 h-4" />
+              {conectandoStripe ? "Conectando..." : "Criar Conta / Conectar Stripe"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,6 +1,6 @@
 /**
  * Motor matemático de cálculo de taxas dinâmicas e parcelamento do Stripe Connect
- * Inclui taxa base da Stripe BR + 1% de Application Fee da plataforma CaixaDoce
+ * Inclui taxa base da Stripe BR + 1,5% de Application Fee da plataforma CaixaDoce
  */
 
 export interface InstallmentFeeRule {

@@ -43,10 +43,112 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// Mapeamento em memória de links curtos de cobrança (cobrancaId -> Stripe Checkout Session URL)
+const paymentLinksMap = new Map<string, { url: string; description?: string; amount?: number; createdAt: number }>();
+
+async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
+  if (!id) return null;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/transacoes_financeiras?id=eq.${encodeURIComponent(id)}&select=id,comprovante_url,descricao,valor`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0 && data[0]?.comprovante_url) {
+        return data[0].comprovante_url;
+      }
+    }
+  } catch (err) {
+    console.error("[Supabase Get Link Error]", err);
+  }
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
+
+      // Proxy Handler para Redirecionamento 302 direto no Servidor (/pagar/*)
+      if (url.pathname.startsWith("/pagar/") && request.method === "GET") {
+        const cobrancaId = url.pathname.replace("/pagar/", "").trim();
+        if (cobrancaId) {
+          let targetUrl = paymentLinksMap.get(cobrancaId)?.url;
+
+          if (!targetUrl) {
+            targetUrl = (await getCheckoutUrlFromSupabase(cobrancaId)) || undefined;
+          }
+
+          if (!targetUrl && cobrancaId.startsWith("cs_")) {
+            try {
+              const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+              if (stripeSecretKey) {
+                const stripe = new Stripe(stripeSecretKey);
+                const session = await stripe.checkout.sessions.retrieve(cobrancaId);
+                if (session.url) targetUrl = session.url;
+              }
+            } catch (err) {
+              console.error("[Stripe Redirect Error]", err);
+            }
+          }
+
+          if (targetUrl) {
+            return Response.redirect(targetUrl, 302);
+          }
+        }
+      }
+
+      // Endpoint para resolução assíncrona do link curto de cobrança (/api/resolve-pay-link?id=...)
+      if (url.pathname === "/api/resolve-pay-link" && request.method === "GET") {
+        const id = url.searchParams.get("id") || "";
+        let entry = paymentLinksMap.get(id);
+
+        if (!entry || !entry.url) {
+          const dbUrl = await getCheckoutUrlFromSupabase(id);
+          if (dbUrl) {
+            entry = { url: dbUrl, description: "Cobrança Stripe", amount: 0, createdAt: Date.now() };
+            paymentLinksMap.set(id, entry);
+          }
+        }
+
+        if (!entry && id.startsWith("cs_")) {
+          try {
+            const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+            if (stripeSecretKey) {
+              const stripe = new Stripe(stripeSecretKey);
+              const session = await stripe.checkout.sessions.retrieve(id);
+              if (session.url) {
+                entry = { url: session.url, description: "Cobrança Stripe", amount: (session.amount_total || 0) / 100, createdAt: Date.now() };
+                paymentLinksMap.set(id, entry);
+              }
+            }
+          } catch {}
+        }
+
+        if (entry && entry.url) {
+          return new Response(
+            JSON.stringify({ success: true, url: entry.url, description: entry.description, amount: entry.amount }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: false, error: "Link de cobrança não encontrado ou expirado." }),
+          { status: 404, headers: { "content-type": "application/json" } }
+        );
+      }
 
       // Handler para criação de Sessão de Checkout do Stripe (Cobrança Avulsa & Pedidos)
       if (url.pathname === "/api/create-checkout-session" && request.method === "POST") {
@@ -120,6 +222,15 @@ export default {
           }
 
           const storeCode = payload.establishmentCode || "CD-1001";
+
+          // Comissão de 1.5% retida pela plataforma CaixaDoce em cada transação via Stripe Connect
+          const totalCentavos = lineItems.reduce((acc, item) => {
+            const unit = item.price_data?.unit_amount || 0;
+            const qty = Number(item.quantity) || 1;
+            return acc + unit * qty;
+          }, 0);
+          const applicationFeeAmount = Math.round(totalCentavos * 0.015); // 1,5% de comissão da plataforma
+
           const sessionOptions: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ["card"],
             mode: "payment",
@@ -132,6 +243,12 @@ export default {
               customerWhatsapp: payload.customerWhatsapp || "",
             },
           };
+
+          if (payload.stripeAccountId) {
+            sessionOptions.payment_intent_data = {
+              application_fee_amount: applicationFeeAmount,
+            };
+          }
 
           const requestOptions = payload.stripeAccountId
             ? { stripeAccount: payload.stripeAccountId }
@@ -146,10 +263,70 @@ export default {
             );
           }
 
-          return new Response(JSON.stringify({ id: session.id, url: session.url }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
+          const cobrancaId = `cob_${Date.now().toString(36)}${Math.random().toString(36).substring(2, 6)}`;
+          const shortPayUrl = `${origin}/pagar/${cobrancaId}`;
+
+          paymentLinksMap.set(cobrancaId, {
+            url: session.url,
+            description: payload.description || "Cobrança CaixaDoce",
+            amount: payload.amount || 0,
+            createdAt: Date.now(),
           });
+
+          paymentLinksMap.set(session.id, {
+            url: session.url,
+            description: payload.description || "Cobrança CaixaDoce",
+            amount: payload.amount || 0,
+            createdAt: Date.now(),
+          });
+
+          // PERSISTÊNCIA NO SUPABASE: INSERT/UPSERT da URL da Stripe com ID cobrancaId
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey =
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          try {
+            await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
+              method: "POST",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({
+                id: cobrancaId,
+                estabelecimento_codigo: storeCode,
+                descricao: payload.description || "Cobrança Avulsa / Link",
+                valor: payload.amount || 0,
+                tipo: "receita",
+                categoria: "Cobrança Online / Stripe",
+                metodo_pagamento: "cartao_credito",
+                status: "pendente",
+                comprovante_url: session.url,
+                cliente_ou_fornecedor: payload.customerName || "Cliente Stripe",
+                data: new Date().toLocaleDateString("pt-BR"),
+                origem: "Stripe",
+              }),
+            });
+            console.log(`[Supabase] Cobrança ${cobrancaId} salva no Supabase com comprovante_url=${session.url}`);
+          } catch (dbErr) {
+            console.error("[Supabase Error] Erro ao salvar cobrança no Supabase:", dbErr);
+          }
+
+          return new Response(
+            JSON.stringify({
+              id: session.id,
+              cobrancaId,
+              shortPayUrl,
+              url: session.url,
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }
+          );
         } catch (err: any) {
           return new Response(
             JSON.stringify({

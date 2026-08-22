@@ -102,6 +102,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>(INITIAL_ESTABELECIMENTOS);
   const [isMounted, setIsMounted] = useState(false);
 
+const generateUniqueCodeFromUserId = (userId?: string): string => {
+  if (!userId) return ESTABELECIMENTO_PADRAO.codigo;
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash << 5) - hash + userId.charCodeAt(i);
+    hash |= 0;
+  }
+  const codeNum = 1000 + (Math.abs(hash) % 8999);
+  return `CD-${codeNum}`;
+};
+
   // Helper centralizado para montagem do perfil com tenant estrito da loja Master e permissoes
   const buildProfileForUser = (authUser: any, emailStr: string): UserProfile => {
     const isColab = emailStr.includes("@") && (emailStr.endsWith(".caixadoce.app") || authUser?.user_metadata?.role === "colaborador" || authUser?.user_metadata?.role === "operador");
@@ -109,6 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let rawCode = authUser?.user_metadata?.establishmentCode || authUser?.user_metadata?.establishment_code;
     if (!rawCode && isColab && emailStr.includes("@")) {
       rawCode = emailStr.split("@")[1].replace(".caixadoce.app", "");
+    }
+    if (!rawCode && authUser?.id) {
+      rawCode = generateUniqueCodeFromUserId(authUser.id);
+      // Salva permanentemente nos metadados do Supabase para manter o mesmo código em todos os dispositivos
+      supabase.auth.updateUser({ data: { establishmentCode: rawCode } }).catch(() => {});
     }
     if (!rawCode) {
       rawCode = ESTABELECIMENTO_PADRAO.codigo;

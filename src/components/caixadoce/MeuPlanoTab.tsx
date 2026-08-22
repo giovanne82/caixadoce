@@ -109,7 +109,7 @@ export function MeuPlanoTab() {
     }
   };
 
-  const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.anual;
+  const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
 
   return (
     <div className="space-y-6">
@@ -120,7 +120,7 @@ export function MeuPlanoTab() {
             Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Aproveite 30 dias grátis de acesso ilimitado ou garanta os novos valores promocionais de lançamento.
+            Aproveite 14 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo.
           </p>
         </div>
       </div>
@@ -136,13 +136,13 @@ export function MeuPlanoTab() {
               🔥 Promoção de Lançamento por Tempo Limitado!
             </h4>
             <p className="text-xs text-white/90">
-              Garanta acesso ilimitado com descontos exclusivos: <strong>Mensal por R$ 14,90/mês</strong> ou <strong>Anual em 12x de R$ 10,90</strong>.
+              Garanta acesso ilimitado com preço promocional exclusivo: <strong>Plano Mensal Completo por apenas R$ 14,90/mês</strong> sem fidelidade.
             </p>
           </div>
         </div>
       </div>
 
-      {/* BANNER DE STATUS DO PLANO E TRIAL DE 30 DIAS */}
+      {/* BANNER DE STATUS DO PLANO E TRIAL DE 14 DIAS */}
       <Card className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -166,7 +166,7 @@ export function MeuPlanoTab() {
                     {infoPlano.status === "ativo"
                       ? "Assinatura Ativa"
                       : infoPlano.status === "trial"
-                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 30} dias grátis restantes`
+                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 14} dias grátis restantes`
                       : "Plano Básico (Gratuito)"}
                   </Badge>
                 </div>
@@ -188,12 +188,12 @@ export function MeuPlanoTab() {
                 </Button>
               ) : (
                 <Button
-                  onClick={() => handleAssinarStripe("anual")}
+                  onClick={() => handleAssinarStripe("mensal")}
                   disabled={loadingStripe}
                   className="font-extrabold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white w-full sm:w-auto text-xs"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
-                  {loadingStripe ? "Conectando..." : "Assinar Anual (12x R$ 10,90)"}
+                  {loadingStripe ? "Conectando..." : "Assinar Mensal (R$ 14,90/mês)"}
                 </Button>
               )}
             </div>
@@ -202,9 +202,9 @@ export function MeuPlanoTab() {
       </Card>
 
       {/* ========================================================================= */}
-      {/* OS 3 CARDS COMPARATIVOS DE PLANOS (GRATUITO, MENSAL R$ 14,90 E ANUAL 12x R$ 10,90) */}
+      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO E MENSAL R$ 14,90) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 items-stretch">
         
         {/* CARD 1: PLANO BÁSICO (R$ 0,00) */}
         <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-border/80 transition-all">
@@ -216,7 +216,7 @@ export function MeuPlanoTab() {
               <ShoppingCart className="w-5 h-5 text-primary" /> Plano Básico
             </CardTitle>
             <CardDescription className="text-xs">
-              Para organizar as compras da sua confeitaria de forma simples e ilimitada pós-trial.
+              Para organizar suas compras, finanças e produtos de forma simples e gratuita.
             </CardDescription>
             <div className="pt-3">
               <span className="text-3xl font-black text-foreground">R$ 0,00</span>
@@ -228,23 +228,23 @@ export function MeuPlanoTab() {
             <ul className="space-y-2 text-xs text-foreground font-medium">
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span><strong>Lista de Compras Interativa (Ilimitada)</strong></span>
+                <span><strong>Acesso Completo ao Painel Financeiro</strong></span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Gestão de Múltiplas Listas Nomeadas</span>
+                <span><strong>Acesso Completo ao Cardápio Digital</strong></span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Vínculo de Clientes por Tags/Chips</span>
+                <span>Lista de Compras Interativa (Ilimitada)</span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Recibo Visual em Estilo Cupom de Notinha</span>
+                <span>Gestão de Múltiplas Listas e Clientes</span>
               </li>
               <li className="flex items-start gap-2 text-stone-400">
                 <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Scanner com IA, Calendário e Financeiro</span>
+                <span className="line-through">Scanner de Notinhas com IA &amp; Calendário</span>
               </li>
             </ul>
           </CardContent>
@@ -261,8 +261,12 @@ export function MeuPlanoTab() {
         </Card>
 
         {/* CARD 2: PLANO MENSAL COMPLETO (R$ 14,90 / MÊS - PROMOÇÃO DE LANÇAMENTO) */}
-        <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-primary/50 transition-all">
-          <CardHeader className="pb-4">
+        <Card className="border-2 border-[#8E7CC3] shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
+            <Sparkles className="w-3.5 h-3.5" /> RECOMENDADO
+          </div>
+
+          <CardHeader className="pb-4 pt-6">
             <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-bold text-[#7C3AED] bg-[#F3EEF9] border border-[#8E7CC3]/30">
               🔥 PROMOÇÃO DE LANÇAMENTO
             </Badge>
@@ -270,15 +274,15 @@ export function MeuPlanoTab() {
               Mensal Completo <Zap className="w-5 h-5 text-amber-500" />
             </CardTitle>
             <CardDescription className="text-xs">
-              Acesso total ilimitado a todas as ferramentas com flexibilidade mensal.
+              Acesso total ilimitado a todas as ferramentas com flexibilidade mensal sem fidelidade.
             </CardDescription>
             <div className="pt-3">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-black text-foreground">R$ 14,90</span>
+                <span className="text-3xl font-black text-[#7C3AED]">R$ 14,90</span>
                 <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
               </div>
               <p className="text-[11px] font-bold text-[#7C3AED] mt-0.5">
-                Preço promocional de lançamento sem fidelidade
+                Preço promocional de lançamento • Cancele quando quiser
               </p>
             </div>
           </CardHeader>
@@ -291,80 +295,19 @@ export function MeuPlanoTab() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Lista de Compras &amp; Conciliação Automática</span>
+                <span><strong>Calendário de Encomendas &amp; Agendamentos</strong></span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Calendário de Encomendas &amp; Histórico Permanente</span>
+                <span>Painel Financeiro &amp; Fluxo de Caixa Completo</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cardápio Digital Público &amp; Agendamentos</span>
+                <span>Cardápio Digital Público &amp; Gestão de Produtos</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Painel Financeiro &amp; Fluxo de Caixa</span>
-              </li>
-            </ul>
-          </CardContent>
-          <div className="p-6 pt-0">
-            <Button
-              onClick={() => handleAssinarStripe("mensal")}
-              disabled={loadingStripe}
-              variant="outline"
-              className="w-full font-bold text-xs border-primary/40 text-primary hover:bg-primary/10"
-            >
-              {infoPlano.planoId === "mensal" && infoPlano.status === "ativo" ? "Plano Ativo" : "Assinar Mensal (R$ 14,90/mês)"}
-            </Button>
-          </div>
-        </Card>
-
-        {/* CARD 3: PLANO ANUAL COMPLETO (12x DE R$ 10,90 / MÊS - MELHOR CUSTO-BENEFÍCIO / MAIS ECONÔMICO) */}
-        <Card className="border-2 border-[#8E7CC3] shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.02] transition-all">
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
-            <Sparkles className="w-3.5 h-3.5" /> MELHOR CUSTO-BENEFÍCIO
-          </div>
-
-          <CardHeader className="pb-4 pt-6">
-            <Badge className="w-fit mb-2 text-[10px] font-extrabold bg-[#8E7CC3] text-white">
-              ⭐ MELHOR CUSTO-BENEFÍCIO / MAIS ECONÔMICO
-            </Badge>
-            <CardTitle className="text-lg font-black text-foreground flex items-center justify-between">
-              Anual Completo <Crown className="w-5 h-5 text-amber-500" />
-            </CardTitle>
-            <CardDescription className="text-xs">
-              A escolha mais inteligente para economizar e transformar seu negócio de confeitaria.
-            </CardDescription>
-            <div className="pt-3">
-              <span className="text-3xl font-black text-[#7C3AED]">12x R$ 10,90</span>
-              <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-              <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                Ou total à vista de R$ 130,80 / ano
-              </p>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-[11px] font-bold text-[#7C3AED] uppercase tracking-wider">Tudo do Mensal + Benefícios Exclusivos:</p>
-            <ul className="space-y-2 text-xs text-foreground font-semibold">
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#8E7CC3] shrink-0 mt-0.5" />
-                <span><strong>Acesso Ilimitado a todos os 5 módulos</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#8E7CC3] shrink-0 mt-0.5" />
-                <span>Scanner com IA + Conciliação Automática</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#8E7CC3] shrink-0 mt-0.5" />
-                <span>Calendário &amp; Histórico Permanente</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#8E7CC3] shrink-0 mt-0.5" />
-                <span>Cardápio Digital &amp; Agendamentos</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#8E7CC3] shrink-0 mt-0.5" />
-                <span>Financeiro, DRE &amp; Relatórios Avançados</span>
+                <span>Lista de Compras Interativa &amp; Conciliação</span>
               </li>
               <li className="flex items-start gap-2 text-[#5B478E] font-extrabold">
                 <ShieldCheck className="w-4 h-4 text-[#7C3AED] shrink-0 mt-0.5" />
@@ -374,11 +317,11 @@ export function MeuPlanoTab() {
           </CardContent>
           <div className="p-6 pt-0">
             <Button
-              onClick={() => handleAssinarStripe("anual")}
+              onClick={() => handleAssinarStripe("mensal")}
               disabled={loadingStripe}
               className="w-full font-extrabold shadow-lg bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white text-xs py-5"
             >
-              {infoPlano.planoId === "anual" && infoPlano.status === "ativo" ? "Plano Ativo" : "Assinar Anual (12x R$ 10,90)"}
+              {infoPlano.planoId === "mensal" && infoPlano.status === "ativo" ? "Plano Ativo" : "Assinar Plano Mensal (R$ 14,90/mês)"}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>

@@ -1761,7 +1761,7 @@ export function OrdersView({
               {editingId ? "Editar Encomenda" : "Cadastrar Nova Encomenda"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Selecione o cliente, adicione os produtos do cardápio e vincule os insumos da ArtFesta.
+              Selecione o cliente, adicione os produtos do cardápio e vincule os insumos da encomenda.
             </DialogDescription>
           </DialogHeader>
 
@@ -1971,7 +1971,7 @@ export function OrdersView({
             <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 relative">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-amber-600" /> Insumos Necessários (Catálogo ArtFesta)
+                  <Tag className="w-3.5 h-3.5 text-amber-600" /> Insumos Necessários
                 </Label>
                 <span className="text-[10px] text-muted-foreground">{insumosTags.length} insumo(s)</span>
               </div>
@@ -1979,7 +1979,7 @@ export function OrdersView({
               <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
                 {insumosTags.length === 0 ? (
                   <span className="text-[11px] text-muted-foreground italic">
-                    Nenhum insumo vinculado. Digite abaixo para buscar no catálogo ArtFesta.
+                    Nenhum insumo vinculado. Digite abaixo para buscar no catálogo de insumos.
                   </span>
                 ) : (
                   insumosTags.map((t) => (
@@ -2014,7 +2014,7 @@ export function OrdersView({
               <div className="relative">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Buscar insumo ArtFesta (ex: Harald Ao Leite, Chantilly, Nutella)..."
+                    placeholder="Buscar insumo (ex: Leite Condensado, Chantilly, Nutella)..."
                     value={buscaTagInsumo}
                     onChange={(e) => {
                       setBuscaTagInsumo(e.target.value);
