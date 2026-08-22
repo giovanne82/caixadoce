@@ -72,6 +72,14 @@ export function LoginView({ onSuccess }: LoginViewProps) {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
+  // Sub-tab / Role selection in Login
+  const [loginRoleMode, setLoginRoleMode] = useState<"admin" | "colaborador">("admin");
+
+  // Colaborador login fields
+  const [colabNome, setColabNome] = useState("");
+  const [colabCodigoLoja, setColabCodigoLoja] = useState("");
+  const [colabPin, setColabPin] = useState("");
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     try {
@@ -141,6 +149,32 @@ export function LoginView({ onSuccess }: LoginViewProps) {
     }
   };
 
+  const handleLoginColaborador = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!colabNome || !colabCodigoLoja || !colabPin) {
+      toast.error("Preencha o Nome do Colaborador, Código da Loja e o PIN.");
+      return;
+    }
+    if (!/^\d{4,6}$/.test(colabPin)) {
+      toast.error("O PIN deve conter entre 4 e 6 dígitos numéricos.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const cleanName = colabNome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const cleanCode = colabCodigoLoja.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
+
+      await loginWithEmail(syntheticEmail, colabPin);
+      onSuccess?.();
+    } catch (error: any) {
+      toast.error("Credenciais inválidas. Verifique o Nome, Código da Loja e o PIN.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-[85vh] items-center justify-center p-4">
       <Card className="w-full max-w-md border-border/80 shadow-2xl shadow-orange-500/5 bg-card/95 backdrop-blur-md">
@@ -174,83 +208,163 @@ export function LoginView({ onSuccess }: LoginViewProps) {
 
             {/* TAB: LOGIN */}
             <TabsContent value="login" className="space-y-4">
-              {/* Google OAuth Button */}
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full flex items-center justify-center gap-2.5 h-11 border-border/80 bg-background hover:bg-accent/60 font-medium text-foreground transition-all shadow-sm"
-                onClick={handleGoogleLogin}
-                disabled={googleLoading || loading}
-              >
-                <GoogleIcon />
-                <span>Continuar com Google</span>
-              </Button>
-
-              <div className="relative my-4 flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border/60" />
-                </div>
-                <span className="relative bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                  ou entre com e-mail
-                </span>
+              {/* Toggle Administrador vs Colaborador */}
+              <div className="grid grid-cols-2 p-1 bg-muted rounded-lg text-xs font-semibold mb-3">
+                <button
+                  type="button"
+                  onClick={() => setLoginRoleMode("admin")}
+                  className={`py-1.5 rounded-md transition-all ${
+                    loginRoleMode === "admin"
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sou Administrador
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginRoleMode("colaborador")}
+                  className={`py-1.5 rounded-md transition-all ${
+                    loginRoleMode === "colaborador"
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sou Colaborador (PDV)
+                </button>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="login-email">E-mail</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      className="pl-9"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
+              {loginRoleMode === "admin" ? (
+                <>
+                  {/* Google OAuth Button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full flex items-center justify-center gap-2.5 h-11 border-border/80 bg-background hover:bg-accent/60 font-medium text-foreground transition-all shadow-sm"
+                    onClick={handleGoogleLogin}
+                    disabled={googleLoading || loading}
+                  >
+                    <GoogleIcon />
+                    <span>Continuar com Google</span>
+                  </Button>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="login-password">Senha</Label>
-                    <button
-                      type="button"
-                      onClick={() => setResetModalOpen(true)}
-                      className="text-xs text-primary hover:underline font-medium"
-                    >
-                      Esqueceu a senha?
-                    </button>
+                  <div className="relative my-4 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border/60" />
+                    </div>
+                    <span className="relative bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                      ou entre com e-mail
+                    </span>
                   </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="login-password"
-                      type={showLoginPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="pl-9 pr-10"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowLoginPassword(!showLoginPassword)}
-                      className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                      title={showLoginPassword ? "Ocultar senha" : "Mostrar senha"}
-                    >
-                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
 
-                <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading}>
-                  {loading ? "Entrando..." : "Acessar CaixaDoce"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </form>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="login-email">E-mail</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="login-email"
+                          type="email"
+                          placeholder="seu@email.com"
+                          className="pl-9"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="login-password">Senha</Label>
+                        <button
+                          type="button"
+                          onClick={() => setResetModalOpen(true)}
+                          className="text-xs text-primary hover:underline font-medium"
+                        >
+                          Esqueceu a senha?
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="login-password"
+                          type={showLoginPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          className="pl-9 pr-10"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword(!showLoginPassword)}
+                          className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                          tabIndex={-1}
+                          title={showLoginPassword ? "Ocultar senha" : "Mostrar senha"}
+                        >
+                          {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading}>
+                      {loading ? "Entrando..." : "Acessar CaixaDoce"}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </form>
+                </>
+              ) : (
+                /* FORMULÁRIO DE LOGIN DE COLABORADOR (CÓDIGO DA LOJA + PIN) */
+                <form onSubmit={handleLoginColaborador} className="space-y-4 pt-1">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="colab-login-name">Nome / Login do Colaborador</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="colab-login-name"
+                        placeholder="Ex: Carlos Eduardo"
+                        className="pl-9"
+                        value={colabNome}
+                        onChange={(e) => setColabNome(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="colab-login-code">Código da Loja</Label>
+                      <Input
+                        id="colab-login-code"
+                        placeholder="Ex: CD-1001"
+                        className="font-mono uppercase font-bold"
+                        value={colabCodigoLoja}
+                        onChange={(e) => setColabCodigoLoja(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="colab-login-pin">PIN de Acesso</Label>
+                      <Input
+                        id="colab-login-pin"
+                        type="password"
+                        placeholder="4 a 6 números"
+                        maxLength={6}
+                        value={colabPin}
+                        onChange={(e) => setColabPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full font-semibold shadow-md h-11 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading}>
+                    {loading ? "Entrando..." : "Acessar PDV / Colaborador"}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </form>
+              )}
             </TabsContent>
 
             {/* TAB: REGISTER */}

@@ -66,6 +66,7 @@ export interface Colaborador {
   estabelecimentoCodigo: string;
   nome: string;
   email: string;
+  pin?: string;
   telefone?: string;
   funcao?: "admin" | "gerente" | "operador";
   ativo: boolean;

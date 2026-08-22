@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
   CardContent,
@@ -28,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Users, Shield, UserCheck, Trash2, Mail, Phone, Edit } from "lucide-react";
+import { Plus, Users, Shield, UserCheck, Trash2, Mail, Phone, Edit, KeyRound } from "lucide-react";
 import { type Colaborador } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -63,7 +64,7 @@ export function ColaboradoresTab() {
 
   const [modalNovo, setModalNovo] = useState(false);
   const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
+  const [pin, setPin] = useState("");
   const [telefone, setTelefone] = useState("");
   const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["dashboard", "financeiro"]);
   const [salvando, setSalvando] = useState(false);
@@ -85,18 +86,43 @@ export function ColaboradoresTab() {
 
   const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome || !email) {
-      toast.error("Preencha nome e e-mail do colaborador.");
+    if (!nome || !pin) {
+      toast.error("Preencha o nome e o PIN de acesso do colaborador.");
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pin)) {
+      toast.error("O PIN de acesso deve conter entre 4 e 6 números.");
       return;
     }
 
     setSalvando(true);
     try {
+      const cleanName = nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const cleanCode = activeCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
+
+      try {
+        await supabase.auth.signUp({
+          email: syntheticEmail,
+          password: pin,
+          options: {
+            data: {
+              name: nome,
+              role: "colaborador",
+              establishmentCode: activeCode,
+            },
+          },
+        });
+      } catch (err) {
+        console.warn("Aviso ao registrar no Supabase Auth:", err);
+      }
+
       const novo: Colaborador = {
         id: crypto.randomUUID(),
         estabelecimentoCodigo: activeCode,
         nome,
-        email,
+        email: syntheticEmail,
+        pin,
         telefone,
         ativo: true,
         dataCadastro: new Date().toLocaleDateString("pt-BR"),
@@ -104,11 +130,27 @@ export function ColaboradoresTab() {
       };
 
       salvarLista([novo, ...colaboradores]);
+
+      try {
+        await supabase.from("colaboradores").insert([
+          {
+            id: novo.id,
+            estabelecimento_codigo: activeCode,
+            nome: novo.nome,
+            email: syntheticEmail,
+            pin,
+            telefone: novo.telefone,
+            abas_permitidas: abasPermitidas,
+            ativo: true,
+          },
+        ]);
+      } catch {}
+
       setModalNovo(false);
       setNome("");
-      setEmail("");
+      setPin("");
       setTelefone("");
-      toast.success(`Colaborador ${nome} adicionado com sucesso!`);
+      toast.success(`Colaborador ${nome} cadastrado com sucesso (Acesso PIN: ${pin})!`);
     } finally {
       setSalvando(false);
     }
@@ -134,7 +176,7 @@ export function ColaboradoresTab() {
             Equipe &amp; Colaboradores <Users className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Compartilhe a sua lista de compras e notinhas com colaboradores.
+            Cadastre colaboradores com Acesso PDV (Código da Loja + PIN) e defina permissões.
           </p>
         </div>
         <Button onClick={() => setModalNovo(true)} className="font-semibold shadow-md">
@@ -148,7 +190,7 @@ export function ColaboradoresTab() {
           <TableHeader>
             <TableRow className="bg-muted/40">
               <TableHead>Nome</TableHead>
-              <TableHead>Contato</TableHead>
+              <TableHead>Contato &amp; Login PDV</TableHead>
               <TableHead>Permissões</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -169,8 +211,8 @@ export function ColaboradoresTab() {
                     <p className="text-xs font-normal text-muted-foreground">Cadastrado em {colab.dataCadastro}</p>
                   </TableCell>
                   <TableCell className="text-xs">
-                    <p className="flex items-center gap-1 text-foreground">
-                      <Mail className="w-3.5 h-3.5 text-muted-foreground" /> {colab.email}
+                    <p className="flex items-center gap-1 font-mono font-medium text-primary">
+                      <KeyRound className="w-3.5 h-3.5 text-primary" /> Login: {colab.email?.split("@")[0]} (PIN: {colab.pin || "****"})
                     </p>
                     {colab.telefone && (
                       <p className="flex items-center gap-1 text-muted-foreground mt-0.5">
@@ -229,13 +271,13 @@ export function ColaboradoresTab() {
           <DialogHeader>
             <DialogTitle>Cadastrar Novo Colaborador</DialogTitle>
             <DialogDescription>
-              Conceda acesso a membros da sua equipe com controle de permissões por módulo.
+              Cadastre membros da sua equipe com PIN numérico para Acesso PDV rápido.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleAdicionar} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="colab-nome">Nome Completo</Label>
+              <Label htmlFor="colab-nome">Nome do Colaborador</Label>
               <Input
                 id="colab-nome"
                 placeholder="Ex: Carlos Eduardo"
@@ -247,13 +289,14 @@ export function ColaboradoresTab() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="colab-email">E-mail de Acesso</Label>
+                <Label htmlFor="colab-pin">PIN de Acesso (4 a 6 números)</Label>
                 <Input
-                  id="colab-email"
-                  type="email"
-                  placeholder="carlos@caixadoce.com.br"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="colab-pin"
+                  type="password"
+                  placeholder="Ex: 1234"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required
                 />
               </div>

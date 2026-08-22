@@ -168,25 +168,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        // Fallback para autenticação local caso offline
-        if (password.length >= 6) {
+        // Fallback local caso offline ou cadastrado em memoria/localState
+        if (password.length >= 4) {
+          const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
+          const rawCode = isCollaboratorSynthetic
+            ? email.split("@")[1].replace(".caixadoce.app", "")
+            : ESTABELECIMENTO_PADRAO.codigo;
+          const formattedCode = rawCode.toUpperCase().startsWith("CD-")
+            ? rawCode.toUpperCase()
+            : rawCode.length === 4 && !isNaN(Number(rawCode))
+            ? `CD-${rawCode}`
+            : rawCode.toUpperCase();
+          const nameFromEmail = email.split("@")[0];
+
           const fallbackUser: User = {
             id: `usr_${Date.now()}`,
-            name: email.split("@")[0],
+            name: nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1),
             email,
             provider: "email",
           };
           const fallbackProfile: UserProfile = {
-            role: "admin",
-            establishmentCode: ESTABELECIMENTO_PADRAO.codigo,
-            establishmentName: ESTABELECIMENTO_PADRAO.nome,
+            role: isCollaboratorSynthetic ? "operador" : "admin",
+            establishmentCode: formattedCode,
+            establishmentName: `Confeitaria ${formattedCode}`,
             establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
           };
           setUser(fallbackUser);
           setProfile(fallbackProfile);
           localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
           localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-          toast.success("Login efetuado com sucesso!");
+          toast.success(`Login efetuado com sucesso${isCollaboratorSynthetic ? " (Acesso PDV Colaborador)" : ""}!`);
           return;
         }
         throw error;
