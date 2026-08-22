@@ -207,6 +207,7 @@ function Index() {
         metodoPagamento: d.metodo_pagamento || "pix",
         status: d.status || "concluida",
         clienteOuFornecedor: d.cliente_ou_fornecedor,
+        origem: d.origem || (d.descricao?.includes("Stripe") || d.categoria?.includes("Stripe") ? "Stripe" : "Manual"),
       }));
 
       setTransacoes(mapeadas);
@@ -793,9 +794,10 @@ function Index() {
   // Handlers de Transações Financeiras
   const adicionarTransacao = async (nova: Omit<TransacaoFinanceira, "id">) => {
     const item: TransacaoFinanceira = {
-      id: crypto.randomUUID(),
-      estabelecimentoCodigo: activeCode,
       ...nova,
+      id: `tr_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      estabelecimentoCodigo: activeCode,
+      origem: nova.origem || "Manual",
     };
 
     const atualizadas = [item, ...transacoes];
@@ -817,6 +819,7 @@ function Index() {
           status: item.status,
           cliente_ou_fornecedor: item.clienteOuFornecedor,
           data: item.data,
+          origem: item.origem,
         },
       ]);
     } catch (err) {

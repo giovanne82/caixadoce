@@ -58,6 +58,7 @@ export interface TransacaoFinanceira {
   status: StatusTransacao;
   clienteOuFornecedor?: string;
   observacoes?: string;
+  origem?: "Stripe" | "Manual";
 }
 
 export interface Colaborador {

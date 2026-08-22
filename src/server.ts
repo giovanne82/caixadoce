@@ -163,19 +163,81 @@ export default {
         }
       }
 
-      // Handler para o Webhook do Stripe (CaixaDoce)
-      if (url.pathname === "/api/stripe/webhook" && request.method === "POST") {
+      // Handler para o Webhook do Stripe (CaixaDoce & Cobrança Avulsa)
+      if (
+        (url.pathname === "/api/stripe/webhook" || url.pathname === "/api/webhook/stripe") &&
+        request.method === "POST"
+      ) {
         try {
           const bodyText = await request.text();
-          const event = JSON.parse(bodyText);
+          const sig = request.headers.get("stripe-signature");
+          const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+          let event: Stripe.Event;
+
+          if (webhookSecret && sig) {
+            const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
+            const stripe = new Stripe(stripeSecretKey);
+            event = stripe.webhooks.constructEvent(bodyText, sig, webhookSecret);
+          } else {
+            event = JSON.parse(bodyText);
+          }
 
           console.log("[CaixaDoce Stripe Webhook] Evento recebido:", event.type);
+
+          if (event.type === "checkout.session.completed") {
+            const session = event.data.object as any;
+            const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
+            const description =
+              session.description ||
+              session.metadata?.description ||
+              "Cobrança Cartão de Crédito (Stripe)";
+            const establishmentCode = session.metadata?.establishmentCode || "CD-1001";
+            const customerName =
+              session.metadata?.customerName ||
+              session.customer_details?.name ||
+              "Cliente Stripe";
+
+            const supabaseUrl =
+              process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseKey =
+              process.env.VITE_SUPABASE_ANON_KEY ||
+              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+            try {
+              await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
+                method: "POST",
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                },
+                body: JSON.stringify({
+                  id: `tr_stripe_${Date.now()}`,
+                  estabelecimento_codigo: establishmentCode,
+                  descricao: description,
+                  valor: amountTotal,
+                  tipo: "receita",
+                  categoria: "Cobrança Online / Stripe",
+                  metodo_pagamento: "cartao_credito",
+                  status: "concluida",
+                  cliente_ou_fornecedor: customerName,
+                  data: new Date().toLocaleDateString("pt-BR"),
+                  origem: "Stripe",
+                }),
+              });
+              console.log("[Stripe Webhook] Transação de Stripe inserida automaticamente na tabela transacoes_financeiras!");
+            } catch (dbErr) {
+              console.error("[Stripe Webhook] Erro ao inserir transação no banco:", dbErr);
+            }
+          }
 
           return new Response(
             JSON.stringify({
               received: true,
               type: event.type,
-              status: "caixadoce_subscription_processed",
+              status: "caixadoce_webhook_processed",
             }),
             {
               status: 200,
@@ -183,10 +245,13 @@ export default {
             }
           );
         } catch (e: any) {
-          return new Response(JSON.stringify({ error: "Invalid webhook payload", message: e.message }), {
-            status: 400,
-            headers: { "content-type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao processar webhook do Stripe", message: e.message }),
+            {
+              status: 400,
+              headers: { "content-type": "application/json" },
+            }
+          );
         }
       }
 

@@ -56,6 +56,7 @@ import {
   Copy,
   Check,
   MessageCircle,
+  Sparkles,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -300,6 +301,7 @@ export function FinanceiroTab({
         metodoPagamento,
         status,
         clienteOuFornecedor,
+        origem: "Manual",
       });
 
       setModalNovaTransacao(false);
@@ -527,6 +529,7 @@ export function FinanceiroTab({
             <TableRow className="bg-muted/40">
               <TableHead>Data</TableHead>
               <TableHead>Descrição</TableHead>
+              <TableHead>Origem</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Método</TableHead>
               <TableHead>Valor</TableHead>
@@ -537,7 +540,7 @@ export function FinanceiroTab({
           <TableBody>
             {transacoesFiltradas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">
                   Nenhuma transação encontrada com os filtros selecionados.
                 </TableCell>
               </TableRow>
@@ -549,6 +552,17 @@ export function FinanceiroTab({
                     <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
                     {t.clienteOuFornecedor && (
                       <p className="text-[11px] text-muted-foreground">{t.clienteOuFornecedor}</p>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
+                      <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
+                        <CreditCard className="w-3 h-3 text-purple-600 dark:text-purple-400" /> Stripe (Auto)
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground border-border font-semibold flex items-center gap-1 w-fit">
+                        <Sparkles className="w-3 h-3 text-amber-500" /> Manual
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell>
