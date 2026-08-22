@@ -57,6 +57,8 @@ import {
   Check,
   MessageCircle,
   Sparkles,
+  QrCode,
+  ExternalLink,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -204,6 +206,7 @@ export function FinanceiroTab({
   };
 
   const [modalNovaTransacao, setModalNovaTransacao] = useState(false);
+
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "receita" | "despesa">("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | StatusTransacao>("todos");
@@ -362,17 +365,48 @@ export function FinanceiroTab({
       </div>
 
       {/* ========================================================================= */}
-      {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (STRIPE CONNECT & COBRANÇA AVULSA) */}
+      {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (COBRANÇA AVULSA & STRIPE CONNECT) */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
             Recebimentos &amp; Integrações <CreditCard className="w-4 h-4 text-primary" />
           </h3>
+          <span className="text-xs text-muted-foreground">
+            Formas de cobrança e gateways de pagamento
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* CARD 1: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) */}
+          {/* CARD 1: COBRANÇA AVULSA / LINK DE PAGAMENTO (POSICIONADO À ESQUERDA) */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4 text-primary" /> Cobrança Avulsa / Link
+                </CardTitle>
+                <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 font-bold">
+                  Link Direto
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Crie um link de pagamento com o valor que desejar e permita que seu cliente pague no cartão de crédito na quantidade de parcelas que ele preferir ou via Pix.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="pt-0">
+              <Button
+                type="button"
+                onClick={() => setModalCobrancaOpen(true)}
+                size="lg"
+                className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
+              >
+                <LinkIcon className="w-4 h-4" /> Gerar Link de Cobrança
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* CARD 2: PAGAMENTOS ONLINE (CARTÃO VIA STRIPE CONNECT) (POSICIONADO À DIREITA) */}
           <Card className="border-border shadow-sm flex flex-col justify-between">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
@@ -432,34 +466,6 @@ export function FinanceiroTab({
                   className="data-[state=checked]:bg-primary"
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* CARD 2: COBRANÇA AVULSA / LINK DE PAGAMENTO */}
-          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-sm flex flex-col justify-between">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <LinkIcon className="w-4 h-4 text-primary" /> Cobrança Avulsa / Link
-                </CardTitle>
-                <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 font-bold">
-                  Link Direto
-                </Badge>
-              </div>
-              <CardDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
-                Crie um link de pagamento com o valor que desejar e permita que seu cliente pague no cartão de crédito na quantidade de parcelas que ele preferir.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="pt-0">
-              <Button
-                type="button"
-                onClick={() => setModalCobrancaOpen(true)}
-                size="lg"
-                className="w-full font-black shadow-md bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 h-10 text-xs"
-              >
-                <LinkIcon className="w-4 h-4" /> Gerar Link de Cobrança
-              </Button>
             </CardContent>
           </Card>
         </div>

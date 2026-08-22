@@ -124,7 +124,7 @@ export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
     const raw = localStorage.getItem(`caixadoce_customers_${code}`);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return CLIENTES_PADRAO;
+  return [];
 }
 
 export function salvarClientesStorage(estabelecimentoCodigo: string, lista: Cliente[]) {
@@ -232,7 +232,7 @@ export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
     const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return CATALOGO_PRODUTOS_PADRAO;
+  return [];
 }
 
 export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCardapio[]) {

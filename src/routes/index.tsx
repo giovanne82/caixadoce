@@ -182,32 +182,8 @@ function Index() {
         if (raw) {
           setTransacoes(JSON.parse(raw));
         } else {
-          const demos: TransacaoFinanceira[] = [
-            {
-              id: "tr-1",
-              descricao: "Venda Caixa de Brigadeiros Gourmet (12 un)",
-              valor: 48.0,
-              tipo: "receita",
-              categoria: "Venda Direta / Balcão",
-              data: new Date().toLocaleDateString("pt-BR"),
-              metodoPagamento: "pix",
-              status: "concluida",
-              clienteOuFornecedor: "Fernanda Costa",
-            },
-            {
-              id: "tr-2",
-              descricao: "Encomenda Bolo Vulcão Ninho com Nutella",
-              valor: 110.0,
-              tipo: "receita",
-              categoria: "Encomenda Especial",
-              data: new Date().toLocaleDateString("pt-BR"),
-              metodoPagamento: "cartao_credito",
-              status: "concluida",
-              clienteOuFornecedor: "Lucas Martins",
-            },
-          ];
-          setTransacoes(demos);
-          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(demos));
+          setTransacoes([]);
+          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify([]));
         }
         return;
       }
@@ -226,9 +202,8 @@ function Index() {
         origem: d.origem || (d.descricao?.includes("Stripe") || d.categoria?.includes("Stripe") ? "Stripe" : "Manual"),
       }));
 
-      setTransacoes(mapeadas);
     } catch {}
-  }, [activeCode, profile]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 2. Carrega Encomendas e Datas Bloqueadas
   const fetchEncomendasECalendario = useCallback(async () => {
@@ -242,35 +217,8 @@ function Index() {
         if (raw) {
           setEncomendas(JSON.parse(raw));
         } else {
-          const hoje = new Date().toISOString().split("T")[0];
-          const demoOrders: Encomenda[] = [
-            {
-              id: "ord-1",
-              estabelecimentoCodigo: activeCode,
-              clienteNome: "Camila Guimarães",
-              clienteWhatsapp: "(11) 98765-4321",
-              dataEntrega: hoje,
-              horarioEntrega: "15:30",
-              itens: "1x Bolo Red Velvet 2kg, 30x Brigadeiros Belga",
-              itensDetalhes: [
-                { id: "it-1", nome: "Bolo Red Velvet Especial", quantidade: 1, precoUnitario: 140 },
-                { id: "it-2", nome: "Caixa Brigadeiros Gourmet (12 un)", quantidade: 1, precoUnitario: 48 },
-              ],
-              insumosNecessarios: [
-                { id: "ins-tag-1", nome: "Leite Condensado Moça 395g", quantidade: 3, comprado: false },
-                { id: "ins-tag-2", nome: "Cobertura Harald Melken Ao Leite", quantidade: 1, comprado: false },
-                { id: "ins-tag-3", nome: "Chantilly Norcau Chanty 1L", quantidade: 2, comprado: true },
-              ],
-              valorTotal: 188.0,
-              valorEntrada: 90.0,
-              statusPagamento: "sinal_pago",
-              status: "em_producao",
-              tipoEntrega: "retirada",
-              observacoes: "Vela decorativa dourada inclusa",
-            },
-          ];
-          setEncomendas(demoOrders);
-          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(demoOrders));
+          setEncomendas([]);
+          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeadas: Encomenda[] = data.map((d: any) => ({
@@ -328,51 +276,8 @@ function Index() {
         if (raw) {
           setDespesas(JSON.parse(raw));
         } else {
-          const demoDespesas: DespesaNotaFiscal[] = [
-            {
-              id: "exp-1",
-              estabelecimentoCodigo: activeCode,
-              fornecedorNome: "ArtFesta Confeitaria & Embalagens",
-              fornecedorEndereco: "Av. das Américas, 1200 - Centro",
-              numeroNota: "NFC-e 000.142.890",
-              numeroPedido: "PED-84920",
-              dataCompra: new Date().toISOString().split("T")[0],
-              horaCompra: "14:35:10",
-              valorTotal: 289.40,
-              valorProducao: 245.00,
-              valorUtensilios: 44.40,
-              valorConsumoProprio: 0.00,
-              valorOutros: 0.00,
-              itens: [
-                {
-                  id: "it-1",
-                  nome: "LEITE CONDENSADO MOÇA 395G",
-                  quantidade: 24,
-                  valorUnitario: 6.89,
-                  valorTotal: 165.36,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-2",
-                  nome: "COBERTURA SICAO AO LEITE 1.01KG",
-                  quantidade: 2,
-                  valorUnitario: 39.82,
-                  valorTotal: 79.64,
-                  categoria: "producao",
-                },
-                {
-                  id: "it-3",
-                  nome: "CAKE BOARD MDF REDONDO 25CM",
-                  quantidade: 8,
-                  valorUnitario: 5.55,
-                  valorTotal: 44.40,
-                  categoria: "utensilios",
-                },
-              ],
-            },
-          ];
-          setDespesas(demoDespesas);
-          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(demoDespesas));
+          setDespesas([]);
+          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
@@ -410,8 +315,8 @@ function Index() {
         if (raw) {
           setClientes(JSON.parse(raw));
         } else {
-          setClientes(CLIENTES_PADRAO);
-          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(CLIENTES_PADRAO));
+          setClientes([]);
+          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeados: Cliente[] = data.map((c: any) => ({
@@ -439,8 +344,8 @@ function Index() {
         if (raw) {
           setProdutos(JSON.parse(raw));
         } else {
-          setProdutos(CATALOGO_PRODUTOS_PADRAO);
-          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(CATALOGO_PRODUTOS_PADRAO));
+          setProdutos([]);
+          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify([]));
         }
       } else {
         const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
