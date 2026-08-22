@@ -852,47 +852,30 @@ function Index() {
       <div className="min-h-screen bg-background pb-16 sm:pb-12">
         {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
         <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
-        <div className="mx-auto max-w-6xl px-4 py-3">
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Bloco Esquerda: Logo + Informações do Estabelecimento/Usuário em Coluna */}
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+        <div className="mx-auto max-w-6xl px-4 py-2.5 sm:py-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Bloco Esquerda: Logo + Nome da Loja + Badge CD-1001 */}
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <CaixaDoceLogo size="md" className="shrink-0" />
               
-              <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0 flex flex-col justify-center">
-                {/* Linha 1: Nome da Loja + Badge do Código da Loja lado a lado */}
-                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                  <p className="truncate text-xs font-bold text-[#2E1A47] max-w-[140px] sm:max-w-[220px]" title={profile.establishmentName}>
-                    {profile.establishmentName}
-                  </p>
-                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold shrink-0">
-                    {profile.establishmentCode}
-                  </span>
-                </div>
-
-                {/* Linha 2: Nome do Usuário */}
-                <p className="text-xs font-medium text-[#2E1A47] truncate max-w-[150px] sm:max-w-[220px] mt-0.5" title={user.name}>
-                  {user.name}
+              <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0 flex items-center gap-2">
+                <p className="truncate text-xs sm:text-sm font-bold text-[#2E1A47] max-w-[140px] sm:max-w-[260px]" title={profile.establishmentName}>
+                  {profile.establishmentName}
                 </p>
-
-                {/* Linha 3: E-mail do Usuário */}
-                {user.email && (
-                  <p className="text-[11px] text-gray-500 truncate max-w-[130px] sm:max-w-[180px]" title={user.email}>
-                    {user.email}
-                  </p>
-                )}
+                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
+                  {profile.establishmentCode}
+                </span>
               </div>
             </div>
 
-            {/* Bloco Direita: Botões de Ação Fixados (Trocar Loja, Sair, Notificações) */}
+            {/* Bloco Direita: Botões de Ação Fixados (Notificações, Trocar Loja, Sair) */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-              <NotificationBell transacoes={transacoes} onNavigateTab={setActiveTab} />
-
-              <div className="hidden lg:flex items-center gap-1.5 bg-white/90 px-2.5 py-1 rounded-full border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
-                <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span className="text-[#7C3AED] font-extrabold uppercase text-[10px]">
-                  {profile.role}
-                </span>
-              </div>
+              <NotificationBell
+                transacoes={transacoes}
+                despesas={despesas}
+                establishmentCode={activeCode}
+                onNavigateTab={setActiveTab}
+              />
 
               <Button
                 variant="ghost"

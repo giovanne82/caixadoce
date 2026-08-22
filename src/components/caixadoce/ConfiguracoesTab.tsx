@@ -197,10 +197,20 @@ export function ConfiguracoesTab() {
                     required
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="usr-email">E-mail de Login</Label>
-                  <Input id="usr-email" value={emailUsuario} disabled className="bg-muted" />
-                  <p className="text-[11px] text-muted-foreground">O e-mail é gerenciado pelo Supabase Auth.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="usr-email">E-mail de Login</Label>
+                    <Input id="usr-email" value={emailUsuario} disabled className="bg-muted font-medium" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="usr-matricula">Matrícula / Perfil de Acesso</Label>
+                    <Input
+                      id="usr-matricula"
+                      value={`${activeCode}-${(profile?.role || "admin").toUpperCase()}`}
+                      disabled
+                      className="bg-muted font-mono font-bold text-purple-600 dark:text-purple-400"
+                    />
+                  </div>
                 </div>
                 <Button type="submit" disabled={salvandoUser} className="font-semibold shadow-sm">
                   <Save className="w-4 h-4 mr-1.5" />
