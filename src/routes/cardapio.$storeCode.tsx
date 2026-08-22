@@ -51,6 +51,7 @@ import {
   aplicarMascaraTelefone,
   obterProdutosCardapio,
   obterRegrasAgendamento,
+  calcularRegrasAgendamentoCarrinho,
   validarDataEntrega,
   validarHorarioEntrega,
   type ProdutoCardapio,
@@ -103,7 +104,11 @@ function CardapioLojaView() {
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
-  const regras = useMemo(() => obterRegrasAgendamento(code), [code]);
+  const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
+  const regras = useMemo(
+    () => calcularRegrasAgendamentoCarrinho(regrasBase, carrinho),
+    [regrasBase, carrinho]
+  );
 
   const dataMinimaStr = useMemo(() => {
     const d = new Date();

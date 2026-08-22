@@ -41,6 +41,7 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -105,6 +106,11 @@ export function ProductsView({
   const [fotoUrl, setFotoUrl] = useState("");
   const [destaque, setDestaque] = useState(false);
   const [ativo, setAtivo] = useState(true);
+
+  // Disponibilidade e Agendamento por Produto
+  const [availabilityType, setAvailabilityType] = useState<"pronta_entrega" | "encomenda">("encomenda");
+  const [availableDays, setAvailableDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
+  const [minLeadTimeDays, setMinLeadTimeDays] = useState<number>(1);
 
   // URL do Cardápio Público
   const linkPublico = typeof window !== "undefined"
@@ -172,6 +178,9 @@ export function ProductsView({
     setFotoUrl("");
     setDestaque(false);
     setAtivo(true);
+    setAvailabilityType("encomenda");
+    setAvailableDays([1, 2, 3, 4, 5, 6]);
+    setMinLeadTimeDays(1);
     setModalProdutoOpen(true);
   };
 
@@ -184,6 +193,9 @@ export function ProductsView({
     setFotoUrl(prod.fotoUrl);
     setDestaque(!!prod.destaque);
     setAtivo(prod.ativo !== false);
+    setAvailabilityType(prod.availability_type || "encomenda");
+    setAvailableDays(prod.available_days || [1, 2, 3, 4, 5, 6]);
+    setMinLeadTimeDays(prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1));
     setModalProdutoOpen(true);
   };
 
@@ -197,22 +209,25 @@ export function ProductsView({
     }
 
     try {
-      const payload = {
+      const payload: Partial<ProdutoCardapio> = {
         nome,
         descricao,
         preco: precoNum,
         categoria,
         fotoUrl: fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
         destaque,
-        tempoPreparoHoras: 24,
+        tempoPreparoHoras: availabilityType === "encomenda" ? minLeadTimeDays * 24 : 0,
         ativo,
+        availability_type: availabilityType,
+        available_days: availableDays,
+        min_lead_time_days: minLeadTimeDays,
       };
 
       if (editingId) {
         await onEditarProduto(editingId, payload);
         toast.success("Produto atualizado com sucesso!");
       } else {
-        await onCriarProduto(payload);
+        await onCriarProduto(payload as Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">);
         toast.success("Novo produto adicionado ao cardápio!");
       }
       setModalProdutoOpen(false);
@@ -380,6 +395,15 @@ export function ProductsView({
                           <Sparkles className="w-3 h-3" /> Destaque
                         </Badge>
                       )}
+                      {prod.availability_type === "pronta_entrega" ? (
+                        <Badge className="bg-emerald-600 text-white border-0 text-[10px] font-bold">
+                          ⚡ Pronta Entrega
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-purple-600 text-white border-0 text-[10px] font-bold">
+                          📅 {prod.min_lead_time_days || 1}d Encomenda
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -538,6 +562,128 @@ export function ProductsView({
                 onChange={(e) => setDescricao(e.target.value)}
                 className="text-xs"
               />
+            </div>
+
+            {/* SEÇÃO: DISPONIBILIDADE E AGENDAMENTO */}
+            <div className="space-y-3 pt-3 border-t border-border">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-primary" /> Disponibilidade &amp; Agendamento
+              </Label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityType("pronta_entrega")}
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                    availabilityType === "pronta_entrega"
+                      ? "bg-purple-50 dark:bg-purple-950/40 border-purple-500 ring-1 ring-purple-500"
+                      : "bg-muted/40 border-border hover:bg-muted"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs flex items-center gap-1.5">
+                      ⚡ Pronta Entrega / Imediato
+                    </span>
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        availabilityType === "pronta_entrega"
+                          ? "bg-purple-600 border-purple-600 text-white"
+                          : "border-muted-foreground/40"
+                      }`}
+                    >
+                      {availabilityType === "pronta_entrega" && <Check className="w-3 h-3" />}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Disponível para entrega/retirada em dias específicos da semana.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityType("encomenda")}
+                  className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                    availabilityType === "encomenda"
+                      ? "bg-purple-50 dark:bg-purple-950/40 border-purple-500 ring-1 ring-purple-500"
+                      : "bg-muted/40 border-border hover:bg-muted"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs flex items-center gap-1.5">
+                      📅 Sob Encomenda
+                    </span>
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        availabilityType === "encomenda"
+                          ? "bg-purple-600 border-purple-600 text-white"
+                          : "border-muted-foreground/40"
+                      }`}
+                    >
+                      {availabilityType === "encomenda" && <Check className="w-3 h-3" />}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Requer antecedência prévia mínima para produção.
+                  </p>
+                </button>
+              </div>
+
+              {availabilityType === "pronta_entrega" ? (
+                <div className="space-y-2 pt-2 bg-purple-500/5 p-3 rounded-xl border border-purple-500/20">
+                  <Label className="text-xs font-bold text-foreground">
+                    Dias da Semana com Pronta Entrega Ativa:
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-7 gap-1.5 pt-1">
+                    {[
+                      { id: 1, label: "Seg" },
+                      { id: 2, label: "Ter" },
+                      { id: 3, label: "Qua" },
+                      { id: 4, label: "Qui" },
+                      { id: 5, label: "Sex" },
+                      { id: 6, label: "Sáb" },
+                      { id: 0, label: "Dom" },
+                    ].map((d) => {
+                      const ativo = availableDays.includes(d.id);
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            setAvailableDays((prev) =>
+                              ativo ? prev.filter((x) => x !== d.id) : [...prev, d.id]
+                            );
+                          }}
+                          className={`py-1.5 px-2 rounded-lg border text-xs font-bold transition-all text-center ${
+                            ativo
+                              ? "bg-purple-600 text-white border-purple-600 shadow-2xs"
+                              : "bg-background border-border text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-2 bg-purple-500/5 p-3 rounded-xl border border-purple-500/20">
+                  <Label htmlFor="prod-lead-time" className="text-xs font-bold text-foreground">
+                    Antecedência Mínima Exigida (em Dias)
+                  </Label>
+                  <Input
+                    id="prod-lead-time"
+                    type="number"
+                    min={0}
+                    max={30}
+                    value={minLeadTimeDays}
+                    onChange={(e) => setMinLeadTimeDays(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="h-8 text-xs font-mono font-bold w-full sm:w-48 bg-background"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Ex: 0 = pode pedir no mesmo dia | 1 = antecedência de 24h | 2 = 48h.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border">

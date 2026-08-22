@@ -152,6 +152,9 @@ export interface ProdutoCardapio {
   tempoPreparoHoras?: number;
   ativo?: boolean;
   createdAt?: string;
+  availability_type?: "pronta_entrega" | "encomenda";
+  available_days?: number[]; // [0,1,2,3,4,5,6] (0 = Dom, 1 = Seg, 2 = Ter, etc.)
+  min_lead_time_days?: number; // antecedência mínima em dias
 }
 
 export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
@@ -1235,4 +1238,40 @@ export function validarHorarioEntrega(
   }
 
   return { valido: true };
+}
+
+export function calcularRegrasAgendamentoCarrinho(
+  regrasLoja: RegrasAgendamento,
+  itensCarrinho: { produto: ProdutoCardapio; quantidade: number }[]
+): RegrasAgendamento {
+  if (!itensCarrinho || itensCarrinho.length === 0) return regrasLoja;
+
+  let maxLeadTime = regrasLoja.antecedenciaMinimaDias || 0;
+  let diasPermitidos = [...(regrasLoja.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6])];
+
+  itensCarrinho.forEach(({ produto }) => {
+    // 1. Maior prazo de antecedência exigido no carrinho
+    if (produto.availability_type === "encomenda" || produto.min_lead_time_days !== undefined) {
+      const leadTime = produto.min_lead_time_days ?? (produto.tempoPreparoHoras ? Math.ceil(produto.tempoPreparoHoras / 24) : 0);
+      if (leadTime > maxLeadTime) {
+        maxLeadTime = leadTime;
+      }
+    } else if (produto.tempoPreparoHoras && produto.tempoPreparoHoras > 0) {
+      const leadTime = Math.ceil(produto.tempoPreparoHoras / 24);
+      if (leadTime > maxLeadTime) {
+        maxLeadTime = leadTime;
+      }
+    }
+
+    // 2. Intersecção dos dias permitidos para pronta entrega
+    if (produto.availability_type === "pronta_entrega" && produto.available_days && produto.available_days.length > 0) {
+      diasPermitidos = diasPermitidos.filter((d) => produto.available_days!.includes(d));
+    }
+  });
+
+  return {
+    ...regrasLoja,
+    antecedenciaMinimaDias: maxLeadTime,
+    diasSemanaDisponiveis: diasPermitidos,
+  };
 }

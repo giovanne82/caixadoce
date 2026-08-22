@@ -51,6 +51,7 @@ import {
   formatarWhatsappLink,
   obterProdutosCardapio,
   obterRegrasAgendamento,
+  calcularRegrasAgendamentoCarrinho,
   validarDataEntrega,
   validarHorarioEntrega,
   ESTABELECIMENTO_PADRAO,
@@ -95,7 +96,15 @@ function PublicStoreView() {
   const { storeSlug } = useParams({ from: "/agendar/$storeSlug" });
   const cleanCode = (storeSlug || "cd-1001").toUpperCase();
 
-  const regras = useMemo(() => obterRegrasAgendamento(cleanCode), [cleanCode]);
+  // Carrinho
+  const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+
+  const regrasBase = useMemo(() => obterRegrasAgendamento(cleanCode), [cleanCode]);
+  const regras = useMemo(
+    () => calcularRegrasAgendamentoCarrinho(regrasBase, carrinho),
+    [regrasBase, carrinho]
+  );
 
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
@@ -141,9 +150,7 @@ function PublicStoreView() {
   // Datas Bloqueadas
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
 
-  // Carrinho
-  const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
+
 
   // Modal / Formulário de Checkout
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
