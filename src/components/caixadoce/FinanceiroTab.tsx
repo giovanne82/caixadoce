@@ -60,6 +60,7 @@ import {
   QrCode,
   ExternalLink,
   ShieldCheck,
+  Edit2,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -86,6 +87,8 @@ interface FinanceiroTabProps {
   onAdicionarTransacao: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onRemoverTransacao: (id: string) => Promise<void>;
   onAtualizarStatus: (id: string, status: StatusTransacao) => Promise<void>;
+  onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
+  onReatribuirEstabelecimento?: (nomeAntigo: string, novoNome: string) => Promise<void>;
 }
 
 export function FinanceiroTab({
@@ -95,6 +98,8 @@ export function FinanceiroTab({
   onAdicionarTransacao,
   onRemoverTransacao,
   onAtualizarStatus,
+  onEditarDespesa,
+  onReatribuirEstabelecimento,
 }: FinanceiroTabProps) {
   const code = establishmentCode || "CD-1001";
 
@@ -218,6 +223,57 @@ export function FinanceiroTab({
   };
 
   const [modalNovaTransacao, setModalNovaTransacao] = useState(false);
+
+  // Modal State de Reatribuição / Mesclagem de Estabelecimento
+  const [modalReatribuirOpen, setModalReatribuirOpen] = useState(false);
+  const [reatribuirFornecedorOrigem, setReatribuirFornecedorOrigem] = useState("");
+  const [tipoDestino, setTipoDestino] = useState<"existente" | "novo">("existente");
+  const [fornecedorDestinoSelecionado, setFornecedorDestinoSelecionado] = useState("");
+  const [fornecedorDestinoNovoNome, setFornecedorDestinoNovoNome] = useState("");
+  const [processandoReatribuicao, setProcessandoReatribuicao] = useState(false);
+
+  const listaFornecedoresExistentes = useMemo(() => {
+    const nomes = new Set<string>();
+    despesas.forEach((d) => {
+      if (d.fornecedorNome && d.fornecedorNome !== reatribuirFornecedorOrigem) {
+        nomes.add(d.fornecedorNome);
+      }
+    });
+    return Array.from(nomes).sort();
+  }, [despesas, reatribuirFornecedorOrigem]);
+
+  const handleAbrirReatribuir = (nomeOrigem: string) => {
+    setReatribuirFornecedorOrigem(nomeOrigem);
+    setTipoDestino("existente");
+    const outros = despesas.filter((d) => d.fornecedorNome !== nomeOrigem).map((d) => d.fornecedorNome);
+    setFornecedorDestinoSelecionado(outros[0] || "");
+    setFornecedorDestinoNovoNome("");
+    setModalReatribuirOpen(true);
+  };
+
+  const handleConfirmarReatribuicao = async () => {
+    const destinoFinal = tipoDestino === "existente" ? fornecedorDestinoSelecionado : fornecedorDestinoNovoNome.trim();
+    if (!destinoFinal) {
+      toast.error("Informe ou selecione o estabelecimento de destino.");
+      return;
+    }
+    if (destinoFinal === reatribuirFornecedorOrigem) {
+      toast.error("O estabelecimento de destino deve ser diferente do original.");
+      return;
+    }
+
+    setProcessandoReatribuicao(true);
+    try {
+      if (onReatribuirEstabelecimento) {
+        await onReatribuirEstabelecimento(reatribuirFornecedorOrigem, destinoFinal);
+      }
+      setModalReatribuirOpen(false);
+    } catch (e: any) {
+      toast.error(`Erro ao reatribuir: ${e.message}`);
+    } finally {
+      setProcessandoReatribuicao(false);
+    }
+  };
 
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "receita" | "despesa">("todos");
@@ -740,10 +796,24 @@ export function FinanceiroTab({
                         {loja.percentual}% do total
                       </Badge>
                     </CardHeader>
-                    <CardContent className="space-y-1">
+                    <CardContent className="space-y-2">
                       <div className="text-xl font-extrabold text-foreground">{formatarMoeda(loja.total)}</div>
                       <div className="text-[11px] text-amber-600 font-semibold flex items-center gap-1">
                         <Cookie className="w-3 h-3" /> Produção: {formatarMoeda(loja.producao)}
+                      </div>
+                      <div className="pt-2 border-t border-border/40">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAbrirReatribuir(loja.nome);
+                          }}
+                          className="h-7 px-2 text-[11px] font-bold text-primary hover:bg-primary/10 border-primary/30 w-full justify-center"
+                          title="Reatribuir ou mesclar compras para outro estabelecimento"
+                        >
+                          <Edit2 className="w-3 h-3 mr-1" /> Reatribuir / Mesclar
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -1092,6 +1162,92 @@ export function FinanceiroTab({
             >
               <CreditCard className="w-4 h-4" />
               {conectandoStripe ? "Conectando..." : "Criar Conta / Conectar Stripe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL REATRIBUIR / MESCLAR ESTABELECIMENTO */}
+      {/* ========================================================================= */}
+      <Dialog open={modalReatribuirOpen} onOpenChange={setModalReatribuirOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <Building2 className="w-5 h-5 text-primary" /> Reatribuir / Mesclar Estabelecimento
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Mova todas as compras e notinhas registradas em <strong>"{reatribuirFornecedorOrigem}"</strong> para outro estabelecimento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Selecione a Opção de Destino:</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={tipoDestino === "existente" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTipoDestino("existente")}
+                  className="text-xs h-8 font-semibold"
+                >
+                  Estabelecimento Existente
+                </Button>
+                <Button
+                  type="button"
+                  variant={tipoDestino === "novo" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTipoDestino("novo")}
+                  className="text-xs h-8 font-semibold"
+                >
+                  Criar Novo Nome
+                </Button>
+              </div>
+            </div>
+
+            {tipoDestino === "existente" ? (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Escolha um Estabelecimento Existente</Label>
+                {listaFornecedoresExistentes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">Nenhum outro estabelecimento cadastrado.</p>
+                ) : (
+                  <select
+                    value={fornecedorDestinoSelecionado}
+                    onChange={(e) => setFornecedorDestinoSelecionado(e.target.value)}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs font-bold"
+                  >
+                    {listaFornecedoresExistentes.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Novo Nome do Estabelecimento / Mercado</Label>
+                <Input
+                  value={fornecedorDestinoNovoNome}
+                  onChange={(e) => setFornecedorDestinoNovoNome(e.target.value)}
+                  placeholder="ex: Atacadão Central S/A"
+                  className="h-9 text-xs font-bold"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setModalReatribuirOpen(false)} className="text-xs">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarReatribuicao}
+              disabled={processandoReatribuicao}
+              className="font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {processandoReatribuicao ? "Reatribuindo..." : "Confirmar & Mesclar"}
             </Button>
           </DialogFooter>
         </DialogContent>

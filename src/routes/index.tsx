@@ -852,6 +852,48 @@ function Index() {
     toast.success("Registro de despesa excluído com sucesso.");
   };
 
+  const editarDespesa = async (id: string, dados: Partial<DespesaNotaFiscal>) => {
+    const atualizadas = despesas.map((d) => (d.id === id ? { ...d, ...dados } : d));
+    setDespesas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+      const updatePayload: any = {};
+      if (dados.fornecedorNome !== undefined) updatePayload.fornecedor_nome = dados.fornecedorNome;
+      if (dados.fornecedorEndereco !== undefined) updatePayload.fornecedor_endereco = dados.fornecedorEndereco;
+      if (dados.numeroNota !== undefined) updatePayload.numero_nota = dados.numeroNota;
+      if (dados.dataCompra !== undefined) updatePayload.data_compra = dados.dataCompra;
+      if (dados.horaCompra !== undefined) updatePayload.hora_compra = dados.horaCompra;
+      if (dados.valorTotal !== undefined) updatePayload.valor_total = dados.valorTotal;
+      if (dados.itens !== undefined) updatePayload.itens = dados.itens;
+
+      await supabase.from("expenses").update(updatePayload).eq("id", id);
+    } catch (e) {
+      console.warn("Aviso ao editar despesa:", e);
+    }
+    toast.success("Dados da notinha atualizados com sucesso!");
+  };
+
+  const reatribuirEstabelecimentoDespesas = async (nomeAntigo: string, novoNome: string) => {
+    if (!nomeAntigo || !novoNome || nomeAntigo === novoNome) return;
+
+    const novoNomeTrim = novoNome.trim();
+    const atualizadas = despesas.map((d) =>
+      d.fornecedorNome === nomeAntigo ? { ...d, fornecedorNome: novoNomeTrim } : d
+    );
+    setDespesas(atualizadas);
+    try {
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+      await supabase
+        .from("expenses")
+        .update({ fornecedor_nome: novoNomeTrim })
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("fornecedor_nome", nomeAntigo);
+    } catch (e) {
+      console.warn("Aviso ao reatribuir estabelecimento:", e);
+    }
+    toast.success(`Todas as notinhas de "${nomeAntigo}" foram reatribuídas para "${novoNomeTrim}"!`);
+  };
+
   // Handlers de Transações Financeiras
   const adicionarTransacao = async (nova: Omit<TransacaoFinanceira, "id">) => {
     const item: TransacaoFinanceira = {
@@ -1037,6 +1079,7 @@ function Index() {
                 encomendas={encomendas}
                 listasCompras={listasCompras}
                 onSalvarDespesa={salvarDespesa}
+                onEditarDespesa={editarDespesa}
                 onConciliarInsumos={conciliarInsumos}
               />
             ) : (
@@ -1053,6 +1096,8 @@ function Index() {
               produtos={produtos}
               estabelecimentoCodigo={activeCode}
               onExcluirDespesa={excluirDespesa}
+              onEditarDespesa={editarDespesa}
+              onReatribuirEstabelecimento={reatribuirEstabelecimentoDespesas}
               listasCompras={listasCompras}
               onAtualizarListasCompras={setListasCompras}
             />
@@ -1105,6 +1150,8 @@ function Index() {
                 onAdicionarTransacao={adicionarTransacao}
                 onRemoverTransacao={removerTransacao}
                 onAtualizarStatus={atualizarStatusTransacao}
+                onEditarDespesa={editarDespesa}
+                onReatribuirEstabelecimento={reatribuirEstabelecimentoDespesas}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />

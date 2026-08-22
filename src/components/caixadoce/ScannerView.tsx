@@ -51,6 +51,7 @@ interface ScannerViewProps {
   encomendas?: Encomenda[];
   listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
+  onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
   onConciliarInsumos?: (conciliacoes: { encomendaId: string; insumoId: string }[]) => Promise<void>;
   onConciliarListasCompras?: (listaIds: string[], itensNota: ItemNotaFiscal[]) => Promise<void>;
 }
@@ -58,6 +59,7 @@ interface ScannerViewProps {
 export function ScannerView({
   despesas,
   onSalvarDespesa,
+  onEditarDespesa,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,10 +78,32 @@ export function ScannerView({
   // Modal de Visualização de Detalhes da Notinha
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
   const [registroDetalhes, setRegistroDetalhes] = useState<DespesaNotaFiscal | null>(null);
+  const [editFornecedorNome, setEditFornecedorNome] = useState("");
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const abrirDetalhesRegistro = (registro: DespesaNotaFiscal) => {
     setRegistroDetalhes(registro);
+    setEditFornecedorNome(registro.fornecedorNome || "");
     setModalDetalhesOpen(true);
+  };
+
+  const handleSalvarEdicaoNotinha = async () => {
+    if (!registroDetalhes || !editFornecedorNome.trim()) {
+      toast.error("Informe o nome do estabelecimento.");
+      return;
+    }
+    setSalvandoEdicao(true);
+    try {
+      if (onEditarDespesa) {
+        await onEditarDespesa(registroDetalhes.id, { fornecedorNome: editFornecedorNome.trim() });
+      }
+      setRegistroDetalhes((prev) => (prev ? { ...prev, fornecedorNome: editFornecedorNome.trim() } : null));
+      toast.success("Nome do estabelecimento atualizado!");
+    } catch (e: any) {
+      toast.error(`Erro ao atualizar notinha: ${e.message}`);
+    } finally {
+      setSalvandoEdicao(false);
+    }
   };
 
   const compartilharNotinhaWhatsApp = (despesa: DespesaNotaFiscal) => {
@@ -532,9 +556,17 @@ export function ScannerView({
           {registroDetalhes && (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Estabelecimento / Mercado</Label>
-                  <p className="text-sm font-bold text-foreground">{registroDetalhes.fornecedorNome}</p>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="det-forn" className="text-xs font-bold text-foreground">
+                    Estabelecimento / Razão Social (Editável)
+                  </Label>
+                  <Input
+                    id="det-forn"
+                    value={editFornecedorNome}
+                    onChange={(e) => setEditFornecedorNome(e.target.value)}
+                    className="h-8 text-xs font-bold mt-1"
+                    placeholder="ex: Atacadão S/A"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Número do Documento</Label>
@@ -542,7 +574,7 @@ export function ScannerView({
                     {registroDetalhes.numeroNota || "Não informado"}
                   </p>
                 </div>
-                <div className="sm:col-span-2">
+                <div>
                   <Label className="text-xs text-muted-foreground">Data e Hora da Compra</Label>
                   <p className="text-sm font-semibold text-foreground">
                     {registroDetalhes.dataCompra}{registroDetalhes.horaCompra ? ` às ${registroDetalhes.horaCompra}` : ""}
@@ -601,20 +633,33 @@ export function ScannerView({
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (registroDetalhes) compartilharNotinhaWhatsApp(registroDetalhes);
-              }}
-              className="gap-2 text-emerald-600 border-emerald-300 hover:bg-emerald-50 text-xs"
-            >
-              <MessageCircle className="w-4 h-4 text-emerald-600" /> Compartilhar no WhatsApp
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
-              Fechar
-            </Button>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t flex flex-wrap justify-between">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (registroDetalhes) compartilharNotinhaWhatsApp(registroDetalhes);
+                }}
+                className="gap-2 text-emerald-600 border-emerald-300 hover:bg-emerald-50 text-xs h-8"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-600" /> WhatsApp
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={handleSalvarEdicaoNotinha}
+                disabled={salvandoEdicao}
+                className="gap-1.5 font-bold text-xs bg-[#8E7CC3] hover:bg-[#7C69B3] text-white h-8"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {salvandoEdicao ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs h-8">
+                Fechar
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -87,6 +87,8 @@ interface DespesasViewProps {
   produtos?: ProdutoCardapio[];
   estabelecimentoCodigo?: string;
   onExcluirDespesa?: (id: string) => Promise<void>;
+  onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
+  onReatribuirEstabelecimento?: (nomeAntigo: string, novoNome: string) => Promise<void>;
   listasCompras?: ListaCompras[];
   onAtualizarListasCompras?: (novasListas: ListaCompras[]) => void;
 }
@@ -97,6 +99,9 @@ export function DespesasView({
   clientes = [],
   produtos = [],
   estabelecimentoCodigo = "CD-1001",
+  onExcluirDespesa,
+  onEditarDespesa,
+  onReatribuirEstabelecimento,
   listasCompras: listasProp,
   onAtualizarListasCompras,
 }: DespesasViewProps) {
