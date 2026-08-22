@@ -61,61 +61,61 @@
 :root {
   --radius: 0.75rem;
 
-  /* Fundo da Aplicação: #0B0B14 Dark Premium */
-  --background: #0B0B14;
-  --foreground: #F1F5F9;
+  /* Fundo da Aplicação: #F8FAFC (Clean Light Slate) */
+  --background: #F8FAFC;
+  --foreground: #0F172A;
 
-  /* Cards & Superfícies: #121124 com tom violeta escuro profundo */
-  --card: #121124;
-  --card-foreground: #F1F5F9;
-  --popover: #121124;
-  --popover-foreground: #F1F5F9;
+  /* Cards & Superfícies: #FFFFFF (Branco Puro) */
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
   
-  /* Primary / Botões de Ação: #8B5CF6 (Roxo Neon) */
-  --primary: #8B5CF6;
+  /* Primary / Botões de Ação: #7C3AED (Roxo Oficial CaixaDoce) */
+  --primary: #7C3AED;
   --primary-foreground: #FFFFFF;
   
-  /* Secondary / Menus */
-  --secondary: #1E1B38;
-  --secondary-foreground: #E2E8F0;
+  /* Secondary / Menus & Destacados */
+  --secondary: #F3EEF9;
+  --secondary-foreground: #6D28D9;
   
-  --muted: #1A1830;
-  --muted-foreground: #94A3B8;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
   
-  --accent: #262248;
-  --accent-foreground: #F1F5F9;
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
   
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
   
-  /* Bordas sutis em roxo */
-  --border: rgba(139, 92, 246, 0.25);
-  --input: rgba(139, 92, 246, 0.3);
-  --ring: #8B5CF6;
+  /* Bordas limpas e nítidas */
+  --border: #E2E8F0;
+  --input: #CBD5E1;
+  --ring: #7C3AED;
   
-  --chart-1: #8B5CF6;
+  --chart-1: #7C3AED;
   --chart-2: #EC4899;
   --chart-3: #F59E0B;
   --chart-4: #10B981;
   --chart-5: #3B82F6;
   
-  --sidebar: #0B0B14;
-  --sidebar-foreground: #F1F5F9;
-  --sidebar-primary: #8B5CF6;
+  --sidebar: #F8FAFC;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #7C3AED;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1E1B38;
-  --sidebar-accent-foreground: #F1F5F9;
-  --sidebar-border: rgba(139, 92, 246, 0.25);
-  --sidebar-ring: #8B5CF6;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #7C3AED;
   
   --gold: #F59E0B;
   --gold-foreground: #FFFFFF;
-  --brand: #8B5CF6;
+  --brand: #7C3AED;
   --brand-foreground: #FFFFFF;
-  --navy: #0B0B14;
+  --navy: #0F172A;
   --navy-foreground: #FFFFFF;
-  --gradient-brand: linear-gradient(135deg, #0B0B14, #8B5CF6);
-  --shadow-card: 0 6px 20px -8px rgba(0, 0, 0, 0.5);
+  --gradient-brand: linear-gradient(135deg, #7C3AED, #9333EA);
+  --shadow-card: 0 4px 12px -2px rgba(15, 23, 42, 0.05);
 }
 
 .dark {

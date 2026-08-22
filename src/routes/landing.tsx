@@ -53,7 +53,7 @@ function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0B14] text-slate-100 selection:bg-purple-500 selection:text-white font-sans overflow-x-hidden">
+    <div className="dark min-h-screen bg-[#0B0B14] text-slate-100 selection:bg-purple-500 selection:text-white font-sans overflow-x-hidden">
       {/* Background Decorativo com Glow Neon em Roxo/Rosa */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse"></div>
