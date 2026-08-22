@@ -129,6 +129,16 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host.includes("caixadoce-nine") || (host.includes("vercel.app") && !host.includes("localhost"))) {
+        const targetUrl = `https://www.caixadoce.com.br${window.location.pathname}${window.location.search}${window.location.hash}`;
+        window.location.replace(targetUrl);
+      }
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

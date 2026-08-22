@@ -96,10 +96,13 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function getAppBaseUrl(path: string = ""): string {
-  const origin =
-    typeof window !== "undefined" && window.location.origin
-      ? window.location.origin
-      : "https://www.caixadoce.com.br";
+  let origin = "https://www.caixadoce.com.br";
+  if (typeof window !== "undefined" && window.location.origin) {
+    const host = window.location.hostname;
+    if (!host.includes("caixadoce-nine") && !host.includes("vercel.app")) {
+      origin = window.location.origin;
+    }
+  }
 
   if (!path) return origin;
   return `${origin}${path.startsWith("/") ? path : `/${path}`}`;

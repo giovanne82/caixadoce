@@ -293,22 +293,77 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 3. Carrega Despesas do Scanner
+  // 3. Carrega e Sincroniza Despesas (Notinhas) com a Nuvem (Supabase + localStorage migration)
   const fetchDespesas = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const data = await safeFetchSupabase("expenses", activeCode, "data_compra", false);
+      const data = await safeFetchSupabase("expenses", activeCode, "created_at", false);
 
-      if (!data || data.length === 0) {
+      let localItems: DespesaNotaFiscal[] = [];
+      try {
         const raw = localStorage.getItem(`caixadoce_expenses_${activeCode}`);
-        if (raw) {
-          setDespesas(JSON.parse(raw));
-        } else {
-          setDespesas([]);
-          localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify([]));
+        if (raw) localItems = JSON.parse(raw);
+      } catch {}
+
+      // Migra notinhas que estavam gravadas localmente no localStorage para o Supabase
+      if (localItems.length > 0) {
+        const remoteIds = new Set((data || []).map((d: any) => String(d.id)));
+        const pendentes = localItems.filter((it) => !remoteIds.has(String(it.id)));
+
+        if (pendentes.length > 0) {
+          for (const item of pendentes) {
+            try {
+              await supabase.from("expenses").insert([
+                {
+                  id: item.id,
+                  estabelecimento_codigo: activeCode,
+                  user_id: user?.id || null,
+                  fornecedor_nome: item.fornecedorNome,
+                  fornecedor_endereco: item.fornecedorEndereco,
+                  numero_nota: item.numeroNota,
+                  numero_pedido: item.numeroPedido,
+                  data_compra: item.dataCompra,
+                  hora_compra: item.horaCompra,
+                  valor_total: item.valorTotal,
+                  valor_producao: item.valorProducao,
+                  valor_utensilios: item.valorUtensilios,
+                  valor_consumo_proprio: item.valorConsumoProprio,
+                  valor_outros: item.valorOutros,
+                  itens: item.itens,
+                },
+              ]);
+            } catch {}
+          }
+          const updated = await safeFetchSupabase("expenses", activeCode, "created_at", false);
+          if (updated && updated.length > 0) {
+            const mapeadas: DespesaNotaFiscal[] = updated.map((d: any) => ({
+              id: String(d.id),
+              estabelecimentoCodigo: d.estabelecimento_codigo,
+              fornecedorNome: d.fornecedor_nome,
+              fornecedorEndereco: d.fornecedor_endereco,
+              numeroNota: d.numero_nota,
+              numeroPedido: d.numero_pedido,
+              dataCompra: d.data_compra,
+              horaCompra: d.hora_compra,
+              valorTotal: Number(d.valor_total),
+              valorProducao: Number(d.valor_producao),
+              valorUtensilios: Number(d.valor_utensilios),
+              valorConsumoProprio: Number(d.valor_consumo_proprio),
+              valorOutros: Number(d.valor_outros),
+              itens: Array.isArray(d.itens) ? d.itens : [],
+              comprovanteUrl: d.comprovante_url,
+              metodoPagamento: d.metodo_pagamento,
+              createdAt: d.created_at,
+            }));
+            setDespesas(mapeadas);
+            localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(mapeadas));
+            return;
+          }
         }
-      } else {
+      }
+
+      if (data && data.length > 0) {
         const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
@@ -329,9 +384,12 @@ function Index() {
           createdAt: d.created_at,
         }));
         setDespesas(mapeadas);
+        localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(mapeadas));
+      } else {
+        setDespesas(localItems);
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, user]);
 
   // 4. Carrega Clientes (Customers)
   const fetchClientes = useCallback(async () => {
@@ -434,6 +492,25 @@ function Index() {
     fetchProdutos();
     fetchListasCompras();
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
+
+  // Listener em tempo real do Supabase para notinhas/despesas escaneadas em qualquer dispositivo (Celular -> PC)
+  useEffect(() => {
+    if (!profile) return;
+    const channel = supabase
+      .channel("expenses_realtime_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expenses" },
+        () => {
+          fetchDespesas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile, fetchDespesas]);
 
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
@@ -730,6 +807,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
+          user_id: user?.id || null,
           fornecedor_nome: item.fornecedorNome,
           fornecedor_endereco: item.fornecedorEndereco,
           numero_nota: item.numeroNota,
@@ -744,6 +822,7 @@ function Index() {
           itens: item.itens,
         },
       ]);
+      await fetchDespesas();
     } catch (e) {
       console.warn("Supabase insert expense warning:", e);
     }
