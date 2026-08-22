@@ -95,6 +95,16 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function getAppBaseUrl(path: string = ""): string {
+  const origin =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://www.caixadoce.com.br";
+
+  if (!path) return origin;
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
@@ -171,9 +181,29 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     };
   };
 
+
+
   // Inicialização e Carregamento de Sessão
   useEffect(() => {
     setIsMounted(true);
+
+    // Limpeza de hash fragmentos de OAuth/Auth Callbacks (ex: /#access_token=... ou /#)
+    if (typeof window !== "undefined" && window.location.hash) {
+      if (
+        window.location.hash.includes("access_token") ||
+        window.location.hash.includes("error") ||
+        window.location.hash.includes("type=recovery") ||
+        window.location.hash === "#"
+      ) {
+        try {
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search
+          );
+        } catch {}
+      }
+    }
 
     try {
       const savedEstablishments = localStorage.getItem("caixadoce_estabelecimentos");
@@ -315,10 +345,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const registerWithEmail = async (name: string, email: string, password: string): Promise<{ requiresConfirmation: boolean }> => {
     try {
+      const redirectUrl = getAppBaseUrl();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: { full_name: name, name },
         },
       });
@@ -369,10 +401,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const sendEmailOtpSignUp = async (name: string, email: string, password: string) => {
     try {
+      const redirectUrl = getAppBaseUrl();
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: { full_name: name, name },
         },
       });
@@ -424,10 +458,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const loginWithGoogle = async () => {
     try {
+      const redirectUrl = getAppBaseUrl();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
         },
       });
       if (error) throw error;
@@ -530,8 +565,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const resetPassword = async (email: string) => {
     try {
+      const redirectUrl = getAppBaseUrl("/reset-password");
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: redirectUrl,
       });
       if (error) throw error;
       toast.success("Link de redefinição enviado para seu e-mail!");
