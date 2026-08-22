@@ -19,6 +19,8 @@ import {
   Heart,
   Store,
 } from "lucide-react";
+import { PLANOS_CONFIG } from "@/lib/planos-utils";
+import { formatarMoeda } from "@/lib/caixadoce-data";
 
 export const Route = createFileRoute("/landing")({
   head: () => ({
@@ -367,9 +369,11 @@ function LandingPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 49,90/mês</div>
+                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 29,90/mês</div>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-amber-400">R$ 29,90</span>
+                    <span className="text-4xl font-black text-amber-400">
+                      {formatarMoeda(PLANOS_CONFIG.mensal.precoMensal)}
+                    </span>
                     <span className="text-xs text-slate-300 font-semibold">/ mês (com 14 dias grátis)</span>
                   </div>
                 </div>

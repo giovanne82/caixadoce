@@ -971,59 +971,59 @@ function Index() {
 
   return (
     <ScannerProvider>
-      <div className="min-h-screen bg-background pb-16 sm:pb-12">
-        {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
-        <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
-        <div className="mx-auto max-w-6xl px-4 py-2.5 sm:py-3">
-          <div className="flex items-center justify-between gap-3">
-            {/* Bloco Esquerda: Logo + Nome da Loja + Badge CD-1001 */}
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <CaixaDoceLogo size="md" className="shrink-0" />
-              
-              <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0 flex items-center gap-2">
-                <p className="truncate text-xs sm:text-sm font-bold text-[#2E1A47] max-w-[140px] sm:max-w-[260px]" title={profile.establishmentName}>
-                  {profile.establishmentName}
-                </p>
-                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
-                  {profile.establishmentCode}
-                </span>
+      <div className="min-h-screen bg-[#0B0B14] text-slate-100 pb-16 sm:pb-12">
+        {/* Header Principal do CaixaDoce em Dark Theme Premium */}
+        <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md text-white shadow-md border-b border-purple-900/40">
+          <div className="mx-auto max-w-6xl px-4 py-2.5 sm:py-3">
+            <div className="flex items-center justify-between gap-3">
+              {/* Bloco Esquerda: Logo + Nome da Loja + Badge CD-1001 */}
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <CaixaDoceLogo size="md" className="shrink-0" />
+                
+                <div className="border-l border-purple-500/30 pl-2.5 sm:pl-3 min-w-0 flex items-center gap-2">
+                  <p className="truncate text-xs sm:text-sm font-bold text-slate-100 max-w-[140px] sm:max-w-[260px]" title={profile.establishmentName}>
+                    {profile.establishmentName}
+                  </p>
+                  <span className="inline-block bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
+                    {profile.establishmentCode}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bloco Direita: Botões de Ação Fixados (Notificações, Trocar Loja, Sair) */}
+              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                <NotificationBell
+                  transacoes={transacoes}
+                  despesas={despesas}
+                  establishmentCode={activeCode}
+                  onNavigateTab={setActiveTab}
+                />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={switchProfile}
+                  title="Trocar Estabelecimento"
+                  className="h-8 px-2 sm:px-3 text-xs text-slate-200 hover:text-white bg-slate-800/80 hover:bg-purple-900/40 border border-slate-700 shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5 text-purple-400" />
+                  <span className="hidden sm:inline font-bold">Trocar Loja</span>
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  title="Sair da Conta"
+                  className="h-8 px-2 sm:px-3 text-xs text-slate-200 hover:text-rose-400 bg-slate-800/80 hover:bg-rose-900/40 border border-slate-700 shrink-0"
+                >
+                  <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-400" />
+                  <span className="hidden sm:inline font-bold">Sair</span>
+                </Button>
               </div>
             </div>
-
-            {/* Bloco Direita: Botões de Ação Fixados (Notificações, Trocar Loja, Sair) */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-              <NotificationBell
-                transacoes={transacoes}
-                despesas={despesas}
-                establishmentCode={activeCode}
-                onNavigateTab={setActiveTab}
-              />
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={switchProfile}
-                title="Trocar Estabelecimento"
-                className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-[#7C3AED] bg-white/70 hover:bg-[#7C3AED]/10 border border-[#E8E0F2] shrink-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5 text-[#7C3AED]" />
-                <span className="hidden sm:inline font-bold">Trocar Loja</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={logout}
-                title="Sair da Conta"
-                className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/70 hover:bg-rose-500/10 border border-[#E8E0F2] shrink-0"
-              >
-                <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-500" />
-                <span className="hidden sm:inline font-bold">Sair</span>
-              </Button>
-            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
       {/* Banner Discreto de Leitura OCR em Background */}
       <ScannerProgressBanner activeTab={activeTab} onNavigateTab={setActiveTab} />
@@ -1032,40 +1032,40 @@ function Index() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
-            <TabsList className="w-max bg-muted/60 p-1 rounded-xl">
+            <TabsList className="w-max bg-slate-900/90 border border-purple-500/30 p-1 rounded-xl">
               {podeAcessarAba("scanner") && (
-                <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <Camera className="w-4 h-4 text-primary" /> Escanear
+                <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <Camera className="w-4 h-4 text-amber-400" /> Escanear
                 </TabsTrigger>
               )}
               {podeAcessarAba("despesas") && (
-                <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <Layers className="w-4 h-4 text-primary" /> Lista de Compras
+                <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <Layers className="w-4 h-4 text-pink-400" /> Lista de Compras
                 </TabsTrigger>
               )}
               {podeAcessarAba("encomendas") && (
-                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <CalendarDays className="w-4 h-4 text-primary" /> Calendário
+                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <CalendarDays className="w-4 h-4 text-purple-400" /> Calendário
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
-                <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <Cake className="w-4 h-4 text-primary" /> Cardápio
+                <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <Cake className="w-4 h-4 text-amber-400" /> Cardápio
                 </TabsTrigger>
               )}
               {podeAcessarAba("financeiro") && (
-                <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <DollarSign className="w-4 h-4" /> Financeiro
+                <TabsTrigger value="financeiro" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <DollarSign className="w-4 h-4 text-emerald-400" /> Financeiro
                 </TabsTrigger>
               )}
               {podeAcessarAba("config") && (
-                <TabsTrigger value="config" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <Settings className="w-4 h-4" /> Configurações
+                <TabsTrigger value="config" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <Settings className="w-4 h-4 text-slate-400" /> Configurações
                 </TabsTrigger>
               )}
               {podeAcessarAba("plano") && (
-                <TabsTrigger value="plano" className="flex items-center gap-1.5 font-semibold text-xs">
-                  <CreditCard className="w-4 h-4" /> Meu Plano
+                <TabsTrigger value="plano" className="flex items-center gap-1.5 font-bold text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
+                  <CreditCard className="w-4 h-4 text-purple-400" /> Meu Plano
                 </TabsTrigger>
               )}
             </TabsList>
@@ -1171,7 +1171,7 @@ function Index() {
       </main>
 
       {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Compacta) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-950/95 backdrop-blur-md border-t border-amber-900/30 text-white md:hidden py-1 px-1 shadow-2xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-purple-900/40 text-white md:hidden py-1 px-1 shadow-2xl">
         <div className="grid grid-cols-6 w-full items-center text-center">
           {podeAcessarAba("scanner") && (
             <button
