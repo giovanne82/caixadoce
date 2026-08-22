@@ -121,7 +121,7 @@ function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string
 }
 
 function Index() {
-  const { user, profile, isMounted, logout, switchProfile } = useAuth();
+  const { user, profile, isMounted, authLoading, logout, switchProfile } = useAuth();
   // Scanner é a tela inicial padrão
   const [activeTab, setActiveTab] = useState<string>("scanner");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
@@ -908,10 +908,11 @@ function Index() {
     toast.info(`Status alterado para ${status === "concluida" ? "Concluído" : "Pendente"}.`);
   };
 
-  if (!isMounted) {
+  if (!isMounted || authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background space-y-3">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <p className="text-xs font-semibold text-muted-foreground animate-pulse">Conectando ao CaixaDoce...</p>
       </div>
     );
   }

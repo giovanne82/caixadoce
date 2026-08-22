@@ -75,6 +75,7 @@ type AuthContextType = {
   estabelecimentos: Estabelecimento[];
   userEstabelecimentos: Estabelecimento[];
   isMounted: boolean;
+  authLoading: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (name: string, email: string, password: string) => Promise<{ requiresConfirmation: boolean }>;
   sendEmailOtpSignUp: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -186,27 +187,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
 
 
+  const [authLoading, setAuthLoading] = useState(true);
+
   // Inicialização e Carregamento de Sessão
   useEffect(() => {
     setIsMounted(true);
-
-    // Limpeza de hash fragmentos de OAuth/Auth Callbacks (ex: /#access_token=... ou /#)
-    if (typeof window !== "undefined" && window.location.hash) {
-      if (
-        window.location.hash.includes("access_token") ||
-        window.location.hash.includes("error") ||
-        window.location.hash.includes("type=recovery") ||
-        window.location.hash === "#"
-      ) {
-        try {
-          window.history.replaceState(
-            null,
-            "",
-            window.location.pathname + window.location.search
-          );
-        } catch {}
-      }
-    }
 
     try {
       const savedEstablishments = localStorage.getItem("caixadoce_estabelecimentos");
@@ -220,11 +205,45 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (savedUser) setUser(JSON.parse(savedUser));
       if (savedProfile) setProfile(JSON.parse(savedProfile));
     } catch (e) {
-      console.warn("Erro ao restaurar sessão local:", e);
+      console.warn("[Auth] Erro ao restaurar sessão local:", e);
     }
 
-    // Listener do Supabase Auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Buscador assíncrono de sessão inicial (Garante resposta rápida do estado inicial)
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        if (error) {
+          console.warn("[Auth] Erro ao recuperar getSession():", error.message);
+        }
+        if (session?.user) {
+          const u: User = {
+            id: session.user.id,
+            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Usuário",
+            email: session.user.email || "",
+            avatar: session.user.user_metadata?.avatar_url || "",
+            provider: session.user.app_metadata?.provider === "google" ? "google" : "email",
+          };
+          setUser(u);
+          localStorage.setItem("caixadoce_user", JSON.stringify(u));
+
+          setProfile((prev) => {
+            if (prev && prev.establishmentCode && prev.role !== "operador") return prev;
+            const prof = buildProfileForUser(session.user, u.email);
+            localStorage.setItem("caixadoce_profile", JSON.stringify(prof));
+            return prof;
+          });
+        }
+      })
+      .finally(() => {
+        setAuthLoading(false);
+      });
+
+    // Listener de mudanças de estado do Supabase Auth
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("[Auth] Evento onAuthStateChange:", event, session?.user?.email);
+
       if (session?.user) {
         const u: User = {
           id: session.user.id,
@@ -243,18 +262,37 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           localStorage.setItem("caixadoce_profile", JSON.stringify(prof));
           return prof;
         });
+
+        // Limpeza de hash fragmentos de OAuth/Auth Callbacks SOMENTE APÓS O SUPABASE PROCESSAR E VALIDAR A SESSÃO
+        if (typeof window !== "undefined" && window.location.hash) {
+          if (
+            window.location.hash.includes("access_token") ||
+            window.location.hash.includes("error") ||
+            window.location.hash.includes("type=recovery") ||
+            window.location.hash === "#"
+          ) {
+            try {
+              window.history.replaceState(
+                null,
+                "",
+                window.location.pathname + window.location.search
+              );
+            } catch {}
+          }
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
         localStorage.removeItem("caixadoce_user");
         localStorage.removeItem("caixadoce_profile");
       }
+      setAuthLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [estabelecimentos]);
+  }, []);
 
   // Timeout de Sessão: Listener de Inatividade (Auto-Logout PDV 4h)
   useEffect(() => {
@@ -462,15 +500,22 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
   const loginWithGoogle = async () => {
     try {
       const redirectUrl = getAppBaseUrl();
+      console.log("[Auth] Iniciando OAuth do Google com redirectTo:", redirectUrl);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: redirectUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "select_account",
+          },
         },
       });
       if (error) throw error;
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao conectar com Google.");
+      console.error("[Auth] Erro no login com Google:", err);
+      toast.error(err?.message || "Erro ao conectar com Google. Tente novamente.");
     }
   };
 
@@ -625,6 +670,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         estabelecimentos,
         userEstabelecimentos,
         isMounted,
+        authLoading,
         loginWithEmail,
         registerWithEmail,
         sendEmailOtpSignUp,
