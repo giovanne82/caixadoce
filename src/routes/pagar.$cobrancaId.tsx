@@ -4,6 +4,7 @@ import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/pagar/$cobrancaId")({
   head: () => ({
@@ -24,19 +25,41 @@ function PagarRedirectView() {
 
     async function resolveLink() {
       try {
+        // 1. Tenta via API backend
         const res = await fetch(`/api/resolve-pay-link?id=${encodeURIComponent(cobrancaId)}`);
         const data = await res.json();
 
         if (active) {
           if (res.ok && data.url) {
             window.location.href = data.url;
-          } else {
-            setError(data.error || "Link de cobrança não encontrado ou expirado.");
+            return;
           }
         }
-      } catch {
+      } catch (err) {
+        console.warn("[Client Pay Link Resolve API error, trying Supabase direct]", err);
+      }
+
+      // 2. Fallback via cliente Supabase
+      try {
+        const { data: dbData, error: dbError } = await supabase
+          .from("transacoes_financeiras")
+          .select("comprovante_url")
+          .eq("id", cobrancaId)
+          .maybeSingle();
+
         if (active) {
-          setError("Erro ao comunicar com o servidor de pagamentos.");
+          if (dbData?.comprovante_url) {
+            window.location.href = dbData.comprovante_url;
+            return;
+          }
+          if (dbError) {
+            console.error("[Supabase Client Query Error]", dbError);
+          }
+          setError("Link de cobrança não encontrado ou expirado.");
+        }
+      } catch (err) {
+        if (active) {
+          setError("Erro ao se comunicar com o servidor de pagamentos.");
         }
       }
     }
