@@ -143,6 +143,31 @@ export function ConfiguracoesTab() {
         </p>
       </div>
 
+      {/* CARD DE PERFIL DESTACADO NO TOPO */}
+      <Card className="border-2 border-purple-500/30 bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20 shadow-md rounded-2xl overflow-hidden">
+        <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center font-extrabold text-lg shadow-md shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-extrabold text-foreground truncate">{user?.name || "Usuário"}</h3>
+                <Badge className="bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] uppercase font-mono font-bold">
+                  {profile?.role || "ADMIN"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono truncate">{user?.email || "Sem e-mail"}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-background/80 border border-border px-3.5 py-2 rounded-xl text-xs font-mono font-bold text-foreground shrink-0 shadow-2xs">
+            <span className="text-muted-foreground uppercase text-[10px] font-sans">Código da Loja:</span>
+            <span className="text-purple-600 dark:text-purple-400 font-extrabold">{activeCode}</span>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs defaultValue="empresa" className="space-y-6">
         <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-2">
           <TabsTrigger value="empresa" className="flex items-center gap-1.5">

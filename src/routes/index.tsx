@@ -852,15 +852,20 @@ function Index() {
         {/* Header Principal do CaixaDoce em Lilás Suave / Lavanda Claro #F3EEF9 com Alto Contraste */}
         <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
         <div className="mx-auto max-w-6xl px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             {/* Logo & Identidade */}
-            <div className="min-w-0 flex items-center gap-3">
+            <div className="min-w-0 flex items-center gap-2.5">
               <CaixaDoceLogo size="md" />
-              <div className="border-l border-[#8E7CC3]/30 pl-3">
-                <p className="truncate text-xs font-bold text-[#2E1A47]">{profile.establishmentName}</p>
-                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold mt-0.5">
-                  {profile.establishmentCode}
-                </span>
+              <div className="border-l border-[#8E7CC3]/30 pl-2.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="truncate text-xs font-bold text-[#2E1A47]">{profile.establishmentName}</p>
+                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold">
+                    {profile.establishmentCode}
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#5B478E] font-mono truncate max-w-[220px] leading-tight mt-0.5 font-medium">
+                  👤 {user.name} <span className="text-muted-foreground">({user.email})</span>
+                </p>
               </div>
             </div>
 
@@ -868,7 +873,7 @@ function Index() {
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell transacoes={transacoes} onNavigateTab={setActiveTab} />
 
-              <div className="hidden sm:flex flex-col justify-center bg-white/90 px-3 py-1.5 rounded-2xl border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
+              <div className="hidden md:flex flex-col justify-center bg-white/90 px-3 py-1.5 rounded-2xl border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
                 <div className="flex items-center gap-1.5 font-extrabold text-[#2E1A47]">
                   <Shield className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />
                   <span className="truncate max-w-[130px]">{user.name}</span>
