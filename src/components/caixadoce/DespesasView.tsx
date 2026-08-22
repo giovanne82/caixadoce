@@ -797,9 +797,10 @@ export function DespesasView({
       {/* MODAL: CRIAR NOVA LISTA COM INCLUSÃO DE PRODUTOS */}
       {/* ========================================================================= */}
       <Dialog open={modalCriarListaOpen} onOpenChange={setModalCriarListaOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+        <DialogContent className="sm:max-w-4xl w-[95vw] sm:w-[900px] h-[92vh] sm:h-[800px] flex flex-col p-0 overflow-hidden border-border rounded-xl sm:rounded-2xl">
+          {/* Header Fixo */}
+          <DialogHeader className="p-4 sm:p-5 border-b border-border bg-card shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base sm:text-lg font-bold">
               <ShoppingCart className="w-5 h-5 text-primary" /> Adicionar Produtos à Lista
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -807,8 +808,9 @@ export function DespesasView({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
+          {/* Form Fixo de Inserção Rápida */}
+          <div className="p-4 sm:p-5 border-b border-border bg-muted/20 shrink-0 space-y-3 relative z-20">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div className="sm:col-span-8 space-y-1 relative">
                 <Label className="text-xs font-semibold">Produto / Insumo</Label>
                 <Input
@@ -819,24 +821,28 @@ export function DespesasView({
                     setDropdownCriarInsumosAberto(true);
                   }}
                   onFocus={() => setDropdownCriarInsumosAberto(true)}
+                  onBlur={() => {
+                    setTimeout(() => setDropdownCriarInsumosAberto(false), 200);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleAdicionarItemModalCriacao();
                     }
                   }}
-                  className="h-8 text-xs"
+                  className="h-9 text-xs"
                 />
                 {dropdownCriarInsumosAberto && sugestoesInsumosCriacao.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 max-h-[180px] overflow-y-auto bg-card border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
                     {sugestoesInsumosCriacao.map((sug) => (
                       <div
                         key={sug.id}
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           setModalItemNome(sug.nome);
                           setDropdownCriarInsumosAberto(false);
                         }}
-                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
+                        className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
                       >
                         <span>{sug.nome}</span>
                         <Badge variant="outline" className="text-[10px] bg-primary/5">
@@ -847,64 +853,96 @@ export function DespesasView({
                   </div>
                 )}
               </div>
+
               <div className="sm:col-span-4 space-y-1">
                 <Label className="text-xs font-semibold">Quantidade</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={modalItemQtd}
-                  onChange={(e) => setModalItemQtd(Number(e.target.value))}
-                  className="h-8 text-xs text-center"
-                />
-              </div>
-              <div className="col-span-full pt-1">
-                <Button type="button" onClick={handleAdicionarItemModalCriacao} size="sm" variant="secondary" className="w-full text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2]">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> + Incluir na Lista
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-foreground">
-                Itens Incluídos ({novosItensCriacao.length}):
-              </Label>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto border border-border rounded-xl p-2">
-                {novosItensCriacao.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4 italic">
-                    Nenhum produto adicionado ainda.
-                  </p>
-                ) : (
-                  novosItensCriacao.map((it, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-xs">
-                      <span className="font-bold text-foreground">
-                        {it.quantidade}x {it.nome}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setNovosItensCriacao((prev) => prev.filter((_, i) => i !== idx))}
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))
-                )}
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={modalItemQtd}
+                    onChange={(e) => setModalItemQtd(Number(e.target.value))}
+                    className="h-9 text-xs text-center font-bold"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleAdicionarItemModalCriacao}
+                    size="sm"
+                    className="h-9 text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2] border border-[#5B478E]/20 shrink-0 px-4"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Incluir
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="pt-3 border-t flex justify-between gap-2">
+          {/* Área Central da Listagem com Scroll Independente */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative z-10">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                Itens Incluídos na Lista ({novosItensCriacao.length})
+              </Label>
+              {novosItensCriacao.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNovosItensCriacao([])}
+                  className="h-6 text-[11px] text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 px-2"
+                >
+                  Limpar Todos
+                </Button>
+              )}
+            </div>
+
+            {novosItensCriacao.length === 0 ? (
+              <div className="h-48 border-2 border-dashed border-border/60 rounded-2xl flex flex-col items-center justify-center p-6 text-center text-muted-foreground space-y-2">
+                <ShoppingCart className="w-10 h-10 text-muted-foreground/40" />
+                <p className="text-xs font-semibold">Nenhum produto adicionado à lista ainda.</p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Use o campo acima para buscar ou digitar os insumos necessários.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {novosItensCriacao.map((it, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 rounded-xl bg-card border border-border/80 shadow-2xs hover:border-primary/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <span className="h-6 px-2 rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-300 text-xs font-mono font-extrabold flex items-center justify-center shrink-0">
+                        {it.quantidade}x
+                      </span>
+                      <span className="font-semibold text-xs text-foreground truncate">{it.nome}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setNovosItensCriacao((prev) => prev.filter((_, i) => i !== idx))}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Rodapé Fixo */}
+          <DialogFooter className="p-4 sm:p-5 border-t border-border bg-card shrink-0 flex flex-row items-center justify-between gap-2">
             <Button variant="outline" size="sm" onClick={() => setModalCriarListaOpen(false)} className="text-xs">
               Cancelar
             </Button>
             <Button
               type="button"
               onClick={handleSalvarNovaListaFinal}
-              className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
+              className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs px-5"
             >
-              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Salvar Lista Completa
+              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Salvar Lista Completa ({novosItensCriacao.length} itens)
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -914,24 +952,26 @@ export function DespesasView({
       {/* MODAL: EDITAR LISTA EXISTENTE */}
       {/* ========================================================================= */}
       <Dialog open={modalEditarListaOpen} onOpenChange={setModalEditarListaOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground text-base">
+        <DialogContent className="sm:max-w-4xl w-[95vw] sm:w-[900px] h-[92vh] sm:h-[800px] flex flex-col p-0 overflow-hidden border-border rounded-xl sm:rounded-2xl">
+          {/* Header Fixo */}
+          <DialogHeader className="p-4 sm:p-5 border-b border-border bg-card shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base sm:text-lg font-bold">
               <Edit2 className="w-5 h-5 text-primary" /> Editar Lista de Compras
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          {/* Form Fixo de Inserção / Edição do Nome */}
+          <div className="p-4 sm:p-5 border-b border-border bg-muted/20 shrink-0 space-y-3 relative z-20">
             <div className="space-y-1">
               <Label className="text-xs font-bold">Nome da Lista</Label>
               <Input
                 value={editNomeLista}
                 onChange={(e) => setEditNomeLista(e.target.value)}
-                className="h-9 text-xs font-bold"
+                className="h-9 text-xs font-bold bg-background"
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-muted/40 p-3 rounded-2xl border border-border">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end pt-1">
               <div className="sm:col-span-8 space-y-1 relative">
                 <Label className="text-xs font-semibold">Novo Produto / Insumo</Label>
                 <Input
@@ -942,24 +982,28 @@ export function DespesasView({
                     setDropdownEditarInsumosAberto(true);
                   }}
                   onFocus={() => setDropdownEditarInsumosAberto(true)}
+                  onBlur={() => {
+                    setTimeout(() => setDropdownEditarInsumosAberto(false), 200);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleAdicionarItemEdicao();
                     }
                   }}
-                  className="h-8 text-xs"
+                  className="h-9 text-xs"
                 />
                 {dropdownEditarInsumosAberto && sugestoesInsumosEdicao.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 max-h-[180px] overflow-y-auto bg-card border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
                     {sugestoesInsumosEdicao.map((sug) => (
                       <div
                         key={sug.id}
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           setEditNovoItemNome(sug.nome);
                           setDropdownEditarInsumosAberto(false);
                         }}
-                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
+                        className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors font-semibold"
                       >
                         <span>{sug.nome}</span>
                         <Badge variant="outline" className="text-[10px] bg-primary/5">
@@ -970,56 +1014,94 @@ export function DespesasView({
                   </div>
                 )}
               </div>
+
               <div className="sm:col-span-4 space-y-1">
                 <Label className="text-xs font-semibold">Quantidade</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={editNovoItemQtd}
-                  onChange={(e) => setEditNovoItemQtd(Number(e.target.value))}
-                  className="h-8 text-xs text-center"
-                />
-              </div>
-              <div className="col-span-full pt-1">
-                <Button type="button" onClick={handleAdicionarItemEdicao} size="sm" variant="secondary" className="w-full text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2]">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> + Incluir na Lista
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editNovoItemQtd}
+                    onChange={(e) => setEditNovoItemQtd(Number(e.target.value))}
+                    className="h-9 text-xs text-center font-bold"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleAdicionarItemEdicao}
+                    size="sm"
+                    className="h-9 text-xs font-bold bg-[#F3EEF9] text-[#5B478E] hover:bg-[#E8E0F2] border border-[#5B478E]/20 shrink-0 px-4"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Incluir
+                  </Button>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-foreground">
-                Itens na Lista ({editItensLista.length}):
+          {/* Área Central da Listagem com Scroll Independente */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative z-10">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                Itens na Lista ({editItensLista.length})
               </Label>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto border border-border rounded-xl p-2">
+              {editItensLista.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditItensLista([])}
+                  className="h-6 text-[11px] text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 px-2"
+                >
+                  Limpar Todos
+                </Button>
+              )}
+            </div>
+
+            {editItensLista.length === 0 ? (
+              <div className="h-48 border-2 border-dashed border-border/60 rounded-2xl flex flex-col items-center justify-center p-6 text-center text-muted-foreground space-y-2">
+                <ShoppingCart className="w-10 h-10 text-muted-foreground/40" />
+                <p className="text-xs font-semibold">Sua lista está vazia.</p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Adicione insumos utilizando o campo acima.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {editItensLista.map((it, idx) => (
-                  <div key={it.id || idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-xs">
-                    <span className="font-bold text-foreground">
-                      {it.quantidade}x {it.nome}
-                    </span>
+                  <div
+                    key={it.id || idx}
+                    className="flex items-center justify-between p-3 rounded-xl bg-card border border-border/80 shadow-2xs hover:border-primary/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <span className="h-6 px-2 rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-300 text-xs font-mono font-extrabold flex items-center justify-center shrink-0">
+                        {it.quantidade}x
+                      </span>
+                      <span className="font-semibold text-xs text-foreground truncate">{it.nome}</span>
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => setEditItensLista((prev) => prev.filter((_, i) => i !== idx))}
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
 
-          <DialogFooter className="pt-3 border-t flex justify-between gap-2">
+          {/* Rodapé Fixo */}
+          <DialogFooter className="p-4 sm:p-5 border-t border-border bg-card shrink-0 flex flex-row items-center justify-between gap-2">
             <Button variant="outline" size="sm" onClick={() => setModalEditarListaOpen(false)} className="text-xs">
               Cancelar
             </Button>
             <Button
               type="button"
               onClick={handleSalvarEdicaoLista}
-              className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              className="font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-5"
             >
               <CheckCircle2 className="w-4 h-4 mr-1.5" /> Salvar Alterações
             </Button>
