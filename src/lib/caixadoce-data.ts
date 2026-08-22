@@ -251,7 +251,7 @@ export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCard
 export interface InsumoCatalogo {
   id: string;
   nome: string;
-  categoria: "Chocolates & Coberturas" | "Lácteos & Recheios" | "Confeitos & Açúcares" | "Embalagens & Descartáveis" | "Bases & Estruturas" | "Outros Insumos";
+  categoria: "Chocolates & Coberturas" | "Lácteos & Recheios" | "Confeitos & Açúcares" | "Embalagens & Descartáveis" | "Bases & Estruturas" | "Outros Insumos" | "Confeitaria & Insumos";
   marca?: string;
   unidadePadrao?: string;
 }
@@ -1019,6 +1019,9 @@ export interface ListaCompras {
   concluidaEm?: string;
   itens: ItemListaCompra[];
   createdAt: string;
+  data?: string;
+  valorEstimado?: number;
+  comprovanteUrl?: string;
 }
 
 export const LISTAS_COMPRAS_PADRAO: ListaCompras[] = [
