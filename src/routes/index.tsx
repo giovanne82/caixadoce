@@ -395,13 +395,44 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
+  // 6. Carrega Listas de Compras (ListasCompras) do Supabase ou Cache Local
+  const fetchListasCompras = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
+
+      if (!data || data.length === 0) {
+        const raw = localStorage.getItem(`caixadoce_listas_compras_v2_${activeCode}`);
+        if (raw) {
+          try {
+            setListasCompras(JSON.parse(raw));
+          } catch {}
+        }
+      } else {
+        const mapeadas: ListaCompras[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          nome: d.nome || d.name,
+          data: d.data || new Date().toISOString().split("T")[0],
+          status: d.status || "pendente",
+          itens: Array.isArray(d.itens) ? d.itens : Array.isArray(d.items) ? d.items : [],
+          valorEstimado: d.valor_estimado ? Number(d.valor_estimado) : 0,
+          comprovanteUrl: d.comprovante_url,
+        }));
+        setListasCompras(mapeadas);
+        localStorage.setItem(`caixadoce_listas_compras_v2_${activeCode}`, JSON.stringify(mapeadas));
+      }
+    } catch {}
+  }, [activeCode, profile, safeFetchSupabase]);
+
   useEffect(() => {
     fetchTransacoes();
     fetchEncomendasECalendario();
     fetchDespesas();
     fetchClientes();
     fetchProdutos();
-  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos]);
+    fetchListasCompras();
+  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
@@ -837,14 +868,17 @@ function Index() {
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell transacoes={transacoes} onNavigateTab={setActiveTab} />
 
-              <div className="hidden sm:flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
-                <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span className="font-extrabold text-[#2E1A47] tracking-wide truncate max-w-[140px]">
-                  {user.name}
-                </span>
-                <span className="text-[#8E7CC3]/50">|</span>
-                <span className="text-[#7C3AED] font-extrabold uppercase text-[10px]">
-                  {profile.role}
+              <div className="hidden sm:flex flex-col justify-center bg-white/90 px-3 py-1.5 rounded-2xl border border-[#E8E0F2] text-xs shadow-xs text-[#2E1A47]">
+                <div className="flex items-center gap-1.5 font-extrabold text-[#2E1A47]">
+                  <Shield className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />
+                  <span className="truncate max-w-[130px]">{user.name}</span>
+                  <span className="text-[#8E7CC3]/50">|</span>
+                  <span className="text-[#7C3AED] font-extrabold uppercase text-[10px]">
+                    {profile.role}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[180px] font-medium leading-tight">
+                  {user.email}
                 </span>
               </div>
 

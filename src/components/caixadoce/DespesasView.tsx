@@ -271,6 +271,27 @@ export function DespesasView({
     if (onAtualizarListasCompras) {
       onAtualizarListasCompras(listas);
     }
+    // Sincronização direta com a tabela listas_compras no Supabase
+    if (listas && listas.length > 0 && estabelecimentoCodigo) {
+      listas.forEach((item) => {
+        supabase
+          .from("listas_compras" as any)
+          .upsert([
+            {
+              id: item.id,
+              estabelecimento_codigo: estabelecimentoCodigo,
+              nome: item.nome,
+              data: item.data,
+              status: item.status,
+              itens: item.itens,
+              valor_estimado: item.valorEstimado || 0,
+              comprovante_url: item.comprovanteUrl,
+            },
+          ])
+          .then(() => {})
+          .catch(() => {});
+      });
+    }
   }, [listas, estabelecimentoCodigo]);
 
   // Abrir Modal de Criação de Lista (Box Inicial)
