@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -148,6 +148,25 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   };
 
+  useEffect(() => {
+    if (profile) {
+      if (profile.establishmentName) setNomeEst(profile.establishmentName);
+      if (profile.responsavel) setResponsavelEst(profile.responsavel);
+      if (profile.telefone) setTelEst(profile.telefone);
+      if (profile.chavePix) setChavePix(profile.chavePix);
+      if (profile.tipoChavePix) setTipoChavePix(profile.tipoChavePix);
+      if (profile.tipoDocumento) setTipoDoc(profile.tipoDocumento);
+      if (profile.numeroDocumento) setNumDoc(profile.numeroDocumento);
+      if (profile.cep) setCepEst(profile.cep);
+      if (profile.logradouro) setLogradouroEst(profile.logradouro);
+      if (profile.numero) setNumeroEst(profile.numero);
+      if (profile.complemento) setComplementoEst(profile.complemento);
+      if (profile.bairro) setBairroEst(profile.bairro);
+      if (profile.cidade) setCidadeEst(profile.cidade);
+      if (profile.estado) setUfEst(profile.estado);
+    }
+  }, [profile]);
+
   const handleSalvarEstabelecimento = async (e: React.FormEvent) => {
     e.preventDefault();
     setSalvandoEst(true);
@@ -159,6 +178,13 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       await updateEstablishmentDetails({
         nome: nomeEst,
         endereco: enderecoFinal,
+        logradouro: logradouroEst,
+        numero: numeroEst,
+        complemento: complementoEst,
+        bairro: bairroEst,
+        cidade: cidadeEst,
+        estado: ufEst,
+        cep: cepEst,
         responsavel: responsavelEst,
         telefone: telEst,
         chavePix,

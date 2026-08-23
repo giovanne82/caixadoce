@@ -226,12 +226,42 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setUser(u);
           localStorage.setItem("caixadoce_user", JSON.stringify(u));
 
-          setProfile((prev) => {
-            if (prev && prev.establishmentCode && prev.role !== "operador") return prev;
-            const prof = buildProfileForUser(session.user, u.email);
-            localStorage.setItem("caixadoce_profile", JSON.stringify(prof));
-            return prof;
-          });
+          const baseProf = buildProfileForUser(session.user, u.email);
+          setProfile(baseProf);
+          localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
+
+          // Busca assíncrona dos dados persistidos da loja no Supabase
+          supabase
+            .from("estabelecimentos")
+            .select("*")
+            .or(`user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`)
+            .maybeSingle()
+            .then((res) => {
+              if (res.data) {
+                const data = res.data;
+                const merged: UserProfile = {
+                  ...baseProf,
+                  establishmentName: data.nome || baseProf.establishmentName,
+                  establishmentAddress: data.endereco || baseProf.establishmentAddress,
+                  logradouro: data.logradouro || baseProf.logradouro,
+                  numero: data.numero || baseProf.numero,
+                  complemento: data.complemento || baseProf.complemento,
+                  bairro: data.bairro || baseProf.bairro,
+                  cidade: data.cidade || baseProf.cidade,
+                  estado: data.estado || baseProf.estado,
+                  cep: data.cep || baseProf.cep,
+                  tipoDocumento: data.tipo_documento || baseProf.tipoDocumento,
+                  numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
+                  chavePix: data.chave_pix || baseProf.chavePix,
+                  tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
+                  responsavel: data.responsavel || baseProf.responsavel,
+                  telefone: data.telefone || baseProf.telefone,
+                  whatsapp: data.whatsapp || baseProf.whatsapp,
+                };
+                setProfile(merged);
+                localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+              }
+            });
         }
       })
       .finally(() => {
@@ -547,10 +577,17 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
   };
 
   const updateEstablishmentDetails = async (details: UpdateEstablishmentDetailsInput) => {
-    if (!profile) return;
+    if (!user || !profile) return;
     const currentCode = profile.establishmentCode;
 
-    setProfile((prev) => (prev ? { ...prev, ...details, establishmentName: details.nome } : null));
+    const updatedProfile: UserProfile = {
+      ...profile,
+      ...details,
+      establishmentName: details.nome,
+      establishmentAddress: details.endereco || profile.establishmentAddress,
+    };
+    setProfile(updatedProfile);
+    localStorage.setItem("caixadoce_profile", JSON.stringify(updatedProfile));
 
     setEstabelecimentos((prev) =>
       prev.map((e) =>
@@ -565,6 +602,42 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       )
     );
 
+    // Gravação REAL via UPSERT no Supabase na tabela estabelecimentos
+    try {
+      const payload = {
+        user_id: user.id,
+        codigo: currentCode,
+        nome: details.nome,
+        responsavel: details.responsavel || user.name || "Administrador",
+        tipo_documento: details.tipoDocumento || "CNPJ",
+        numero_documento: details.numeroDocumento || null,
+        tipo_chave_pix: details.tipoChavePix || "email",
+        chave_pix: details.chavePix || null,
+        cep: details.cep || null,
+        endereco: details.endereco || null,
+        logradouro: details.logradouro || null,
+        numero: details.numero || null,
+        complemento: details.complemento || null,
+        bairro: details.bairro || null,
+        cidade: details.cidade || null,
+        estado: details.estado || null,
+        telefone: details.telefone || null,
+        whatsapp: details.whatsapp || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("estabelecimentos")
+        .upsert(payload, { onConflict: "user_id" });
+
+      if (error) {
+        console.warn("[Supabase] Aviso no upsert por user_id, tentando por codigo:", error.message);
+        await supabase.from("estabelecimentos").upsert(payload, { onConflict: "codigo" });
+      }
+    } catch (err: any) {
+      console.error("[Supabase] Erro ao salvar estabelecimento no banco:", err);
+    }
+
     salvarDadosInstitucionaisCache(currentCode, {
       nome: details.nome,
       chavePix: details.chavePix,
@@ -576,7 +649,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       whatsapp: details.whatsapp,
     });
 
-    toast.success("Dados do estabelecimento atualizados com sucesso!");
+    toast.success("Dados do estabelecimento salvos com sucesso!");
   };
 
   const updateEstablishmentPlan = async (planoId: PlanoId, pagamentoConfirmado: boolean = false) => {
