@@ -686,6 +686,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete (fallbackPayload as any).menu_slogan;
           delete (fallbackPayload as any).pix_accounts;
           delete (fallbackPayload as any).pix_keys;
+          delete (fallbackPayload as any).cnpj;
 
           let fallbackRes = await supabase
             .from("estabelecimentos")
