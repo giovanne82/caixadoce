@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 // Components
 import { LoginView } from "@/components/auth/LoginView";
 import { ProfileSelectionView } from "@/components/auth/ProfileSelectionView";
+import { LandingPageContent } from "./landing";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { ScannerView } from "@/components/caixadoce/ScannerView";
 import { DespesasView } from "@/components/caixadoce/DespesasView";
@@ -979,9 +980,9 @@ function Index() {
     );
   }
 
-  // 1. Não autenticado
+  // 1. Não autenticado -> Renderiza a Landing Page na rota principal (/)
   if (!user) {
-    return <LoginView />;
+    return <LandingPageContent />;
   }
 
   // 2. Sem estabelecimento / perfil selecionado
