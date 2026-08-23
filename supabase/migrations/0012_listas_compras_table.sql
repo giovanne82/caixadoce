@@ -1,8 +1,11 @@
 -- ==============================================================================
--- CAIXADOCE - TABELA LISTAS_COMPRAS & SCHEMA ALIGNMENT (0012)
+-- CAIXADOCE - DROPAR VIEW E CRIAR TABELA FÍSICA LISTAS_COMPRAS (0012)
 -- ==============================================================================
 
--- 1. CRIAR OU AJUSTAR A TABELA LISTAS_COMPRAS NO SUPABASE
+-- 1. DROPAR VIEW ANTERIOR LISTAS_COMPRAS SE EXISTIR (Evita erro 42809)
+DROP VIEW IF EXISTS public.listas_compras CASCADE;
+
+-- 2. CRIAR A TABELA FÍSICA LISTAS_COMPRAS
 CREATE TABLE IF NOT EXISTS public.listas_compras (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     estabelecimento_codigo TEXT,
@@ -19,7 +22,7 @@ CREATE TABLE IF NOT EXISTS public.listas_compras (
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
--- Garantir todas as colunas essenciais (Evita erro 400 "column listas_compras.data does not exist")
+-- Garantir todas as colunas essenciais
 ALTER TABLE public.listas_compras
 ADD COLUMN IF NOT EXISTS estabelecimento_codigo TEXT,
 ADD COLUMN IF NOT EXISTS codigo TEXT,
@@ -40,10 +43,10 @@ UPDATE public.listas_compras SET estabelecimento_codigo = COALESCE(estabelecimen
 UPDATE public.listas_compras SET name = COALESCE(name, nome);
 UPDATE public.listas_compras SET nome = COALESCE(nome, name);
 
--- 2. CRIAR VIEW SHOPPING_LISTS (ALIAS)
+-- 3. CRIAR VIEW SHOPPING_LISTS (ALIAS)
 CREATE OR REPLACE VIEW public.shopping_lists AS SELECT * FROM public.listas_compras;
 
--- 3. GARANTIR COLUNAS NA TABELA EXPENSES (Evita "expenses.estabelecimento_codigo does not exist")
+-- 4. GARANTIR COLUNAS NA TABELA EXPENSES
 ALTER TABLE public.expenses
 ADD COLUMN IF NOT EXISTS estabelecimento_codigo TEXT,
 ADD COLUMN IF NOT EXISTS codigo TEXT,
@@ -53,10 +56,10 @@ UPDATE public.expenses SET codigo = COALESCE(codigo, estabelecimento_codigo, sto
 UPDATE public.expenses SET store_id = COALESCE(store_id, estabelecimento_codigo, codigo);
 UPDATE public.expenses SET estabelecimento_codigo = COALESCE(estabelecimento_codigo, codigo, store_id);
 
--- 4. HABILITAR RLS COM POLÍTICA AMPLA
+-- 5. HABILITAR RLS COM POLÍTICA AMPLA
 ALTER TABLE public.listas_compras ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN EXECUTE 'CREATE POLICY "allow_all_listas_compras" ON public.listas_compras FOR ALL USING (true) WITH CHECK (true)'; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
--- 5. RECARREGAR CACHE DE SCHEMA NA API REST DO SUPABASE
+-- 6. RECARREGAR CACHE DE SCHEMA NA API REST DO SUPABASE
 NOTIFY pgrst, 'reload schema';
