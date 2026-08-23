@@ -1013,18 +1013,48 @@ function Index() {
   };
 
   const excluirDespesa = async (id: string) => {
-    const { error } = await supabase.from("despesas").delete().eq("id", id);
-    if (error) {
-      toast.error(`Erro ao excluir notinha no Supabase: ${error.message}`);
+    const notaTarget = despesas.find((d) => d.id === id);
+
+    // Deleção simultânea em cascata na tabela despesas e na tabela transacoes_financeiras
+    const reqDeleteDespesa = supabase.from("despesas").delete().eq("id", id);
+    let reqDeleteTransacao: any = null;
+
+    if (notaTarget) {
+      const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
+      reqDeleteTransacao = supabase
+        .from("transacoes_financeiras")
+        .delete()
+        .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${notaTarget.fornecedorNome}`);
+    }
+
+    const [resDespesa] = await Promise.all([
+      reqDeleteDespesa,
+      reqDeleteTransacao || Promise.resolve({ error: null }),
+    ]);
+
+    if (resDespesa.error) {
+      toast.error(`Erro ao excluir notinha no Supabase: ${resDespesa.error.message}`);
       return;
     }
 
-    const atualizadas = despesas.filter((d) => d.id !== id);
-    setDespesas(atualizadas);
+    const despesasAtualizadas = despesas.filter((d) => d.id !== id);
+    setDespesas(despesasAtualizadas);
     try {
-      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
     } catch {}
-    toast.success("Registro de despesa excluído com sucesso.");
+
+    if (notaTarget) {
+      const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
+      const transacoesAtualizadas = transacoes.filter(
+        (t) => t.descricao !== descMatch && t.clienteOuFornecedor !== notaTarget.fornecedorNome
+      );
+      setTransacoes(transacoesAtualizadas);
+      try {
+        localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(transacoesAtualizadas));
+      } catch {}
+    }
+
+    toast.success("Notinha e lançamento financeiro em cascata excluídos com sucesso!");
   };
 
   const editarDespesa = async (id: string, dados: Partial<DespesaNotaFiscal>) => {

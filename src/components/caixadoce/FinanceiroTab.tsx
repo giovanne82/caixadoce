@@ -743,8 +743,13 @@ export function FinanceiroTab({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onRemoverTransacao(t.id)}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
+                      onClick={() => {
+                        if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+                          onRemoverTransacao(t.id);
+                        }
+                      }}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 transition-colors"
+                      title="Excluir lançamento financeiro"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
