@@ -340,7 +340,112 @@ export function ScannerView({
           </span>
         </div>
 
-        <Card className="border-border shadow-sm overflow-hidden bg-card">
+        {/* LAYOUT MOBILE (CARDS EMPILHADOS - sm:hidden) */}
+        <div className="space-y-3 sm:hidden">
+          {ultimosRegistros.length === 0 ? (
+            <Card className="p-6 text-center text-xs text-muted-foreground italic border-border shadow-sm">
+              Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
+            </Card>
+          ) : (
+            ultimosRegistros.map((d) => (
+              <Card
+                key={d.id}
+                onClick={() => abrirDetalhesRegistro(d)}
+                className="p-4 border-l-4 border-l-purple-600 border-t border-r border-b border-border/80 shadow-sm hover:shadow-md transition-all cursor-pointer bg-card active:scale-[0.99] rounded-xl"
+              >
+                <div className="space-y-3">
+                  {/* Parte Superior (Linha 1): Nome do Estabelecimento + Doc (Esquerda) e Data/Hora (Direita) */}
+                  <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-border/50">
+                    <div className="space-y-0.5 min-w-0 pr-2">
+                      <h4 className="font-extrabold text-sm text-foreground truncate group-hover:text-primary">
+                        {d.fornecedorNome}
+                      </h4>
+                      {d.numeroNota && (
+                        <span className="inline-block text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-normal">
+                          Doc: {d.numeroNota}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-bold text-foreground font-mono">
+                        {d.dataCompra}
+                      </div>
+                      {d.horaCompra && (
+                        <div className="text-[10px] text-muted-foreground/80 font-mono">
+                          {d.horaCompra}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Parte Inferior (Linha 2): Valor Total (Esquerda) e Botões de Ação (Direita) */}
+                  <div className="flex items-center justify-between pt-0.5">
+                    <div>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                        Valor Total
+                      </span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                        {formatarMoeda(d.valorTotal)}
+                      </span>
+                    </div>
+
+                    {/* Botões de Ação Alinhados à Direita */}
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onReenviarFinanceiro) {
+                            onReenviarFinanceiro(d);
+                          }
+                        }}
+                        className="h-10 w-10 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        title="Reenviar para o Financeiro"
+                      >
+                        <RefreshCw className="w-4.5 h-4.5" />
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          compartilharNotinhaWhatsApp(d);
+                        }}
+                        className="h-10 w-10 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-full inline-flex items-center justify-center shrink-0"
+                        title="Compartilhar no WhatsApp"
+                      >
+                        <MessageCircle className="w-4.5 h-4.5" />
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotaParaExcluir(d);
+                          setModalExcluirOpen(true);
+                        }}
+                        className="h-10 w-10 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        title="Excluir notinha"
+                      >
+                        <Trash2 className="w-4.5 h-4.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* LAYOUT DESKTOP (TABELA TRADICIONAL - hidden sm:block) */}
+        <Card className="hidden sm:block border-border shadow-sm overflow-hidden bg-card">
           <div className="overflow-x-auto select-none [scrollbar-width:thin]">
             <Table>
               <TableHeader className="bg-muted/40">
