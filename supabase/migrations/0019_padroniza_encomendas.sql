@@ -1,5 +1,5 @@
 -- Migration 0019: Padroniza Encomendas como Tabela Oficial (Execução 100% Ultra-Segura)
--- Descrição: Garante a existência da tabela 'encomendas', adiciona TODAS as colunas (PT/EN) com IF NOT EXISTS, migra dados e recarrega RLS/schema cache.
+-- Descrição: Garante a existência da tabela 'encomendas', adiciona TODAS as colunas (PT/EN), remove NOT NULL de colunas legadas e recarrega RLS/schema cache.
 
 -- 1. Remover view se porventura ainda existir como view (ignora se já for tabela)
 DO $$
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.encomendas (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Adicionar TODAS as colunas possíveis (em Português e Inglês) com IF NOT EXISTS
+-- 3. Adicionar TODAS as colunas possíveis (em Português e Inglês com todas as grafias legadas) com IF NOT EXISTS
 ALTER TABLE public.encomendas
 ADD COLUMN IF NOT EXISTS estabelecimento_codigo TEXT,
 ADD COLUMN IF NOT EXISTS codigo TEXT,
@@ -24,8 +24,10 @@ ADD COLUMN IF NOT EXISTS store_id TEXT,
 ADD COLUMN IF NOT EXISTS cliente_id TEXT,
 ADD COLUMN IF NOT EXISTS cliente_nome TEXT,
 ADD COLUMN IF NOT EXISTS customer_name TEXT,
+ADD COLUMN IF NOT EXISTS client_name TEXT,
 ADD COLUMN IF NOT EXISTS cliente_whatsapp TEXT,
 ADD COLUMN IF NOT EXISTS customer_phone TEXT,
+ADD COLUMN IF NOT EXISTS client_phone TEXT,
 ADD COLUMN IF NOT EXISTS data_entrega DATE,
 ADD COLUMN IF NOT EXISTS delivery_date DATE,
 ADD COLUMN IF NOT EXISTS horario_entrega TEXT DEFAULT '14:00',
@@ -50,7 +52,22 @@ ADD COLUMN IF NOT EXISTS observacoes TEXT,
 ADD COLUMN IF NOT EXISTS notes TEXT,
 ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 
--- 4. Migração dinâmica de dados da tabela 'orders' (se existir) usando EXECUTE seguro
+-- 4. Remover restrições de NOT NULL de colunas legadas para evitar erro 23502 no Supabase
+DO $$
+BEGIN
+    ALTER TABLE public.encomendas ALTER COLUMN cliente_nome DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN customer_name DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN client_name DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN cliente_whatsapp DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN customer_phone DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN client_phone DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN data_entrega DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN delivery_date DROP NOT NULL;
+    ALTER TABLE public.encomendas ALTER COLUMN itens DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- 5. Migração dinâmica de dados da tabela 'orders' (se existir) usando EXECUTE seguro
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'orders') THEN
@@ -64,8 +81,10 @@ BEGIN
                 cliente_id = COALESCE(e.cliente_id, o.cliente_id::text),
                 cliente_nome = COALESCE(e.cliente_nome, o.cliente_nome, o.customer_name),
                 customer_name = COALESCE(e.customer_name, o.customer_name, o.cliente_nome),
+                client_name = COALESCE(e.client_name, o.cliente_nome, o.customer_name),
                 cliente_whatsapp = COALESCE(e.cliente_whatsapp, o.cliente_whatsapp, o.customer_phone),
                 customer_phone = COALESCE(e.customer_phone, o.customer_phone, o.cliente_whatsapp),
+                client_phone = COALESCE(e.client_phone, o.cliente_whatsapp, o.customer_phone),
                 data_entrega = COALESCE(e.data_entrega, o.data_entrega, o.delivery_date),
                 delivery_date = COALESCE(e.delivery_date, o.delivery_date, o.data_entrega),
                 horario_entrega = COALESCE(e.horario_entrega, o.horario_entrega, o.delivery_time),
@@ -104,16 +123,18 @@ BEGIN
     END IF;
 END $$;
 
--- 5. Sincronizar pares de colunas (PT e EN) dentro da própria tabela 'encomendas'
+-- 6. Sincronizar pares de colunas (PT e EN) dentro da própria tabela 'encomendas'
 UPDATE public.encomendas SET codigo = COALESCE(codigo, estabelecimento_codigo, store_id);
 UPDATE public.encomendas SET store_id = COALESCE(store_id, estabelecimento_codigo, codigo);
 UPDATE public.encomendas SET estabelecimento_codigo = COALESCE(estabelecimento_codigo, codigo, store_id);
 
-UPDATE public.encomendas SET customer_name = COALESCE(customer_name, cliente_nome);
-UPDATE public.encomendas SET cliente_nome = COALESCE(cliente_nome, customer_name);
+UPDATE public.encomendas SET customer_name = COALESCE(customer_name, cliente_nome, client_name);
+UPDATE public.encomendas SET client_name = COALESCE(client_name, cliente_nome, customer_name);
+UPDATE public.encomendas SET cliente_nome = COALESCE(cliente_nome, customer_name, client_name);
 
-UPDATE public.encomendas SET customer_phone = COALESCE(customer_phone, cliente_whatsapp);
-UPDATE public.encomendas SET cliente_whatsapp = COALESCE(cliente_whatsapp, customer_phone);
+UPDATE public.encomendas SET customer_phone = COALESCE(customer_phone, cliente_whatsapp, client_phone);
+UPDATE public.encomendas SET client_phone = COALESCE(client_phone, cliente_whatsapp, customer_phone);
+UPDATE public.encomendas SET cliente_whatsapp = COALESCE(cliente_whatsapp, customer_phone, client_phone);
 
 UPDATE public.encomendas SET delivery_date = COALESCE(delivery_date, data_entrega);
 UPDATE public.encomendas SET data_entrega = COALESCE(data_entrega, delivery_date);
@@ -142,10 +163,10 @@ UPDATE public.encomendas SET endereco_entrega = COALESCE(endereco_entrega, deliv
 UPDATE public.encomendas SET notes = COALESCE(notes, observacoes);
 UPDATE public.encomendas SET observacoes = COALESCE(observacoes, notes);
 
--- 6. Habilitar RLS (Row Level Security) na tabela encomendas
+-- 7. Habilitar RLS (Row Level Security) na tabela encomendas
 ALTER TABLE public.encomendas ENABLE ROW LEVEL SECURITY;
 
--- 7. Criar políticas RLS abrangentes para sincronização entre dispositivos e acesso anônimo/autenticado
+-- 8. Criar políticas RLS abrangentes para sincronização entre dispositivos e acesso anônimo/autenticado
 DROP POLICY IF EXISTS "Permitir leitura de encomendas por user_id ou codigo" ON public.encomendas;
 DROP POLICY IF EXISTS "Permitir insercao de encomendas por clientes anonimos ou autenticados" ON public.encomendas;
 DROP POLICY IF EXISTS "Permitir atualizacao de encomendas por donos e clientes" ON public.encomendas;
@@ -163,9 +184,9 @@ ON public.encomendas FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (
 CREATE POLICY "Permitir exclusao de encomendas pelo usuario dono"
 ON public.encomendas FOR DELETE TO anon, authenticated USING (true);
 
--- 8. Conceder todas as permissões de acesso
+-- 9. Conceder todas as permissões de acesso
 GRANT ALL ON public.encomendas TO authenticated;
 GRANT ALL ON public.encomendas TO anon;
 
--- 9. Recarregar o Schema Cache do PostgREST
+-- 10. Recarregar o Schema Cache do PostgREST
 NOTIFY pgrst, 'reload schema';
