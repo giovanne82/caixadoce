@@ -374,14 +374,25 @@ export function OrdersView({
     ).slice(0, 5);
   }, [clienteNome, listaClientes]);
 
-  // Sugestões de Produtos para Itens do Pedido
+  // Sugestões de Produtos para Itens do Pedido (com logs de diagnóstico)
   const sugestoesProdutos = useMemo(() => {
     const termo = buscaItemProduto.trim().toLowerCase();
-    if (!termo) return listaProdutos.slice(0, 10);
-    return listaProdutos.filter(
-      (p) => p.nome.toLowerCase().includes(termo) || p.categoria.toLowerCase().includes(termo)
-    ).slice(0, 10);
+    const result = !termo
+      ? listaProdutos.slice(0, 10)
+      : listaProdutos.filter(
+          (p) => p.nome.toLowerCase().includes(termo) || (p.categoria && p.categoria.toLowerCase().includes(termo))
+        ).slice(0, 10);
+
+    console.log(
+      `[Autocomplete Produtos] Total no Cardápio: ${listaProdutos.length} | Termo Busca: "${buscaItemProduto}" | Sugestões Encontradas: ${result.length}`,
+      result
+    );
+    return result;
   }, [buscaItemProduto, listaProdutos]);
+
+  useEffect(() => {
+    console.log("[OrdersView Autocomplete] Produtos do cardápio recebidos/carregados:", listaProdutos.length, listaProdutos);
+  }, [listaProdutos]);
 
   const defaultInsumosTags = useMemo(
     () => [
@@ -2125,7 +2136,7 @@ export function OrdersView({
               </div>
             </div>
 
-            <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative w-full overflow-hidden">
+            <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative w-full overflow-visible">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Cake className="w-3.5 h-3.5 text-primary shrink-0" /> Itens do Pedido (Produtos / Doces) *
