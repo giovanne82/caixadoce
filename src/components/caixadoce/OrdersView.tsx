@@ -377,10 +377,10 @@ export function OrdersView({
   // Sugestões de Produtos para Itens do Pedido
   const sugestoesProdutos = useMemo(() => {
     const termo = buscaItemProduto.trim().toLowerCase();
-    if (!termo) return [];
+    if (!termo) return listaProdutos.slice(0, 10);
     return listaProdutos.filter(
       (p) => p.nome.toLowerCase().includes(termo) || p.categoria.toLowerCase().includes(termo)
-    ).slice(0, 8);
+    ).slice(0, 10);
   }, [buscaItemProduto, listaProdutos]);
 
   const defaultInsumosTags = useMemo(
@@ -475,6 +475,25 @@ export function OrdersView({
       prev.map((it) => (it.id === itemId ? { ...it, quantidade: qtdSegura } : it))
     );
   };
+
+  const handleAlterarPrecoUnitarioItem = (itemId: string, novoPreco: number) => {
+    const precoSeguro = isNaN(novoPreco) ? 0 : Math.max(0, novoPreco);
+    setItensTags((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, precoUnitario: precoSeguro } : it))
+    );
+  };
+
+  // Reatividade Automática: Recalcula Valor Total quando quantidade ou preço unitário mudar
+  useEffect(() => {
+    if (itensTags.length === 0) return;
+    const totalCalculadoItens = itensTags.reduce(
+      (acc, it) => acc + (it.quantidade || 1) * (it.precoUnitario || 0),
+      0
+    );
+    if (totalCalculadoItens > 0) {
+      setValorTotalFormatado(aplicarMascaraMoedaInput(String(Math.round(totalCalculadoItens * 100))));
+    }
+  }, [itensTags]);
 
   const handleRemoverItemPedido = (itemId: string) => {
     setItensTags((prev) => prev.filter((it) => it.id !== itemId));
@@ -2031,23 +2050,27 @@ export function OrdersView({
                     setDropdownClientesAberto(true);
                   }}
                   onFocus={() => setDropdownClientesAberto(true)}
+                  onBlur={() => setTimeout(() => setDropdownClientesAberto(false), 200)}
                   className="h-8 text-xs font-semibold"
                   required
                 />
 
                 {dropdownClientesAberto && sugestoesClientes.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-40 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
+                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 max-h-48 overflow-y-auto bg-popover bg-white dark:bg-slate-900 border border-border shadow-2xl rounded-xl p-1 divide-y divide-border/40">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1 block">
                       Clientes Cadastrados:
                     </span>
                     {sugestoesClientes.map((cli) => (
                       <div
                         key={cli.id}
-                        onClick={() => handleSelecionarCliente(cli)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelecionarCliente(cli);
+                        }}
                         className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
                       >
                         <span className="font-bold text-foreground">{cli.nome}</span>
-                        <span className="text-[11px] font-mono text-emerald-600">{cli.whatsapp}</span>
+                        <span className="text-[11px] font-mono text-emerald-600 font-bold">{cli.whatsapp}</span>
                       </div>
                     ))}
                   </div>
@@ -2111,7 +2134,7 @@ export function OrdersView({
                       it.precoUnitario ||
                       listaProdutos.find((p) => p.id === it.produtoId || p.nome.toLowerCase() === it.nome.toLowerCase())?.preco ||
                       0;
-                    const subtotalItem = precoUnit * (it.quantidade || 1);
+                    const subtotalItem = (it.quantidade || 1) * (it.precoUnitario || precoUnit || 0);
 
                     return (
                       <div
@@ -2123,7 +2146,8 @@ export function OrdersView({
                           <span className="font-bold text-xs text-foreground truncate">{it.nome}</span>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 pt-1.5 sm:pt-0 border-t border-border/30 sm:border-t-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto shrink-0 pt-1.5 sm:pt-0 border-t border-border/30 sm:border-t-0">
+                          {/* QTD Input */}
                           <div className="flex items-center gap-1 bg-background px-2 py-1 rounded-lg border border-input shadow-2xs">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase">Qtd:</span>
                             <input
@@ -2131,9 +2155,7 @@ export function OrdersView({
                               inputMode="numeric"
                               pattern="[0-9]*"
                               value={it.quantidade === 0 ? "" : it.quantidade}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                              }}
+                              onKeyDown={(e) => e.stopPropagation()}
                               onChange={(e) => {
                                 const valLimpo = e.target.value.replace(/\D/g, "");
                                 const num = valLimpo === "" ? 0 : Number(valLimpo);
@@ -2144,25 +2166,39 @@ export function OrdersView({
                                   handleAlterarQuantidadeItem(it.id, 1);
                                 }
                               }}
-                              className="w-8 h-5 text-center text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                              className="w-8 h-5 text-center text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 text-foreground"
                             />
                           </div>
 
-                          <div className="text-right min-w-[80px] sm:min-w-[90px]">
-                            {precoUnit > 0 ? (
-                              <div>
-                                <div className="text-xs font-extrabold text-purple-700 dark:text-purple-300">
-                                  {formatarMoeda(subtotalItem)}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground">
-                                  ({it.quantidade}x {formatarMoeda(precoUnit)})
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-[11px] font-semibold text-stone-500">
-                                Sem preço
-                              </div>
-                            )}
+                          {/* Preço Unitário Editável */}
+                          <div className="flex items-center gap-1 bg-background px-2 py-1 rounded-lg border border-input shadow-2xs">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Unit R$:</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={
+                                it.precoUnitario !== undefined && it.precoUnitario > 0
+                                  ? it.precoUnitario.toString().replace(".", ",")
+                                  : precoUnit > 0
+                                  ? precoUnit.toString().replace(".", ",")
+                                  : ""
+                              }
+                              onKeyDown={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const valLimpo = e.target.value.replace(",", ".");
+                                const num = parseFloat(valLimpo);
+                                handleAlterarPrecoUnitarioItem(it.id, isNaN(num) ? 0 : num);
+                              }}
+                              className="w-16 h-5 text-right text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 text-foreground"
+                            />
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="text-right min-w-[70px]">
+                            <div className="text-xs font-extrabold text-purple-700 dark:text-purple-300 font-mono">
+                              {formatarMoeda(subtotalItem)}
+                            </div>
                           </div>
 
                           <button
@@ -2190,6 +2226,7 @@ export function OrdersView({
                       setDropdownItensAberto(true);
                     }}
                     onFocus={() => setDropdownItensAberto(true)}
+                    onBlur={() => setTimeout(() => setDropdownItensAberto(false), 200)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -2209,30 +2246,36 @@ export function OrdersView({
                   </Button>
                 </div>
 
-                {dropdownItensAberto && buscaItemProduto.trim().length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
-                    {sugestoesProdutos.length > 0 ? (
-                      sugestoesProdutos.map((prod) => (
-                        <div
-                          key={prod.id}
-                          onClick={() => handleAdicionarItemPedido(prod.nome, prod.preco, prod.id)}
-                          className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <img src={prod.fotoUrl} alt={prod.nome} className="w-6 h-6 rounded object-cover" />
-                            <span className="font-bold text-foreground">{prod.nome}</span>
-                          </div>
-                          <span className="font-mono font-black text-foreground">{formatarMoeda(prod.preco)}</span>
-                        </div>
-                      ))
-                    ) : (
+                {dropdownItensAberto && sugestoesProdutos.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 max-h-52 overflow-y-auto bg-popover bg-white dark:bg-slate-900 border border-border shadow-2xl rounded-xl p-1 divide-y divide-border/40">
+                    {sugestoesProdutos.map((prod) => (
                       <div
-                        onClick={() => handleAdicionarItemPedido(buscaItemProduto)}
-                        className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                        key={prod.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleAdicionarItemPedido(prod.nome, prod.preco, prod.id);
+                        }}
+                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Adicionar "{buscaItemProduto}" como item personalizado
+                        <div className="flex items-center gap-2">
+                          {prod.fotoUrl && <img src={prod.fotoUrl} alt={prod.nome} className="w-6 h-6 rounded object-cover" />}
+                          <span className="font-bold text-foreground">{prod.nome}</span>
+                        </div>
+                        <span className="font-mono font-black text-emerald-600">{formatarMoeda(prod.preco)}</span>
                       </div>
-                    )}
+                    ))}
+                    {buscaItemProduto.trim().length > 0 &&
+                      !sugestoesProdutos.some((p) => p.nome.toLowerCase() === buscaItemProduto.trim().toLowerCase()) && (
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleAdicionarItemPedido(buscaItemProduto);
+                          }}
+                          className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar "{buscaItemProduto}" como item personalizado
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
