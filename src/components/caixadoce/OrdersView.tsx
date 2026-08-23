@@ -443,26 +443,39 @@ export function OrdersView({
     const nomeLimpo = nomeItem.trim();
     if (!nomeLimpo) return;
 
+    // Se o usuário digitou sem selecionar do dropdown, buscar no cardápio se existe um produto correspondente
+    const prodMatch =
+      precoSugerido !== undefined && precoSugerido > 0
+        ? null
+        : listaProdutos.find((p) => p.nome.toLowerCase() === nomeLimpo.toLowerCase());
+
+    const precoFinal =
+      precoSugerido !== undefined && precoSugerido > 0
+        ? precoSugerido
+        : prodMatch
+        ? prodMatch.preco
+        : 0;
+
+    const prodIdFinal = produtoId || (prodMatch ? prodMatch.id : undefined);
+
     const existente = itensTags.find((it) => it.nome.toLowerCase() === nomeLimpo.toLowerCase());
     if (existente) {
       setItensTags((prev) =>
-        prev.map((it) => (it.id === existente.id ? { ...it, quantidade: it.quantidade + 1 } : it))
+        prev.map((it) =>
+          it.id === existente.id
+            ? { ...it, quantidade: it.quantidade + 1, precoUnitario: it.precoUnitario || precoFinal }
+            : it
+        )
       );
     } else {
       const novoItem: ItemPedidoEncomenda = {
         id: crypto.randomUUID(),
-        produtoId,
+        produtoId: prodIdFinal,
         nome: nomeLimpo,
         quantidade: 1,
-        precoUnitario: precoSugerido || 0,
+        precoUnitario: precoFinal,
       };
       setItensTags((prev) => [...prev, novoItem]);
-    }
-
-    if (precoSugerido && precoSugerido > 0) {
-      const valorAtual = converterMoedaInputParaNumero(valorTotalFormatado);
-      const novoValor = valorAtual + precoSugerido;
-      setValorTotalFormatado(aplicarMascaraMoedaInput(String(Math.round(novoValor * 100))));
     }
 
     setBuscaItemProduto("");
@@ -483,16 +496,13 @@ export function OrdersView({
     );
   };
 
-  // Reatividade Automática: Recalcula Valor Total quando quantidade ou preço unitário mudar
+  // Reatividade Automática: Recalcula Valor Total em tempo real sempre que itensTags mudar
   useEffect(() => {
-    if (itensTags.length === 0) return;
     const totalCalculadoItens = itensTags.reduce(
-      (acc, it) => acc + (it.quantidade || 1) * (it.precoUnitario || 0),
+      (acc, it) => acc + (it.quantidade || 0) * (it.precoUnitario || 0),
       0
     );
-    if (totalCalculadoItens > 0) {
-      setValorTotalFormatado(aplicarMascaraMoedaInput(String(Math.round(totalCalculadoItens * 100))));
-    }
+    setValorTotalFormatado(aplicarMascaraMoedaInput(String(Math.round(totalCalculadoItens * 100))));
   }, [itensTags]);
 
   const handleRemoverItemPedido = (itemId: string) => {
