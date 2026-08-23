@@ -42,19 +42,20 @@ import { initiateStripeCheckout } from "@/lib/stripe-service";
 export function MeuPlanoTab() {
   const { user, profile, updateEstablishmentPlan } = useAuth();
   const activeCode = profile?.establishmentCode || "CD-1001";
+  const userCreatedAt = (user as any)?.created_at || (profile as any)?.createdAt;
 
-  const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode));
+  const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
 
   const recarregarPlano = () => {
-    setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode));
+    setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
   };
 
   useEffect(() => {
     recarregarPlano();
-  }, [activeCode]);
+  }, [activeCode, userCreatedAt]);
 
   const handleAssinarStripe = async (planoKey: PlanoId) => {
     setLoadingStripe(true);
@@ -160,6 +161,8 @@ export function MeuPlanoTab() {
                         ? "bg-emerald-600 text-white font-bold"
                         : infoPlano.status === "trial"
                         ? "bg-[#F3EEF9] text-[#5B478E] border border-[#8E7CC3]/40 font-extrabold animate-pulse"
+                        : infoPlano.status === "expirado"
+                        ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-bold"
                         : "bg-stone-500/20 text-stone-700 font-bold"
                     }
                   >
@@ -167,6 +170,8 @@ export function MeuPlanoTab() {
                       ? "Assinatura Ativa"
                       : infoPlano.status === "trial"
                       ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 14} dias grátis restantes`
+                      : infoPlano.status === "expirado"
+                      ? "⚠️ Trial Expirado (0 dias restantes)"
                       : "Plano Básico (Gratuito)"}
                   </Badge>
                 </div>

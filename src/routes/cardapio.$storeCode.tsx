@@ -105,7 +105,18 @@ function CardapioLojaView() {
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-  const [lojaInfo, setLojaInfo] = useState<{ whatsapp?: string; telefone?: string; user_id?: string; nome?: string } | null>(null);
+  const [lojaInfo, setLojaInfo] = useState<{
+    whatsapp?: string;
+    telefone?: string;
+    user_id?: string;
+    nome?: string;
+    logo_url?: string;
+    store_logo_url?: string;
+    titulo_cardapio?: string;
+    menu_title?: string;
+    slogan_cardapio?: string;
+    menu_slogan?: string;
+  } | null>(null);
 
   useEffect(() => {
     async function carregarDadosLoja() {
@@ -122,6 +133,12 @@ function CardapioLojaView() {
             telefone: data.telefone || data.whatsapp,
             user_id: data.user_id,
             nome: data.nome,
+            logo_url: data.logo_url || data.store_logo_url,
+            store_logo_url: data.store_logo_url || data.logo_url,
+            titulo_cardapio: data.titulo_cardapio || data.menu_title,
+            menu_title: data.menu_title || data.titulo_cardapio,
+            slogan_cardapio: data.slogan_cardapio || data.menu_slogan,
+            menu_slogan: data.menu_slogan || data.slogan_cardapio,
           });
         }
       } catch {}
@@ -376,10 +393,18 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
       <header className="bg-[#F3EEF9] text-[#2E1A47] py-4 px-4 shadow-xs border-b border-[#E8E0F2] sticky top-0 z-30">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <CaixaDoceLogo size="md" />
+            {lojaInfo?.logo_url || lojaInfo?.store_logo_url ? (
+              <img
+                src={lojaInfo.logo_url || lojaInfo.store_logo_url}
+                alt={lojaInfo.nome || "Logo"}
+                className="w-10 h-10 object-cover rounded-xl border border-[#8E7CC3]/30 shadow-xs shrink-0"
+              />
+            ) : (
+              <CaixaDoceLogo size="md" />
+            )}
             <div className="border-l border-[#8E7CC3]/30 pl-3">
               <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47]">
-                Confeitaria Artesanal
+                {lojaInfo?.nome || "Confeitaria Artesanal"}
               </h1>
               <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold">
                 Código Loja: {code}
@@ -408,10 +433,10 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
         {/* Banner de Boas-Vindas */}
         <div className="text-center space-y-2 py-2">
           <h2 className="text-2xl sm:text-3xl font-black text-foreground">
-            Cardápio de Bolos &amp; Doces Especiais
+            {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
           </h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-            Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe.
+            {lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."}
           </p>
         </div>
 

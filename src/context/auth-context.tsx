@@ -41,6 +41,12 @@ export type UpdateEstablishmentDetailsInput = {
   responsavel?: string;
   telefone?: string;
   whatsapp?: string;
+  logoUrl?: string;
+  store_logo_url?: string;
+  tituloCardapio?: string;
+  menu_title?: string;
+  sloganCardapio?: string;
+  menu_slogan?: string;
 };
 
 export type StaffProfile = {
@@ -62,6 +68,12 @@ export type StaffProfile = {
   responsavel?: string;
   telefone?: string;
   whatsapp?: string;
+  logoUrl?: string;
+  store_logo_url?: string;
+  tituloCardapio?: string;
+  menu_title?: string;
+  sloganCardapio?: string;
+  menu_slogan?: string;
   abasPermitidas?: string[];
 };
 
@@ -257,6 +269,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   responsavel: data.responsavel || baseProf.responsavel,
                   telefone: data.telefone || baseProf.telefone,
                   whatsapp: data.whatsapp || baseProf.whatsapp,
+                  logoUrl: data.logo_url || data.store_logo_url || baseProf.logoUrl,
+                  store_logo_url: data.store_logo_url || data.logo_url || baseProf.store_logo_url,
+                  tituloCardapio: data.titulo_cardapio || data.menu_title || baseProf.tituloCardapio,
+                  menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
+                  sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
+                  menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
@@ -623,6 +641,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         estado: details.estado || null,
         telefone: details.telefone || null,
         whatsapp: details.whatsapp || null,
+        logo_url: details.logoUrl || details.store_logo_url || null,
+        store_logo_url: details.store_logo_url || details.logoUrl || null,
+        titulo_cardapio: details.tituloCardapio || details.menu_title || null,
+        menu_title: details.menu_title || details.tituloCardapio || null,
+        slogan_cardapio: details.sloganCardapio || details.menu_slogan || null,
+        menu_slogan: details.menu_slogan || details.sloganCardapio || null,
         updated_at: new Date().toISOString(),
       };
 

@@ -152,6 +152,9 @@ function PublicStoreView() {
     chavePix: string;
     tipoChavePix: string;
     user_id?: string;
+    logoUrl?: string;
+    tituloCardapio?: string;
+    sloganCardapio?: string;
   }>({
     nome: "Confeitaria CaixaDoce",
     endereco: "Av. Principal, 1000 - Centro",
@@ -210,6 +213,9 @@ function PublicStoreView() {
             user_id: estData.user_id,
             chavePix: estData.chave_pix || estData.chavePix || "contato@caixadoce.com.br",
             tipoChavePix: estData.tipo_chave_pix || "email",
+            logoUrl: estData.logo_url || estData.store_logo_url,
+            tituloCardapio: estData.titulo_cardapio || estData.menu_title,
+            sloganCardapio: estData.slogan_cardapio || estData.menu_slogan,
           });
         }
       } catch {}
@@ -443,7 +449,15 @@ function PublicStoreView() {
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border shadow-xs">
         <div className="mx-auto max-w-5xl px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <CaixaDoceLogo size="sm" />
+            {storeInfo.logoUrl ? (
+              <img
+                src={storeInfo.logoUrl}
+                alt={storeInfo.nome}
+                className="w-9 h-9 object-cover rounded-lg border border-border shadow-xs shrink-0"
+              />
+            ) : (
+              <CaixaDoceLogo size="sm" />
+            )}
             <div className="border-l border-border pl-3">
               <h1 className="font-extrabold text-sm sm:text-base leading-tight text-foreground">
                 {storeInfo.nome}
@@ -554,10 +568,10 @@ function PublicStoreView() {
             <Sparkles className="w-3.5 h-3.5 mr-1" /> Encomendas Abertas
           </Badge>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-            Cardápio &amp; Agendamento Online
+            {storeInfo.tituloCardapio || "Cardápio & Agendamento Online"}
           </h2>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Escolha os itens, selecione a melhor data para retirada ou entrega e receba doces frescos feitos com carinho.
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-lg mx-auto">
+            {storeInfo.sloganCardapio || "Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."}
           </p>
         </div>
       </section>

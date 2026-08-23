@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
+import { supabase } from "@/integrations/supabase/client";
+import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +44,9 @@ import {
   Plus,
   Check,
   X,
+  Upload,
+  Image as ImageIcon,
+  Sparkles,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -80,6 +86,47 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [tipoDoc, setTipoDoc] = useState(profile?.tipoDocumento || "CNPJ");
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
+
+  // Personalização do Cardápio Público
+  const [logoUrl, setLogoUrl] = useState(profile?.logoUrl || profile?.store_logo_url || "");
+  const [tituloCardapio, setTituloCardapio] = useState(profile?.tituloCardapio || profile?.menu_title || "");
+  const [sloganCardapio, setSloganCardapio] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEnviandoLogo(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `logos/${activeCode}_${Date.now()}.${fileExt}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("public")
+        .upload(filePath, file, { upsert: true });
+
+      let finalUrl = "";
+      if (!uploadError && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+        finalUrl = publicUrlData.publicUrl;
+      } else {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setLogoUrl(finalUrl);
+      toast.success("Logo selecionada com sucesso! Clique em 'Salvar Dados do Estabelecimento' para confirmar.");
+    } catch {
+      toast.error("Erro ao carregar imagem da logo.");
+    } finally {
+      setEnviandoLogo(false);
+    }
+  };
 
   // Endereço Estruturado via CEP
   const numeroInputRef = useRef<HTMLInputElement>(null);
@@ -164,6 +211,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.bairro) setBairroEst(profile.bairro);
       if (profile.cidade) setCidadeEst(profile.cidade);
       if (profile.estado) setUfEst(profile.estado);
+      if (profile.logoUrl || profile.store_logo_url) setLogoUrl(profile.logoUrl || profile.store_logo_url || "");
+      if (profile.tituloCardapio || profile.menu_title) setTituloCardapio(profile.tituloCardapio || profile.menu_title || "");
+      if (profile.sloganCardapio || profile.menu_slogan) setSloganCardapio(profile.sloganCardapio || profile.menu_slogan || "");
     }
   }, [profile]);
 
@@ -191,7 +241,14 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         tipoChavePix,
         tipoDocumento: tipoDoc,
         numeroDocumento: numDoc,
+        logoUrl,
+        store_logo_url: logoUrl,
+        tituloCardapio,
+        menu_title: tituloCardapio,
+        sloganCardapio,
+        menu_slogan: sloganCardapio,
       });
+      toast.success("Dados do estabelecimento e personalização salvos com sucesso!");
     } finally {
       setSalvandoEst(false);
     }
@@ -576,6 +633,108 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         onChange={(e) => setChavePix(e.target.value)}
                         placeholder="Informe sua chave Pix"
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SEÇÃO DE PERSONALIZAÇÃO DO CARDÁPIO DIGITAL (LOGO, TÍTULO, SLOGAN) */}
+                <div className="pt-3 border-t space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <h4 className="text-sm font-bold text-foreground">
+                      Personalização do Cardápio Digital Público
+                    </h4>
+                  </div>
+
+                  {/* 1. Upload de Logo do Estabelecimento */}
+                  <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-purple-600" /> Logo do Estabelecimento
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Esta imagem será exibida no cabeçalho do seu cardápio público. Se deixada em branco, será utilizada a logomarca padrão do CaixaDoce.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                      <div className="w-20 h-20 rounded-2xl bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative group">
+                        {logoUrl ? (
+                          <img src={logoUrl} alt="Logo da loja" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-center p-1">
+                            <CaixaDoceLogo size="sm" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-center sm:text-left">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadLogoFile}
+                          className="hidden"
+                        />
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={enviandoLogo}
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                          >
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
+                          </Button>
+                          {logoUrl && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLogoUrl("")}
+                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Título e Slogan do Cardápio */}
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="menu-title" className="text-xs font-bold">
+                        Título do Cardápio (Público)
+                      </Label>
+                      <Input
+                        id="menu-title"
+                        value={tituloCardapio}
+                        onChange={(e) => setTituloCardapio(e.target.value)}
+                        placeholder="Cardápio de Bolos & Doces Especiais"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Exibido no cabeçalho do seu cardápio público. Padrão: <em>'Cardápio de Bolos & Doces Especiais'</em>
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="menu-slogan" className="text-xs font-bold">
+                        Slogan / Descrição do Cardápio
+                      </Label>
+                      <Textarea
+                        id="menu-slogan"
+                        rows={2}
+                        value={sloganCardapio}
+                        onChange={(e) => setSloganCardapio(e.target.value)}
+                        placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
+                        className="text-xs"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Exibido como mensagem de apresentação. Padrão: <em>'Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe.'</em>
+                      </p>
                     </div>
                   </div>
                 </div>
