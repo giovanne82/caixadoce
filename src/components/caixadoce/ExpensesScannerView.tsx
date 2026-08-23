@@ -815,7 +815,7 @@ export function ExpensesScannerView({
       {/* ========================================================================= */}
       {notaSelecionada && (
         <Dialog open={!!notaSelecionada} onOpenChange={() => setNotaSelecionada(null)}>
-          <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-foreground">
                 <Building2 className="w-5 h-5 text-primary" /> {notaSelecionada.fornecedorNome}

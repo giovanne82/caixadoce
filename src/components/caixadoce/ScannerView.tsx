@@ -476,7 +476,7 @@ export function ScannerView({
       {/* MODAL SIMPLIFICADO E LIMPO DE REVISÃO DA NOTINHA */}
       {/* ========================================================================= */}
       <Dialog open={modalRevisaoOpen} onOpenChange={setModalRevisaoOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <FileText className="w-5 h-5 text-primary" /> Revisar Dados da Notinha Lida
@@ -643,7 +643,7 @@ export function ScannerView({
       {/* MODAL DE VISUALIZAÇÃO DE DETALHES DA NOTINHA */}
       {/* ========================================================================= */}
       <Dialog open={modalDetalhesOpen} onOpenChange={setModalDetalhesOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <FileText className="w-5 h-5 text-primary" /> Detalhes da Notinha Fiscal
