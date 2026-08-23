@@ -320,40 +320,42 @@ function CardapioLojaView() {
       subtotal: item.produto.preco * item.quantidade,
     }));
 
-    // 1. SALVAR O PEDIDO NA TABELA ORDERS DO SUPABASE
-    try {
-      await supabase.from("orders").insert([
-        {
-          id: pedidoId,
-          estabelecimento_codigo: code,
-          codigo: code,
-          store_id: code,
-          user_id: lojaInfo?.user_id || null,
-          cliente_nome: clienteNome,
-          customer_name: clienteNome,
-          cliente_whatsapp: clienteWhatsapp,
-          customer_phone: clienteWhatsapp,
-          data_entrega: dataEntrega,
-          delivery_date: dataEntrega,
-          horario_entrega: horarioEntrega || "15:00",
-          delivery_time: horarioEntrega || "15:00",
-          tipo_entrega: tipoEntrega,
-          delivery_type: tipoEntrega,
-          endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
-          delivery_address: tipoEntrega === "delivery" ? enderecoEntrega : "",
-          status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-          payment_status: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-          status: "pendente",
-          itens: resumoItensTexto,
-          itens_detalhes: itensDetalhesJson,
-          valor_total: totalCarrinho,
-          total_price: totalCarrinho,
-          observacoes: observacoes || "",
-          notes: observacoes || "",
-        },
-      ]);
-    } catch (err) {
-      console.warn("Aviso ao salvar pedido publico no Supabase:", err);
+    // 1. SALVAR O PEDIDO NA TABELA ENCOMENDAS DO SUPABASE
+    const { error: insertError } = await supabase.from("encomendas").insert([
+      {
+        id: pedidoId,
+        estabelecimento_codigo: code,
+        codigo: code,
+        store_id: code,
+        user_id: lojaInfo?.user_id || null,
+        cliente_nome: clienteNome,
+        customer_name: clienteNome,
+        cliente_whatsapp: clienteWhatsapp,
+        customer_phone: clienteWhatsapp,
+        data_entrega: dataEntrega,
+        delivery_date: dataEntrega,
+        horario_entrega: horarioEntrega || "15:00",
+        delivery_time: horarioEntrega || "15:00",
+        tipo_entrega: tipoEntrega,
+        delivery_type: tipoEntrega,
+        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        delivery_address: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+        payment_status: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+        status: "pendente",
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: totalCarrinho,
+        total_price: totalCarrinho,
+        observacoes: observacoes || "",
+        notes: observacoes || "",
+      },
+    ]);
+
+    if (insertError) {
+      console.error("Erro ao registrar encomenda no Supabase:", insertError);
+      toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
+      return;
     }
 
     if (metodoPagamento === "cartao") {

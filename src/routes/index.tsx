@@ -236,7 +236,7 @@ function Index() {
     if (!profile) return;
 
     try {
-      const data = await safeFetchSupabase("orders", activeCode, "data_entrega", true);
+      const data = await safeFetchSupabase("encomendas", activeCode, "data_entrega", true);
 
       if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_orders_${activeCode}`);
@@ -537,10 +537,10 @@ function Index() {
   useEffect(() => {
     if (!profile) return;
     const channel = supabase
-      .channel("orders_realtime_sync")
+      .channel("encomendas_realtime_sync")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
+        { event: "*", schema: "public", table: "encomendas" },
         () => {
           fetchEncomendasECalendario();
         }
@@ -687,94 +687,116 @@ function Index() {
       estabelecimentoCodigo: activeCode,
     };
 
+    // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas)
+    const { error } = await supabase.from("encomendas").insert([
+      {
+        id: item.id,
+        user_id: user?.id || null,
+        estabelecimento_codigo: activeCode,
+        codigo: activeCode,
+        store_id: activeCode,
+        cliente_id: item.clienteId,
+        cliente_nome: item.clienteNome,
+        customer_name: item.clienteNome,
+        cliente_whatsapp: item.clienteWhatsapp,
+        customer_phone: item.clienteWhatsapp,
+        data_entrega: item.dataEntrega,
+        delivery_date: item.dataEntrega,
+        horario_entrega: item.horarioEntrega,
+        delivery_time: item.horarioEntrega,
+        itens: item.itens,
+        itens_detalhes: item.itensDetalhes || [],
+        insumos_necessarios: item.insumosNecessarios || [],
+        valor_total: item.valorTotal,
+        total_price: item.valorTotal,
+        valor_entrada: item.valorEntrada || 0,
+        historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
+        payments_history: item.paymentsHistory || item.historicoPagamentos || [],
+        status_pagamento: item.statusPagamento,
+        payment_status: item.statusPagamento,
+        status: item.status,
+        tipo_entrega: item.tipoEntrega,
+        delivery_type: item.tipoEntrega,
+        endereco_entrega: item.enderecoEntrega,
+        delivery_address: item.enderecoEntrega,
+        observacoes: item.observacoes,
+      },
+    ]);
+
+    if (error) {
+      console.error("[Supabase Error] Falha ao criar encomenda:", error);
+      toast.error(`Falha ao salvar no banco: ${error.message || "Erro desconhecido"}`);
+      throw error; // Lança erro para interromper a submissão e não fechar o formulário
+    }
+
+    // 2. Atualizar estado local SOMENTE se a gravação no Supabase retornou sucesso
     const atualizadas = [item, ...encomendas];
     setEncomendas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
-
-    try {
-      await supabase.from("orders").insert([
-        {
-          id: item.id,
-          user_id: user?.id || null,
-          estabelecimento_codigo: activeCode,
-          codigo: activeCode,
-          store_id: activeCode,
-          cliente_id: item.clienteId,
-          cliente_nome: item.clienteNome,
-          customer_name: item.clienteNome,
-          cliente_whatsapp: item.clienteWhatsapp,
-          customer_phone: item.clienteWhatsapp,
-          data_entrega: item.dataEntrega,
-          delivery_date: item.dataEntrega,
-          horario_entrega: item.horarioEntrega,
-          delivery_time: item.horarioEntrega,
-          itens: item.itens,
-          itens_detalhes: item.itensDetalhes || [],
-          insumos_necessarios: item.insumosNecessarios || [],
-          valor_total: item.valorTotal,
-          total_price: item.valorTotal,
-          valor_entrada: item.valorEntrada || 0,
-          historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
-          payments_history: item.paymentsHistory || item.historicoPagamentos || [],
-          status_pagamento: item.statusPagamento,
-          payment_status: item.statusPagamento,
-          status: item.status,
-          tipo_entrega: item.tipoEntrega,
-          delivery_type: item.tipoEntrega,
-          endereco_entrega: item.enderecoEntrega,
-          delivery_address: item.enderecoEntrega,
-          observacoes: item.observacoes,
-        },
-      ]);
-    } catch (err) {
-      console.warn("Supabase insert order warning:", err);
-    }
   };
 
   const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
+    // 1. Atualizar no Supabase PRIMEIRO
+    const { error } = await supabase
+      .from("encomendas")
+      .update({
+        cliente_id: dados.clienteId,
+        cliente_nome: dados.clienteNome,
+        customer_name: dados.clienteNome,
+        cliente_whatsapp: dados.clienteWhatsapp,
+        customer_phone: dados.clienteWhatsapp,
+        data_entrega: dados.dataEntrega,
+        delivery_date: dados.dataEntrega,
+        horario_entrega: dados.horarioEntrega,
+        delivery_time: dados.horarioEntrega,
+        itens: dados.itens,
+        itens_detalhes: dados.itensDetalhes,
+        insumos_necessarios: dados.insumosNecessarios,
+        valor_total: dados.valorTotal,
+        total_price: dados.valorTotal,
+        valor_entrada: dados.valorEntrada,
+        historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+        payments_history: dados.paymentsHistory || dados.historicoPagamentos || [],
+        status_pagamento: dados.statusPagamento,
+        payment_status: dados.statusPagamento,
+        status: dados.status,
+        tipo_entrega: dados.tipoEntrega,
+        delivery_type: dados.tipoEntrega,
+        endereco_entrega: dados.enderecoEntrega,
+        delivery_address: dados.enderecoEntrega,
+        observacoes: dados.observacoes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[Supabase Error] Falha ao atualizar encomenda:", error);
+      toast.error(`Falha ao atualizar no banco: ${error.message || "Erro desconhecido"}`);
+      throw error; // Lança erro para o formulário tratar
+    }
+
+    // 2. Atualizar estado local SOMENTE se o Supabase retornou sucesso
     const atualizadas = encomendas.map((e) => (e.id === id ? { ...e, ...dados } : e));
     setEncomendas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
-
-    try {
-      await supabase
-        .from("orders")
-        .update({
-          cliente_id: dados.clienteId,
-          cliente_nome: dados.clienteNome,
-          cliente_whatsapp: dados.clienteWhatsapp,
-          data_entrega: dados.dataEntrega,
-          horario_entrega: dados.horarioEntrega,
-          itens: dados.itens,
-          itens_detalhes: dados.itensDetalhes,
-          insumos_necessarios: dados.insumosNecessarios,
-          valor_total: dados.valorTotal,
-          valor_entrada: dados.valorEntrada,
-          historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
-          payments_history: dados.paymentsHistory || dados.historicoPagamentos || [],
-          status_pagamento: dados.statusPagamento,
-          status: dados.status,
-          tipo_entrega: dados.tipoEntrega,
-          endereco_entrega: dados.enderecoEntrega,
-          observacoes: dados.observacoes,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-    } catch (err) {
-      console.warn("Supabase update order warning:", err);
-    }
   };
 
   const excluirEncomenda = async (id: string) => {
+    const { error } = await supabase.from("encomendas").delete().eq("id", id);
+    if (error) {
+      console.error("[Supabase Error] Falha ao excluir encomenda:", error);
+      toast.error(`Falha ao excluir no banco: ${error.message}`);
+      return;
+    }
+
     const atualizadas = encomendas.filter((e) => e.id !== id);
     setEncomendas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase.from("orders").delete().eq("id", id);
     } catch {}
     toast.success("Encomenda excluída com sucesso.");
   };
@@ -796,7 +818,7 @@ function Index() {
       if (encAlvo) {
         try {
           await supabase
-            .from("orders")
+            .from("encomendas")
             .update({ insumos_necessarios: encAlvo.insumosNecessarios })
             .eq("id", encomendaId);
         } catch {}
