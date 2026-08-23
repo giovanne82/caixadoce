@@ -134,8 +134,7 @@ export function DespesasView({
       try {
         const { data, error } = await supabase
           .from("shopping_list_receipts")
-          .select("shopping_list_id, receipt_id")
-          .eq("estabelecimento_codigo", estabelecimentoCodigo);
+          .select("shopping_list_id, receipt_id");
 
         if (!error && data && data.length > 0) {
           const map: Record<string, string[]> = {};
@@ -174,7 +173,6 @@ export function DespesasView({
     try {
       await supabase.from("shopping_list_receipts").insert([
         {
-          estabelecimento_codigo: estabelecimentoCodigo,
           shopping_list_id: shoppingListId,
           receipt_id: receiptId,
         },
@@ -193,7 +191,6 @@ export function DespesasView({
       await supabase
         .from("shopping_list_receipts")
         .delete()
-        .eq("estabelecimento_codigo", estabelecimentoCodigo)
         .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
     } catch {}

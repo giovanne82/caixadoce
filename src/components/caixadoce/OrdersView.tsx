@@ -169,15 +169,13 @@ export function OrdersView({
   const [buscaNotinhaMap, setBuscaNotinhaMap] = useState<Record<string, string>>({});
   const [dropdownAbertoMap, setDropdownAbertoMap] = useState<Record<string, boolean>>({});
   const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
-
   // Carregar vinculações do Supabase no mount por lista
   useEffect(() => {
     async function carregarNotinhasPorLista() {
       try {
         const { data, error } = await supabase
           .from("shopping_list_receipts")
-          .select("shopping_list_id, receipt_id")
-          .eq("estabelecimento_codigo", "CD-1001");
+          .select("shopping_list_id, receipt_id");
 
         if (!error && data && data.length > 0) {
           const map: Record<string, string[]> = {};
@@ -215,7 +213,6 @@ export function OrdersView({
     try {
       await supabase.from("shopping_list_receipts").insert([
         {
-          estabelecimento_codigo: "CD-1001",
           shopping_list_id: shoppingListId,
           receipt_id: receiptId,
         },
@@ -236,7 +233,6 @@ export function OrdersView({
       await supabase
         .from("shopping_list_receipts")
         .delete()
-        .eq("estabelecimento_codigo", "CD-1001")
         .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
     } catch (e) {

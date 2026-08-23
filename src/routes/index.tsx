@@ -161,14 +161,11 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
-  // 1. Carrega dados do Supabase / Cache Local com suporte a fallbacks e log detalhado de erros
+  // 1. Carrega dados do Supabase confiantemente no RLS / tabela direta sem filtros obsoletos
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
       try {
         let query = supabase.from(tableName as any).select("*");
-        if (activeCode) {
-          query = query.eq("estabelecimento_codigo", activeCode);
-        }
         if (orderColumn) {
           query = query.order(orderColumn, { ascending });
         }
@@ -179,32 +176,10 @@ function Index() {
         if (res.error) {
           console.error(
             `[Supabase GET Error] Tabela: "${tableName}" | Status: ${res.status} | Mensagem:`,
-            res.error.message,
-            "| Detalhes:",
-            res.error.details,
-            "| Dica:",
-            res.error.hint
+            res.error.message
           );
 
-          // Fallback 1: Tenta sem ordenação caso a coluna ordenada tenha gerado mismatch 400
-          try {
-            let altQuery = supabase.from(tableName as any).select("*");
-            if (activeCode) altQuery = altQuery.eq("estabelecimento_codigo", activeCode);
-            const altRes = await altQuery;
-            if (!altRes.error && altRes.data) return altRes.data;
-          } catch {}
-
-          // Fallback 2: Tenta filtros alternativos (codigo ou store_id)
-          try {
-            let altQuery2 = supabase.from(tableName as any).select("*");
-            if (activeCode) {
-              altQuery2 = altQuery2.or(`estabelecimento_codigo.eq.${activeCode},codigo.eq.${activeCode},store_id.eq.${activeCode}`);
-            }
-            const altRes2 = await altQuery2;
-            if (!altRes2.error && altRes2.data) return altRes2.data;
-          } catch {}
-
-          // Fallback 3: Query simples sem filtro de coluna caso o schema ainda esteja sincronizando
+          // Fallback sem ordenação caso a coluna de ordenação não exista
           try {
             const rawRes = await supabase.from(tableName as any).select("*");
             if (!rawRes.error && rawRes.data) return rawRes.data;
@@ -906,7 +881,6 @@ function Index() {
       await supabase
         .from("expenses")
         .update({ fornecedor_nome: novoNomeTrim })
-        .eq("estabelecimento_codigo", activeCode)
         .eq("fornecedor_nome", nomeAntigo);
     } catch (e) {
       console.warn("Aviso ao reatribuir estabelecimento:", e);
