@@ -726,7 +726,7 @@ export function salvarNovoInsumoCatalogo(estabelecimentoCodigo: string, novoNome
 // ==============================================================================
 
 export type StatusEncomenda = "pendente" | "em_producao" | "pronta" | "entregue" | "cancelada";
-export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega";
+export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega" | "cartao_pendente" | "pix_pendente";
 
 export interface ItemPedidoEncomenda {
   id: string;
@@ -810,6 +810,8 @@ export const STATUS_PAGAMENTO_CONFIG: Record<
   sinal_pago: { label: "Sinal Pago (50%)", color: "text-amber-600" },
   pago_integral: { label: "100% Pago", color: "text-emerald-600" },
   pago_na_entrega: { label: "Pagar na Entrega", color: "text-blue-600" },
+  cartao_pendente: { label: "Aguardando Cartão", color: "text-purple-600" },
+  pix_pendente: { label: "Aguardando Pix", color: "text-indigo-600" },
 };
 
 // ==============================================================================

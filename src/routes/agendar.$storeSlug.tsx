@@ -356,36 +356,6 @@ function PublicStoreView() {
       return;
     }
 
-    if (metodoPagamento === "cartao") {
-      setEnviandoPedido(true);
-      try {
-        const session = await createStripeSession({
-          establishmentCode: cleanCode,
-          customerName: clienteNome,
-          customerWhatsapp: clienteWhatsapp,
-          items: carrinho.map((it) => ({
-            name: it.produto.nome,
-            quantity: it.quantidade,
-            unitPrice: it.produto.preco,
-          })),
-          subtotal: totalCarrinho,
-          installments: parcelasSelecionadas,
-          repassarTaxa: stripeConfig.repassarTaxaStripe,
-          stripeAccountId: stripeConfig.accountId,
-        });
-
-        toast.success(`Sessão no cartão gerada! Total: ${feeResult.formattedTotalAmount} (${feeResult.installments}x de ${feeResult.formattedInstallmentValue})`);
-        setTimeout(() => {
-          window.open(session.checkoutUrl, "_blank");
-        }, 800);
-      } catch (err) {
-        toast.error("Erro ao gerar pagamento no cartão.");
-      } finally {
-        setEnviandoPedido(false);
-      }
-      return;
-    }
-
     setEnviandoPedido(true);
     try {
       const itensFormatados = carrinho
@@ -404,7 +374,7 @@ function PublicStoreView() {
         itens: itensFormatados,
         valorTotal: totalCarrinho,
         valorEntrada: metodoPagamento === "pix" ? totalCarrinho : 0,
-        statusPagamento: metodoPagamento === "pix" ? "pago_integral" : "pago_na_entrega",
+        statusPagamento: metodoPagamento === "pix" ? "pago_integral" : metodoPagamento === "cartao" ? "cartao_pendente" : "pago_na_entrega",
         status: "pendente",
         tipoEntrega,
         enderecoEntrega,
@@ -421,8 +391,10 @@ function PublicStoreView() {
           user_id: (storeInfo as any).user_id || null,
           cliente_nome: novaEncomenda.clienteNome,
           customer_name: novaEncomenda.clienteNome,
+          client_name: novaEncomenda.clienteNome,
           cliente_whatsapp: novaEncomenda.clienteWhatsapp,
           customer_phone: novaEncomenda.clienteWhatsapp,
+          client_phone: novaEncomenda.clienteWhatsapp,
           data_entrega: novaEncomenda.dataEntrega,
           delivery_date: novaEncomenda.dataEntrega,
           horario_entrega: novaEncomenda.horarioEntrega,
@@ -450,6 +422,33 @@ function PublicStoreView() {
         console.error("Erro ao salvar encomenda no Supabase:", error);
         toast.error(`Falha ao registrar pedido: ${error.message || "Erro de conexão com o banco de dados"}`);
         return;
+      }
+
+      if (metodoPagamento === "cartao") {
+        try {
+          const session = await createStripeSession({
+            orderId: newId,
+            establishmentCode: cleanCode,
+            customerName: clienteNome,
+            customerWhatsapp: clienteWhatsapp,
+            items: carrinho.map((it) => ({
+              name: it.produto.nome,
+              quantity: it.quantidade,
+              unitPrice: it.produto.preco,
+            })),
+            subtotal: totalCarrinho,
+            installments: parcelasSelecionadas,
+            repassarTaxa: stripeConfig.repassarTaxaStripe,
+            stripeAccountId: stripeConfig.accountId,
+          });
+
+          toast.success(`Sessão no cartão gerada! Total: ${feeResult.formattedTotalAmount}`);
+          setTimeout(() => {
+            window.open(session.checkoutUrl, "_blank");
+          }, 800);
+        } catch (err) {
+          toast.error("Erro ao gerar pagamento no cartão.");
+        }
       }
 
       // 2. Atualiza cache local

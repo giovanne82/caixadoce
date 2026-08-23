@@ -364,6 +364,7 @@ function CardapioLojaView() {
       setProcessandoPagamento(true);
       try {
         const session = await createStripeSession({
+          orderId: pedidoId,
           establishmentCode: code,
           customerName: clienteNome,
           customerWhatsapp: clienteWhatsapp,

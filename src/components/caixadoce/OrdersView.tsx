@@ -2082,38 +2082,75 @@ export function OrdersView({
                 <span className="text-[10px] text-muted-foreground">{itensTags.length} item(ns) selecionado(s)</span>
               </div>
 
-              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
+              <div className="flex flex-col gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border divide-y divide-border/40 w-full">
                 {itensTags.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground italic">
+                  <span className="text-[11px] text-muted-foreground italic p-2">
                     Nenhum produto adicionado. Digite abaixo para selecionar do cardápio.
                   </span>
                 ) : (
-                  itensTags.map((it) => (
-                    <div
-                      key={it.id}
-                      className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-primary/15 text-primary border border-primary/30 text-xs font-semibold shadow-2xs"
-                    >
-                      <span className="truncate max-w-[160px] font-bold">{it.nome}</span>
-                      <span className="text-muted-foreground/60">|</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={it.quantidade}
-                          onChange={(e) => handleAlterarQuantidadeItem(it.id, Number(e.target.value) || 1)}
-                          className="w-10 h-5 px-1 text-xs font-mono font-bold bg-background border border-primary/40 rounded text-center"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoverItemPedido(it.id)}
-                        className="hover:text-rose-600 ml-1 text-muted-foreground"
+                  itensTags.map((it) => {
+                    const precoUnit =
+                      it.precoUnitario ||
+                      listaProdutos.find((p) => p.id === it.produtoId || p.nome.toLowerCase() === it.nome.toLowerCase())?.preco ||
+                      0;
+                    const subtotalItem = precoUnit * (it.quantidade || 1);
+
+                    return (
+                      <div
+                        key={it.id}
+                        className="flex items-center justify-between gap-3 py-2 px-3 bg-muted/20 hover:bg-muted/40 rounded-xl transition-colors w-full"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Cake className="w-4 h-4 text-primary shrink-0" />
+                          <span className="font-bold text-xs text-foreground truncate">{it.nome}</span>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex items-center gap-1 bg-background px-2 py-1 rounded-lg border border-input shadow-2xs">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Qtd:</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={it.quantidade}
+                              onChange={(e) => {
+                                const valLimpo = e.target.value.replace(/\D/g, "");
+                                const num = Number(valLimpo);
+                                handleAlterarQuantidadeItem(it.id, num);
+                              }}
+                              className="w-8 h-5 text-center text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                            />
+                          </div>
+
+                          <div className="text-right min-w-[90px]">
+                            {precoUnit > 0 ? (
+                              <div>
+                                <div className="text-xs font-extrabold text-purple-700 dark:text-purple-300">
+                                  {formatarMoeda(subtotalItem)}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  ({it.quantidade}x {formatarMoeda(precoUnit)})
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] font-semibold text-stone-500">
+                                Sem preço
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverItemPedido(it.id)}
+                            className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                            title="Remover item"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
 

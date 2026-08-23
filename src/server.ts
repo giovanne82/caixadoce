@@ -239,6 +239,7 @@ export default {
             cancel_url: `${origin}/cardapio/${storeCode}`,
             metadata: {
               establishmentCode: storeCode,
+              orderId: payload.orderId || payload.pedidoId || "",
               customerName: payload.customerName || "",
               customerWhatsapp: payload.customerWhatsapp || "",
             },
@@ -362,14 +363,15 @@ export default {
 
           console.log("[CaixaDoce Stripe Webhook] Evento recebido:", event.type);
 
-          if (event.type === "checkout.session.completed") {
+          if (event.type === "checkout.session.completed" || event.type === "payment_intent.succeeded") {
             const session = event.data.object as any;
-            const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
+            const amountTotal = session.amount_total ? session.amount_total / 100 : (session.amount ? session.amount / 100 : 0);
             const description =
               session.description ||
               session.metadata?.description ||
               "Cobrança Cartão de Crédito (Stripe)";
-            const establishmentCode = session.metadata?.establishmentCode || "CD-1001";
+            const establishmentCode = session.metadata?.establishmentCode || session.metadata?.estabelecimento_codigo || "CD-1001";
+            const orderId = session.metadata?.orderId || session.metadata?.pedidoId || "";
             const customerName =
               session.metadata?.customerName ||
               session.customer_details?.name ||
@@ -381,6 +383,65 @@ export default {
               process.env.VITE_SUPABASE_ANON_KEY ||
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
+            // 1. Atualizar a Encomenda no Supabase se houver orderId vinculado
+            if (orderId) {
+              try {
+                const fetchRes = await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${orderId}&select=*`, {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                });
+
+                if (fetchRes.ok) {
+                  const encList = await fetchRes.json();
+                  if (encList && encList.length > 0) {
+                    const enc = encList[0];
+                    const histAtual = Array.isArray(enc.historico_pagamentos)
+                      ? enc.historico_pagamentos
+                      : Array.isArray(enc.payments_history)
+                      ? enc.payments_history
+                      : [];
+
+                    const novoPag = {
+                      id: `pay_stripe_${Date.now()}`,
+                      data: new Date().toISOString().split("T")[0],
+                      valor: amountTotal,
+                      observacao: "Pagamento Online via Cartão / Stripe",
+                    };
+
+                    const novoHistorico = [...histAtual, novoPag];
+                    const totalPago = novoHistorico.reduce((sum: number, p: any) => sum + Number(p.valor || 0), 0);
+                    const valorTotalEnc = Number(enc.valor_total || enc.total_price || enc.total_amount || 0);
+                    const statusPag = totalPago >= valorTotalEnc && valorTotalEnc > 0 ? "pago_integral" : "sinal_pago";
+
+                    await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${orderId}`, {
+                      method: "PATCH",
+                      headers: {
+                        apikey: supabaseKey,
+                        Authorization: `Bearer ${supabaseKey}`,
+                        "Content-Type": "application/json",
+                        Prefer: "return=minimal",
+                      },
+                      body: JSON.stringify({
+                        status_pagamento: statusPag,
+                        payment_status: statusPag,
+                        valor_entrada: totalPago,
+                        down_payment: totalPago,
+                        historico_pagamentos: novoHistorico,
+                        payments_history: novoHistorico,
+                        updated_at: new Date().toISOString(),
+                      }),
+                    });
+                    console.log(`[Stripe Webhook] Encomenda ${orderId} atualizada para ${statusPag} com pagamento de R$ ${amountTotal}!`);
+                  }
+                }
+              } catch (encErr) {
+                console.error("[Stripe Webhook] Erro ao atualizar encomenda no Supabase:", encErr);
+              }
+            }
+
+            // 2. Registrar transação financeira
             try {
               await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
                 method: "POST",
@@ -404,7 +465,7 @@ export default {
                   origem: "Stripe",
                 }),
               });
-              console.log("[Stripe Webhook] Transação de Stripe inserida automaticamente na tabela transacoes_financeiras!");
+              console.log("[Stripe Webhook] Transação de Stripe inserida na tabela transacoes_financeiras!");
             } catch (dbErr) {
               console.error("[Stripe Webhook] Erro ao inserir transação no banco:", dbErr);
             }

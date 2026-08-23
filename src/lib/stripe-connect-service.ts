@@ -16,6 +16,8 @@ export interface StripeCheckoutItem {
 }
 
 export interface CreateStripeSessionPayload {
+  orderId?: string;
+  pedidoId?: string;
   establishmentCode: string;
   customerName: string;
   customerEmail?: string;
@@ -146,6 +148,7 @@ export async function createStripeSession(payload: CreateStripeSessionPayload): 
   }
 
   console.log("[Stripe Connect API / Checkout] Sessão de pagamento com markup dinâmico gerada:", {
+    orderId: payload.orderId,
     establishmentCode: payload.establishmentCode,
     subtotal: feeResult.subtotal,
     installments: feeResult.installments,
@@ -159,6 +162,7 @@ export async function createStripeSession(payload: CreateStripeSessionPayload): 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        orderId: payload.orderId,
         establishmentCode: payload.establishmentCode,
         customerName: payload.customerName,
         customerWhatsapp: payload.customerWhatsapp,
