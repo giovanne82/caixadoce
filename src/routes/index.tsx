@@ -161,7 +161,7 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
-  // 1. Carrega transações do Supabase / Cache Local com interceptação silenciosa de erros (400 / 404 / tabela inexistente)
+  // 1. Carrega dados do Supabase / Cache Local com suporte a fallbacks e log detalhado de erros
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
       try {
@@ -177,22 +177,42 @@ function Index() {
         if (!res.error && res.data) return res.data;
 
         if (res.error) {
-          // Se a coluna estabelecimento_codigo não existir na tabela (HTTP 400 / 42703), tenta sem o filtro
-          if (res.error.code === "42703" || res.status === 400 || res.error.message?.includes("estabelecimento_codigo")) {
-            try {
-              let fallbackQuery = supabase.from(tableName as any).select("*");
-              if (orderColumn) {
-                fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
-              }
-              const fallbackRes = await fallbackQuery;
-              if (!fallbackRes.error && fallbackRes.data) {
-                return fallbackRes.data;
-              }
-            } catch {}
-          }
+          console.error(
+            `[Supabase GET Error] Tabela: "${tableName}" | Status: ${res.status} | Mensagem:`,
+            res.error.message,
+            "| Detalhes:",
+            res.error.details,
+            "| Dica:",
+            res.error.hint
+          );
+
+          // Fallback 1: Tenta sem ordenação caso a coluna ordenada tenha gerado mismatch 400
+          try {
+            let altQuery = supabase.from(tableName as any).select("*");
+            if (activeCode) altQuery = altQuery.eq("estabelecimento_codigo", activeCode);
+            const altRes = await altQuery;
+            if (!altRes.error && altRes.data) return altRes.data;
+          } catch {}
+
+          // Fallback 2: Tenta filtros alternativos (codigo ou store_id)
+          try {
+            let altQuery2 = supabase.from(tableName as any).select("*");
+            if (activeCode) {
+              altQuery2 = altQuery2.or(`estabelecimento_codigo.eq.${activeCode},codigo.eq.${activeCode},store_id.eq.${activeCode}`);
+            }
+            const altRes2 = await altQuery2;
+            if (!altRes2.error && altRes2.data) return altRes2.data;
+          } catch {}
+
+          // Fallback 3: Query simples sem filtro de coluna caso o schema ainda esteja sincronizando
+          try {
+            const rawRes = await supabase.from(tableName as any).select("*");
+            if (!rawRes.error && rawRes.data) return rawRes.data;
+          } catch {}
         }
         return [];
-      } catch {
+      } catch (err: any) {
+        console.error(`[Supabase Exception] Tabela "${tableName}":`, err?.message || err);
         return [];
       }
     },
