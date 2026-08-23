@@ -435,12 +435,9 @@ export function OrdersView({
   };
 
   const handleAlterarQuantidadeItem = (itemId: string, novaQtd: number) => {
-    if (novaQtd <= 0) {
-      handleRemoverItemPedido(itemId);
-      return;
-    }
+    const qtdSegura = isNaN(novaQtd) ? 0 : Math.max(0, novaQtd);
     setItensTags((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, quantidade: novaQtd } : it))
+      prev.map((it) => (it.id === itemId ? { ...it, quantidade: qtdSegura } : it))
     );
   };
 
@@ -584,7 +581,12 @@ export function OrdersView({
           ? "sinal_pago"
           : "pendente";
 
-      const resumoItens = itensTags.map((it) => `${it.quantidade}x ${it.nome}`).join(", ");
+      const itensSanitizados = itensTags.map((it) => ({
+        ...it,
+        quantidade: it.quantidade && it.quantidade > 0 ? it.quantidade : 1,
+      }));
+
+      const resumoItens = itensSanitizados.map((it) => `${it.quantidade}x ${it.nome}`).join(", ");
 
       const payload = {
         clienteId,
@@ -593,7 +595,7 @@ export function OrdersView({
         dataEntrega,
         horarioEntrega,
         itens: resumoItens,
-        itensDetalhes: itensTags,
+        itensDetalhes: itensSanitizados,
         insumosNecessarios: insumosTags,
         valorTotal: valorNum,
         valorEntrada: totalPago,
@@ -2112,11 +2114,19 @@ export function OrdersView({
                               type="text"
                               inputMode="numeric"
                               pattern="[0-9]*"
-                              value={it.quantidade}
+                              value={it.quantidade === 0 ? "" : it.quantidade}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                              }}
                               onChange={(e) => {
                                 const valLimpo = e.target.value.replace(/\D/g, "");
-                                const num = Number(valLimpo);
+                                const num = valLimpo === "" ? 0 : Number(valLimpo);
                                 handleAlterarQuantidadeItem(it.id, num);
+                              }}
+                              onBlur={() => {
+                                if (!it.quantidade || it.quantidade <= 0) {
+                                  handleAlterarQuantidadeItem(it.id, 1);
+                                }
                               }}
                               className="w-8 h-5 text-center text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                             />
