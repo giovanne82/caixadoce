@@ -990,45 +990,14 @@ function Index() {
                 </div>
               </div>
 
-              {/* Bloco Direita: Botões de Ação Fixados (Planos, Notificações, Trocar Loja, Sair) */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveTab("plano")}
-                  title="Assinatura & Meu Plano"
-                  className="h-8 px-2 sm:px-3 text-xs text-[#6D28D9] hover:text-purple-900 bg-purple-100/80 hover:bg-purple-200/80 border border-purple-200 shrink-0 font-extrabold"
-                >
-                  <Crown className="w-3.5 h-3.5 text-amber-500 sm:mr-1" />
-                  <span className="hidden sm:inline">
-                    {infoPlano.status === "trial"
-                      ? `Teste Pro (${infoPlano.diasRestantesTrial || 14}d)`
-                      : infoPlano.planoId === "basico"
-                      ? "Plano Básico"
-                      : "Plano Pro"}
-                  </span>
-                  <span className="sm:hidden text-[10px]">
-                    {infoPlano.planoId === "basico" ? "Básico" : "Pro"}
-                  </span>
-                </Button>
-
+              {/* Bloco Direita: Apenas Notificações + Sair/Logout */}
+              <div className="flex items-center gap-2 shrink-0">
                 <NotificationBell
                   transacoes={transacoes}
                   despesas={despesas}
                   establishmentCode={activeCode}
                   onNavigateTab={setActiveTab}
                 />
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={switchProfile}
-                  title="Trocar Estabelecimento"
-                  className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-[#7C3AED] bg-white/80 hover:bg-[#7C3AED]/10 border border-[#E8E0F2] shrink-0"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5 text-[#7C3AED]" />
-                  <span className="hidden sm:inline font-bold">Trocar Loja</span>
-                </Button>
 
                 <Button
                   variant="ghost"
