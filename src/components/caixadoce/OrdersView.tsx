@@ -2191,27 +2191,27 @@ export function OrdersView({
                             />
                           </div>
 
-                          {/* Preço Unitário Editável */}
+                          {/* Preço Unitário Editável (Mascara Moeda BRL) */}
                           <div className="flex items-center gap-1 bg-background px-2 py-1 rounded-lg border border-input shadow-2xs">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Unit R$:</span>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Unit:</span>
                             <input
                               type="text"
-                              inputMode="decimal"
-                              placeholder="0,00"
+                              inputMode="numeric"
+                              placeholder="R$ 0,00"
                               value={
                                 it.precoUnitario !== undefined && it.precoUnitario > 0
-                                  ? it.precoUnitario.toString().replace(".", ",")
+                                  ? aplicarMascaraMoedaInput(String(Math.round(it.precoUnitario * 100)))
                                   : precoUnit > 0
-                                  ? precoUnit.toString().replace(".", ",")
+                                  ? aplicarMascaraMoedaInput(String(Math.round(precoUnit * 100)))
                                   : ""
                               }
                               onKeyDown={(e) => e.stopPropagation()}
                               onChange={(e) => {
-                                const valLimpo = e.target.value.replace(",", ".");
-                                const num = parseFloat(valLimpo);
-                                handleAlterarPrecoUnitarioItem(it.id, isNaN(num) ? 0 : num);
+                                const valMascara = aplicarMascaraMoedaInput(e.target.value);
+                                const num = converterMoedaInputParaNumero(valMascara);
+                                handleAlterarPrecoUnitarioItem(it.id, num);
                               }}
-                              className="w-16 h-5 text-right text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 text-foreground"
+                              className="w-20 h-5 text-right text-xs font-bold font-mono bg-transparent outline-none border-none focus:ring-0 text-foreground"
                             />
                           </div>
 
