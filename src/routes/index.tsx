@@ -75,12 +75,12 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Mensal</h3>
+        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Pro</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que inclui acesso à Lista de Compras, Painel Financeiro e Cardápio).
+          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-          Assine o Plano Mensal (R$ 14,90/mês) para desbloquear o acesso completo.
+          Assine o Plano Mensal Completo (R$ 19,90/mês) para desbloquear todos os módulos.
         </p>
       </div>
 

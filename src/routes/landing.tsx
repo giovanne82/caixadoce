@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   ChevronDown,
   Check,
+  X,
   Heart,
   Store,
   UserCheck,
@@ -317,11 +318,12 @@ export function LandingPageContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* PLANO BÁSICO (GRATUITO) */}
+            {/* PLANO BÁSICO (GRATUITO - APENAS LISTA DE COMPRAS) */}
             <Card className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-md">
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-xl font-bold text-slate-900">Plano Básico</h3>
-                  <p className="text-xs text-slate-500">Essencial para organizar seu cadastro e cardápio inicial.</p>
+                  <p className="text-xs text-slate-500">Para organizar suas listas de compras de forma simples.</p>
                 </div>
 
                 <div className="flex items-baseline gap-1">
@@ -330,21 +332,25 @@ export function LandingPageContent() {
                 </div>
 
                 <div className="pt-4 border-t border-slate-100 space-y-3 text-xs text-slate-700">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 font-bold text-emerald-700">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Cardápio Digital Online para Compartilhar</span>
+                    <span>Acesso Exclusivo à Lista de Compras Interativa</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Cadastro de Clientes e Produtos</span>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Escanear a Notinha com IA (Bloqueado)</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Listas de Compras Interativas</span>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Calendário de Encomendas &amp; Clientes (Bloqueado)</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Lançamentos Financeiros Manuais</span>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Painel Financeiro &amp; Fluxo de Caixa (Bloqueado)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Cardápio Digital Personalizado (Bloqueado)</span>
                   </div>
                 </div>
               </div>
@@ -358,7 +364,7 @@ export function LandingPageContent() {
               </Button>
             </Card>
 
-            {/* PLANO PRO (PROMOÇÃO DE LANÇAMENTO + 14 DIAS GRÁTIS) */}
+            {/* PLANO PRO (MENSAL COMPLETO - R$ 19,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15 transform lg:-translate-y-2">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-xs px-4 py-1 rounded-full shadow-md flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5 text-slate-950" /> 14 DIAS GRÁTIS DE TESTE
@@ -377,32 +383,40 @@ export function LandingPageContent() {
                   <div className="text-xs text-slate-400 line-through font-mono">De R$ 29,90/mês</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-purple-700">
-                      {formatarMoeda(PLANOS_CONFIG.mensal.precoMensal)}
+                      R$ 19,90
                     </span>
                     <span className="text-xs text-slate-600 font-semibold">/ mês (com 14 dias grátis)</span>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-purple-100 space-y-3 text-xs text-slate-700">
-                  <div className="flex items-center gap-2 font-bold text-purple-900">
+                <div className="pt-4 border-t border-purple-100 space-y-2.5 text-xs text-slate-700">
+                  <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Tudo do Plano Básico incluso</span>
+                    <span>Escanear a Notinha com IA (Ilimitado)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Leitura Ilimitada de Cupons de Mercado por IA</span>
+                    <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Disponibilidade e Agendamento por Produto no Checkout</span>
+                    <span>Controle financeiro dos pedidos e fluxo de caixa</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Recebimentos por Pix e Cartão (Stripe Connect)</span>
+                    <span>Cardápio digital personalizado</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Conciliação Automática de Insumos e Estoque</span>
+                    <span>Emissão de link de pagamento</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Cobrança via cartão com o Stripe</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Compartilhamento de conta com outro usuário</span>
                   </div>
                 </div>
               </div>

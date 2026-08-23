@@ -19,46 +19,44 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     nome: "Plano Básico (Gratuito)",
     precoMensal: 0,
     faturamento: "Gratuito para sempre",
-    descricao: "Para organizar as compras da sua confeitaria de forma simples e eficiente.",
+    descricao: "Para organizar suas listas de compras e matérias-primas de forma simples.",
     recursos: [
-      "Lista de Compras Interativa (Ilimitada)",
-      "Gestão de Múltiplas Listas Nomeadas",
-      "Vínculo de Clientes por Tags/Chips",
-      "Recibo Visual em Estilo Cupom",
-      "Suporte via Comunidade",
+      "Lista de Compras Interativa (Exclusiva)",
     ],
   },
   mensal: {
     id: "mensal",
     nome: "Plano Mensal Completo",
-    badge: "🔥 PROMOÇÃO DE LANÇAMENTO",
-    precoMensal: 14.90,
-    faturamento: "R$ 14,90 / mês (Promocional)",
-    descricao: "Acesso total ilimitado a todas as ferramentas com flexibilidade mensal.",
+    badge: "🔥 ACESSO COMPLETO PRO",
+    precoMensal: 19.90,
+    faturamento: "R$ 19,90 / mês",
+    descricao: "Acesso total ilimitado a todas as ferramentas da plataforma sem fidelidade.",
     recursos: [
-      "Scanner de Notinhas com IA (Ilimitado)",
-      "Lista de Compras & Conciliação Automática",
-      "Calendário de Encomendas & Histórico",
-      "Cardápio Digital Público & Agendamentos",
-      "Painel Financeiro & Fluxo de Caixa",
-      "Sem fidelidade, cancele quando quiser",
+      "Escanear a Notinha com IA (Ilimitado)",
+      "Controlar pedidos de clientes (Calendário de Encomendas)",
+      "Controle financeiro dos pedidos e fluxo de caixa",
+      "Cardápio digital personalizado",
+      "Emissão de link de pagamento",
+      "Cobrança via cartão com o Stripe",
+      "Compartilhamento de conta com outro usuário",
     ],
   },
   anual: {
     id: "anual",
     nome: "Plano Anual Completo",
-    badge: "⭐ MELHOR CUSTO-BENEFÍCIO / MAIS ECONÔMICO",
-    precoMensal: 10.90,
-    precoAnualTotal: 130.80,
-    faturamento: "12x R$ 10,90 (R$ 130,80/ano)",
-    descricao: "A escolha mais inteligente e econômica para quem deseja transformar o negócio com todos os recursos.",
+    badge: "⭐ MELHOR CUSTO-BENEFÍCIO",
+    precoMensal: 14.90,
+    precoAnualTotal: 178.80,
+    faturamento: "12x R$ 14,90 (R$ 178,80/ano)",
+    descricao: "A escolha mais inteligente e econômica para transformar a sua confeitaria com todos os recursos.",
     recursos: [
-      "Todas as funcionalidades do Plano Mensal",
-      "Scanner com IA + Conciliação Automática",
-      "Calendário & Histórico Permanente",
-      "Cardápio Digital & Agendamentos",
-      "Financeiro, DRE & Relatórios",
-      "Suporte Prioritário no WhatsApp",
+      "Escanear a Notinha com IA (Ilimitado)",
+      "Controlar pedidos de clientes (Calendário de Encomendas)",
+      "Controle financeiro dos pedidos e fluxo de caixa",
+      "Cardápio digital personalizado",
+      "Emissão de link de pagamento",
+      "Cobrança via cartão com o Stripe",
+      "Compartilhamento de conta com outro usuário",
     ],
     destaque: true,
     recomendado: true,
@@ -69,31 +67,45 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     nome: "Plano Básico (Gratuito)",
     precoMensal: 0,
     faturamento: "Gratuito para sempre",
-    descricao: "Para organizar as compras da sua confeitaria de forma simples.",
+    descricao: "Acesso exclusivo à Lista de Compras.",
     recursos: [
-      "Lista de Compras Interativa (Ilimitada)",
-      "Gestão de Múltiplas Listas Nomeadas",
-      "Vínculo de Clientes por Tags/Chips",
+      "Lista de Compras Interativa (Exclusiva)",
     ],
   },
   pro: {
     id: "mensal",
     nome: "Plano Mensal Completo",
-    precoMensal: 14.90,
-    faturamento: "R$ 14,90 / mês",
+    precoMensal: 19.90,
+    faturamento: "R$ 19,90 / mês",
     descricao: "Acesso total ilimitado.",
-    recursos: ["Todas as funcionalidades desbloqueadas"],
+    recursos: [
+      "Escanear a Notinha com IA (Ilimitado)",
+      "Controlar pedidos de clientes (Calendário de Encomendas)",
+      "Controle financeiro dos pedidos e fluxo de caixa",
+      "Cardápio digital personalizado",
+      "Emissão de link de pagamento",
+      "Cobrança via cartão com o Stripe",
+      "Compartilhamento de conta com outro usuário",
+    ],
     destaque: true,
   },
   ilimitado: {
     id: "anual",
     nome: "Plano Anual Completo",
     badge: "MELHOR CUSTO-BENEFÍCIO",
-    precoMensal: 10.90,
-    precoAnualTotal: 130.80,
-    faturamento: "12x R$ 10,90",
+    precoMensal: 14.90,
+    precoAnualTotal: 178.80,
+    faturamento: "12x R$ 14,90",
     descricao: "A maior economia.",
-    recursos: ["Todas as funcionalidades desbloqueadas com prioridade"],
+    recursos: [
+      "Escanear a Notinha com IA (Ilimitado)",
+      "Controlar pedidos de clientes (Calendário de Encomendas)",
+      "Controle financeiro dos pedidos e fluxo de caixa",
+      "Cardápio digital personalizado",
+      "Emissão de link de pagamento",
+      "Cobrança via cartão com o Stripe",
+      "Compartilhamento de conta com outro usuário",
+    ],
   },
 };
 
@@ -169,10 +181,13 @@ export function verificarAcessoModulo(
   modulo: "despesas" | "scanner" | "encomendas" | "produtos" | "financeiro",
   infoPlano: InfoPlanoEstabelecimento
 ): boolean {
-  // Usuários no plano gratuito DEVEM ter acesso total às abas 'Financeiro', 'Cardápio' (produtos) e 'Lista de Compras' (despesas)
-  if (modulo === "despesas" || modulo === "financeiro" || modulo === "produtos") return true;
+  // 1. O plano gratuito permite EXCLUSIVAMENTE a Lista de Compras ('despesas')
+  if (modulo === "despesas") return true;
 
+  // 2. No período de teste de 14 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
+
+  // 3. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado
   if (infoPlano.status === "ativo") {
     if (
       infoPlano.planoId === "mensal" ||
@@ -184,6 +199,7 @@ export function verificarAcessoModulo(
     }
   }
 
+  // 4. Caso contrário (Plano Gratuito / Básico ou trial expirado), bloqueia acesso
   return false;
 }
 
