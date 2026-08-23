@@ -145,7 +145,14 @@ function PublicStoreView() {
   };
 
   // Dados do Estabelecimento
-  const [storeInfo, setStoreInfo] = useState({
+  const [storeInfo, setStoreInfo] = useState<{
+    nome: string;
+    endereco: string;
+    whatsapp: string;
+    chavePix: string;
+    tipoChavePix: string;
+    user_id?: string;
+  }>({
     nome: "Confeitaria CaixaDoce",
     endereco: "Av. Principal, 1000 - Centro",
     whatsapp: "(11) 99999-9999",
@@ -192,14 +199,15 @@ function PublicStoreView() {
         const { data: estData } = await supabase
           .from("estabelecimentos")
           .select("*")
-          .eq("codigo", cleanCode)
-          .single();
+          .or(`codigo.eq.${cleanCode},estabelecimento_codigo.eq.${cleanCode}`)
+          .maybeSingle();
 
         if (estData) {
           setStoreInfo({
             nome: estData.nome,
             endereco: estData.endereco || ESTABELECIMENTO_PADRAO.endereco,
-            whatsapp: estData.whatsapp || ESTABELECIMENTO_PADRAO.whatsapp || "(11) 99999-9999",
+            whatsapp: estData.whatsapp || estData.telefone || ESTABELECIMENTO_PADRAO.whatsapp,
+            user_id: estData.user_id,
             chavePix: estData.chave_pix || estData.chavePix || "contato@caixadoce.com.br",
             tipoChavePix: estData.tipo_chave_pix || "email",
           });
@@ -374,18 +382,30 @@ function PublicStoreView() {
           {
             id: novaEncomenda.id,
             estabelecimento_codigo: cleanCode,
+            codigo: cleanCode,
+            store_id: cleanCode,
+            user_id: (storeInfo as any).user_id || null,
             cliente_nome: novaEncomenda.clienteNome,
+            customer_name: novaEncomenda.clienteNome,
             cliente_whatsapp: novaEncomenda.clienteWhatsapp,
+            customer_phone: novaEncomenda.clienteWhatsapp,
             data_entrega: novaEncomenda.dataEntrega,
+            delivery_date: novaEncomenda.dataEntrega,
             horario_entrega: novaEncomenda.horarioEntrega,
+            delivery_time: novaEncomenda.horarioEntrega,
             itens: novaEncomenda.itens,
             valor_total: novaEncomenda.valorTotal,
+            total_price: novaEncomenda.valorTotal,
             valor_entrada: novaEncomenda.valorEntrada,
             status_pagamento: novaEncomenda.statusPagamento,
+            payment_status: novaEncomenda.statusPagamento,
             status: novaEncomenda.status,
             tipo_entrega: novaEncomenda.tipoEntrega,
+            delivery_type: novaEncomenda.tipoEntrega,
             endereco_entrega: novaEncomenda.enderecoEntrega,
+            delivery_address: novaEncomenda.enderecoEntrega,
             observacoes: novaEncomenda.observacoes,
+            notes: novaEncomenda.observacoes,
           },
         ]);
       } catch (err) {

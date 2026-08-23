@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import {
   Card,
@@ -103,6 +104,30 @@ function CardapioLojaView() {
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
+
+  const [lojaInfo, setLojaInfo] = useState<{ whatsapp?: string; telefone?: string; user_id?: string; nome?: string } | null>(null);
+
+  useEffect(() => {
+    async function carregarDadosLoja() {
+      try {
+        const { data } = await supabase
+          .from("estabelecimentos")
+          .select("*")
+          .or(`codigo.eq.${code},estabelecimento_codigo.eq.${code}`)
+          .maybeSingle();
+
+        if (data) {
+          setLojaInfo({
+            whatsapp: data.whatsapp || data.telefone,
+            telefone: data.telefone || data.whatsapp,
+            user_id: data.user_id,
+            nome: data.nome,
+          });
+        }
+      } catch {}
+    }
+    carregarDadosLoja();
+  }, [code]);
 
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
   const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
@@ -221,12 +246,61 @@ function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
 
-  // Finalizar Encomenda (Pix no WhatsApp ou Cartão na Stripe)
+  // Finalizar Encomenda (Salvar no Supabase + WhatsApp/Stripe Dinâmico)
   const handleFinalizarPedido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteNome || !clienteWhatsapp || !dataEntrega || carrinho.length === 0) {
       toast.error("Preencha seu nome, WhatsApp e data para entrega.");
       return;
+    }
+
+    const pedidoId = crypto.randomUUID();
+    const resumoItensTexto = carrinho
+      .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
+      .join(", ");
+
+    const itensDetalhesJson = carrinho.map((item) => ({
+      id: item.produto.id,
+      nome: item.produto.nome,
+      quantidade: item.quantidade,
+      precoUnitario: item.produto.preco,
+      subtotal: item.produto.preco * item.quantidade,
+    }));
+
+    // 1. SALVAR O PEDIDO NA TABELA ORDERS DO SUPABASE
+    try {
+      await supabase.from("orders").insert([
+        {
+          id: pedidoId,
+          estabelecimento_codigo: code,
+          codigo: code,
+          store_id: code,
+          user_id: lojaInfo?.user_id || null,
+          cliente_nome: clienteNome,
+          customer_name: clienteNome,
+          cliente_whatsapp: clienteWhatsapp,
+          customer_phone: clienteWhatsapp,
+          data_entrega: dataEntrega,
+          delivery_date: dataEntrega,
+          horario_entrega: horarioEntrega || "15:00",
+          delivery_time: horarioEntrega || "15:00",
+          tipo_entrega: tipoEntrega,
+          delivery_type: tipoEntrega,
+          endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          delivery_address: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+          payment_status: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+          status: "pendente",
+          itens: resumoItensTexto,
+          itens_detalhes: itensDetalhesJson,
+          valor_total: totalCarrinho,
+          total_price: totalCarrinho,
+          observacoes: observacoes || "",
+          notes: observacoes || "",
+        },
+      ]);
+    } catch (err) {
+      console.warn("Aviso ao salvar pedido publico no Supabase:", err);
     }
 
     if (metodoPagamento === "cartao") {
@@ -247,7 +321,7 @@ function CardapioLojaView() {
           stripeAccountId: stripeConfig.accountId,
         });
 
-        toast.success(`Sessão de pagamento no cartão criada! Total: ${feeResult.formattedTotalAmount} (${feeResult.installments}x de ${feeResult.formattedInstallmentValue})`);
+        toast.success(`Sessão no cartão criada! Total: ${feeResult.formattedTotalAmount}`);
         setTimeout(() => {
           window.open(session.checkoutUrl, "_blank");
         }, 800);
@@ -273,20 +347,21 @@ function CardapioLojaView() {
 Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
 
 👤 *Cliente:* ${clienteNome}
-📱 *WhatsApp:* ${clienteWhatsapp}
+📱 *WhatsApp do Cliente:* ${clienteWhatsapp}
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
 📍 *Modalidade:* ${modalidade}
 💳 *Pagamento:* Pix Direto (Sem taxa)
-${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
-🛒 *Itens do Pedido:*
+${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
 ${resumoItens}
 
 💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}
 
-Poderia confirmar a disponibilidade e a chave Pix para o sinal? Muito obrigado(a)!`;
+Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`;
 
-    const url = `https://wa.me/5511999999999?text=${encodeURIComponent(msg)}`;
+    const numTarget = lojaInfo?.whatsapp || lojaInfo?.telefone || "";
+    const url = formatarWhatsappLink(numTarget, msg);
+
     if (typeof window !== "undefined") {
       window.open(url, "_blank");
     }
