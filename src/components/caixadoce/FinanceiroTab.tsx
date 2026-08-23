@@ -385,31 +385,6 @@ export function FinanceiroTab({
     }
   };
 
-  const exportarCSV = () => {
-    if (transacoesFiltradas.length === 0) {
-      toast.error("Nenhuma transação para exportar.");
-      return;
-    }
-
-    const header = "Data;Descrição;Tipo;Categoria;Valor;Método;Status;Contato\n";
-    const rows = transacoesFiltradas
-      .map(
-        (t) =>
-          `${t.data};"${t.descricao}";${t.tipo};"${t.categoria}";${t.valor.toFixed(2)};${t.metodoPagamento};${t.status};"${t.clienteOuFornecedor || ""}"`
-      )
-      .join("\n");
-
-    const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `caixadoce_relatorio_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Relatório CSV exportado com sucesso!");
-  };
-
   return (
     <div className="space-y-6">
       {/* Header Actions */}
@@ -420,11 +395,7 @@ export function FinanceiroTab({
             Controle de entradas, saídas, emissão de comprovantes e fluxo de vendas.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportarCSV}>
-            <Download className="w-4 h-4 mr-1.5" />
-            Exportar CSV
-          </Button>
+        <div>
           <Button onClick={() => setModalNovaTransacao(true)} className="font-semibold shadow-md">
             <Plus className="w-4 h-4 mr-1.5" />
             Novo Lançamento
