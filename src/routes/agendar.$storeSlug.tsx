@@ -56,6 +56,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
   ESTABELECIMENTO_PADRAO,
+  generatePixPayload,
   type ProdutoCardapio,
   type DataBloqueada,
   type Encomenda,
@@ -464,9 +465,17 @@ function PublicStoreView() {
 
   const handleCopiarPix = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(storeInfo.chavePix);
+      const pixPayload = generatePixPayload({
+        pixKey: storeInfo.chavePix,
+        merchantName: storeInfo.nome || "CaixaDoce",
+        merchantCity: (storeInfo as any).cidade || "SAO PAULO",
+        amount: totalCarrinho > 0 ? totalCarrinho : undefined,
+        txid: `PED${Date.now().toString().slice(-8)}`,
+      });
+
+      navigator.clipboard.writeText(pixPayload || storeInfo.chavePix);
       setPixCopiado(true);
-      toast.success("Chave Pix copiada!");
+      toast.success("Código Pix Copia e Cola copiado com sucesso!");
       setTimeout(() => setPixCopiado(false), 2500);
     }
   };

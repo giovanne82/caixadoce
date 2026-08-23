@@ -1030,15 +1030,35 @@ export function formatarWhatsappLink(whatsapp: string, mensagem?: string): strin
   return `https://wa.me/${formattedPhone}${textEncoded ? `?text=${textEncoded}` : ""}`;
 }
 
+import { generatePixPayload } from "./pix-utils";
+
+export { generatePixPayload, calculateCRC16, formatPixKey } from "./pix-utils";
+
+export interface DadosLojaPix {
+  nomeLoja?: string;
+  chavePix?: string;
+  cidadeLoja?: string;
+}
+
 /**
  * Gera mensagem formatada e elegante com o resumo do pedido para enviar ao cliente no WhatsApp
  */
-export function gerarMensagemResumoWhatsApp(encomenda: Encomenda, nomeLoja?: string): string {
+export function gerarMensagemResumoWhatsApp(
+  encomenda: Encomenda,
+  dadosLoja?: string | DadosLojaPix
+): string {
+  const nomeLoja = typeof dadosLoja === "string" ? dadosLoja : dadosLoja?.nomeLoja || "CaixaDoce";
+  const chavePix = typeof dadosLoja === "object" ? dadosLoja?.chavePix : undefined;
+  const cidade = typeof dadosLoja === "object" ? dadosLoja?.cidadeLoja : undefined;
+
   const dataFormatada = encomenda.dataEntrega.split("-").reverse().join("/");
   const hora = encomenda.horarioEntrega || "14:00";
+  const totalPago = calcularTotalPagoEncomenda(encomenda);
+  const saldoRestanteNum = Math.max(0, encomenda.valorTotal - totalPago);
+
   const valorTotal = formatarMoeda(encomenda.valorTotal);
-  const sinalPago = formatarMoeda(encomenda.valorEntrada || 0);
-  const saldoRestante = formatarMoeda(Math.max(0, encomenda.valorTotal - (encomenda.valorEntrada || 0)));
+  const sinalPago = formatarMoeda(totalPago);
+  const saldoRestante = formatarMoeda(saldoRestanteNum);
   const modalidade = encomenda.tipoEntrega === "delivery" ? `🚚 Entrega / Delivery (${encomenda.enderecoEntrega || "A combinar"})` : "🏬 Retirada no Balcão";
 
   let itensTexto = encomenda.itens;
@@ -1046,7 +1066,28 @@ export function gerarMensagemResumoWhatsApp(encomenda: Encomenda, nomeLoja?: str
     itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
   }
 
-  return `✨ *Confirmação de Encomenda - ${nomeLoja || "CaixaDoce"}* ✨
+  // Gera o Pix Copia e Cola se houver chave Pix e valor devido
+  let blocoPix = "";
+  const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
+
+  if (chavePix && chavePix.trim().length > 0 && valorParaPix > 0) {
+    try {
+      const pixPayload = generatePixPayload({
+        pixKey: chavePix,
+        merchantName: nomeLoja,
+        merchantCity: cidade || "SAO PAULO",
+        amount: valorParaPix,
+        txid: (encomenda.id || "ORDER").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20),
+        description: `Encomenda ${encomenda.clienteNome.slice(0, 15)}`,
+      });
+
+      if (pixPayload) {
+        blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}\n\n🔗 *Pix Copia e Cola:*\n\`\`\`\n${pixPayload}\n\`\`\``;
+      }
+    } catch {}
+  }
+
+  return `✨ *Confirmação de Encomenda - ${nomeLoja}* ✨
 
 Olá, *${encomenda.clienteNome}*! Seu pedido foi registrado com sucesso. Seguem os detalhes:
 
@@ -1057,8 +1098,8 @@ ${itensTexto}
 📍 *Modalidade:* ${modalidade}
 ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : ""}
 💰 *Valor Total:* ${valorTotal}
-💳 *Sinal Pago:* ${sinalPago}
-💵 *Saldo Restante:* ${saldoRestante}
+💳 *Total Pago:* ${sinalPago}
+💵 *Saldo Restante:* ${saldoRestante}${blocoPix}
 
 Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
 }

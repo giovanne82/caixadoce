@@ -56,6 +56,7 @@ import {
   formatarBadgeDisponibilidadeProduto,
   validarDataEntrega,
   validarHorarioEntrega,
+  generatePixPayload,
   type ProdutoCardapio,
 } from "@/lib/caixadoce-data";
 import {
@@ -116,6 +117,8 @@ function CardapioLojaView() {
     menu_title?: string;
     slogan_cardapio?: string;
     menu_slogan?: string;
+    chavePix?: string;
+    cidade?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -168,6 +171,8 @@ function CardapioLojaView() {
             menu_title: estData.menu_title || estData.titulo_cardapio,
             slogan_cardapio: estData.slogan_cardapio || estData.menu_slogan,
             menu_slogan: estData.menu_slogan || estData.slogan_cardapio,
+            chavePix: estData.chave_pix || estData.chavePix || "contato@caixadoce.com.br",
+            cidade: estData.cidade || "SAO PAULO",
           });
         }
       } catch (err) {
@@ -390,6 +395,24 @@ function CardapioLojaView() {
       ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
       : "🏬 Retirada no Balcão";
 
+    let blocoPix = "";
+    if (lojaInfo?.chavePix && totalCarrinho > 0) {
+      try {
+        const pixPayload = generatePixPayload({
+          pixKey: lojaInfo.chavePix,
+          merchantName: lojaInfo.nome || "CaixaDoce",
+          merchantCity: (lojaInfo as any).cidade || "SAO PAULO",
+          amount: totalCarrinho,
+          txid: `PED${Date.now().toString().slice(-8)}`,
+          description: `Pedido ${clienteNome.slice(0, 15)}`,
+        });
+
+        if (pixPayload) {
+          blocoPix = `\n\n🔗 *Pix Copia e Cola:*\n\`\`\`\n${pixPayload}\n\`\`\``;
+        }
+      } catch {}
+    }
+
     const msg = `🎂 *NOVO PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
 
 Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
@@ -403,7 +426,7 @@ Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
 ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
 ${resumoItens}
 
-💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}
+💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}${blocoPix}
 
 Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`;
 

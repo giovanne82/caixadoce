@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/auth-context";
 import {
   Card,
   CardContent,
@@ -151,6 +152,7 @@ export function OrdersView({
   onDesbloquearData,
   onCriarClienteRapido,
 }: OrdersViewProps) {
+  const { profile } = useAuth();
   // Modos de Visualização: 'lista' | 'semana' | 'mes' | 'compras'
   const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("lista");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -613,7 +615,11 @@ export function OrdersView({
       return;
     }
 
-    const mensagem = gerarMensagemResumoWhatsApp(ord, estabelecimentoNome);
+    const mensagem = gerarMensagemResumoWhatsApp(ord, {
+      nomeLoja: estabelecimentoNome || profile?.establishmentName || "CaixaDoce",
+      chavePix: profile?.chavePix || "contato@caixadoce.com.br",
+      cidadeLoja: profile?.cidade || "SAO PAULO",
+    });
     const url = formatarWhatsappLink(ord.clienteWhatsapp, mensagem);
     if (typeof window !== "undefined") {
       window.open(url, "_blank");
