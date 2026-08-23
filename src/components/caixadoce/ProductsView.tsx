@@ -231,8 +231,8 @@ export function ProductsView({
         toast.success("Novo produto adicionado ao cardápio!");
       }
       setModalProdutoOpen(false);
-    } catch {
-      toast.error("Erro ao salvar produto.");
+    } catch (err: any) {
+      console.error("Erro ao salvar produto no banco de dados:", err);
     }
   };
 

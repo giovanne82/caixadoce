@@ -441,11 +441,11 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 5. Carrega Produtos do Cardápio (Products)
+  // 5. Carrega Produtos do Cardápio (Tabela Oficial produtos)
   const fetchProdutos = useCallback(async () => {
     if (!profile) return;
     try {
-      const data = await safeFetchSupabase("products", activeCode, "name", true);
+      const data = await safeFetchSupabase("produtos", activeCode, "nome", true);
 
       if (!data || data.length === 0) {
         const raw = localStorage.getItem(`caixadoce_cardapio_${activeCode}`);
@@ -458,18 +458,21 @@ function Index() {
       } else {
         const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
           id: String(p.id),
-          estabelecimentoCodigo: p.estabelecimento_codigo,
-          nome: p.name,
-          descricao: p.description,
-          preco: Number(p.price),
-          fotoUrl: p.image_url,
-          categoria: p.category,
+          estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || activeCode,
+          nome: p.nome || p.name,
+          descricao: p.descricao || p.description || "",
+          preco: Number(p.preco ?? p.price ?? 0),
+          fotoUrl: p.foto_url || p.image_url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+          categoria: p.categoria || p.category || "Bolos Decorados",
           destaque: false,
-          tempoPreparoHoras: p.prep_time_hours || 24,
-          ativo: p.is_active !== false,
+          tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
+          ativo: (p.ativo ?? p.is_active) !== false,
           createdAt: p.created_at,
         }));
         setProdutos(mapeados);
+        try {
+          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(mapeados));
+        } catch {}
       }
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
@@ -552,6 +555,25 @@ function Index() {
     };
   }, [profile, fetchEncomendasECalendario]);
 
+  // Listener em tempo real do Supabase para Produtos do Cardápio
+  useEffect(() => {
+    if (!profile) return;
+    const channel = supabase
+      .channel("produtos_realtime_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "produtos" },
+        () => {
+          fetchProdutos();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile, fetchProdutos]);
+
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const novo: Cliente = {
@@ -616,7 +638,7 @@ function Index() {
     }
   };
 
-  // Handlers de Produtos
+  // Handlers de Produtos (Tabela Oficial produtos)
   const criarProduto = async (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const novo: ProdutoCardapio = {
       ...dados,
@@ -625,56 +647,94 @@ function Index() {
       createdAt: new Date().toISOString(),
     };
 
+    // 1. Enviar para o Supabase PRIMEIRO
+    const { error } = await supabase.from("produtos").insert([
+      {
+        id: novo.id,
+        user_id: user?.id || null,
+        estabelecimento_codigo: activeCode,
+        codigo: activeCode,
+        store_id: activeCode,
+        nome: novo.nome,
+        name: novo.nome,
+        descricao: novo.descricao,
+        description: novo.descricao,
+        preco: novo.preco,
+        price: novo.preco,
+        foto_url: novo.fotoUrl,
+        image_url: novo.fotoUrl,
+        categoria: novo.categoria,
+        category: novo.categoria,
+        ativo: novo.ativo !== false,
+        is_active: novo.ativo !== false,
+        tempo_preparo_horas: novo.tempoPreparoHoras || 24,
+        prep_time_hours: novo.tempoPreparoHoras || 24,
+      },
+    ]);
+
+    if (error) {
+      console.error("[Supabase Error] Falha ao criar produto:", error);
+      toast.error(`Falha ao salvar produto no banco: ${error.message || "Erro de conexão"}`);
+      throw error; // Interrompe a submissão para não fechar o formulário nem atualizar o estado local
+    }
+
+    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
     const atualizados = [novo, ...produtos];
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      await supabase.from("products").insert([
-        {
-          id: novo.id,
-          estabelecimento_codigo: activeCode,
-          name: novo.nome,
-          description: novo.descricao,
-          price: novo.preco,
-          image_url: novo.fotoUrl,
-          category: novo.categoria,
-          is_active: novo.ativo !== false,
-          prep_time_hours: novo.tempoPreparoHoras || 24,
-        },
-      ]);
-    } catch (e) {
-      console.warn("Aviso ao salvar produto:", e);
-    }
+    } catch {}
   };
 
   const editarProduto = async (id: string, dados: Partial<ProdutoCardapio>) => {
+    // 1. Atualizar no Supabase PRIMEIRO
+    const { error } = await supabase
+      .from("produtos")
+      .update({
+        nome: dados.nome,
+        name: dados.nome,
+        descricao: dados.descricao,
+        description: dados.descricao,
+        preco: dados.preco,
+        price: dados.preco,
+        foto_url: dados.fotoUrl,
+        image_url: dados.fotoUrl,
+        categoria: dados.categoria,
+        category: dados.categoria,
+        ativo: dados.ativo,
+        is_active: dados.ativo,
+        tempo_preparo_horas: dados.tempoPreparoHoras,
+        prep_time_hours: dados.tempoPreparoHoras,
+      })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[Supabase Error] Falha ao editar produto:", error);
+      toast.error(`Falha ao atualizar produto no banco: ${error.message || "Erro de conexão"}`);
+      throw error; // Interrompe a submissão
+    }
+
+    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
     const atualizados = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p));
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      await supabase
-        .from("products")
-        .update({
-          name: dados.nome,
-          description: dados.descricao,
-          price: dados.preco,
-          image_url: dados.fotoUrl,
-          category: dados.categoria,
-          is_active: dados.ativo,
-          prep_time_hours: dados.tempoPreparoHoras,
-        })
-        .eq("id", id);
-    } catch (e) {
-      console.warn("Aviso ao editar produto:", e);
-    }
+    } catch {}
   };
 
   const excluirProduto = async (id: string) => {
+    const { error } = await supabase.from("produtos").delete().eq("id", id);
+
+    if (error) {
+      console.error("[Supabase Error] Falha ao excluir produto:", error);
+      toast.error(`Falha ao remover produto do banco: ${error.message}`);
+      return;
+    }
+
     const atualizados = produtos.filter((p) => p.id !== id);
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      await supabase.from("products").delete().eq("id", id);
     } catch {}
     toast.success("Produto removido do cardápio.");
   };
