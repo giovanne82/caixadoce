@@ -2683,9 +2683,27 @@ export function OrdersView({
                 <Package className="w-5 h-5 text-primary" /> Detalhes do Pedido
               </span>
               {encomendaDetalhes && (
-                <Badge className={STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.color || "bg-amber-500"}>
-                  {STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.label || "Pendente"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const target = encomendaDetalhes;
+                      setModalDetalhesOpen(false);
+                      if (target) {
+                        handleAbrirEdicao(target);
+                      }
+                    }}
+                    title="Editar esta encomenda"
+                    className="h-7 px-2 text-xs font-bold text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40 border border-purple-200"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar
+                  </Button>
+                  <Badge className={STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.color || "bg-amber-500"}>
+                    {STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.label || "Pendente"}
+                  </Badge>
+                </div>
               )}
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -2820,10 +2838,30 @@ export function OrdersView({
             </div>
           )}
 
-          <DialogFooter className="pt-2 border-t flex justify-between">
-            <Button type="button" variant="outline" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
-              Fechar Detalhes
-            </Button>
+          <DialogFooter className="pt-2 border-t flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
+                Fechar
+              </Button>
+              {encomendaDetalhes && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const target = encomendaDetalhes;
+                    setModalDetalhesOpen(false);
+                    if (target) {
+                      handleAbrirEdicao(target);
+                    }
+                  }}
+                  className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/40"
+                >
+                  <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar Pedido
+                </Button>
+              )}
+            </div>
+
             {encomendaDetalhes && (
               <Button
                 type="button"
