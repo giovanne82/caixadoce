@@ -148,8 +148,8 @@ export function OrdersView({
   onDesbloquearData,
   onCriarClienteRapido,
 }: OrdersViewProps) {
-  // Modos de Visualização: 'mes' | 'semana' | 'lista' | 'compras'
-  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("mes");
+  // Modos de Visualização: 'lista' | 'semana' | 'mes' | 'compras'
+  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("lista");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
   // Aba dentro da Lista de Compras: 'hoje' | 'semana' | 'encomenda'
@@ -755,12 +755,12 @@ export function OrdersView({
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto">
           <Button
-            variant={viewMode === "mes" ? "default" : "ghost"}
+            variant={viewMode === "lista" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setViewMode("mes")}
+            onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Mensal
+            Lista Completa
           </Button>
           <Button
             variant={viewMode === "semana" ? "default" : "ghost"}
@@ -771,12 +771,12 @@ export function OrdersView({
             Semanal
           </Button>
           <Button
-            variant={viewMode === "lista" ? "default" : "ghost"}
+            variant={viewMode === "mes" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setViewMode("lista")}
+            onClick={() => setViewMode("mes")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Lista Completa
+            Mensal
           </Button>
           <Button
             variant={viewMode === "compras" ? "default" : "ghost"}
