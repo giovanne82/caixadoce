@@ -1987,10 +1987,10 @@ export function OrdersView({
       {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA */}
       {/* ========================================================================= */}
       <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl sm:w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-3 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground">
-              <CalendarDays className="w-5 h-5 text-primary" />
+            <DialogTitle className="flex items-center gap-2 text-foreground text-base sm:text-lg">
+              <CalendarDays className="w-5 h-5 text-primary shrink-0" />
               {editingId ? "Editar Encomenda" : "Cadastrar Nova Encomenda"}
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -2076,15 +2076,15 @@ export function OrdersView({
               </div>
             </div>
 
-            <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative">
+            <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20 relative w-full overflow-hidden">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Cake className="w-3.5 h-3.5 text-primary" /> Itens do Pedido (Produtos / Doces) *
+                  <Cake className="w-3.5 h-3.5 text-primary shrink-0" /> Itens do Pedido (Produtos / Doces) *
                 </Label>
                 <span className="text-[10px] text-muted-foreground">{itensTags.length} item(ns) selecionado(s)</span>
               </div>
 
-              <div className="flex flex-col gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border divide-y divide-border/40 w-full">
+              <div className="flex flex-col gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border divide-y divide-border/40 w-full overflow-hidden">
                 {itensTags.length === 0 ? (
                   <span className="text-[11px] text-muted-foreground italic p-2">
                     Nenhum produto adicionado. Digite abaixo para selecionar do cardápio.
@@ -2100,14 +2100,14 @@ export function OrdersView({
                     return (
                       <div
                         key={it.id}
-                        className="flex items-center justify-between gap-3 py-2 px-3 bg-muted/20 hover:bg-muted/40 rounded-xl transition-colors w-full"
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 sm:px-3 bg-muted/20 hover:bg-muted/40 rounded-xl transition-colors w-full overflow-hidden"
                       >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 w-full sm:flex-1 min-w-0">
                           <Cake className="w-4 h-4 text-primary shrink-0" />
                           <span className="font-bold text-xs text-foreground truncate">{it.nome}</span>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 pt-1.5 sm:pt-0 border-t border-border/30 sm:border-t-0">
                           <div className="flex items-center gap-1 bg-background px-2 py-1 rounded-lg border border-input shadow-2xs">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase">Qtd:</span>
                             <input
@@ -2132,7 +2132,7 @@ export function OrdersView({
                             />
                           </div>
 
-                          <div className="text-right min-w-[90px]">
+                          <div className="text-right min-w-[80px] sm:min-w-[90px]">
                             {precoUnit > 0 ? (
                               <div>
                                 <div className="text-xs font-extrabold text-purple-700 dark:text-purple-300">
