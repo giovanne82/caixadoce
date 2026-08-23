@@ -321,45 +321,7 @@ function Index() {
     try {
       const data = await safeFetchSupabase("despesas", activeCode, "created_at", false);
 
-      let localItems: DespesaNotaFiscal[] = [];
-      try {
-        const raw = localStorage.getItem(`caixadoce_expenses_${activeCode}`);
-        if (raw) localItems = JSON.parse(raw);
-      } catch {}
-
-      // Migra notinhas que estavam gravadas localmente no localStorage para o Supabase
-      if (localItems.length > 0 && Array.isArray(data)) {
-        const remoteIds = new Set(data.map((d: any) => String(d.id)));
-        const pendentes = localItems.filter((it) => !remoteIds.has(String(it.id)));
-
-        if (pendentes.length > 0) {
-          for (const item of pendentes) {
-            try {
-              await supabase.from("despesas").insert([
-                {
-                  id: item.id,
-                  estabelecimento_codigo: activeCode,
-                  user_id: user?.id || null,
-                  fornecedor_nome: item.fornecedorNome,
-                  fornecedor_endereco: item.fornecedorEndereco,
-                  numero_nota: item.numeroNota,
-                  numero_pedido: item.numeroPedido,
-                  data_compra: item.dataCompra,
-                  hora_compra: item.horaCompra,
-                  valor_total: item.valorTotal,
-                  valor_producao: item.valorProducao,
-                  valor_utensilios: item.valorUtensilios,
-                  valor_consumo_proprio: item.valorConsumoProprio,
-                  valor_outros: item.valorOutros,
-                  itens: item.itens,
-                },
-              ]);
-            } catch {}
-          }
-        }
-      }
-
-      if (data.length > 0) {
+      if (data && Array.isArray(data)) {
         const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo || d.codigo || activeCode,
@@ -388,18 +350,11 @@ function Index() {
 
         setDespesas(mapeadas);
         localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(mapeadas));
-      } else {
-        localItems.sort((a, b) => {
-          const dateA = new Date(a.createdAt || a.dataCompra || 0).getTime();
-          const dateB = new Date(b.createdAt || b.dataCompra || 0).getTime();
-          return dateB - dateA;
-        });
-        setDespesas(localItems);
       }
     } catch (err) {
       console.error("Erro ao carregar despesas:", err);
     }
-  }, [activeCode, profile, safeFetchSupabase, user]);
+  }, [activeCode, profile, safeFetchSupabase]);
 
   // 4. Carrega Clientes (Customers)
   const fetchClientes = useCallback(async () => {
