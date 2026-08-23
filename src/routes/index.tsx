@@ -990,8 +990,28 @@ function Index() {
                 </div>
               </div>
 
-              {/* Bloco Direita: Botões de Ação Fixados (Notificações, Trocar Loja, Sair) */}
-              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {/* Bloco Direita: Botões de Ação Fixados (Planos, Notificações, Trocar Loja, Sair) */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab("plano")}
+                  title="Assinatura & Meu Plano"
+                  className="h-8 px-2 sm:px-3 text-xs text-[#6D28D9] hover:text-purple-900 bg-purple-100/80 hover:bg-purple-200/80 border border-purple-200 shrink-0 font-extrabold"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-500 sm:mr-1" />
+                  <span className="hidden sm:inline">
+                    {infoPlano.status === "trial"
+                      ? `Teste Pro (${infoPlano.diasRestantesTrial || 14}d)`
+                      : infoPlano.planoId === "basico"
+                      ? "Plano Básico"
+                      : "Plano Pro"}
+                  </span>
+                  <span className="sm:hidden text-[10px]">
+                    {infoPlano.planoId === "basico" ? "Básico" : "Pro"}
+                  </span>
+                </Button>
+
                 <NotificationBell
                   transacoes={transacoes}
                   despesas={despesas}
@@ -1160,7 +1180,7 @@ function Index() {
 
           {/* 7. Configurações & Perfil (com sub-aba Equipe & Acessos) */}
           <TabsContent value="config">
-            <ConfiguracoesTab />
+            <ConfiguracoesTab onIrParaPlano={() => setActiveTab("plano")} />
           </TabsContent>
 
           {/* 8. Meu Plano (Stripe) — Último Item */}

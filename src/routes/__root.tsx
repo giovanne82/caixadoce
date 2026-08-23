@@ -80,17 +80,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CaixaDoce — Gestão Financeira, Vendas e Assinaturas" },
-      { name: "description", content: "Sistema moderno e completo para gestão de fluxo de caixa, pagamentos e equipe." },
-      { name: "author", content: "CaixaDoce" },
+      { title: "Caixa Doce" },
+      { name: "application-name", content: "Caixa Doce" },
+      { name: "apple-mobile-web-app-title", content: "Caixa Doce" },
+      { name: "theme-color", content: "#7C3AED" },
+      { name: "description", content: "Sistema inteligente para gestão de confeitaria e vendas online." },
+      { name: "author", content: "Caixa Doce" },
       { property: "og:type", content: "website" },
-      { property: "og:title", content: "CaixaDoce — Gestão Financeira Inteligente" },
+      { property: "og:title", content: "Caixa Doce" },
       {
         property: "og:description",
-        content: "Controle financeiro, recebimentos via Pix e Cartão, relatórios e gestão completa.",
+        content: "Gestão inteligente de compras, receitas, cardápio e vendas online para confeitaria.",
       },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.json" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -103,6 +107,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/logocaixadoce.png", type: "image/png" },
       { rel: "shortcut icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/logocaixadoce.png" },
     ],
   }),
 

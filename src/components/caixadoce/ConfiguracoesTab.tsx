@@ -37,6 +37,7 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   Clock,
+  Crown,
   Plus,
   Check,
   X,
@@ -47,8 +48,13 @@ import {
   formatarCpfCnpj,
   formatarCep,
 } from "@/lib/caixadoce-data";
+import { obterPlanoEfetivoEstabelecimento } from "@/lib/planos-utils";
 
-export function ConfiguracoesTab() {
+interface ConfiguracoesTabProps {
+  onIrParaPlano?: () => void;
+}
+
+export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const {
     user,
     profile,
@@ -228,6 +234,48 @@ export function ConfiguracoesTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* CARD / BANNER DEDICADO: MEU PLANO & ASSINATURA */}
+      {(() => {
+        const infoPlano = obterPlanoEfetivoEstabelecimento(activeCode);
+        return (
+          <Card className="border-purple-200 bg-gradient-to-r from-purple-50/80 via-pink-50/60 to-purple-50/80 shadow-sm">
+            <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                  <Crown className="w-5 h-5 text-amber-300" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Assinatura &amp; Meu Plano</h4>
+                    <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                      {infoPlano.status === "trial"
+                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 14} dias restantes)`
+                        : infoPlano.planoId === "basico"
+                        ? "Plano Básico Gratuito"
+                        : "Plano Pro Ativo"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    {infoPlano.planoId === "basico"
+                      ? "Você está usando o Plano Básico. Faça upgrade para o Plano Pro e libere o scanner por IA ilimitado."
+                      : "Acesso ilimitado liberado para leitura por IA, pagamentos online e agendamento de encomendas."}
+                  </p>
+                </div>
+              </div>
+              {onIrParaPlano && (
+                <Button
+                  type="button"
+                  onClick={onIrParaPlano}
+                  className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md rounded-xl shrink-0"
+                >
+                  <Crown className="w-4 h-4 mr-1.5 text-amber-300" /> Gerenciar Assinatura
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <Tabs defaultValue="empresa" className="space-y-6">
         <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-2">

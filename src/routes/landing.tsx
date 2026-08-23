@@ -25,7 +25,7 @@ import { formatarMoeda } from "@/lib/caixadoce-data";
 export const Route = createFileRoute("/landing")({
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Gestão Inteligente para Confeitaria" },
+      { title: "Caixa Doce" },
       {
         name: "description",
         content:
