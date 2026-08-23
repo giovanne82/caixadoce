@@ -34,6 +34,7 @@ import {
   FileText,
   MessageCircle,
   Eye,
+  RefreshCw,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -53,6 +54,7 @@ interface ScannerViewProps {
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
   onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
   onExcluirDespesa?: (id: string) => Promise<void>;
+  onReenviarFinanceiro?: (despesa: DespesaNotaFiscal) => Promise<void>;
   onConciliarInsumos?: (conciliacoes: { encomendaId: string; insumoId: string }[]) => Promise<void>;
   onConciliarListasCompras?: (listaIds: string[], itensNota: ItemNotaFiscal[]) => Promise<void>;
 }
@@ -62,6 +64,7 @@ export function ScannerView({
   onSalvarDespesa,
   onEditarDespesa,
   onExcluirDespesa,
+  onReenviarFinanceiro,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -374,6 +377,21 @@ export function ScannerView({
                     </TableCell>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onReenviarFinanceiro) {
+                              onReenviarFinanceiro(d);
+                            }
+                          }}
+                          className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center transition-colors"
+                          title="Reenviar para o Financeiro"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"

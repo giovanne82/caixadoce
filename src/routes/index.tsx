@@ -1057,6 +1057,47 @@ function Index() {
     toast.success("Notinha e lançamento financeiro em cascata excluídos com sucesso!");
   };
 
+  const reenviarFinanceiro = async (despesa: DespesaNotaFiscal) => {
+    const descMatch = `Compra Insumos / Notinha - ${despesa.fornecedorNome}`;
+
+    try {
+      const { data, error } = await supabase
+        .from("transacoes_financeiras")
+        .select("*")
+        .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${despesa.fornecedorNome}`);
+
+      const existeRemoto = !error && Array.isArray(data) && data.length > 0;
+      const existeLocal = transacoes.some(
+        (t) => t.descricao === descMatch || t.clienteOuFornecedor === despesa.fornecedorNome
+      );
+
+      if (existeRemoto || existeLocal) {
+        toast.info("Essa notinha já está registrada no seu financeiro. ℹ️");
+        return;
+      }
+
+      const custoEmpresa =
+        despesa.valorProducao + despesa.valorUtensilios + despesa.valorOutros > 0
+          ? despesa.valorProducao + despesa.valorUtensilios + despesa.valorOutros
+          : despesa.valorTotal;
+
+      await adicionarTransacao({
+        descricao: descMatch,
+        valor: custoEmpresa,
+        tipo: "despesa",
+        categoria: "Insumos & Ingredientes (Produção)",
+        data: despesa.dataCompra ? despesa.dataCompra.split("-").reverse().join("/") : new Date().toLocaleDateString("pt-BR"),
+        metodoPagamento: despesa.metodoPagamento || "pix",
+        status: "concluida",
+        clienteOuFornecedor: despesa.fornecedorNome,
+      });
+
+      toast.success("Notinha enviada para o financeiro com sucesso! 🎉");
+    } catch (err: any) {
+      toast.error(`Erro ao reenviar notinha para o financeiro: ${err.message || err}`);
+    }
+  };
+
   const editarDespesa = async (id: string, dados: Partial<DespesaNotaFiscal>) => {
     const updatePayload: any = {};
     if (dados.fornecedorNome !== undefined) updatePayload.fornecedor_nome = dados.fornecedorNome;
@@ -1285,6 +1326,7 @@ function Index() {
                 onSalvarDespesa={salvarDespesa}
                 onEditarDespesa={editarDespesa}
                 onExcluirDespesa={excluirDespesa}
+                onReenviarFinanceiro={reenviarFinanceiro}
                 onConciliarInsumos={conciliarInsumos}
               />
             ) : (
