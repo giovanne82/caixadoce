@@ -259,7 +259,108 @@ export interface InsumoCatalogo {
   unidadePadrao?: string;
 }
 
-export const LISTA_SUGESTOES_INSUMOS: string[] = [
+export const NOVOS_INSUMOS_SEED: string[] = [
+  "Cobertura Harald Confeiteiro Ao Leite",
+  "Cobertura Harald Confeiteiro Blend",
+  "Cobertura Harald Confeiteiro Branco",
+  "Cobertura Harald Confeiteiro Meio Amargo",
+  "Chocolate em pó 50% Melken",
+  "Chocolate em pó 33% Melken",
+  "Chocolate em pó 50% SICAO",
+  "Chocolate em pó 100% SICAO",
+  "Chocolate em pó 100% Melken",
+  "Brigadeiro Melken",
+  "Brigadeiro Alispec",
+  "Beijinho Melken",
+  "Beijinho Alispec",
+  "Cobertura CMC Arcolor",
+  "Castanha de Caju G2T Grossa",
+  "Coco Ralado",
+  "Coco Flocos",
+  "Leite em pó Integral Itambé",
+  "Leite em pó Ninho",
+  "Pão de ló",
+  "Super Liga Neutra",
+  "Emustab",
+  "Papel Manteiga",
+  "Papel Alumínio",
+  "Touca TNT",
+  "Luva Descartável",
+  "Luva Vinil",
+  "Lava Nitrílica",
+  "Kit Pote Quadrado Prafesta 250ml",
+  "Kit Pote Redondo 120ml",
+  "Kit Pote Redondo 200ml",
+  "Kit Pote Redondo 250ml",
+  "Kit Pote Redondo 300ml",
+  "Kit Pote Redondo 350ml",
+  "Kit Pote Redondo 500ml",
+  "Kit Pote Redondo 750ml",
+  "Kit Pote Redondo 1000ml",
+  "Palito Pequeno N9 BWB",
+  "Palito Médio N14 BWB",
+  "Palito Grande N28 BWB",
+  "Palito Pirulito",
+  "Espeto Golf",
+  "Palito de Churrasco",
+  "Cola Quente",
+  "Cola Adesivo",
+  "Fio de Nylon",
+  "Cola Artesanato",
+  "Fita Dupla Face",
+  "Emulsão Saborizante",
+  "Isopor Bolo Fake 10cm",
+  "Isopor Bolo Fake 15cm",
+  "Isopor Bolo Fake 20cm",
+  "Isopor Bolo Fake 25cm",
+  "Isopor Bolo Fake 30cm",
+  "Isopor Bolo Fake 35cm",
+  "Isopor Bolo Fake 40cm",
+  "Cone Isopor",
+  "Caixa de Salgado 20cm",
+  "Caixa de Salgado 25cm",
+  "Caixa de Salgado 30cm",
+  "Caixa de Salgado 35cm",
+  "Caixa de Salgado 40cm",
+  "Caixa de Pizza 20cm",
+  "Caixa de Pizza 25cm",
+  "Caixa de Pizza 30cm",
+  "Caixa de Pizza 35cm",
+  "Caixa de Pizza 40cm",
+  "Fecho Prático",
+  "Saco Delivery P",
+  "Saco Delivery PP",
+  "Saco Delivery M",
+  "Saco Delivery G",
+  "Saco Delivery GG",
+  "Sacola Delivery PP",
+  "Sacola Delivery P",
+  "Sacola Delivery M",
+  "Sacola Delivery G",
+  "Sacola Delivery GG",
+  "Sanpack S630",
+  "Sanpack S15",
+  "Sanpack S13",
+  "Sanpack S10",
+  "Sanpack S20",
+  "Sanpack S29",
+  "Galvanotek G683",
+  "Galvanotek G682",
+  "Galvanotek G679",
+  "Galvanotek G681",
+  "Galvanotek G34 Mini",
+  "Galvanotek G34",
+  "Galvanotek GA12",
+  "Sanpack S642",
+  "Sanpack S640",
+  "Sanpack S88",
+  "Sanpack S641",
+  "MDF Bandeja Retangular 30x40",
+  "MDF Bandeja Retangular 50x35",
+];
+
+const INSUMOS_BASE_BRUTOS: string[] = [
+  ...NOVOS_INSUMOS_SEED,
   "Aditivo",
   "Amendoim Xerem",
   "Açúcar Vermelho",
@@ -552,6 +653,19 @@ export const LISTA_SUGESTOES_INSUMOS: string[] = [
   "Forminha Doce Nº 6",
 ];
 
+// Deduplicação estrita (Case-insensitive) para descarte de itens duplicados
+const nomesVistosSeed = new Set<string>();
+export const LISTA_SUGESTOES_INSUMOS: string[] = [];
+
+for (const item of INSUMOS_BASE_BRUTOS) {
+  const clean = item.trim();
+  const lower = clean.toLowerCase();
+  if (clean && !nomesVistosSeed.has(lower)) {
+    nomesVistosSeed.add(lower);
+    LISTA_SUGESTOES_INSUMOS.push(clean);
+  }
+}
+
 export const CATALOGO_INSUMOS_PADRAO: InsumoCatalogo[] = LISTA_SUGESTOES_INSUMOS.map((nome, index) => ({
   id: `ins-${index + 1}`,
   nome,
@@ -565,8 +679,21 @@ export function obterCatalogoInsumos(estabelecimentoCodigo?: string): InsumoCata
   try {
     const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
     if (raw) {
-      const list = JSON.parse(raw);
-      if (Array.isArray(list) && list.length > 0) return list;
+      const list: InsumoCatalogo[] = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        // Fusão automática sem duplicatas para garantir que novos itens da seed entrem no cache local
+        const nomesExistentes = new Set(list.map((i) => i.nome.toLowerCase().trim()));
+        const novosDoSeed = CATALOGO_INSUMOS_PADRAO.filter(
+          (item) => !nomesExistentes.has(item.nome.toLowerCase().trim())
+        );
+
+        if (novosDoSeed.length > 0) {
+          const fundido = [...list, ...novosDoSeed];
+          localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(fundido));
+          return fundido;
+        }
+        return list;
+      }
     }
   } catch {}
   return CATALOGO_INSUMOS_PADRAO;
