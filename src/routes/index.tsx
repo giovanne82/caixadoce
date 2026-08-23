@@ -314,20 +314,12 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 3. Carrega e Sincroniza Despesas (Notinhas) com a Nuvem (Supabase + localStorage migration)
+  // 3. Carrega e Sincroniza Despesas (Notinhas) exclusivamente na tabela "despesas"
   const fetchDespesas = useCallback(async () => {
     if (!profile) return;
 
     try {
-      const dataExpenses = await safeFetchSupabase("expenses", activeCode, "created_at", false);
-      const dataDespesas = await safeFetchSupabase("despesas", activeCode, "created_at", false);
-
-      const rawCombined = [...(dataExpenses || []), ...(dataDespesas || [])];
-      const mapa = new Map<string, any>();
-      for (const d of rawCombined) {
-        if (d && d.id) mapa.set(String(d.id), d);
-      }
-      const data = Array.from(mapa.values());
+      const data = await safeFetchSupabase("despesas", activeCode, "created_at", false);
 
       let localItems: DespesaNotaFiscal[] = [];
       try {
@@ -336,14 +328,14 @@ function Index() {
       } catch {}
 
       // Migra notinhas que estavam gravadas localmente no localStorage para o Supabase
-      if (localItems.length > 0) {
+      if (localItems.length > 0 && Array.isArray(data)) {
         const remoteIds = new Set(data.map((d: any) => String(d.id)));
         const pendentes = localItems.filter((it) => !remoteIds.has(String(it.id)));
 
         if (pendentes.length > 0) {
           for (const item of pendentes) {
             try {
-              await supabase.from("expenses").insert([
+              await supabase.from("despesas").insert([
                 {
                   id: item.id,
                   estabelecimento_codigo: activeCode,
@@ -961,7 +953,7 @@ function Index() {
     toast.info("Data desbloqueada na agenda.");
   };
 
-  // Handlers de Despesas do Scanner
+  // Handlers de Despesas do Scanner (Tabela Única despesas)
   const salvarDespesa = async (dados: Omit<DespesaNotaFiscal, "id">) => {
     const item: DespesaNotaFiscal = {
       ...dados,
@@ -969,36 +961,41 @@ function Index() {
       estabelecimentoCodigo: activeCode,
     };
 
+    const payload = {
+      id: item.id,
+      estabelecimento_codigo: activeCode,
+      user_id: user?.id || null,
+      fornecedor_nome: item.fornecedorNome,
+      fornecedor_endereco: item.fornecedorEndereco || null,
+      numero_nota: item.numeroNota || null,
+      numero_pedido: item.numeroPedido || null,
+      data_compra: item.dataCompra || new Date().toISOString().split("T")[0],
+      hora_compra: item.horaCompra || "12:00",
+      valor_total: item.valorTotal || 0,
+      valor_producao: item.valorProducao || 0,
+      valor_utensilios: item.valorUtensilios || 0,
+      valor_consumo_proprio: item.valorConsumoProprio || 0,
+      valor_outros: item.valorOutros || 0,
+      itens: item.itens || [],
+      comprovante_url: item.comprovanteUrl || null,
+      metodo_pagamento: item.metodoPagamento || "dinheiro",
+    };
+
+    const { error } = await supabase.from("despesas").insert([payload]);
+
+    if (error) {
+      console.error("[Supabase Erro Despesa]:", error.message);
+      toast.error(`Falha ao salvar notinha no Supabase: ${error.message}`);
+      return;
+    }
+
     const atualizadas = [item, ...despesas];
     setDespesas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
 
-    try {
-      await supabase.from("expenses").insert([
-        {
-          id: item.id,
-          estabelecimento_codigo: activeCode,
-          user_id: user?.id || null,
-          fornecedor_nome: item.fornecedorNome,
-          fornecedor_endereco: item.fornecedorEndereco,
-          numero_nota: item.numeroNota,
-          numero_pedido: item.numeroPedido,
-          data_compra: item.dataCompra,
-          hora_compra: item.horaCompra,
-          valor_total: item.valorTotal,
-          valor_producao: item.valorProducao,
-          valor_utensilios: item.valorUtensilios,
-          valor_consumo_proprio: item.valorConsumoProprio,
-          valor_outros: item.valorOutros,
-          itens: item.itens,
-        },
-      ]);
-      await fetchDespesas();
-    } catch (e) {
-      console.warn("Supabase insert expense warning:", e);
-    }
+    toast.success("Notinha salva no banco de dados com sucesso!");
 
     const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
     if (custoEmpresa > 0) {
@@ -1016,33 +1013,45 @@ function Index() {
   };
 
   const excluirDespesa = async (id: string) => {
+    const { error } = await supabase.from("despesas").delete().eq("id", id);
+    if (error) {
+      toast.error(`Erro ao excluir notinha no Supabase: ${error.message}`);
+      return;
+    }
+
     const atualizadas = despesas.filter((d) => d.id !== id);
     setDespesas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase.from("expenses").delete().eq("id", id);
     } catch {}
     toast.success("Registro de despesa excluído com sucesso.");
   };
 
   const editarDespesa = async (id: string, dados: Partial<DespesaNotaFiscal>) => {
+    const updatePayload: any = {};
+    if (dados.fornecedorNome !== undefined) updatePayload.fornecedor_nome = dados.fornecedorNome;
+    if (dados.fornecedorEndereco !== undefined) updatePayload.fornecedor_endereco = dados.fornecedorEndereco;
+    if (dados.numeroNota !== undefined) updatePayload.numero_nota = dados.numeroNota;
+    if (dados.dataCompra !== undefined) updatePayload.data_compra = dados.dataCompra;
+    if (dados.horaCompra !== undefined) updatePayload.hora_compra = dados.horaCompra;
+    if (dados.valorTotal !== undefined) updatePayload.valor_total = dados.valorTotal;
+    if (dados.valorProducao !== undefined) updatePayload.valor_producao = dados.valorProducao;
+    if (dados.valorUtensilios !== undefined) updatePayload.valor_utensilios = dados.valorUtensilios;
+    if (dados.valorConsumoProprio !== undefined) updatePayload.valor_consumo_proprio = dados.valorConsumoProprio;
+    if (dados.valorOutros !== undefined) updatePayload.valor_outros = dados.valorOutros;
+    if (dados.itens !== undefined) updatePayload.itens = dados.itens;
+
+    const { error } = await supabase.from("despesas").update(updatePayload).eq("id", id);
+    if (error) {
+      toast.error(`Erro ao atualizar notinha no Supabase: ${error.message}`);
+      return;
+    }
+
     const atualizadas = despesas.map((d) => (d.id === id ? { ...d, ...dados } : d));
     setDespesas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
-      const updatePayload: any = {};
-      if (dados.fornecedorNome !== undefined) updatePayload.fornecedor_nome = dados.fornecedorNome;
-      if (dados.fornecedorEndereco !== undefined) updatePayload.fornecedor_endereco = dados.fornecedorEndereco;
-      if (dados.numeroNota !== undefined) updatePayload.numero_nota = dados.numeroNota;
-      if (dados.dataCompra !== undefined) updatePayload.data_compra = dados.dataCompra;
-      if (dados.horaCompra !== undefined) updatePayload.hora_compra = dados.horaCompra;
-      if (dados.valorTotal !== undefined) updatePayload.valor_total = dados.valorTotal;
-      if (dados.itens !== undefined) updatePayload.itens = dados.itens;
-
-      await supabase.from("expenses").update(updatePayload).eq("id", id);
-    } catch (e) {
-      console.warn("Aviso ao editar despesa:", e);
-    }
+    } catch {}
     toast.success("Dados da notinha atualizados com sucesso!");
   };
 
@@ -1050,19 +1059,23 @@ function Index() {
     if (!nomeAntigo || !novoNome || nomeAntigo === novoNome) return;
 
     const novoNomeTrim = novoNome.trim();
+    const { error } = await supabase
+      .from("despesas")
+      .update({ fornecedor_nome: novoNomeTrim })
+      .eq("fornecedor_nome", nomeAntigo);
+
+    if (error) {
+      toast.error(`Erro ao reatribuir fornecedor no Supabase: ${error.message}`);
+      return;
+    }
+
     const atualizadas = despesas.map((d) =>
       d.fornecedorNome === nomeAntigo ? { ...d, fornecedorNome: novoNomeTrim } : d
     );
     setDespesas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase
-        .from("expenses")
-        .update({ fornecedor_nome: novoNomeTrim })
-        .eq("fornecedor_nome", nomeAntigo);
-    } catch (e) {
-      console.warn("Aviso ao reatribuir estabelecimento:", e);
-    }
+    } catch {}
     toast.success(`Todas as notinhas de "${nomeAntigo}" foram reatribuídas para "${novoNomeTrim}"!`);
   };
 
