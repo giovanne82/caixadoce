@@ -1,10 +1,15 @@
--- Migration 0020: Padroniza Produtos como Tabela Oficial (Execução 100% Blindada)
--- Descrição: Remove a view 'produtos', cria a tabela real 'produtos', adiciona colunas PT/EN, migra dados dinamicamente e aplica RLS.
+-- Migration 0020: Padroniza Produtos como Tabela Oficial (Execução 100% Ultra-Segura)
+-- Descrição: Garante a existência da tabela 'produtos', adiciona colunas PT/EN, migra dados dinamicamente e aplica RLS.
 
--- 1. Remover a view 'produtos' para permitir a criação da tabela real
-DROP VIEW IF EXISTS public.produtos CASCADE;
+-- 1. Remover view se porventura ainda existir como view (ignora se já for tabela)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_views WHERE schemaname = 'public' AND viewname = 'produtos') THEN
+        EXECUTE 'DROP VIEW public.produtos CASCADE';
+    END IF;
+END $$;
 
--- 2. Criar a tabela real 'produtos'
+-- 2. Criar a tabela real 'produtos' se não existir
 CREATE TABLE IF NOT EXISTS public.produtos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

@@ -1,17 +1,22 @@
--- Migration 0019: Padroniza Encomendas como Tabela Oficial (Execução 100% Blindada)
--- Descrição: Remove a view 'encomendas', cria a tabela real 'encomendas', garante TODAS as colunas (PT/EN), migra dados dinamicamente e aplica RLS.
+-- Migration 0019: Padroniza Encomendas como Tabela Oficial (Execução 100% Ultra-Segura)
+-- Descrição: Garante a existência da tabela 'encomendas', adiciona TODAS as colunas (PT/EN) com IF NOT EXISTS, migra dados e recarrega RLS/schema cache.
 
--- 1. Remover a view 'encomendas' existente para permitir a criação da tabela física
-DROP VIEW IF EXISTS public.encomendas CASCADE;
+-- 1. Remover view se porventura ainda existir como view (ignora se já for tabela)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_views WHERE schemaname = 'public' AND viewname = 'encomendas') THEN
+        EXECUTE 'DROP VIEW public.encomendas CASCADE';
+    END IF;
+END $$;
 
--- 2. Criar a tabela real 'encomendas'
+-- 2. Criar a tabela real 'encomendas' se não existir
 CREATE TABLE IF NOT EXISTS public.encomendas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Adicionar TODAS as colunas possíveis (em Português e Inglês) PRIMEIRO para evitar erro PGRST204 (coluna inexistente no schema cache)
+-- 3. Adicionar TODAS as colunas possíveis (em Português e Inglês) com IF NOT EXISTS
 ALTER TABLE public.encomendas
 ADD COLUMN IF NOT EXISTS estabelecimento_codigo TEXT,
 ADD COLUMN IF NOT EXISTS codigo TEXT,
