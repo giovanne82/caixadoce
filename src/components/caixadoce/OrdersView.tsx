@@ -383,14 +383,49 @@ export function OrdersView({
     ).slice(0, 8);
   }, [buscaItemProduto, listaProdutos]);
 
-  // Sugestões de Insumos ArtFesta
+  const defaultInsumosTags = useMemo(
+    () => [
+      "Pão", "Pão de Queijo", "Banana", "Cenoura", "Beterraba", "Abobrinha", "Salsinha", 
+      "Pão de Sal", "Torrada", "Manteiga", "Azeite", "Queijo Ralado", "Macarrão", "Milho", 
+      "Sabão Líquido", "Amaciante", "Detergente", "Coxinha", "Batata", "Morango", "Uva", 
+      "Nozes", "Avelã", "Maracujá", "Limão", "Coco", "Pêssego", "Frutas Vermelhas", 
+      "Framboesa", "Amora", "Mirtilo", "Óleo", "Cebola", "Curry", "Vinagre", "Vinagre Branco", 
+      "Mel", "Pêra", "Ameixa Seca", "Iogurte", "Tomate", "Frango", "Camarões", "Abóbora", 
+      "Alho-Poró", "Azeitona", "Tâmara", "Passas", "Manga", "Farinha"
+    ],
+    []
+  );
+
+  // Sugestões de Insumos (Catálogo + Opções Padrão)
   const sugestoesInsumos = useMemo(() => {
     const termo = buscaTagInsumo.trim().toLowerCase();
-    if (!termo) return [];
-    return catalogoInsumos.filter(
-      (i) => i.nome.toLowerCase().includes(termo) || i.categoria.toLowerCase().includes(termo)
-    ).slice(0, 8);
-  }, [buscaTagInsumo, catalogoInsumos]);
+
+    const insumosBase: Array<{ id: string; nome: string; categoria: string }> = [
+      ...catalogoInsumos.map((i) => ({ id: i.id, nome: i.nome, categoria: i.categoria || "Insumo" })),
+      ...defaultInsumosTags.map((nome) => ({
+        id: `def_${nome}`,
+        nome,
+        categoria: "Sugestão Padrão",
+      })),
+    ];
+
+    const nomesJaSelecionados = new Set(insumosTags.map((t) => t.nome.toLowerCase()));
+    const unicosDisponiveis = insumosBase.filter(
+      (ins, index, self) =>
+        !nomesJaSelecionados.has(ins.nome.toLowerCase()) &&
+        index === self.findIndex((t) => t.nome.toLowerCase() === ins.nome.toLowerCase())
+    );
+
+    if (!termo) {
+      return unicosDisponiveis.slice(0, 10);
+    }
+
+    return unicosDisponiveis
+      .filter(
+        (i) => i.nome.toLowerCase().includes(termo) || i.categoria.toLowerCase().includes(termo)
+      )
+      .slice(0, 10);
+  }, [buscaTagInsumo, catalogoInsumos, insumosTags, defaultInsumosTags]);
 
   // Selecionar Cliente Existente
   const handleSelecionarCliente = (cli: Cliente) => {
@@ -2493,27 +2528,33 @@ export function OrdersView({
                   </Button>
                 </div>
 
-                {dropdownInsumosAberto && buscaTagInsumo.trim().length > 0 && (
+                {dropdownInsumosAberto && sugestoesInsumos.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
-                    {sugestoesInsumos.length > 0 ? (
-                      sugestoesInsumos.map((sug) => (
-                        <div
-                          key={sug.id}
-                          onClick={() => handleAdicionarInsumo(sug.nome)}
-                          className="p-2 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                        >
-                          <span className="font-semibold text-foreground">{sug.nome}</span>
-                          <span className="text-[10px] text-muted-foreground">{sug.categoria}</span>
-                        </div>
-                      ))
-                    ) : (
+                    {sugestoesInsumos.map((sug) => (
                       <div
-                        onClick={() => handleAdicionarInsumo(buscaTagInsumo)}
-                        className="p-2.5 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                        key={sug.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleAdicionarInsumo(sug.nome);
+                        }}
+                        className="p-2 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Criar nova tag "{buscaTagInsumo}"
+                        <span className="font-semibold text-foreground">{sug.nome}</span>
+                        <span className="text-[10px] text-muted-foreground">{sug.categoria}</span>
                       </div>
-                    )}
+                    ))}
+                    {buscaTagInsumo.trim().length > 0 &&
+                      !sugestoesInsumos.some((s) => s.nome.toLowerCase() === buscaTagInsumo.trim().toLowerCase()) && (
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleAdicionarInsumo(buscaTagInsumo);
+                          }}
+                          className="p-2.5 hover:bg-amber-500/15 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Criar nova tag "{buscaTagInsumo}"
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
