@@ -1281,6 +1281,7 @@ function Index() {
               <FinanceiroTab
                 transacoes={transacoes}
                 despesas={despesas}
+                encomendas={encomendas}
                 establishmentCode={activeCode}
                 onAdicionarTransacao={adicionarTransacao}
                 onRemoverTransacao={removerTransacao}

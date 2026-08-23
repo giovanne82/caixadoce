@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
   CardContent,
@@ -70,6 +71,7 @@ import {
   type MetodoPagamento,
   type StatusTransacao,
   type DespesaNotaFiscal,
+  type Encomenda,
 } from "@/lib/caixadoce-data";
 import { calculateDynamicTotal } from "@/lib/stripeFees";
 import {
@@ -83,6 +85,7 @@ import { toast } from "sonner";
 interface FinanceiroTabProps {
   transacoes: TransacaoFinanceira[];
   despesas?: DespesaNotaFiscal[];
+  encomendas?: Encomenda[];
   establishmentCode?: string;
   onAdicionarTransacao: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onRemoverTransacao: (id: string) => Promise<void>;
@@ -94,6 +97,7 @@ interface FinanceiroTabProps {
 export function FinanceiroTab({
   transacoes,
   despesas = [],
+  encomendas = [],
   establishmentCode = "CD-1001",
   onAdicionarTransacao,
   onRemoverTransacao,
@@ -102,6 +106,31 @@ export function FinanceiroTab({
   onReatribuirEstabelecimento,
 }: FinanceiroTabProps) {
   const code = establishmentCode || "CD-1001";
+
+  // Busca de Encomendas no Supabase para Agregação no Financeiro
+  const [encomendasBanco, setEncomendasBanco] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    async function carregarEncomendasBanco() {
+      try {
+        const { data, error } = await supabase
+          .from("encomendas")
+          .select("*")
+          .or(`estabelecimento_codigo.eq.${code},codigo.eq.${code},store_id.eq.${code}`);
+
+        if (!cancelado && !error && data) {
+          setEncomendasBanco(data);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar encomendas no financeiro:", err);
+      }
+    }
+    carregarEncomendasBanco();
+    return () => {
+      cancelado = true;
+    };
+  }, [code]);
 
   // Stripe Connect Config State
   const [stripeConfig, setStripeConfig] = useState<StripeConnectAccount>(() =>
@@ -345,9 +374,75 @@ export function FinanceiroTab({
     return matchBusca && matchTipo && matchStatus;
   });
 
-  const totalReceitas = transacoesFiltradas
+  // Agregação de Encomendas (Combinando prop e Supabase sem duplicatas)
+  const todasEncomendas = useMemo(() => {
+    const mapa = new Map<string, any>();
+
+    if (Array.isArray(encomendasBanco)) {
+      for (const item of encomendasBanco) {
+        if (item && item.id) mapa.set(item.id, item);
+      }
+    }
+
+    if (Array.isArray(encomendas)) {
+      for (const item of encomendas) {
+        if (item && item.id) mapa.set(item.id, item);
+      }
+    }
+
+    return Array.from(mapa.values());
+  }, [encomendasBanco, encomendas]);
+
+  const totalReceitasEncomendas = useMemo(() => {
+    if (!Array.isArray(todasEncomendas) || todasEncomendas.length === 0) return 0;
+
+    let soma = 0;
+    for (const enc of todasEncomendas) {
+      if (!enc) continue;
+
+      const historico = Array.isArray(enc.historicoPagamentos)
+        ? enc.historicoPagamentos
+        : Array.isArray(enc.paymentsHistory)
+        ? enc.paymentsHistory
+        : Array.isArray(enc.historico_pagamentos)
+        ? enc.historico_pagamentos
+        : Array.isArray(enc.payments_history)
+        ? enc.payments_history
+        : Array.isArray(enc.payments)
+        ? enc.payments
+        : [];
+
+      if (historico.length > 0) {
+        for (const p of historico) {
+          if (!p) continue;
+          const valNum = Number(p.valor || p.amount || p.val || 0);
+          if (!isNaN(valNum) && valNum > 0) {
+            soma += valNum;
+          }
+        }
+      } else {
+        const entrada = Number(enc.valorEntrada || enc.valor_entrada || enc.down_payment || 0);
+        if (!isNaN(entrada) && entrada > 0) {
+          soma += entrada;
+        } else {
+          const statusPag = String(enc.statusPagamento || enc.payment_status || "").toLowerCase();
+          if (statusPag === "pago_integral" || statusPag === "pago") {
+            const totalEnc = Number(enc.valorTotal || enc.valor_total || enc.total_price || enc.total_amount || 0);
+            if (!isNaN(totalEnc) && totalEnc > 0) {
+              soma += totalEnc;
+            }
+          }
+        }
+      }
+    }
+    return soma;
+  }, [todasEncomendas]);
+
+  const totalReceitasAvulsas = transacoesFiltradas
     .filter((t) => t.tipo === "receita" && t.status === "concluida")
     .reduce((acc, t) => acc + t.valor, 0);
+
+  const totalReceitas = totalReceitasAvulsas + totalReceitasEncomendas;
 
   const totalDespesas = transacoesFiltradas
     .filter((t) => t.tipo === "despesa" && t.status === "concluida")
@@ -557,11 +652,11 @@ export function FinanceiroTab({
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Entradas Filtradas</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Entrada (Vendas)</p>
           <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatarMoeda(totalReceitas)}</p>
         </div>
         <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Saídas Filtradas</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Saída (Gastos)</p>
           <p className="text-2xl font-extrabold text-rose-600 mt-1">{formatarMoeda(totalDespesas)}</p>
         </div>
         <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
