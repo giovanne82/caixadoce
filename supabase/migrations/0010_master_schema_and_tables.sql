@@ -199,7 +199,7 @@ ALTER TABLE public.shopping_list_receipts ENABLE ROW LEVEL SECURITY;
 -- POLÍTICAS PERMISSIVAS PARA USUÁRIOS AUTENTICADOS (SEM CONFLITO OU ERRO 404)
 DO $$
 BEGIN
-    EXECUTE 'CREATE POLICY "allow_all_estabelecimentos" ON public.estabelecimentos FOR ALL TO authenticated USING (true) WITH CHECK (true)';
+    EXECUTE 'CREATE POLICY "allow_all_estabelecimentos" ON public.estabelecimentos FOR ALL USING (true) WITH CHECK (true)';
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 DO $$
