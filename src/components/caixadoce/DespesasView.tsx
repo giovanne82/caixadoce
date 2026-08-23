@@ -182,18 +182,23 @@ export function DespesasView({
   };
 
   const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
-    const atuais = linkedMap[shoppingListId] || [];
-    const novosIds = atuais.filter((id) => id !== receiptId);
-    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
-
     try {
-      await supabase
+      const { error } = await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("shopping_list_id", shoppingListId)
         .eq("receipt_id", receiptId);
+
+      if (error) {
+        toast.error(`Falha ao desvincular notinha no banco: ${error.message}`);
+        return;
+      }
     } catch {}
+
+    const atuais = linkedMap[shoppingListId] || [];
+    const novosIds = atuais.filter((id) => id !== receiptId);
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
     toast.info("Notinha desvinculada desta lista.");
   };
 
@@ -377,10 +382,31 @@ export function DespesasView({
   };
 
   // Excluir Lista de Compras
-  const handleExcluirLista = (listaId: string) => {
-    setListas((prev) => prev.filter((l) => l.id !== listaId));
+  const handleExcluirLista = async (listaId: string) => {
+    try {
+      const { error } = await supabase
+        .from("listas_compras")
+        .delete()
+        .eq("id", listaId);
+
+      if (error) {
+        toast.error(`Falha ao excluir lista de compras no banco: ${error.message}`);
+        return;
+      }
+    } catch (err: any) {
+      console.warn("Aviso ao deletar lista no Supabase:", err);
+    }
+
+    const atualizadas = listas.filter((l) => l.id !== listaId);
+    setListas(atualizadas);
     if (expandedListaId === listaId) setExpandedListaId(null);
-    toast.info("Lista removida.");
+    try {
+      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
+    } catch {}
+    if (onAtualizarListasCompras) {
+      onAtualizarListasCompras(atualizadas);
+    }
+    toast.success("Lista de compras excluída com sucesso.");
   };
 
   // Abrir Modal de Edição de Lista

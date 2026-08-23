@@ -197,56 +197,43 @@ function Index() {
   );
 
   // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
+  // 1. Carrega Transações Financeiras do Supabase (Fonte Única da Verdade)
   const fetchTransacoes = useCallback(async () => {
     if (!profile) return;
 
     try {
       const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_transacoes_${activeCode}`);
-        if (raw) {
-          setTransacoes(JSON.parse(raw));
-        } else {
-          setTransacoes([]);
-          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify([]));
-        }
-        return;
+      if (data && Array.isArray(data)) {
+        const mapeadas: TransacaoFinanceira[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          descricao: d.descricao,
+          valor: Number(d.valor),
+          tipo: d.tipo,
+          categoria: d.categoria,
+          data: d.data || new Date(d.created_at).toLocaleDateString("pt-BR"),
+          metodoPagamento: d.metodo_pagamento || "pix",
+          status: d.status || "concluida",
+          clienteOuFornecedor: d.cliente_ou_fornecedor,
+          origem: d.origem || (d.descricao?.includes("Stripe") || d.categoria?.includes("Stripe") ? "Stripe" : "Manual"),
+        }));
+        setTransacoes(mapeadas);
+        try {
+          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(mapeadas));
+        } catch {}
       }
-
-      const mapeadas: TransacaoFinanceira[] = data.map((d: any) => ({
-        id: String(d.id),
-        estabelecimentoCodigo: d.estabelecimento_codigo,
-        descricao: d.descricao,
-        valor: Number(d.valor),
-        tipo: d.tipo,
-        categoria: d.categoria,
-        data: d.data || new Date(d.created_at).toLocaleDateString("pt-BR"),
-        metodoPagamento: d.metodo_pagamento || "pix",
-        status: d.status || "concluida",
-        clienteOuFornecedor: d.cliente_ou_fornecedor,
-        origem: d.origem || (d.descricao?.includes("Stripe") || d.categoria?.includes("Stripe") ? "Stripe" : "Manual"),
-      }));
-
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 2. Carrega Encomendas e Datas Bloqueadas
+  // 2. Carrega Encomendas e Datas Bloqueadas do Supabase (Fonte Única da Verdade)
   const fetchEncomendasECalendario = useCallback(async () => {
     if (!profile) return;
 
     try {
       const data = await safeFetchSupabase("encomendas", activeCode, "data_entrega", true);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_orders_${activeCode}`);
-        if (raw) {
-          setEncomendas(JSON.parse(raw));
-        } else {
-          setEncomendas([]);
-          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify([]));
-        }
-      } else {
+      if (data && Array.isArray(data)) {
         const mapeadas: Encomenda[] = data.map((d: any) => {
           const histRaw = d.historico_pagamentos || d.payments_history;
           const historicoMapeado = Array.isArray(histRaw) && histRaw.length > 0
@@ -298,10 +285,7 @@ function Index() {
     try {
       const data = await safeFetchSupabase("datas_bloqueadas", activeCode);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_datas_bloqueadas_${activeCode}`);
-        if (raw) setDatasBloqueadas(JSON.parse(raw));
-      } else {
+      if (data && Array.isArray(data)) {
         const mapeadas: DataBloqueada[] = data.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
@@ -310,6 +294,9 @@ function Index() {
           createdAt: d.created_at,
         }));
         setDatasBloqueadas(mapeadas);
+        try {
+          localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(mapeadas));
+        } catch {}
       }
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
@@ -356,21 +343,13 @@ function Index() {
     }
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 4. Carrega Clientes (Customers)
+  // 4. Carrega Clientes (Customers) do Supabase (Fonte Única da Verdade)
   const fetchClientes = useCallback(async () => {
     if (!profile) return;
     try {
       const data = await safeFetchSupabase("customers", activeCode, "name", true);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_customers_${activeCode}`);
-        if (raw) {
-          setClientes(JSON.parse(raw));
-        } else {
-          setClientes([]);
-          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify([]));
-        }
-      } else {
+      if (data && Array.isArray(data)) {
         const mapeados: Cliente[] = data.map((c: any) => ({
           id: String(c.id),
           estabelecimentoCodigo: c.estabelecimento_codigo,
@@ -381,25 +360,20 @@ function Index() {
           createdAt: c.created_at,
         }));
         setClientes(mapeados);
+        try {
+          localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(mapeados));
+        } catch {}
       }
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 5. Carrega Produtos do Cardápio (Tabela Oficial produtos)
+  // 5. Carrega Produtos do Cardápio do Supabase (Fonte Única da Verdade)
   const fetchProdutos = useCallback(async () => {
     if (!profile) return;
     try {
       const data = await safeFetchSupabase("produtos", activeCode, "nome", true);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_cardapio_${activeCode}`);
-        if (raw) {
-          setProdutos(JSON.parse(raw));
-        } else {
-          setProdutos([]);
-          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify([]));
-        }
-      } else {
+      if (data && Array.isArray(data)) {
         const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
           id: String(p.id),
           estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || activeCode,
@@ -421,20 +395,13 @@ function Index() {
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 6. Carrega Listas de Compras (ListasCompras) do Supabase ou Cache Local
+  // 6. Carrega Listas de Compras (ListasCompras) do Supabase (Fonte Única da Verdade)
   const fetchListasCompras = useCallback(async () => {
     if (!profile) return;
     try {
       const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
 
-      if (!data || data.length === 0) {
-        const raw = localStorage.getItem(`caixadoce_listas_compras_v2_${activeCode}`);
-        if (raw) {
-          try {
-            setListasCompras(JSON.parse(raw));
-          } catch {}
-        }
-      } else {
+      if (data && Array.isArray(data)) {
         const mapeadas: ListaCompras[] = data.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
@@ -448,7 +415,9 @@ function Index() {
           createdAt: d.created_at || d.data || new Date().toISOString(),
         }));
         setListasCompras(mapeadas);
-        localStorage.setItem(`caixadoce_listas_compras_v2_${activeCode}`, JSON.stringify(mapeadas));
+        try {
+          localStorage.setItem(`caixadoce_listas_compras_v2_${activeCode}`, JSON.stringify(mapeadas));
+        } catch {}
       }
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
@@ -462,31 +431,24 @@ function Index() {
     fetchListasCompras();
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
-  // Listener em tempo real do Supabase para notinhas/despesas escaneadas em qualquer dispositivo (Celular <-> PC)
+  // Listener Global em Tempo Real do Supabase para todas as tabelas (Sincronização Multidispositivo PC <-> Celular)
   useEffect(() => {
     if (!profile) return;
     const channel = supabase
-      .channel("expenses_realtime_sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "expenses" },
-        () => {
-          fetchDespesas();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "despesas" },
-        () => {
-          fetchDespesas();
-        }
-      )
+      .channel("global_realtime_sync_caixadoce")
+      .on("postgres_changes", { event: "*", schema: "public", table: "despesas" }, () => fetchDespesas())
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => fetchDespesas())
+      .on("postgres_changes", { event: "*", schema: "public", table: "encomendas" }, () => fetchEncomendasECalendario())
+      .on("postgres_changes", { event: "*", schema: "public", table: "produtos" }, () => fetchProdutos())
+      .on("postgres_changes", { event: "*", schema: "public", table: "transacoes_financeiras" }, () => fetchTransacoes())
+      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => fetchClientes())
+      .on("postgres_changes", { event: "*", schema: "public", table: "listas_compras" }, () => fetchListasCompras())
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile, fetchDespesas]);
+  }, [profile, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
 
   // Listener para re-fetch automático quando a janela ganha foco ou visibilidade no celular/PC
   useEffect(() => {
@@ -509,43 +471,6 @@ function Index() {
       document.removeEventListener("visibilitychange", handleFocus);
     };
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
-
-  // Listener em tempo real do Supabase para Encomendas (Sincronização PC <-> Celular)
-  useEffect(() => {
-    const channel = supabase
-      .channel("encomendas_realtime_sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "encomendas" },
-        () => {
-          fetchEncomendasECalendario();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile, fetchEncomendasECalendario]);
-
-  // Listener em tempo real do Supabase para Produtos do Cardápio
-  useEffect(() => {
-    if (!profile) return;
-    const channel = supabase
-      .channel("produtos_realtime_sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "produtos" },
-        () => {
-          fetchProdutos();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile, fetchProdutos]);
 
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
@@ -595,11 +520,16 @@ function Index() {
   };
 
   const excluirCliente = async (id: string) => {
+    const { error } = await supabase.from("customers").delete().eq("id", id);
+    if (error) {
+      toast.error(`Falha ao excluir cliente no banco de dados: ${error.message}`);
+      return;
+    }
+
     const atualizados = clientes.filter((c) => c.id !== id);
     setClientes(atualizados);
     try {
       localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-      await supabase.from("customers").delete().eq("id", id);
     } catch {}
     toast.success("Cliente removido com sucesso.");
   };
@@ -899,11 +829,16 @@ function Index() {
   };
 
   const desbloquearData = async (id: string) => {
+    const { error } = await supabase.from("datas_bloqueadas").delete().eq("id", id);
+    if (error) {
+      toast.error(`Falha ao desbloquear data no banco de dados: ${error.message}`);
+      return;
+    }
+
     const atualizadas = datasBloqueadas.filter((d) => d.id !== id);
     setDatasBloqueadas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase.from("datas_bloqueadas").delete().eq("id", id);
     } catch {}
     toast.info("Data desbloqueada na agenda.");
   };
@@ -1142,13 +1077,18 @@ function Index() {
   };
 
   const removerTransacao = async (id: string) => {
+    const { error } = await supabase.from("transacoes_financeiras").delete().eq("id", id);
+    if (error) {
+      toast.error(`Falha ao excluir lançamento no banco de dados: ${error.message}`);
+      return;
+    }
+
     const atualizadas = transacoes.filter((t) => t.id !== id);
     setTransacoes(atualizadas);
     try {
       localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase.from("transacoes_financeiras").delete().eq("id", id);
     } catch {}
-    toast.success("Lançamento excluído com sucesso.");
+    toast.success("Lançamento financeiro excluído com sucesso.");
   };
 
   const atualizarStatusTransacao = async (id: string, status: StatusTransacao) => {
