@@ -650,16 +650,48 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from("estabelecimentos")
         .upsert(payload, { onConflict: "user_id" });
 
       if (error) {
         console.warn("[Supabase] Aviso no upsert por user_id, tentando por codigo:", error.message);
-        await supabase.from("estabelecimentos").upsert(payload, { onConflict: "codigo" });
+        const resCodigo = await supabase
+          .from("estabelecimentos")
+          .upsert(payload, { onConflict: "codigo" });
+        error = resCodigo.error;
+      }
+
+      if (error) {
+        const msg = error.message || "";
+        const isColumnError = msg.includes("column") || msg.includes("does not exist") || error.code === "PGRST204";
+
+        if (isColumnError) {
+          console.warn("[Supabase] Colunas de personalização ausentes no Supabase. Executando fallback dos dados primários...");
+          const fallbackPayload = { ...payload };
+          delete (fallbackPayload as any).logo_url;
+          delete (fallbackPayload as any).store_logo_url;
+          delete (fallbackPayload as any).titulo_cardapio;
+          delete (fallbackPayload as any).menu_title;
+          delete (fallbackPayload as any).slogan_cardapio;
+          delete (fallbackPayload as any).menu_slogan;
+
+          let fallbackRes = await supabase
+            .from("estabelecimentos")
+            .upsert(fallbackPayload, { onConflict: "user_id" });
+
+          if (fallbackRes.error) {
+            await supabase.from("estabelecimentos").upsert(fallbackPayload, { onConflict: "codigo" });
+          }
+
+          throw new Error("As colunas 'menu_slogan' e 'menu_title' ainda não existem no banco Supabase. Execute o script SQL no Supabase Editor para liberar o salvamento da personalização.");
+        }
+
+        throw error;
       }
     } catch (err: any) {
       console.error("[Supabase] Erro ao salvar estabelecimento no banco:", err);
+      throw err;
     }
 
     salvarDadosInstitucionaisCache(currentCode, {

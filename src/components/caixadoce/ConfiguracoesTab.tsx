@@ -249,6 +249,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         menu_slogan: sloganCardapio,
       });
       toast.success("Dados do estabelecimento e personalização salvos com sucesso!");
+    } catch (err: any) {
+      console.error("[Configurações] Erro ao salvar estabelecimento:", err);
+      toast.error(err?.message || "Erro ao salvar os dados do estabelecimento. Verifique sua conexão ou rode a migration no Supabase.");
     } finally {
       setSalvandoEst(false);
     }
