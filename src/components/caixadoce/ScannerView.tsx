@@ -245,7 +245,7 @@ export function ScannerView({
     }
   };
 
-  const ultimosRegistros = despesas.slice(0, 5);
+  const ultimosRegistros = despesas;
 
   return (
     <div className="space-y-6">

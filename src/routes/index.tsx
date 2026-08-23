@@ -319,7 +319,15 @@ function Index() {
     if (!profile) return;
 
     try {
-      const data = await safeFetchSupabase("expenses", activeCode, "created_at", false);
+      const dataExpenses = await safeFetchSupabase("expenses", activeCode, "created_at", false);
+      const dataDespesas = await safeFetchSupabase("despesas", activeCode, "created_at", false);
+
+      const rawCombined = [...(dataExpenses || []), ...(dataDespesas || [])];
+      const mapa = new Map<string, any>();
+      for (const d of rawCombined) {
+        if (d && d.id) mapa.set(String(d.id), d);
+      }
+      const data = Array.from(mapa.values());
 
       let localItems: DespesaNotaFiscal[] = [];
       try {
@@ -329,7 +337,7 @@ function Index() {
 
       // Migra notinhas que estavam gravadas localmente no localStorage para o Supabase
       if (localItems.length > 0) {
-        const remoteIds = new Set((data || []).map((d: any) => String(d.id)));
+        const remoteIds = new Set(data.map((d: any) => String(d.id)));
         const pendentes = localItems.filter((it) => !remoteIds.has(String(it.id)));
 
         if (pendentes.length > 0) {
@@ -356,60 +364,49 @@ function Index() {
               ]);
             } catch {}
           }
-          const updated = await safeFetchSupabase("expenses", activeCode, "created_at", false);
-          if (updated && updated.length > 0) {
-            const mapeadas: DespesaNotaFiscal[] = updated.map((d: any) => ({
-              id: String(d.id),
-              estabelecimentoCodigo: d.estabelecimento_codigo,
-              fornecedorNome: d.fornecedor_nome,
-              fornecedorEndereco: d.fornecedor_endereco,
-              numeroNota: d.numero_nota,
-              numeroPedido: d.numero_pedido,
-              dataCompra: d.data_compra,
-              horaCompra: d.hora_compra,
-              valorTotal: Number(d.valor_total),
-              valorProducao: Number(d.valor_producao),
-              valorUtensilios: Number(d.valor_utensilios),
-              valorConsumoProprio: Number(d.valor_consumo_proprio),
-              valorOutros: Number(d.valor_outros),
-              itens: Array.isArray(d.itens) ? d.itens : [],
-              comprovanteUrl: d.comprovante_url,
-              metodoPagamento: d.metodo_pagamento,
-              createdAt: d.created_at,
-            }));
-            setDespesas(mapeadas);
-            localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(mapeadas));
-            return;
-          }
         }
       }
 
-      if (data && data.length > 0) {
+      if (data.length > 0) {
         const mapeadas: DespesaNotaFiscal[] = data.map((d: any) => ({
           id: String(d.id),
-          estabelecimentoCodigo: d.estabelecimento_codigo,
-          fornecedorNome: d.fornecedor_nome,
-          fornecedorEndereco: d.fornecedor_endereco,
-          numeroNota: d.numero_nota,
-          numeroPedido: d.numero_pedido,
-          dataCompra: d.data_compra,
-          horaCompra: d.hora_compra,
-          valorTotal: Number(d.valor_total),
-          valorProducao: Number(d.valor_producao),
-          valorUtensilios: Number(d.valor_utensilios),
-          valorConsumoProprio: Number(d.valor_consumo_proprio),
-          valorOutros: Number(d.valor_outros),
+          estabelecimentoCodigo: d.estabelecimento_codigo || d.codigo || activeCode,
+          fornecedorNome: d.fornecedor_nome || "Fornecedor",
+          fornecedorEndereco: d.fornecedor_endereco || "",
+          numeroNota: d.numero_nota || "",
+          numeroPedido: d.numero_pedido || "",
+          dataCompra: d.data_compra || d.created_at?.split("T")[0] || new Date().toISOString().split("T")[0],
+          horaCompra: d.hora_compra || "12:00",
+          valorTotal: Number(d.valor_total || d.total || 0),
+          valorProducao: Number(d.valor_producao || 0),
+          valorUtensilios: Number(d.valor_utensilios || 0),
+          valorConsumoProprio: Number(d.valor_consumo_proprio || 0),
+          valorOutros: Number(d.valor_outros || 0),
           itens: Array.isArray(d.itens) ? d.itens : [],
           comprovanteUrl: d.comprovante_url,
-          metodoPagamento: d.metodo_pagamento,
-          createdAt: d.created_at,
+          metodoPagamento: d.metodo_pagamento || "dinheiro",
+          createdAt: d.created_at || d.data_compra || new Date().toISOString(),
         }));
+
+        mapeadas.sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.dataCompra || 0).getTime();
+          const dateB = new Date(b.createdAt || b.dataCompra || 0).getTime();
+          return dateB - dateA;
+        });
+
         setDespesas(mapeadas);
         localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(mapeadas));
       } else {
+        localItems.sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.dataCompra || 0).getTime();
+          const dateB = new Date(b.createdAt || b.dataCompra || 0).getTime();
+          return dateB - dateA;
+        });
         setDespesas(localItems);
       }
-    } catch {}
+    } catch (err) {
+      console.error("Erro ao carregar despesas:", err);
+    }
   }, [activeCode, profile, safeFetchSupabase, user]);
 
   // 4. Carrega Clientes (Customers)
@@ -495,8 +492,9 @@ function Index() {
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
           nome: d.nome || d.name,
-          data: d.data || new Date().toISOString().split("T")[0],
-          status: d.status || "pendente",
+          data: d.data || d.created_at?.split("T")[0] || new Date().toISOString().split("T")[0],
+          status: d.status || (d.concluida ? "concluida" : "pendente"),
+          concluida: d.concluida ?? d.is_completed ?? false,
           itens: Array.isArray(d.itens) ? d.itens : Array.isArray(d.items) ? d.items : [],
           valorEstimado: d.valor_estimado ? Number(d.valor_estimado) : 0,
           comprovanteUrl: d.comprovante_url,
@@ -517,7 +515,7 @@ function Index() {
     fetchListasCompras();
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
-  // Listener em tempo real do Supabase para notinhas/despesas escaneadas em qualquer dispositivo (Celular -> PC)
+  // Listener em tempo real do Supabase para notinhas/despesas escaneadas em qualquer dispositivo (Celular <-> PC)
   useEffect(() => {
     if (!profile) return;
     const channel = supabase
@@ -529,6 +527,13 @@ function Index() {
           fetchDespesas();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "despesas" },
+        () => {
+          fetchDespesas();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -536,9 +541,30 @@ function Index() {
     };
   }, [profile, fetchDespesas]);
 
+  // Listener para re-fetch automático quando a janela ganha foco ou visibilidade no celular/PC
+  useEffect(() => {
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        fetchTransacoes();
+        fetchEncomendasECalendario();
+        fetchDespesas();
+        fetchClientes();
+        fetchProdutos();
+        fetchListasCompras();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
+
   // Listener em tempo real do Supabase para Encomendas (Sincronização PC <-> Celular)
   useEffect(() => {
-    if (!profile) return;
     const channel = supabase
       .channel("encomendas_realtime_sync")
       .on(

@@ -315,15 +315,21 @@ export function ExpensesScannerView({
     return Array.from(new Set(despesas.map((d) => d.fornecedorNome).filter(Boolean)));
   }, [despesas]);
 
-  // Despesas Filtradas para Histórico
+  // Despesas Filtradas para Histórico (Mais recentes primeiro)
   const despesasFiltradas = useMemo(() => {
-    return despesas.filter((d) => {
+    const filtradas = despesas.filter((d) => {
       const matchFornec = filtroFornecedor === "todos" || d.fornecedorNome === filtroFornecedor;
       const matchBusca =
         !buscaHistorico ||
         d.fornecedorNome.toLowerCase().includes(buscaHistorico.toLowerCase()) ||
         d.itens.some((it) => it.nome.toLowerCase().includes(buscaHistorico.toLowerCase()));
       return matchFornec && matchBusca;
+    });
+
+    return filtradas.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.dataCompra || 0).getTime();
+      const dateB = new Date(b.createdAt || b.dataCompra || 0).getTime();
+      return dateB - dateA;
     });
   }, [despesas, filtroFornecedor, buscaHistorico]);
 
