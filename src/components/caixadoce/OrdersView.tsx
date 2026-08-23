@@ -307,6 +307,15 @@ export function OrdersView({
   const [modalSelecaoPixOpen, setModalSelecaoPixOpen] = useState(false);
   const [encomendaParaEnvioPix, setEncomendaParaEnvioPix] = useState<Encomenda | null>(null);
 
+  // Modal de Detalhes do Pedido (Somente Leitura)
+  const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
+  const [encomendaDetalhes, setEncomendaDetalhes] = useState<Encomenda | null>(null);
+
+  const handleAbrirDetalhes = (ord: Encomenda) => {
+    setEncomendaDetalhes(ord);
+    setModalDetalhesOpen(true);
+  };
+
   // Histórico de Pagamentos Recebidos (Mini histórico)
   const [historicoPagamentos, setHistoricoPagamentos] = useState<PagamentoItem[]>([]);
   const [novoPagamentoValorFormatado, setNovoPagamentoValorFormatado] = useState("");
@@ -1174,160 +1183,224 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA */}
+      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA (LIMPA & CLICÁVEL) */}
       {/* ========================================================================= */}
       {viewMode === "lista" && (
-        <Card className="border-border shadow-sm overflow-hidden bg-card">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead className="text-xs">Data &amp; Hora</TableHead>
-                <TableHead className="text-xs">Cliente</TableHead>
-                <TableHead className="text-xs">Itens do Pedido</TableHead>
-                <TableHead className="text-xs">Insumos Vinculados</TableHead>
-                <TableHead className="text-xs">Valor Total</TableHead>
-                <TableHead className="text-xs">Pagamento</TableHead>
-                <TableHead className="text-xs text-right w-48">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {encomendasFiltradas.length === 0 ? (
+        <div className="space-y-4">
+          {/* VISUALIZAÇÃO DESKTOP (TABELA LIMPA DE 5 COLUNAS) */}
+          <Card className="hidden md:block border-border shadow-xs overflow-hidden bg-card">
+            <Table>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-xs text-muted-foreground">
-                    Nenhuma encomenda encontrada.
-                  </TableCell>
+                  <TableHead className="text-xs">Data &amp; Hora</TableHead>
+                  <TableHead className="text-xs">Cliente</TableHead>
+                  <TableHead className="text-xs">Valor Total</TableHead>
+                  <TableHead className="text-xs">Status de Pagamento</TableHead>
+                  <TableHead className="text-xs text-right w-48">Ações</TableHead>
                 </TableRow>
-              ) : (
-                encomendasFiltradas.map((ord) => {
-                  const totalPago = calcularTotalPagoEncomenda(ord);
-                  const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
-                  return (
-                    <TableRow key={ord.id} className="hover:bg-muted/20">
-                      <TableCell className="text-xs font-mono">
-                        <div className="font-bold text-foreground">
-                          {ord.dataEntrega.split("-").reverse().join("/")}
-                        </div>
-                        <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
-                          <Clock className="w-3 h-3 text-primary" /> {ord.horarioEntrega || "14:00"}
-                        </div>
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="font-semibold text-xs text-foreground">{ord.clienteNome}</div>
-                        {ord.clienteWhatsapp && (
-                          <a
-                            href={formatarWhatsappLink(ord.clienteWhatsapp)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline font-mono"
-                          >
-                            <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
-                          </a>
-                        )}
-                      </TableCell>
-
-                      <TableCell className="text-xs max-w-[220px] text-foreground">
-                        {ord.itensDetalhes && ord.itensDetalhes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {ord.itensDetalhes.map((it) => (
-                              <Badge key={it.id} variant="secondary" className="text-[10px] px-1.5 py-0 font-medium">
-                                {it.quantidade}x {it.nome}
-                              </Badge>
-                            ))}
+              </TableHeader>
+              <TableBody>
+                {encomendasFiltradas.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                      Nenhuma encomenda encontrada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  encomendasFiltradas.map((ord) => {
+                    const totalPago = calcularTotalPagoEncomenda(ord);
+                    const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+                    return (
+                      <TableRow
+                        key={ord.id}
+                        onClick={() => handleAbrirDetalhes(ord)}
+                        className="hover:bg-purple-500/5 cursor-pointer transition-colors"
+                      >
+                        <TableCell className="text-xs font-mono">
+                          <div className="font-bold text-foreground">
+                            {ord.dataEntrega.split("-").reverse().join("/")}
                           </div>
-                        ) : (
-                          <span className="truncate">{ord.itens}</span>
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        {ord.insumosNecessarios && ord.insumosNecessarios.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 max-w-[180px]">
-                            {ord.insumosNecessarios.map((ins) => (
-                              <Badge
-                                key={ins.id}
-                                variant="outline"
-                                className={`text-[9px] px-1.5 py-0 ${
-                                  ins.comprado
-                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-semibold"
-                                    : "bg-amber-500/10 text-amber-700 border-amber-500/30"
-                                }`}
-                              >
-                                {ins.comprado ? <Check className="w-2.5 h-2.5 mr-0.5" /> : null}
-                                {ins.quantidade ? `${ins.quantidade}x ` : ""}{ins.nome}
-                              </Badge>
-                            ))}
+                          <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                            <Clock className="w-3 h-3 text-primary" /> {ord.horarioEntrega || "14:00"}
                           </div>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground italic">Nenhum</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell className="text-xs font-extrabold text-foreground">
-                        {formatarMoeda(ord.valorTotal)}
-                      </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-xs text-foreground">{ord.clienteNome}</div>
+                          {ord.clienteWhatsapp && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-mono">
+                              <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
+                            </span>
+                          )}
+                        </TableCell>
 
-                      <TableCell className="text-xs">
+                        <TableCell className="text-xs font-extrabold text-foreground">
+                          {formatarMoeda(ord.valorTotal)}
+                        </TableCell>
+
+                        <TableCell className="text-xs">
+                          {totalPago >= ord.valorTotal && ord.valorTotal > 0 ? (
+                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
+                              100% Pago ({formatarMoeda(totalPago)})
+                            </Badge>
+                          ) : totalPago > 0 ? (
+                            <div className="space-y-0.5">
+                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
+                                Pago: {formatarMoeda(totalPago)}
+                              </Badge>
+                              <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
+                            </div>
+                          ) : (
+                            <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[10px]">
+                              Pendente (0%)
+                            </Badge>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnviarResumoWhatsApp(ord);
+                              }}
+                              title="Enviar resumo do pedido para o WhatsApp do cliente"
+                              className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 mr-1 text-emerald-600 fill-emerald-600" />
+                              Enviar
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAbrirEdicao(ord);
+                              }}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
+                                  onExcluirEncomenda(ord.id);
+                                }
+                              }}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+
+          {/* VISUALIZAÇÃO MOBILE (CARDS LIMPOS & CLICÁVEIS) */}
+          <div className="block md:hidden space-y-3">
+            {encomendasFiltradas.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground bg-card border border-border rounded-xl">
+                Nenhuma encomenda encontrada.
+              </div>
+            ) : (
+              encomendasFiltradas.map((ord) => {
+                const totalPago = calcularTotalPagoEncomenda(ord);
+                const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+                return (
+                  <div
+                    key={ord.id}
+                    onClick={() => handleAbrirDetalhes(ord)}
+                    className="p-3.5 rounded-2xl border border-border bg-card shadow-xs hover:border-primary/50 cursor-pointer transition-all space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-2">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">{ord.clienteNome}</div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono mt-0.5">
+                          <Clock className="w-3 h-3 text-primary" />
+                          {ord.dataEntrega.split("-").reverse().join("/")} às {ord.horarioEntrega || "14:00"}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xs font-extrabold text-foreground">{formatarMoeda(ord.valorTotal)}</div>
                         {totalPago >= ord.valorTotal && ord.valorTotal > 0 ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
-                            100% Pago ({formatarMoeda(totalPago)})
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+                            100% Pago
                           </Badge>
                         ) : totalPago > 0 ? (
-                          <div className="space-y-0.5">
-                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                              Pago: {formatarMoeda(totalPago)}
-                            </Badge>
-                            <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
-                          </div>
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+                            Pago: {formatarMoeda(totalPago)}
+                          </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[10px]">
+                          <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[9px] px-1.5 py-0 mt-0.5">
                             Pendente (0%)
                           </Badge>
                         )}
-                      </TableCell>
+                      </div>
+                    </div>
 
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEnviarResumoWhatsApp(ord)}
-                            title="Enviar resumo do pedido para o WhatsApp do cliente"
-                            className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 mr-1 text-emerald-600 fill-emerald-600" />
-                            Enviar
-                          </Button>
+                    <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[10px] text-primary font-bold">Ver todos os detalhes &gt;</span>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleAbrirEdicao(ord)}
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
-                                onExcluirEncomenda(ord.id);
-                              }
-                            }}
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEnviarResumoWhatsApp(ord);
+                          }}
+                          className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 mr-1 text-emerald-600 fill-emerald-600" />
+                          Enviar
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAbrirEdicao(ord);
+                          }}
+                          className="h-7 w-7 p-0 text-muted-foreground"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
+                              onExcluirEncomenda(ord.id);
+                            }
+                          }}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       )}
 
       {/* ========================================================================= */}
@@ -2597,6 +2670,173 @@ export function OrdersView({
             >
               Cancelar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE DETALHES DA ENCOMENDA (SOMENTE LEITURA) */}
+      <Dialog open={modalDetalhesOpen} onOpenChange={setModalDetalhesOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center justify-between gap-2 pr-6">
+              <span className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" /> Detalhes do Pedido
+              </span>
+              {encomendaDetalhes && (
+                <Badge className={STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.color || "bg-amber-500"}>
+                  {STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.label || "Pendente"}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Visualização completa de cliente, itens solicitados, notinhas/insumos vinculados e histórico de pagamentos.
+            </DialogDescription>
+          </DialogHeader>
+
+          {encomendaDetalhes && (
+            <div className="space-y-4 py-2">
+              {/* BLOCO 1: DADOS DO CLIENTE & DATA/ENTREGA */}
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Cliente</span>
+                    <span className="font-extrabold text-foreground text-sm flex items-center gap-1.5">
+                      <User className="w-4 h-4 text-primary" /> {encomendaDetalhes.clienteNome}
+                    </span>
+                    {encomendaDetalhes.clienteWhatsapp && (
+                      <span className="text-muted-foreground text-[11px] font-mono block mt-0.5">
+                        📱 {encomendaDetalhes.clienteWhatsapp}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data &amp; Horário</span>
+                    <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-primary" />
+                      {encomendaDetalhes.dataEntrega.split("-").reverse().join("/")} às {encomendaDetalhes.horarioEntrega || "14:00"}
+                    </span>
+                    <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
+                      {encomendaDetalhes.tipoEntrega === "delivery"
+                        ? `🚚 Entrega: ${encomendaDetalhes.enderecoEntrega || "A combinar"}`
+                        : "🏬 Retirada no Balcão"}
+                    </span>
+                  </div>
+                </div>
+
+                {encomendaDetalhes.observacoes && (
+                  <div className="pt-2 border-t border-border/50 text-xs">
+                    <span className="font-bold text-foreground">📝 Observações:</span>{" "}
+                    <span className="text-muted-foreground italic">{encomendaDetalhes.observacoes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* BLOCO 2: ITENS DO PEDIDO */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Cake className="w-4 h-4 text-purple-600" /> Itens Pedidos pelo Cliente
+                </h4>
+                {encomendaDetalhes.itensDetalhes && encomendaDetalhes.itensDetalhes.length > 0 ? (
+                  <div className="p-3 rounded-xl border border-border bg-card space-y-1.5">
+                    {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-border/50">
+                        <span className="font-semibold text-foreground">
+                          {it.quantidade}x {it.nome}
+                        </span>
+                        <span className="font-mono font-bold text-muted-foreground">
+                          {formatarMoeda((it.preco || it.valorUnitario || 0) * (it.quantidade || 1))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground font-medium">
+                    {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
+                  </div>
+                )}
+              </div>
+
+              {/* BLOCO 3: INSUMOS NECESSÁRIOS / NOTINHAS VINCULADAS */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Receipt className="w-4 h-4 text-emerald-600" /> Insumos &amp; Compras da Encomenda
+                </h4>
+                {encomendaDetalhes.insumosNecessarios && encomendaDetalhes.insumosNecessarios.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-border bg-card">
+                    {encomendaDetalhes.insumosNecessarios.map((ins, idx) => (
+                      <Badge key={idx} variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                        {ins.comprado ? "✓ " : "• "} {ins.quantidade ? `${ins.quantidade} ` : ""}{ins.nome}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic px-1">Nenhum insumo ou notinha vinculado ainda.</p>
+                )}
+              </div>
+
+              {/* BLOCO 4: FINANCEIRO & HISTÓRICO DE PAGAMENTOS */}
+              <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-foreground">Valor Total do Pedido:</span>
+                  <span className="font-mono font-extrabold text-base text-foreground">
+                    {formatarMoeda(encomendaDetalhes.valorTotal)}
+                  </span>
+                </div>
+
+                {/* HISTÓRICO DE PAGAMENTOS */}
+                <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
+                  <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block">
+                    Pagamentos Registrados:
+                  </span>
+                  {encomendaDetalhes.historicoPagamentos && encomendaDetalhes.historicoPagamentos.length > 0 ? (
+                    <div className="space-y-1">
+                      {encomendaDetalhes.historicoPagamentos.map((pag) => (
+                        <div key={pag.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
+                          <div>
+                            <span className="font-mono text-[11px] text-muted-foreground block">
+                              📅 {pag.data.split("-").reverse().join("/")}
+                            </span>
+                            {pag.observacao && <span className="text-[10px] text-muted-foreground">{pag.observacao}</span>}
+                          </div>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatarMoeda(pag.valor)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Nenhum pagamento registrado até o momento.</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-purple-500/20 font-bold">
+                  <span>Saldo Devedor Restante:</span>
+                  <span className={Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)) > 0 ? "text-rose-600 font-mono" : "text-emerald-600 font-mono"}>
+                    {formatarMoeda(Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2 border-t flex justify-between">
+            <Button type="button" variant="outline" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
+              Fechar Detalhes
+            </Button>
+            {encomendaDetalhes && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setModalDetalhesOpen(false);
+                  handleEnviarResumoWhatsApp(encomendaDetalhes);
+                }}
+                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Send className="w-3.5 h-3.5 mr-1" /> WhatsApp Resumo
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

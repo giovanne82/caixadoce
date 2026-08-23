@@ -289,6 +289,9 @@ function Index() {
           };
         });
         setEncomendas(mapeadas);
+        try {
+          localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(mapeadas));
+        } catch {}
       }
     } catch {}
 
@@ -530,6 +533,25 @@ function Index() {
     };
   }, [profile, fetchDespesas]);
 
+  // Listener em tempo real do Supabase para Encomendas (Sincronização PC <-> Celular)
+  useEffect(() => {
+    if (!profile) return;
+    const channel = supabase
+      .channel("orders_realtime_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          fetchEncomendasECalendario();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile, fetchEncomendasECalendario]);
+
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const novo: Cliente = {
@@ -675,23 +697,34 @@ function Index() {
       await supabase.from("orders").insert([
         {
           id: item.id,
+          user_id: user?.id || null,
           estabelecimento_codigo: activeCode,
+          codigo: activeCode,
+          store_id: activeCode,
           cliente_id: item.clienteId,
           cliente_nome: item.clienteNome,
+          customer_name: item.clienteNome,
           cliente_whatsapp: item.clienteWhatsapp,
+          customer_phone: item.clienteWhatsapp,
           data_entrega: item.dataEntrega,
+          delivery_date: item.dataEntrega,
           horario_entrega: item.horarioEntrega,
+          delivery_time: item.horarioEntrega,
           itens: item.itens,
           itens_detalhes: item.itensDetalhes || [],
           insumos_necessarios: item.insumosNecessarios || [],
           valor_total: item.valorTotal,
+          total_price: item.valorTotal,
           valor_entrada: item.valorEntrada || 0,
           historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
           payments_history: item.paymentsHistory || item.historicoPagamentos || [],
           status_pagamento: item.statusPagamento,
+          payment_status: item.statusPagamento,
           status: item.status,
           tipo_entrega: item.tipoEntrega,
+          delivery_type: item.tipoEntrega,
           endereco_entrega: item.enderecoEntrega,
+          delivery_address: item.enderecoEntrega,
           observacoes: item.observacoes,
         },
       ]);
