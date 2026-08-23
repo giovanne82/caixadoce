@@ -743,6 +743,23 @@ export interface InsumoNecessarioPedido {
   quantidade?: number | string;
 }
 
+export interface PagamentoItem {
+  id: string;
+  data: string; // YYYY-MM-DD
+  valor: number;
+  observacao?: string;
+}
+
+export function calcularTotalPagoEncomenda(encomenda: Partial<Encomenda>): number {
+  if (encomenda.historicoPagamentos && encomenda.historicoPagamentos.length > 0) {
+    return encomenda.historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+  }
+  if (encomenda.paymentsHistory && (encomenda.paymentsHistory as any[]).length > 0) {
+    return (encomenda.paymentsHistory as any[]).reduce((sum, item) => sum + (Number(item.valor || item.amount) || 0), 0);
+  }
+  return Number(encomenda.valorEntrada) || 0;
+}
+
 export interface Encomenda {
   id: string;
   estabelecimentoCodigo: string;
@@ -756,6 +773,8 @@ export interface Encomenda {
   insumosNecessarios?: InsumoNecessarioPedido[]; // Tags de insumos vinculados com quantidade
   valorTotal: number;
   valorEntrada?: number;
+  historicoPagamentos?: PagamentoItem[];
+  paymentsHistory?: PagamentoItem[];
   statusPagamento: StatusPagamentoEncomenda;
   status: StatusEncomenda;
   observacoes?: string;

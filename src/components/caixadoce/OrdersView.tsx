@@ -76,6 +76,7 @@ import {
   UtensilsCrossed,
   Package,
   MapPin,
+  CreditCard,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -90,6 +91,7 @@ import {
   obterProdutosCardapio,
   obterNotinhasVinculadasPorLista,
   salvarNotinhasVinculadasPorLista,
+  calcularTotalPagoEncomenda,
   STATUS_ENCOMENDA_CONFIG,
   CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
@@ -101,6 +103,7 @@ import {
   type Cliente,
   type ProdutoCardapio,
   type DespesaNotaFiscal,
+  type PagamentoItem,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -295,6 +298,50 @@ export function OrdersView({
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
+  // Histórico de Pagamentos Recebidos (Mini histórico)
+  const [historicoPagamentos, setHistoricoPagamentos] = useState<PagamentoItem[]>([]);
+  const [novoPagamentoValorFormatado, setNovoPagamentoValorFormatado] = useState("");
+  const [novoPagamentoData, setNovoPagamentoData] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const totalPagoCalculado = useMemo(() => {
+    return historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+  }, [historicoPagamentos]);
+
+  const valorTotalNum = useMemo(() => {
+    return converterMoedaInputParaNumero(valorTotalFormatado);
+  }, [valorTotalFormatado]);
+
+  const saldoDevedorCalculado = useMemo(() => {
+    return Math.max(0, valorTotalNum - totalPagoCalculado);
+  }, [valorTotalNum, totalPagoCalculado]);
+
+  const handleAdicionarPagamentoHistorico = () => {
+    const val = converterMoedaInputParaNumero(novoPagamentoValorFormatado);
+    if (val <= 0) {
+      toast.error("Informe um valor maior que R$ 0,00 para registrar o pagamento.");
+      return;
+    }
+    if (!novoPagamentoData) {
+      toast.error("Informe a data do pagamento.");
+      return;
+    }
+
+    const novoItem: PagamentoItem = {
+      id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      data: novoPagamentoData,
+      valor: val,
+    };
+
+    setHistoricoPagamentos((prev) => [...prev, novoItem]);
+    setNovoPagamentoValorFormatado("");
+    toast.success(`Pagamento de ${formatarMoeda(val)} adicionado!`);
+  };
+
+  const handleRemoverPagamentoHistorico = (id: string) => {
+    setHistoricoPagamentos((prev) => prev.filter((p) => p.id !== id));
+    toast.info("Pagamento removido do histórico.");
+  };
+
   // Formulário de Bloqueio de Data
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
@@ -428,6 +475,9 @@ export function OrdersView({
     setItensTags([]);
     setValorTotalFormatado("");
     setValorEntradaFormatado("");
+    setHistoricoPagamentos([]);
+    setNovoPagamentoValorFormatado("");
+    setNovoPagamentoData(new Date().toISOString().split("T")[0]);
     setInsumosTags([]);
     setBuscaItemProduto("");
     setBuscaTagInsumo("");
@@ -458,7 +508,33 @@ export function OrdersView({
     }
 
     setValorTotalFormatado(ord.valorTotal ? `R$ ${(ord.valorTotal).toFixed(2).replace(".", ",")}` : "");
-    setValorEntradaFormatado(ord.valorEntrada ? `R$ ${(ord.valorEntrada).toFixed(2).replace(".", ",")}` : "");
+    
+    // Histórico de Pagamentos ou Fallback do Sinal
+    const histExistente = ord.historicoPagamentos || ord.paymentsHistory;
+    if (Array.isArray(histExistente) && histExistente.length > 0) {
+      setHistoricoPagamentos(
+        histExistente.map((p: any) => ({
+          id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+          data: p.data || p.date || ord.createdAt?.split("T")[0] || ord.dataEntrega,
+          valor: Number(p.valor || p.amount || 0),
+          observacao: p.observacao || p.note || "",
+        }))
+      );
+    } else if (ord.valorEntrada && ord.valorEntrada > 0) {
+      setHistoricoPagamentos([
+        {
+          id: "pay_initial",
+          data: ord.createdAt?.split("T")[0] || ord.dataEntrega || new Date().toISOString().split("T")[0],
+          valor: Number(ord.valorEntrada),
+          observacao: "Sinal / Entrada Inicial",
+        },
+      ]);
+    } else {
+      setHistoricoPagamentos([]);
+    }
+
+    setNovoPagamentoValorFormatado("");
+    setNovoPagamentoData(new Date().toISOString().split("T")[0]);
     setInsumosTags(ord.insumosNecessarios || []);
     setBuscaItemProduto("");
     setBuscaTagInsumo("");
@@ -472,7 +548,7 @@ export function OrdersView({
   const handleSalvarEncomenda = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorNum = converterMoedaInputParaNumero(valorTotalFormatado);
-    const entradaNum = converterMoedaInputParaNumero(valorEntradaFormatado);
+    const totalPago = historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
 
     if (!clienteNome || itensTags.length === 0 || valorNum <= 0) {
       toast.error("Preencha o cliente, adicione ao menos 1 item e informe o valor total.");
@@ -481,9 +557,9 @@ export function OrdersView({
 
     try {
       const statusPag: StatusPagamentoEncomenda =
-        entradaNum >= valorNum
+        totalPago >= valorNum && valorNum > 0
           ? "pago_integral"
-          : entradaNum > 0
+          : totalPago > 0
           ? "sinal_pago"
           : "pendente";
 
@@ -499,7 +575,9 @@ export function OrdersView({
         itensDetalhes: itensTags,
         insumosNecessarios: insumosTags,
         valorTotal: valorNum,
-        valorEntrada: entradaNum,
+        valorEntrada: totalPago,
+        historicoPagamentos,
+        paymentsHistory: historicoPagamentos,
         statusPagamento: statusPag,
         status: "pendente" as StatusEncomenda,
         tipoEntrega,
@@ -1038,7 +1116,8 @@ export function OrdersView({
                 </TableRow>
               ) : (
                 encomendasFiltradas.map((ord) => {
-                  const saldoRestante = Math.max(0, ord.valorTotal - (ord.valorEntrada || 0));
+                  const totalPago = calcularTotalPagoEncomenda(ord);
+                  const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
                   return (
                     <TableRow key={ord.id} className="hover:bg-muted/20">
                       <TableCell className="text-xs font-mono">
@@ -1106,14 +1185,14 @@ export function OrdersView({
                       </TableCell>
 
                       <TableCell className="text-xs">
-                        {ord.valorEntrada && ord.valorEntrada >= ord.valorTotal ? (
+                        {totalPago >= ord.valorTotal && ord.valorTotal > 0 ? (
                           <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
-                            100% Pago
+                            100% Pago ({formatarMoeda(totalPago)})
                           </Badge>
-                        ) : ord.valorEntrada && ord.valorEntrada > 0 ? (
+                        ) : totalPago > 0 ? (
                           <div className="space-y-0.5">
                             <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                              Sinal: {formatarMoeda(ord.valorEntrada)}
+                              Pago: {formatarMoeda(totalPago)}
                             </Badge>
                             <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
                           </div>
@@ -1940,27 +2019,156 @@ export function OrdersView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/30 border border-border/60">
-              <div className="space-y-1">
-                <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total (R$) *</Label>
-                <Input
-                  id="enc-valor"
-                  placeholder="R$ 0,00"
-                  value={valorTotalFormatado}
-                  onChange={(e) => setValorTotalFormatado(aplicarMascaraMoedaInput(e.target.value))}
-                  className="h-8 text-xs font-black text-foreground"
-                  required
-                />
+            {/* VALOR TOTAL DA ENCOMENDA */}
+            <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-1">
+              <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total da Encomenda (R$) *</Label>
+              <Input
+                id="enc-valor"
+                placeholder="R$ 0,00"
+                value={valorTotalFormatado}
+                onChange={(e) => setValorTotalFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                className="h-9 text-sm font-black text-foreground"
+                required
+              />
+            </div>
+
+            {/* SEÇÃO DE PAGAMENTOS RECEBIDOS E SALDO DEVEDOR (MINI HISTÓRICO DE PAGAMENTOS) */}
+            <div className="space-y-3 p-3.5 rounded-xl bg-muted/40 border border-border/80">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-emerald-600" /> Pagamentos Recebidos
+                </Label>
+                <Badge variant="outline" className="text-[10px] font-mono bg-background">
+                  {historicoPagamentos.length} pagamento(s)
+                </Badge>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="enc-sinal" className="text-xs font-bold text-emerald-600">Sinal / Entrada (R$)</Label>
-                <Input
-                  id="enc-sinal"
-                  placeholder="R$ 0,00"
-                  value={valorEntradaFormatado}
-                  onChange={(e) => setValorEntradaFormatado(aplicarMascaraMoedaInput(e.target.value))}
-                  className="h-8 text-xs text-emerald-600 font-bold"
-                />
+
+              {/* Inputs para Adicionar Pagamento */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                <div className="sm:col-span-5 space-y-1">
+                  <Label htmlFor="pay-val" className="text-[11px] font-semibold text-muted-foreground">
+                    Valor (R$)
+                  </Label>
+                  <Input
+                    id="pay-val"
+                    placeholder="R$ 0,00"
+                    value={novoPagamentoValorFormatado}
+                    onChange={(e) => setNovoPagamentoValorFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                    className="h-8 text-xs font-bold font-mono bg-background"
+                  />
+                </div>
+                <div className="sm:col-span-4 space-y-1">
+                  <Label htmlFor="pay-date" className="text-[11px] font-semibold text-muted-foreground">
+                    Data do Pagamento
+                  </Label>
+                  <Input
+                    id="pay-date"
+                    type="date"
+                    value={novoPagamentoData}
+                    onChange={(e) => setNovoPagamentoData(e.target.value)}
+                    className="h-8 text-xs font-mono font-bold bg-background"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAdicionarPagamentoHistorico}
+                    className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tabela/Lista Compacta de Pagamentos Já Adicionados */}
+              {historicoPagamentos.length > 0 ? (
+                <div className="divide-y divide-border/60 bg-background rounded-lg border border-border/80 overflow-hidden">
+                  {historicoPagamentos.map((pag, idx) => (
+                    <div key={pag.id} className="p-2 px-3 flex items-center justify-between text-xs hover:bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <div>
+                          <span className="font-mono text-foreground font-semibold text-xs">
+                            {pag.data.split("-").reverse().join("/")}
+                          </span>
+                          {pag.observacao && (
+                            <span className="ml-2 text-[10px] text-muted-foreground italic">({pag.observacao})</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                          {formatarMoeda(pag.valor)}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoverPagamentoHistorico(pag.id)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                          title="Excluir pagamento"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-2.5 text-center text-xs text-muted-foreground italic bg-background/50 rounded-lg border border-dashed border-border">
+                  Nenhum pagamento registrado ainda. Informe o valor e a data acima e clique em "+ Adicionar".
+                </div>
+              )}
+
+              {/* RESUMO DE VALORES COM DESTAQUE VISUAL (VISOR DE TOTAIS) */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {/* 1. Valor Total */}
+                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
+                    Valor Total
+                  </span>
+                  <span className="text-xs sm:text-sm font-black font-mono text-blue-900 dark:text-blue-200">
+                    {formatarMoeda(valorTotalNum)}
+                  </span>
+                </div>
+
+                {/* 2. Total Pago */}
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
+                    Total Pago
+                  </span>
+                  <span className="text-xs sm:text-sm font-black font-mono text-emerald-900 dark:text-emerald-200">
+                    {formatarMoeda(totalPagoCalculado)}
+                  </span>
+                </div>
+
+                {/* 3. Falta Pagar (Saldo Devedor) */}
+                <div
+                  className={`p-2.5 rounded-xl text-center border ${
+                    saldoDevedorCalculado === 0
+                      ? "bg-emerald-500/15 border-emerald-500/30"
+                      : "bg-rose-500/15 border-rose-500/30"
+                  }`}
+                >
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider block ${
+                      saldoDevedorCalculado === 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"
+                    }`}
+                  >
+                    Falta Pagar
+                  </span>
+                  <span
+                    className={`text-xs sm:text-sm font-black font-mono ${
+                      saldoDevedorCalculado === 0 ? "text-emerald-900 dark:text-emerald-200" : "text-rose-900 dark:text-rose-200"
+                    }`}
+                  >
+                    {formatarMoeda(saldoDevedorCalculado)}
+                  </span>
+                </div>
               </div>
             </div>
 

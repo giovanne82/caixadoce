@@ -245,26 +245,47 @@ function Index() {
           localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify([]));
         }
       } else {
-        const mapeadas: Encomenda[] = data.map((d: any) => ({
-          id: String(d.id),
-          estabelecimentoCodigo: d.estabelecimento_codigo,
-          clienteId: d.cliente_id,
-          clienteNome: d.cliente_nome,
-          clienteWhatsapp: d.cliente_whatsapp,
-          dataEntrega: d.data_entrega,
-          horarioEntrega: d.horario_entrega || "14:00",
-          itens: d.itens,
-          itensDetalhes: Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [],
-          insumosNecessarios: Array.isArray(d.insumos_necessarios) ? d.insumos_necessarios : [],
-          valorTotal: Number(d.valor_total),
-          valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
-          statusPagamento: d.status_pagamento || "pendente",
-          status: d.status || "pendente",
-          observacoes: d.observacoes,
-          enderecoEntrega: d.endereco_entrega,
-          tipoEntrega: d.tipo_entrega || "retirada",
-          createdAt: d.created_at,
-        }));
+        const mapeadas: Encomenda[] = data.map((d: any) => {
+          const histRaw = d.historico_pagamentos || d.payments_history;
+          const historicoMapeado = Array.isArray(histRaw) && histRaw.length > 0
+            ? histRaw.map((p: any) => ({
+                id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+                data: p.data || p.date || d.created_at?.split("T")[0] || d.data_entrega,
+                valor: Number(p.valor || p.amount || 0),
+                observacao: p.observacao || p.note || "",
+              }))
+            : d.valor_entrada && Number(d.valor_entrada) > 0
+            ? [{
+                id: "pay_initial",
+                data: d.created_at?.split("T")[0] || d.data_entrega,
+                valor: Number(d.valor_entrada),
+                observacao: "Sinal / Entrada Inicial",
+              }]
+            : [];
+
+          return {
+            id: String(d.id),
+            estabelecimentoCodigo: d.estabelecimento_codigo,
+            clienteId: d.cliente_id,
+            clienteNome: d.cliente_nome,
+            clienteWhatsapp: d.cliente_whatsapp,
+            dataEntrega: d.data_entrega,
+            horarioEntrega: d.horario_entrega || "14:00",
+            itens: d.itens,
+            itensDetalhes: Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [],
+            insumosNecessarios: Array.isArray(d.insumos_necessarios) ? d.insumos_necessarios : [],
+            valorTotal: Number(d.valor_total),
+            valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
+            historicoPagamentos: historicoMapeado,
+            paymentsHistory: historicoMapeado,
+            statusPagamento: d.status_pagamento || "pendente",
+            status: d.status || "pendente",
+            observacoes: d.observacoes,
+            enderecoEntrega: d.endereco_entrega,
+            tipoEntrega: d.tipo_entrega || "retirada",
+            createdAt: d.created_at,
+          };
+        });
         setEncomendas(mapeadas);
       }
     } catch {}
@@ -663,6 +684,8 @@ function Index() {
           insumos_necessarios: item.insumosNecessarios || [],
           valor_total: item.valorTotal,
           valor_entrada: item.valorEntrada || 0,
+          historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
+          payments_history: item.paymentsHistory || item.historicoPagamentos || [],
           status_pagamento: item.statusPagamento,
           status: item.status,
           tipo_entrega: item.tipoEntrega,
@@ -696,6 +719,8 @@ function Index() {
           insumos_necessarios: dados.insumosNecessarios,
           valor_total: dados.valorTotal,
           valor_entrada: dados.valorEntrada,
+          historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+          payments_history: dados.paymentsHistory || dados.historicoPagamentos || [],
           status_pagamento: dados.statusPagamento,
           status: dados.status,
           tipo_entrega: dados.tipoEntrega,
