@@ -83,6 +83,7 @@ import {
   formatarMoeda,
   formatarWhatsappLink,
   gerarMensagemResumoWhatsApp,
+  generatePixPayload,
   aplicarMascaraTelefone,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
@@ -608,18 +609,58 @@ export function OrdersView({
     }
   };
 
-  // Enviar Resumo Formatado no WhatsApp para o Cliente
+  // Enviar Resumo Formatado no WhatsApp para o Cliente e Copiar Pix EMVCo para o Clipboard
   const handleEnviarResumoWhatsApp = (ord: Encomenda) => {
     if (!ord.clienteWhatsapp) {
       toast.error("Esta encomenda não possui número de WhatsApp cadastrado.");
       return;
     }
 
+    const chavePix = profile?.chavePix || "contato@caixadoce.com.br";
+    const nomeLoja = estabelecimentoNome || profile?.establishmentName || "CaixaDoce";
+    const cidadeLoja = profile?.cidade || "SAO PAULO";
+
+    const totalPago = calcularTotalPagoEncomenda(ord);
+    const saldoRestanteNum = Math.max(0, ord.valorTotal - totalPago);
+    const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (ord.valorTotal > 0 ? ord.valorTotal : 0);
+
+    // 1. Gera mensagem com a chave Pix limpa
     const mensagem = gerarMensagemResumoWhatsApp(ord, {
-      nomeLoja: estabelecimentoNome || profile?.establishmentName || "CaixaDoce",
-      chavePix: profile?.chavePix || "contato@caixadoce.com.br",
-      cidadeLoja: profile?.cidade || "SAO PAULO",
+      nomeLoja,
+      chavePix,
+      cidadeLoja,
     });
+
+    // 2. Copia automaticamente a string bruta do Pix Copia e Cola EMVCo para a área de transferência
+    let pixCopiadoComSucesso = false;
+    if (chavePix && valorParaPix > 0) {
+      try {
+        const pixPayload = generatePixPayload({
+          pixKey: chavePix,
+          merchantName: nomeLoja,
+          merchantCity: cidadeLoja,
+          amount: valorParaPix,
+          txid: (ord.id || "ORDER").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20),
+          description: `Encomenda ${ord.clienteNome.slice(0, 15)}`,
+        });
+
+        if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(pixPayload);
+          pixCopiadoComSucesso = true;
+        }
+      } catch {}
+    }
+
+    // 3. Exibe o toast informativo
+    if (pixCopiadoComSucesso) {
+      toast.info(
+        "Mensagem gerada! O Pix Copia e Cola foi copiado para sua área de transferência. Cole-o no WhatsApp após enviar o pedido."
+      );
+    } else {
+      toast.success("Resumo gerado! Abrindo o WhatsApp...");
+    }
+
+    // 4. Abre o WhatsApp
     const url = formatarWhatsappLink(ord.clienteWhatsapp, mensagem);
     if (typeof window !== "undefined") {
       window.open(url, "_blank");

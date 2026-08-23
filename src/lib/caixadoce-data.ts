@@ -1066,25 +1066,12 @@ export function gerarMensagemResumoWhatsApp(
     itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
   }
 
-  // Gera o Pix Copia e Cola se houver chave Pix e valor devido
+  // Exibe a Chave Pix limpa e o valor devido na mensagem do WhatsApp
   let blocoPix = "";
   const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
 
   if (chavePix && chavePix.trim().length > 0 && valorParaPix > 0) {
-    try {
-      const pixPayload = generatePixPayload({
-        pixKey: chavePix,
-        merchantName: nomeLoja,
-        merchantCity: cidade || "SAO PAULO",
-        amount: valorParaPix,
-        txid: (encomenda.id || "ORDER").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20),
-        description: `Encomenda ${encomenda.clienteNome.slice(0, 15)}`,
-      });
-
-      if (pixPayload) {
-        blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}\n\n🔗 *Pix Copia e Cola:*\n\`\`\`\n${pixPayload}\n\`\`\``;
-      }
-    } catch {}
+    blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}\n🔑 *Chave Pix:* ${chavePix}`;
   }
 
   return `✨ *Confirmação de Encomenda - ${nomeLoja}* ✨

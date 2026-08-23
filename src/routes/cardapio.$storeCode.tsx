@@ -395,8 +395,12 @@ function CardapioLojaView() {
       ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
       : "🏬 Retirada no Balcão";
 
-    let blocoPix = "";
+    let pixCopiadoComSucesso = false;
+    let blocoPixInfo = "";
+
     if (lojaInfo?.chavePix && totalCarrinho > 0) {
+      blocoPixInfo = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
+      
       try {
         const pixPayload = generatePixPayload({
           pixKey: lojaInfo.chavePix,
@@ -407,8 +411,9 @@ function CardapioLojaView() {
           description: `Pedido ${clienteNome.slice(0, 15)}`,
         });
 
-        if (pixPayload) {
-          blocoPix = `\n\n🔗 *Pix Copia e Cola:*\n\`\`\`\n${pixPayload}\n\`\`\``;
+        if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(pixPayload);
+          pixCopiadoComSucesso = true;
         }
       } catch {}
     }
@@ -422,13 +427,18 @@ Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
 📍 *Modalidade:* ${modalidade}
-💳 *Pagamento:* Pix Direto (Sem taxa)
 ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
 ${resumoItens}
 
-💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}${blocoPix}
+💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
 
 Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`;
+
+    if (pixCopiadoComSucesso) {
+      toast.info("Mensagem gerada! O Pix Copia e Cola foi copiado para sua área de transferência. Cole-o no WhatsApp após enviar o pedido.");
+    } else {
+      toast.success("Pedido enviado para a confeiteira com sucesso!");
+    }
 
     const numTarget = lojaInfo?.whatsapp || lojaInfo?.telefone || "";
     const url = formatarWhatsappLink(numTarget, msg);
