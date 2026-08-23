@@ -1013,11 +1013,33 @@ export function aplicarMascaraMoedaInput(valorInput: string): string {
   }).format(Number(centavos))}`;
 }
 
-export function converterMoedaInputParaNumero(valorFormatado: string): number {
+export function converterMoedaInputParaNumero(valorFormatado: string | number): number {
+  if (typeof valorFormatado === "number") {
+    return isNaN(valorFormatado) ? 0 : valorFormatado;
+  }
   if (!valorFormatado) return 0;
-  const limpo = valorFormatado.replace(/\D/g, "");
-  if (!limpo) return 0;
-  return Number(limpo) / 100;
+
+  const str = String(valorFormatado).trim();
+  if (!str) return 0;
+
+  // Se a string já contiver vírgula decimal (ex: "R$ 470,00" ou "470,00"):
+  if (str.includes(",")) {
+    const limpo = str.replace(/[^\d,]/g, "").replace(",", ".");
+    const num = parseFloat(limpo);
+    return isNaN(num) ? 0 : num;
+  }
+
+  // Se a string contiver ponto decimal explícito com duas casas (ex: "470.00"):
+  if (str.includes(".")) {
+    const limpo = str.replace(/[^\d.]/g, "");
+    const num = parseFloat(limpo);
+    return isNaN(num) ? 0 : num;
+  }
+
+  // Caso seja apenas dígitos (ex: centavos brutos "47000"):
+  const apenasDigitos = str.replace(/\D/g, "");
+  if (!apenasDigitos) return 0;
+  return Number(apenasDigitos) / 100;
 }
 
 export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
