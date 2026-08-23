@@ -1254,6 +1254,7 @@ function Index() {
                 listasCompras={listasCompras}
                 onSalvarDespesa={salvarDespesa}
                 onEditarDespesa={editarDespesa}
+                onExcluirDespesa={excluirDespesa}
                 onConciliarInsumos={conciliarInsumos}
               />
             ) : (

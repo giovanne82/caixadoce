@@ -52,6 +52,7 @@ interface ScannerViewProps {
   listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
   onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
+  onExcluirDespesa?: (id: string) => Promise<void>;
   onConciliarInsumos?: (conciliacoes: { encomendaId: string; insumoId: string }[]) => Promise<void>;
   onConciliarListasCompras?: (listaIds: string[], itensNota: ItemNotaFiscal[]) => Promise<void>;
 }
@@ -60,6 +61,7 @@ export function ScannerView({
   despesas,
   onSalvarDespesa,
   onEditarDespesa,
+  onExcluirDespesa,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +82,27 @@ export function ScannerView({
   const [registroDetalhes, setRegistroDetalhes] = useState<DespesaNotaFiscal | null>(null);
   const [editFornecedorNome, setEditFornecedorNome] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  // Modal de Confirmação de Exclusão
+  const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
+  const [notaParaExcluir, setNotaParaExcluir] = useState<DespesaNotaFiscal | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+
+  const handleConfirmarExclusao = async () => {
+    if (!notaParaExcluir) return;
+    setExcluindo(true);
+    try {
+      if (onExcluirDespesa) {
+        await onExcluirDespesa(notaParaExcluir.id);
+      }
+      setModalExcluirOpen(false);
+      setNotaParaExcluir(null);
+    } catch (e: any) {
+      toast.error(`Erro ao excluir notinha: ${e.message}`);
+    } finally {
+      setExcluindo(false);
+    }
+  };
 
   const abrirDetalhesRegistro = (registro: DespesaNotaFiscal) => {
     setRegistroDetalhes(registro);
@@ -321,7 +344,7 @@ export function ScannerView({
                 <TableHead className="text-xs font-bold w-36">Data</TableHead>
                 <TableHead className="text-xs font-bold">Nome do Estabelecimento</TableHead>
                 <TableHead className="text-xs font-bold text-right w-36">Valor Total</TableHead>
-                <TableHead className="text-xs font-bold text-center w-28">Compartilhar</TableHead>
+                <TableHead className="text-xs font-bold text-center w-32">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -350,19 +373,35 @@ export function ScannerView({
                       {formatarMoeda(d.valorTotal)}
                     </TableCell>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          compartilharNotinhaWhatsApp(d);
-                        }}
-                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
-                        title="Compartilhar no WhatsApp"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            compartilharNotinhaWhatsApp(d);
+                          }}
+                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
+                          title="Compartilhar no WhatsApp"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNotaParaExcluir(d);
+                            setModalExcluirOpen(true);
+                          }}
+                          className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center transition-colors"
+                          title="Excluir notinha"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -370,6 +409,47 @@ export function ScannerView({
             </TableBody>
           </Table>
         </Card>
+
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DA NOTINHA */}
+        <Dialog open={modalExcluirOpen} onOpenChange={setModalExcluirOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-rose-600 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" /> Excluir Registro de Notinha
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground pt-1">
+                Tem certeza que deseja excluir a notinha de{" "}
+                <span className="font-bold text-foreground">"{notaParaExcluir?.fornecedorNome}"</span> no valor de{" "}
+                <span className="font-bold text-emerald-600">
+                  {formatarMoeda(notaParaExcluir?.valorTotal || 0)}
+                </span>
+                ? Esta ação removerá o registro do Supabase e atualizará o caixa financeiro.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0 mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalExcluirOpen(false)}
+                disabled={excluindo}
+                className="text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmarExclusao}
+                disabled={excluindo}
+                className="text-xs font-semibold"
+              >
+                {excluindo ? "Excluindo..." : "Confirmar Exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* ========================================================================= */}
