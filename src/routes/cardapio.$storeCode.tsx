@@ -121,27 +121,58 @@ function CardapioLojaView() {
   useEffect(() => {
     async function carregarDadosLoja() {
       try {
-        const { data } = await supabase
+        let estData = null;
+
+        // 1. Busca por codigo
+        const { data: d1, error: err1 } = await supabase
           .from("estabelecimentos")
           .select("*")
-          .or(`codigo.eq.${code},estabelecimento_codigo.eq.${code}`)
+          .eq("codigo", code)
           .maybeSingle();
 
-        if (data) {
+        if (!err1 && d1) {
+          estData = d1;
+        } else {
+          // 2. Busca por estabelecimento_codigo
+          const { data: d2, error: err2 } = await supabase
+            .from("estabelecimentos")
+            .select("*")
+            .eq("estabelecimento_codigo", code)
+            .maybeSingle();
+
+          if (!err2 && d2) {
+            estData = d2;
+          } else {
+            // 3. Fallback: seleciona o primeiro estabelecimento cadastrado
+            const { data: d3, error: err3 } = await supabase
+              .from("estabelecimentos")
+              .select("*")
+              .limit(1)
+              .maybeSingle();
+
+            if (!err3 && d3) {
+              estData = d3;
+            }
+          }
+        }
+
+        if (estData) {
           setLojaInfo({
-            whatsapp: data.whatsapp || data.telefone,
-            telefone: data.telefone || data.whatsapp,
-            user_id: data.user_id,
-            nome: data.nome,
-            logo_url: data.logo_url || data.store_logo_url,
-            store_logo_url: data.store_logo_url || data.logo_url,
-            titulo_cardapio: data.titulo_cardapio || data.menu_title,
-            menu_title: data.menu_title || data.titulo_cardapio,
-            slogan_cardapio: data.slogan_cardapio || data.menu_slogan,
-            menu_slogan: data.menu_slogan || data.slogan_cardapio,
+            whatsapp: estData.whatsapp || estData.telefone,
+            telefone: estData.telefone || estData.whatsapp,
+            user_id: estData.user_id,
+            nome: estData.nome,
+            logo_url: estData.logo_url || estData.store_logo_url,
+            store_logo_url: estData.store_logo_url || estData.logo_url,
+            titulo_cardapio: estData.titulo_cardapio || estData.menu_title,
+            menu_title: estData.menu_title || estData.titulo_cardapio,
+            slogan_cardapio: estData.slogan_cardapio || estData.menu_slogan,
+            menu_slogan: estData.menu_slogan || estData.slogan_cardapio,
           });
         }
-      } catch {}
+      } catch (err) {
+        console.warn("[Cardápio Público] Aviso no carregamento do estabelecimento:", err);
+      }
     }
     carregarDadosLoja();
   }, [code]);

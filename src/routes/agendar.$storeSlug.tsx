@@ -199,11 +199,37 @@ function PublicStoreView() {
   useEffect(() => {
     async function loadData() {
       try {
-        const { data: estData } = await supabase
+        let estData = null;
+
+        const { data: d1, error: err1 } = await supabase
           .from("estabelecimentos")
           .select("*")
-          .or(`codigo.eq.${cleanCode},estabelecimento_codigo.eq.${cleanCode}`)
+          .eq("codigo", cleanCode)
           .maybeSingle();
+
+        if (!err1 && d1) {
+          estData = d1;
+        } else {
+          const { data: d2, error: err2 } = await supabase
+            .from("estabelecimentos")
+            .select("*")
+            .eq("estabelecimento_codigo", cleanCode)
+            .maybeSingle();
+
+          if (!err2 && d2) {
+            estData = d2;
+          } else {
+            const { data: d3, error: err3 } = await supabase
+              .from("estabelecimentos")
+              .select("*")
+              .limit(1)
+              .maybeSingle();
+
+            if (!err3 && d3) {
+              estData = d3;
+            }
+          }
+        }
 
         if (estData) {
           setStoreInfo({
@@ -218,7 +244,9 @@ function PublicStoreView() {
             sloganCardapio: estData.slogan_cardapio || estData.menu_slogan,
           });
         }
-      } catch {}
+      } catch (err) {
+        console.warn("[Agendamento] Aviso no carregamento do estabelecimento:", err);
+      }
 
       try {
         const { data: bloqData } = await supabase
