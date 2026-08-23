@@ -502,9 +502,9 @@ export function FinanceiroTab({
       {/* SEÇÃO: RECEBIMENTOS E INTEGRAÇÕES (COBRANÇA AVULSA & STRIPE CONNECT) */}
       {/* ========================================================================= */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
           <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
-            Recebimentos &amp; Integrações <CreditCard className="w-4 h-4 text-primary" />
+            Recebimentos &amp; Integrações <CreditCard className="w-4 h-4 text-primary shrink-0" />
           </h3>
           <span className="text-xs text-muted-foreground">
             Formas de cobrança e gateways de pagamento
@@ -608,47 +608,6 @@ export function FinanceiroTab({
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <Card className="border-border shadow-sm p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por descrição, categoria..."
-              className="pl-9 h-9 text-xs"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Select value={filtroTipo} onValueChange={(v: any) => setFiltroTipo(v)}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Tipo de Movimentação" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os Tipos</SelectItem>
-                <SelectItem value="receita">Apenas Receitas (Entradas)</SelectItem>
-                <SelectItem value="despesa">Apenas Despesas (Saídas)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Select value={filtroStatus} onValueChange={(v: any) => setFiltroStatus(v)}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Status do Pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os Status</SelectItem>
-                <SelectItem value="concluida">Confirmados / Concluídos</SelectItem>
-                <SelectItem value="pendente">Pendentes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
-
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
@@ -667,98 +626,100 @@ export function FinanceiroTab({
 
       {/* Transactions Table */}
       <Card className="border-border shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40">
-              <TableHead>Data</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead>Origem</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead>Método</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transacoesFiltradas.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">
-                  Nenhuma transação encontrada com os filtros selecionados.
-                </TableCell>
+        <div className="overflow-x-auto select-none [scrollbar-width:thin]">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40">
+                <TableHead className="whitespace-nowrap">Data</TableHead>
+                <TableHead className="whitespace-nowrap">Descrição</TableHead>
+                <TableHead className="whitespace-nowrap">Origem</TableHead>
+                <TableHead className="whitespace-nowrap">Categoria</TableHead>
+                <TableHead className="whitespace-nowrap">Método</TableHead>
+                <TableHead className="whitespace-nowrap">Valor</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Ações</TableHead>
               </TableRow>
-            ) : (
-              transacoesFiltradas.map((t) => (
-                <TableRow key={t.id} className="hover:bg-muted/20">
-                  <TableCell className="font-mono text-xs text-muted-foreground">{t.data}</TableCell>
-                  <TableCell>
-                    <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
-                    {t.clienteOuFornecedor && (
-                      <p className="text-[11px] text-muted-foreground">{t.clienteOuFornecedor}</p>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
-                      <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
-                        <CreditCard className="w-3 h-3 text-purple-600 dark:text-purple-400" /> Stripe (Auto)
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground border-border font-semibold flex items-center gap-1 w-fit">
-                        <Sparkles className="w-3 h-3 text-amber-500" /> Manual
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs font-normal">
-                      {t.categoria}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs uppercase font-medium text-muted-foreground">
-                    {t.metodoPagamento.replace("_", " ")}
-                  </TableCell>
-                  <TableCell className={`font-bold text-sm ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
-                    {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      onClick={() =>
-                        onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
-                      }
-                      title="Clique para alternar status"
-                      className="cursor-pointer"
-                    >
-                      <Badge
-                        variant={t.status === "concluida" ? "default" : "secondary"}
-                        className={`text-[11px] ${
-                          t.status === "concluida"
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                            : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
-                        }`}
-                      >
-                        {t.status === "concluida" ? "Concluído" : "Pendente"}
-                      </Badge>
-                    </button>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
-                          onRemoverTransacao(t.id);
-                        }
-                      }}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 transition-colors"
-                      title="Excluir lançamento financeiro"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+            </TableHeader>
+            <TableBody>
+              {transacoesFiltradas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground whitespace-nowrap">
+                    Nenhuma transação encontrada.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                transacoesFiltradas.map((t) => (
+                  <TableRow key={t.id} className="hover:bg-muted/20">
+                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{t.data}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
+                      {t.clienteOuFornecedor && (
+                        <p className="text-[11px] text-muted-foreground">{t.clienteOuFornecedor}</p>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
+                        <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
+                          <CreditCard className="w-3 h-3 text-purple-600 dark:text-purple-400" /> Stripe (Auto)
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground border-border font-semibold flex items-center gap-1 w-fit">
+                          <Sparkles className="w-3 h-3 text-amber-500" /> Manual
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Badge variant="outline" className="text-xs font-normal">
+                        {t.categoria}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs uppercase font-medium text-muted-foreground whitespace-nowrap">
+                      {t.metodoPagamento.replace("_", " ")}
+                    </TableCell>
+                    <TableCell className={`font-bold text-sm whitespace-nowrap ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
+                      {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <button
+                        onClick={() =>
+                          onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
+                        }
+                        title="Clique para alternar status"
+                        className="cursor-pointer min-h-[36px] min-w-[36px] inline-flex items-center justify-center"
+                      >
+                        <Badge
+                          variant={t.status === "concluida" ? "default" : "secondary"}
+                          className={`text-[11px] ${
+                            t.status === "concluida"
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                          }`}
+                        >
+                          {t.status === "concluida" ? "Concluído" : "Pendente"}
+                        </Badge>
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+                            onRemoverTransacao(t.id);
+                          }
+                        }}
+                        className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                        title="Excluir lançamento financeiro"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
 
       {/* ========================================================================= */}

@@ -519,17 +519,6 @@ export function DespesasView({
         </CardContent>
       </Card>
 
-      {/* BARRA DE BUSCA EM TODAS AS LISTAS */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Pesquisar em todas as listas de compras..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="h-9 pl-9 text-xs bg-card"
-        />
-      </div>
-
       {/* ========================================================================= */}
       {/* 2. EXIBIÇÃO DAS LISTAS DE COMPRAS (CARDS INDIVIDUAIS COM RECURSOS INTEGRADOS) */}
       {/* ========================================================================= */}

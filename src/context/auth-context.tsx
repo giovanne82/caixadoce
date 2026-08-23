@@ -36,6 +36,7 @@ export type UpdateEstablishmentDetailsInput = {
   cep?: string;
   tipoDocumento?: string;
   numeroDocumento?: string;
+  cnpj?: string;
   chavePix?: string;
   tipoChavePix?: string;
   responsavel?: string;
@@ -633,7 +634,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         nome: details.nome,
         responsavel: details.responsavel || user.name || "Administrador",
         tipo_documento: details.tipoDocumento || "CNPJ",
-        numero_documento: details.numeroDocumento || null,
+        numero_documento: details.numeroDocumento || details.cnpj || null,
+        cnpj: details.numeroDocumento || details.cnpj || null,
         tipo_chave_pix: details.tipoChavePix || "email",
         chave_pix: details.chavePix || null,
         pix_accounts: details.contasPix || null,

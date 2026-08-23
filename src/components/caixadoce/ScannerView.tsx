@@ -341,91 +341,93 @@ export function ScannerView({
         </div>
 
         <Card className="border-border shadow-sm overflow-hidden bg-card">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead className="text-xs font-bold w-36">Data</TableHead>
-                <TableHead className="text-xs font-bold">Nome do Estabelecimento</TableHead>
-                <TableHead className="text-xs font-bold text-right w-36">Valor Total</TableHead>
-                <TableHead className="text-xs font-bold text-center w-32">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ultimosRegistros.length === 0 ? (
+          <div className="overflow-x-auto select-none [scrollbar-width:thin]">
+            <Table>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground">
-                    Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
-                  </TableCell>
+                  <TableHead className="text-xs font-bold w-36 whitespace-nowrap">Data</TableHead>
+                  <TableHead className="text-xs font-bold whitespace-nowrap">Nome do Estabelecimento</TableHead>
+                  <TableHead className="text-xs font-bold text-right w-36 whitespace-nowrap">Valor Total</TableHead>
+                  <TableHead className="text-xs font-bold text-center w-36 whitespace-nowrap">Ações</TableHead>
                 </TableRow>
-              ) : (
-                ultimosRegistros.map((d) => (
-                  <TableRow
-                    key={d.id}
-                    onClick={() => abrirDetalhesRegistro(d)}
-                    className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      <div>{d.dataCompra}</div>
-                      {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
-                    </TableCell>
-                    <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors">
-                      <div>{d.fornecedorNome}</div>
-                      {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
-                    </TableCell>
-                    <TableCell className="font-bold text-xs text-emerald-600 text-right">
-                      {formatarMoeda(d.valorTotal)}
-                    </TableCell>
-                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onReenviarFinanceiro) {
-                              onReenviarFinanceiro(d);
-                            }
-                          }}
-                          className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center transition-colors"
-                          title="Reenviar para o Financeiro"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            compartilharNotinhaWhatsApp(d);
-                          }}
-                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
-                          title="Compartilhar no WhatsApp"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setNotaParaExcluir(d);
-                            setModalExcluirOpen(true);
-                          }}
-                          className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center transition-colors"
-                          title="Excluir notinha"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {ultimosRegistros.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground whitespace-nowrap">
+                      Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  ultimosRegistros.map((d) => (
+                    <TableRow
+                      key={d.id}
+                      onClick={() => abrirDetalhesRegistro(d)}
+                      className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                        <div>{d.dataCompra}</div>
+                        {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
+                      </TableCell>
+                      <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors whitespace-nowrap">
+                        <div>{d.fornecedorNome}</div>
+                        {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
+                      </TableCell>
+                      <TableCell className="font-bold text-xs text-emerald-600 text-right whitespace-nowrap">
+                        {formatarMoeda(d.valorTotal)}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onReenviarFinanceiro) {
+                                onReenviarFinanceiro(d);
+                              }
+                            }}
+                            className="h-9 w-9 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
+                            title="Reenviar para o Financeiro"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              compartilharNotinhaWhatsApp(d);
+                            }}
+                            className="h-9 w-9 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center min-h-[44px] min-w-[44px]"
+                            title="Compartilhar no WhatsApp"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNotaParaExcluir(d);
+                              setModalExcluirOpen(true);
+                            }}
+                            className="h-9 w-9 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
+                            title="Excluir notinha"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
 
         {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DA NOTINHA */}

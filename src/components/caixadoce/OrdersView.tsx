@@ -956,7 +956,7 @@ export function OrdersView({
 
       {/* Barra de Controle de Visualização */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
-        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button
             variant={viewMode === "lista" ? "default" : "ghost"}
             size="sm"
@@ -980,15 +980,6 @@ export function OrdersView({
             className="h-7 text-xs font-semibold shrink-0"
           >
             Mensal
-          </Button>
-          <Button
-            variant={viewMode === "compras" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("compras")}
-            className="h-7 text-xs font-semibold shrink-0 text-amber-600 dark:text-amber-400"
-          >
-            <ShoppingCart className="w-3.5 h-3.5 mr-1 text-amber-500" />
-            Lista de Compras / Produção
           </Button>
         </div>
 
@@ -1026,16 +1017,6 @@ export function OrdersView({
 
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar cliente, item..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="h-8 text-xs pl-8"
-              />
-            </div>
-
             <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
               <SelectTrigger className="h-8 text-xs w-40">
                 <SelectValue placeholder="Pagamento" />

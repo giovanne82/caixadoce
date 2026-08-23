@@ -460,8 +460,8 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-foreground pb-24">
       {/* Header da Confeitaria em Lilás Suave #F3EEF9 com Botão #8E7CC3 */}
       <header className="bg-[#F3EEF9] text-[#2E1A47] py-4 px-4 shadow-xs border-b border-[#E8E0F2] sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {lojaInfo?.logo_url || lojaInfo?.store_logo_url ? (
               <img
                 src={lojaInfo.logo_url || lojaInfo.store_logo_url}
@@ -469,13 +469,13 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                 className="w-10 h-10 object-cover rounded-xl border border-[#8E7CC3]/30 shadow-xs shrink-0"
               />
             ) : (
-              <CaixaDoceLogo size="md" />
+              <CaixaDoceLogo size="md" className="shrink-0" />
             )}
-            <div className="border-l border-[#8E7CC3]/30 pl-3">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47]">
+            <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47] truncate max-w-[150px] sm:max-w-xs">
                 {lojaInfo?.nome || "Confeitaria Artesanal"}
               </h1>
-              <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold">
+              <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
                 Código Loja: {code}
               </span>
             </div>
@@ -484,9 +484,9 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
           {/* Botão do Carrinho Flutuante 'Meu Pedido' no Topo (Lilás da Marca #8E7CC3) */}
           <Button
             onClick={() => setCartOpen(true)}
-            className="font-extrabold relative bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs shadow-md rounded-2xl py-2 px-3.5"
+            className="font-extrabold shrink-0 relative bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs shadow-md rounded-2xl py-2 px-3.5 whitespace-nowrap"
           >
-            <ShoppingCart className="w-4 h-4 mr-1.5" />
+            <ShoppingCart className="w-4 h-4 mr-1.5 shrink-0" />
             <span className="hidden sm:inline">Meu Pedido</span>
             {totalItensCarrinho > 0 && (
               <span className="ml-1.5 bg-[#2E1A47] text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
@@ -510,7 +510,7 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
         </div>
 
         {/* Pílulas de Categorias */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 justify-start sm:justify-center">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 justify-start sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categorias.map((cat) => (
             <Button
               key={cat}
