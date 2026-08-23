@@ -463,9 +463,9 @@ export function FinanceiroTab({
                 )}
               </div>
               <CardDescription className="text-xs space-y-1">
-                <span>Receba cartões de crédito/débito direto na sua conta bancária via Stripe Connect.</span>
+                <span>Receba pagamentos automaticamente dos clientes que comprarem pelo seu Cardápio Digital.</span>
                 <span className="block text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-xl border border-border mt-1.5 leading-relaxed font-medium">
-                  Para receber pagamentos por cartão, você precisa conectar sua conta. Utilizamos a Stripe, o sistema de pagamentos mais seguro e utilizado no mundo, para garantir que o dinheiro caia diretamente na sua conta bancária.
+                  Para habilitar o pagamento por cartão no seu cardápio, conecte sua conta bancária. O CaixaDoce utiliza a Stripe, a plataforma de pagamentos online mais segura e utilizada no mundo todo. É 100% confiável e garante que o dinheiro das suas encomendas caia direto na sua conta, sem intermediários e com proteção total contra fraudes.
                 </span>
               </CardDescription>
             </CardHeader>
@@ -477,7 +477,7 @@ export function FinanceiroTab({
                     {stripeConfig.status === "connected" ? "Conta Stripe Vinculada" : "Conectar Conta"}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {stripeConfig.status === "connected" ? stripeConfig.accountId : "Habilite vendas no cartão"}
+                    {stripeConfig.status === "connected" ? stripeConfig.accountId : "Habilite vendas no seu Cardápio Digital"}
                   </p>
                 </div>
                 <Button
