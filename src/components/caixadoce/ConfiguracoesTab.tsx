@@ -47,6 +47,7 @@ import {
   Upload,
   Image as ImageIcon,
   Sparkles,
+  Edit2,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -96,7 +97,41 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [novaContaFavorecido, setNovaContaFavorecido] = useState("");
   const [novaContaDefault, setNovaContaDefault] = useState(false);
 
-  const handleAdicionarContaPix = () => {
+  // Modal de Edição de Chave Pix
+  const [modalEditPixOpen, setModalEditPixOpen] = useState(false);
+  const [editContaId, setEditContaId] = useState("");
+  const [editContaTipo, setEditContaTipo] = useState<"cpf" | "cnpj" | "telefone" | "email" | "aleatoria">("email");
+  const [editContaChave, setEditContaChave] = useState("");
+  const [editContaFavorecido, setEditContaFavorecido] = useState("");
+  const [editContaDefault, setEditContaDefault] = useState(false);
+
+  // Salva e persiste o array de contas Pix no banco Supabase e no state global imediatamente
+  const persistirContasPix = async (novasContas: ContaPix[]) => {
+    console.log("[Pix Manager] Salvando contas Pix no banco e state:", novasContas);
+    setContasPix(novasContas);
+
+    const contaPadrao = novasContas.find((c) => c.isDefault) || novasContas[0];
+
+    try {
+      await updateEstablishmentDetails({
+        nome: nomeEst || profile?.establishmentName || "CaixaDoce",
+        responsavel: responsavelEst,
+        chavePix: contaPadrao ? contaPadrao.chave : chavePix,
+        tipoChavePix: contaPadrao ? contaPadrao.tipo : tipoChavePix,
+        contasPix: novasContas,
+        logoUrl,
+        store_logo_url: logoUrl,
+        tituloCardapio,
+        menu_title: tituloCardapio,
+        sloganCardapio,
+        menu_slogan: sloganCardapio,
+      });
+    } catch (err) {
+      console.error("[Pix Manager] Erro ao persistir contas Pix:", err);
+    }
+  };
+
+  const handleAdicionarContaPix = async () => {
     if (!novaContaChave.trim()) {
       toast.error("Informe a Chave Pix.");
       return;
@@ -122,30 +157,66 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
     listaAtualizada.push(nova);
 
-    setContasPix(listaAtualizada);
+    await persistirContasPix(listaAtualizada);
     setNovaContaChave("");
     setNovaContaFavorecido("");
     setNovaContaDefault(false);
     setMostrarFormNovaContaPix(false);
-    toast.success("Conta Pix adicionada à lista!");
+    toast.success("Nova Chave Pix adicionada e salva com sucesso!");
   };
 
-  const handleRemoverContaPix = (id: string) => {
+  const handleAbrirEdicaoContaPix = (conta: ContaPix) => {
+    setEditContaId(conta.id);
+    setEditContaTipo(conta.tipo);
+    setEditContaChave(conta.chave);
+    setEditContaFavorecido(conta.favorecido);
+    setEditContaDefault(conta.isDefault);
+    setModalEditPixOpen(true);
+  };
+
+  const handleSalvarEdicaoContaPix = async () => {
+    if (!editContaChave.trim()) {
+      toast.error("Informe a Chave Pix.");
+      return;
+    }
+    if (!editContaFavorecido.trim()) {
+      toast.error("Informe o Nome do Favorecido (obrigatório).");
+      return;
+    }
+
+    let listaAtualizada = contasPix.map((c) => {
+      if (c.id === editContaId) {
+        return {
+          ...c,
+          tipo: editContaTipo,
+          chave: editContaChave.trim(),
+          favorecido: editContaFavorecido.trim(),
+          isDefault: editContaDefault,
+        };
+      }
+      return editContaDefault ? { ...c, isDefault: false } : c;
+    });
+
+    await persistirContasPix(listaAtualizada);
+    setModalEditPixOpen(false);
+    toast.success("Chave Pix atualizada com sucesso!");
+  };
+
+  const handleRemoverContaPix = async (id: string) => {
     const filtradas = contasPix.filter((c) => c.id !== id);
     if (filtradas.length > 0 && !filtradas.some((c) => c.isDefault)) {
       filtradas[0].isDefault = true;
     }
-    setContasPix(filtradas);
+    await persistirContasPix(filtradas);
     toast.success("Conta Pix removida.");
   };
 
-  const handleSetDefaultContaPix = (id: string) => {
-    setContasPix((prev) =>
-      prev.map((c) => ({
-        ...c,
-        isDefault: c.id === id,
-      }))
-    );
+  const handleSetDefaultContaPix = async (id: string) => {
+    const atualizadas = contasPix.map((c) => ({
+      ...c,
+      isDefault: c.id === id,
+    }));
+    await persistirContasPix(atualizadas);
     toast.success("Conta Pix padrão atualizada!");
   };
 
@@ -733,16 +804,29 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                             </p>
                           </div>
 
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoverContaPix(conta.id)}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full shrink-0"
-                            title="Remover chave Pix"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleAbrirEdicaoContaPix(conta)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-full"
+                              title="Editar chave Pix"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoverContaPix(conta.id)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-full"
+                              title="Remover chave Pix"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1053,6 +1137,93 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </Button>
             <Button variant="destructive" onClick={handleExcluirConta} disabled={deletando}>
               {deletando ? "Excluindo..." : "Confirmar Exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Edição de Chave Pix */}
+      <Dialog open={modalEditPixOpen} onOpenChange={setModalEditPixOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2">
+              <Edit2 className="w-4 h-4 text-emerald-600" /> Editar Chave Pix
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Atualize o tipo, a chave Pix ou o Nome do Favorecido desta conta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Tipo de Chave</Label>
+              <Select value={editContaTipo} onValueChange={(val: any) => setEditContaTipo(val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="email">E-mail</SelectItem>
+                  <SelectItem value="cpf">CPF</SelectItem>
+                  <SelectItem value="cnpj">CNPJ</SelectItem>
+                  <SelectItem value="telefone">Telefone</SelectItem>
+                  <SelectItem value="aleatoria">Chave Aleatória</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Chave Pix *</Label>
+              <Input
+                value={editContaChave}
+                onChange={(e) => setEditContaChave(e.target.value)}
+                placeholder="Informe sua chave Pix"
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Nome do Favorecido *</Label>
+              <Input
+                value={editContaFavorecido}
+                onChange={(e) => setEditContaFavorecido(e.target.value)}
+                placeholder="Ex: ArtFesta Confeitaria ou Nome Completo do Titular"
+                className="h-9 text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Informe o nome completo do titular da conta bancária como aparece no banco.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-foreground font-medium">
+                <input
+                  type="checkbox"
+                  checked={editContaDefault}
+                  onChange={(e) => setEditContaDefault(e.target.checked)}
+                  className="rounded border-border text-emerald-600 focus:ring-emerald-500"
+                />
+                Definir como Chave Principal / Padrão
+              </label>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 border-t flex justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalEditPixOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSalvarEdicaoContaPix}
+              className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Check className="w-3.5 h-3.5 mr-1" /> Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>

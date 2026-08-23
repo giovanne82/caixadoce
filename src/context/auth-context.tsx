@@ -674,7 +674,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         const isColumnError = msg.includes("column") || msg.includes("does not exist") || error.code === "PGRST204";
 
         if (isColumnError) {
-          console.warn("[Supabase] Colunas de personalização ausentes no Supabase. Executando fallback dos dados primários...");
+          console.warn("[Supabase] Colunas pix_accounts/menu_title ausentes no Supabase. Executando fallback dos dados primários...");
           const fallbackPayload = { ...payload };
           delete (fallbackPayload as any).logo_url;
           delete (fallbackPayload as any).store_logo_url;
@@ -682,6 +682,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete (fallbackPayload as any).menu_title;
           delete (fallbackPayload as any).slogan_cardapio;
           delete (fallbackPayload as any).menu_slogan;
+          delete (fallbackPayload as any).pix_accounts;
+          delete (fallbackPayload as any).pix_keys;
 
           let fallbackRes = await supabase
             .from("estabelecimentos")
@@ -690,15 +692,42 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           if (fallbackRes.error) {
             await supabase.from("estabelecimentos").upsert(fallbackPayload, { onConflict: "codigo" });
           }
-
-          throw new Error("As colunas 'menu_slogan' e 'menu_title' ainda não existem no banco Supabase. Execute o script SQL no Supabase Editor para liberar o salvamento da personalização.");
+        } else {
+          throw error;
         }
+      }
 
-        throw error;
+      // Sincronização na tabela auxiliar public.pix_accounts se existir
+      if (details.contasPix && user?.id) {
+        try {
+          const pixRows = details.contasPix.map((c) => ({
+            user_id: user.id,
+            tipo: c.tipo,
+            chave: c.chave,
+            favorecido: c.favorecido,
+            is_default: c.isDefault,
+          }));
+          await supabase.from("pix_accounts").delete().eq("user_id", user.id);
+          await supabase.from("pix_accounts").insert(pixRows);
+        } catch (e) {
+          console.warn("[Supabase] Não foi possível sincronizar na tabela pix_accounts:", e);
+        }
       }
     } catch (err: any) {
       console.error("[Supabase] Erro ao salvar estabelecimento no banco:", err);
       throw err;
+    }
+
+    if (profile) {
+      const merged: UserProfile = {
+        ...profile,
+        ...details,
+        chavePix: details.chavePix || profile.chavePix,
+        tipoChavePix: details.tipoChavePix || profile.tipoChavePix,
+        contasPix: details.contasPix || profile.contasPix,
+      };
+      setProfile(merged);
+      localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
     }
 
     salvarDadosInstitucionaisCache(currentCode, {

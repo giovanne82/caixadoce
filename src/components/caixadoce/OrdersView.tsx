@@ -620,9 +620,11 @@ export function OrdersView({
     ord: Encomenda,
     conta: { chave: string; favorecido?: string }
   ) => {
-    const chavePix = conta.chave || profile?.chavePix || "contato@caixadoce.com.br";
-    const favorecidoPix = conta.favorecido || profile?.establishmentName || profile?.responsavel || "CaixaDoce";
     const nomeLoja = estabelecimentoNome || profile?.establishmentName || "CaixaDoce";
+    const chavePix = conta.chave || profile?.chavePix || "contato@caixadoce.com.br";
+    const favorecidoPix = (conta.favorecido && conta.favorecido.trim().length > 0)
+      ? conta.favorecido.trim()
+      : (nomeLoja || profile?.responsavel || "CaixaDoce");
     const cidadeLoja = profile?.cidade || "SAO PAULO";
 
     const totalPago = calcularTotalPagoEncomenda(ord);
