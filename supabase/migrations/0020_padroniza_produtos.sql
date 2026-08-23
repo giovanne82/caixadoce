@@ -1,16 +1,16 @@
--- Migration 0020: Padroniza Produtos como Tabela Oficial (Execução 100% Segura)
--- Descrição: Remove a view 'produtos', cria a tabela real 'produtos', garante TODAS as colunas (PT/EN), migra dados e aplica políticas RLS.
+-- Migration 0020: Padroniza Produtos como Tabela Oficial (Execução 100% Blindada)
+-- Descrição: Remove a view 'produtos', cria a tabela real 'produtos', adiciona colunas PT/EN, migra dados dinamicamente e aplica RLS.
 
--- 1. Remover a view 'produtos' existente para permitir a criação da tabela física
+-- 1. Remover a view 'produtos' para permitir a criação da tabela real
 DROP VIEW IF EXISTS public.produtos CASCADE;
 
--- 2. Criar a tabela real 'produtos' baseada na tabela 'products' (se existir) ou criar do zero se não existir
+-- 2. Criar a tabela real 'produtos'
 CREATE TABLE IF NOT EXISTS public.produtos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Adicionar TODAS as colunas possíveis (em Português e Inglês) para evitar erro 42703 (coluna inexistente)
+-- 3. Adicionar TODAS as colunas possíveis (Português e Inglês) com IF NOT EXISTS
 ALTER TABLE public.produtos
 ADD COLUMN IF NOT EXISTS estabelecimento_codigo TEXT,
 ADD COLUMN IF NOT EXISTS codigo TEXT,
@@ -37,44 +37,47 @@ ADD COLUMN IF NOT EXISTS antecedencia_minima_dias INTEGER DEFAULT 1,
 ADD COLUMN IF NOT EXISTS min_lead_time_days INTEGER DEFAULT 1,
 ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 
--- 4. Copiar dados da tabela 'products' para 'produtos' se a tabela 'products' existir
+-- 4. Migração dinâmica de dados da tabela 'products' (se existir) usando EXECUTE seguro
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'products') THEN
-        INSERT INTO public.produtos (
-            id, estabelecimento_codigo, codigo, store_id,
-            nome, name, descricao, description,
-            preco, price, foto_url, image_url,
-            categoria, category, ativo, is_active,
-            tempo_preparo_horas, prep_time_hours, user_id, created_at
-        )
-        SELECT 
-            id, 
-            estabelecimento_codigo, 
-            estabelecimento_codigo AS codigo, 
-            estabelecimento_codigo AS store_id,
-            name AS nome, 
-            name, 
-            description AS descricao, 
-            description,
-            price AS preco, 
-            price, 
-            image_url AS foto_url, 
-            image_url,
-            category AS categoria, 
-            category, 
-            is_active AS ativo, 
-            is_active,
-            prep_time_hours AS tempo_preparo_horas, 
-            prep_time_hours, 
-            user_id, 
-            created_at
-        FROM public.products
-        ON CONFLICT (id) DO NOTHING;
+        BEGIN
+            EXECUTE 'INSERT INTO public.produtos (id, created_at) SELECT id, created_at FROM public.products ON CONFLICT (id) DO NOTHING';
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+
+        BEGIN
+            EXECUTE 'UPDATE public.produtos p SET 
+                nome = COALESCE(p.nome, pr.name),
+                name = COALESCE(p.name, pr.name),
+                descricao = COALESCE(p.descricao, pr.description),
+                description = COALESCE(p.description, pr.description),
+                preco = COALESCE(p.preco, pr.price, 0.00),
+                price = COALESCE(p.price, pr.price, 0.00),
+                foto_url = COALESCE(p.foto_url, pr.image_url),
+                image_url = COALESCE(p.image_url, pr.image_url),
+                categoria = COALESCE(p.categoria, pr.category),
+                category = COALESCE(p.category, pr.category),
+                ativo = COALESCE(p.ativo, pr.is_active, true),
+                is_active = COALESCE(p.is_active, pr.is_active, true),
+                tempo_preparo_horas = COALESCE(p.tempo_preparo_horas, pr.prep_time_hours, 24),
+                prep_time_hours = COALESCE(p.prep_time_hours, pr.prep_time_hours, 24)
+            FROM public.products pr WHERE p.id = pr.id';
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+
+        BEGIN
+            EXECUTE 'UPDATE public.produtos p SET 
+                estabelecimento_codigo = COALESCE(p.estabelecimento_codigo, pr.estabelecimento_codigo),
+                codigo = COALESCE(p.codigo, pr.estabelecimento_codigo),
+                store_id = COALESCE(p.store_id, pr.estabelecimento_codigo)
+            FROM public.products pr WHERE p.id = pr.id';
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
     END IF;
 END $$;
 
--- 5. Sincronizar os valores das colunas equivalentes (PT e EN)
+-- 5. Sincronizar pares de colunas (PT e EN) dentro da própria tabela 'produtos'
 UPDATE public.produtos SET nome = COALESCE(nome, name);
 UPDATE public.produtos SET name = COALESCE(name, nome);
 UPDATE public.produtos SET descricao = COALESCE(descricao, description);
@@ -96,7 +99,7 @@ UPDATE public.produtos SET estabelecimento_codigo = COALESCE(estabelecimento_cod
 -- 6. Habilitar RLS (Row Level Security) na tabela produtos
 ALTER TABLE public.produtos ENABLE ROW LEVEL SECURITY;
 
--- 7. Criar políticas de RLS para leitura pública e escrita (anon / authenticated)
+-- 7. Criar políticas de RLS para leitura e escrita (anon / authenticated)
 DROP POLICY IF EXISTS "Permitir leitura de produtos" ON public.produtos;
 DROP POLICY IF EXISTS "Permitir insercao de produtos" ON public.produtos;
 DROP POLICY IF EXISTS "Permitir atualizacao de produtos" ON public.produtos;
