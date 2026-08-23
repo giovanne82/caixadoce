@@ -11,7 +11,7 @@ import {
   salvarDadosPlanoEstabelecimento,
   obterPlanoEfetivoEstabelecimento,
 } from "@/lib/planos-utils";
-import { salvarDadosInstitucionaisCache, type DadosInstitucionais } from "@/lib/pix-utils";
+import { salvarDadosInstitucionaisCache, type DadosInstitucionais, type ContaPix } from "@/lib/pix-utils";
 import { toast } from "sonner";
 
 export type User = {
@@ -47,6 +47,7 @@ export type UpdateEstablishmentDetailsInput = {
   menu_title?: string;
   sloganCardapio?: string;
   menu_slogan?: string;
+  contasPix?: ContaPix[];
 };
 
 export type StaffProfile = {
@@ -74,6 +75,7 @@ export type StaffProfile = {
   menu_title?: string;
   sloganCardapio?: string;
   menu_slogan?: string;
+  contasPix?: ContaPix[];
   abasPermitidas?: string[];
 };
 
@@ -266,6 +268,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
                   chavePix: data.chave_pix || baseProf.chavePix,
                   tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
+                  contasPix: Array.isArray(data.pix_accounts) && data.pix_accounts.length > 0
+                    ? data.pix_accounts
+                    : (Array.isArray(data.pix_keys) && data.pix_keys.length > 0 ? data.pix_keys : baseProf.contasPix),
                   responsavel: data.responsavel || baseProf.responsavel,
                   telefone: data.telefone || baseProf.telefone,
                   whatsapp: data.whatsapp || baseProf.whatsapp,
@@ -631,6 +636,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         numero_documento: details.numeroDocumento || null,
         tipo_chave_pix: details.tipoChavePix || "email",
         chave_pix: details.chavePix || null,
+        pix_accounts: details.contasPix || null,
+        pix_keys: details.contasPix || null,
         cep: details.cep || null,
         endereco: details.endereco || null,
         logradouro: details.logradouro || null,

@@ -12,6 +12,14 @@ export interface PixPayloadInput {
   description?: string;
 }
 
+export interface ContaPix {
+  id: string;
+  tipo: "cpf" | "cnpj" | "telefone" | "email" | "aleatoria";
+  chave: string;
+  favorecido: string;
+  isDefault: boolean;
+}
+
 export interface DadosInstitucionais {
   nome?: string;
   chavePix?: string;

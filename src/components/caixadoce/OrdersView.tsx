@@ -78,12 +78,14 @@ import {
   Package,
   MapPin,
   CreditCard,
+  QrCode,
 } from "lucide-react";
 import {
   formatarMoeda,
   formatarWhatsappLink,
   gerarMensagemResumoWhatsApp,
   generatePixPayload,
+  type ContaPix,
   aplicarMascaraTelefone,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
@@ -300,6 +302,10 @@ export function OrdersView({
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
+
+  // Modal de Seleção Rápida de Conta Pix no momento do Envio
+  const [modalSelecaoPixOpen, setModalSelecaoPixOpen] = useState(false);
+  const [encomendaParaEnvioPix, setEncomendaParaEnvioPix] = useState<Encomenda | null>(null);
 
   // Histórico de Pagamentos Recebidos (Mini histórico)
   const [historicoPagamentos, setHistoricoPagamentos] = useState<PagamentoItem[]>([]);
@@ -609,14 +615,13 @@ export function OrdersView({
     }
   };
 
-  // Enviar Resumo Formatado no WhatsApp para o Cliente e Copiar Pix EMVCo para o Clipboard
-  const handleEnviarResumoWhatsApp = (ord: Encomenda) => {
-    if (!ord.clienteWhatsapp) {
-      toast.error("Esta encomenda não possui número de WhatsApp cadastrado.");
-      return;
-    }
-
-    const chavePix = profile?.chavePix || "contato@caixadoce.com.br";
+  // Executa o envio do WhatsApp e a cópia da Chave Pix selecionada
+  const executarEnvioWhatsAppComContaPix = (
+    ord: Encomenda,
+    conta: { chave: string; favorecido?: string }
+  ) => {
+    const chavePix = conta.chave || profile?.chavePix || "contato@caixadoce.com.br";
+    const favorecidoPix = conta.favorecido || profile?.establishmentName || profile?.responsavel || "CaixaDoce";
     const nomeLoja = estabelecimentoNome || profile?.establishmentName || "CaixaDoce";
     const cidadeLoja = profile?.cidade || "SAO PAULO";
 
@@ -624,10 +629,11 @@ export function OrdersView({
     const saldoRestanteNum = Math.max(0, ord.valorTotal - totalPago);
     const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (ord.valorTotal > 0 ? ord.valorTotal : 0);
 
-    // 1. Gera mensagem com a chave Pix limpa
+    // 1. Gera mensagem com a chave Pix, favorecido e valor devido
     const mensagem = gerarMensagemResumoWhatsApp(ord, {
       nomeLoja,
       chavePix,
+      favorecidoPix,
       cidadeLoja,
     });
 
@@ -637,7 +643,7 @@ export function OrdersView({
       try {
         const pixPayload = generatePixPayload({
           pixKey: chavePix,
-          merchantName: nomeLoja,
+          merchantName: favorecidoPix || nomeLoja,
           merchantCity: cidadeLoja,
           amount: valorParaPix,
           txid: (ord.id || "ORDER").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20),
@@ -665,6 +671,31 @@ export function OrdersView({
     if (typeof window !== "undefined") {
       window.open(url, "_blank");
     }
+  };
+
+  // Enviar Resumo Formatado no WhatsApp para o Cliente
+  const handleEnviarResumoWhatsApp = (ord: Encomenda) => {
+    if (!ord.clienteWhatsapp) {
+      toast.error("Esta encomenda não possui número de WhatsApp cadastrado.");
+      return;
+    }
+
+    const contas = profile?.contasPix && profile.contasPix.length > 0 ? profile.contasPix : [];
+
+    // Se tiver 2 ou mais contas Pix cadastradas, exibe o modal de seleção rápida
+    if (contas.length >= 2) {
+      setEncomendaParaEnvioPix(ord);
+      setModalSelecaoPixOpen(true);
+      return;
+    }
+
+    // Se tiver 0 ou 1 chave, envia direto com a chave principal
+    const contaUsar = contas.find((c) => c.isDefault) || contas[0] || {
+      chave: profile?.chavePix || "contato@caixadoce.com.br",
+      favorecido: profile?.establishmentName || profile?.responsavel || "CaixaDoce",
+    };
+
+    executarEnvioWhatsAppComContaPix(ord, contaUsar);
   };
 
   // Alternar Insumo Comprado/Pendente
@@ -2500,6 +2531,71 @@ export function OrdersView({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE SELEÇÃO RÁPIDA DE CONTA PIX PARA ENVIO */}
+      <Dialog open={modalSelecaoPixOpen} onOpenChange={setModalSelecaoPixOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-emerald-600" /> Em qual conta você deseja receber este Pix?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecione a conta bancária / chave Pix para a qual o cliente enviará o pagamento deste pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            {(profile?.contasPix || []).map((conta) => (
+              <div
+                key={conta.id}
+                onClick={() => {
+                  if (encomendaParaEnvioPix) {
+                    executarEnvioWhatsAppComContaPix(encomendaParaEnvioPix, conta);
+                    setModalSelecaoPixOpen(false);
+                  }
+                }}
+                className="p-3 rounded-xl border border-border bg-card hover:bg-emerald-500/10 hover:border-emerald-500/50 cursor-pointer transition-all flex items-center justify-between group shadow-2xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                      👤 {conta.favorecido}
+                    </span>
+                    {conta.isDefault && (
+                      <Badge className="bg-emerald-600 text-white text-[9px] px-1.5 py-0 font-bold">
+                        Padrão
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs font-mono font-semibold text-muted-foreground">
+                    🔑 {conta.chave} <span className="uppercase text-[10px]">({conta.tipo})</span>
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                >
+                  Selecionar
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setModalSelecaoPixOpen(false)}
+              className="text-xs text-muted-foreground"
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

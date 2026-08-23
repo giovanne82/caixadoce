@@ -1032,11 +1032,12 @@ export function formatarWhatsappLink(whatsapp: string, mensagem?: string): strin
 
 import { generatePixPayload } from "./pix-utils";
 
-export { generatePixPayload, calculateCRC16, formatPixKey } from "./pix-utils";
+export { generatePixPayload, calculateCRC16, formatPixKey, type ContaPix } from "./pix-utils";
 
 export interface DadosLojaPix {
   nomeLoja?: string;
   chavePix?: string;
+  favorecidoPix?: string;
   cidadeLoja?: string;
 }
 
@@ -1049,6 +1050,7 @@ export function gerarMensagemResumoWhatsApp(
 ): string {
   const nomeLoja = typeof dadosLoja === "string" ? dadosLoja : dadosLoja?.nomeLoja || "CaixaDoce";
   const chavePix = typeof dadosLoja === "object" ? dadosLoja?.chavePix : undefined;
+  const favorecido = typeof dadosLoja === "object" ? dadosLoja?.favorecidoPix : undefined;
   const cidade = typeof dadosLoja === "object" ? dadosLoja?.cidadeLoja : undefined;
 
   const dataFormatada = encomenda.dataEntrega.split("-").reverse().join("/");
@@ -1066,12 +1068,13 @@ export function gerarMensagemResumoWhatsApp(
     itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
   }
 
-  // Exibe a Chave Pix limpa e o valor devido na mensagem do WhatsApp
+  // Exibe a Chave Pix limpa, o favorecido e o valor devido na mensagem do WhatsApp
   let blocoPix = "";
   const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
 
   if (chavePix && chavePix.trim().length > 0 && valorParaPix > 0) {
-    blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}\n🔑 *Chave Pix:* ${chavePix}`;
+    const blocoFavorecido = favorecido ? `\n👤 *Favorecido:* ${favorecido}` : "";
+    blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}${blocoFavorecido}\n🔑 *Chave Pix:* ${chavePix}`;
   }
 
   return `✨ *Confirmação de Encomenda - ${nomeLoja}* ✨

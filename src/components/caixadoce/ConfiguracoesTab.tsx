@@ -54,6 +54,7 @@ import {
   formatarCpfCnpj,
   formatarCep,
 } from "@/lib/caixadoce-data";
+import { type ContaPix } from "@/lib/pix-utils";
 import { obterPlanoEfetivoEstabelecimento } from "@/lib/planos-utils";
 
 interface ConfiguracoesTabProps {
@@ -86,6 +87,67 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [tipoDoc, setTipoDoc] = useState(profile?.tipoDocumento || "CNPJ");
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
+
+  // Gerenciamento Dinâmico de Múltiplas Contas Pix
+  const [contasPix, setContasPix] = useState<ContaPix[]>([]);
+  const [mostrarFormNovaContaPix, setMostrarFormNovaContaPix] = useState(false);
+  const [novaContaTipo, setNovaContaTipo] = useState<"cpf" | "cnpj" | "telefone" | "email" | "aleatoria">("email");
+  const [novaContaChave, setNovaContaChave] = useState("");
+  const [novaContaFavorecido, setNovaContaFavorecido] = useState("");
+  const [novaContaDefault, setNovaContaDefault] = useState(false);
+
+  const handleAdicionarContaPix = () => {
+    if (!novaContaChave.trim()) {
+      toast.error("Informe a Chave Pix.");
+      return;
+    }
+    if (!novaContaFavorecido.trim()) {
+      toast.error("Informe o Nome do Favorecido (obrigatório).");
+      return;
+    }
+
+    const ehPrimeiraOuPadrao = contasPix.length === 0 || novaContaDefault;
+
+    const nova: ContaPix = {
+      id: `pix_${Date.now()}`,
+      tipo: novaContaTipo,
+      chave: novaContaChave.trim(),
+      favorecido: novaContaFavorecido.trim(),
+      isDefault: ehPrimeiraOuPadrao,
+    };
+
+    let listaAtualizada = [...contasPix];
+    if (ehPrimeiraOuPadrao) {
+      listaAtualizada = listaAtualizada.map((c) => ({ ...c, isDefault: false }));
+    }
+    listaAtualizada.push(nova);
+
+    setContasPix(listaAtualizada);
+    setNovaContaChave("");
+    setNovaContaFavorecido("");
+    setNovaContaDefault(false);
+    setMostrarFormNovaContaPix(false);
+    toast.success("Conta Pix adicionada à lista!");
+  };
+
+  const handleRemoverContaPix = (id: string) => {
+    const filtradas = contasPix.filter((c) => c.id !== id);
+    if (filtradas.length > 0 && !filtradas.some((c) => c.isDefault)) {
+      filtradas[0].isDefault = true;
+    }
+    setContasPix(filtradas);
+    toast.success("Conta Pix removida.");
+  };
+
+  const handleSetDefaultContaPix = (id: string) => {
+    setContasPix((prev) =>
+      prev.map((c) => ({
+        ...c,
+        isDefault: c.id === id,
+      }))
+    );
+    toast.success("Conta Pix padrão atualizada!");
+  };
 
   // Personalização do Cardápio Público
   const [logoUrl, setLogoUrl] = useState(profile?.logoUrl || profile?.store_logo_url || "");
@@ -202,6 +264,19 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.telefone) setTelEst(profile.telefone);
       if (profile.chavePix) setChavePix(profile.chavePix);
       if (profile.tipoChavePix) setTipoChavePix(profile.tipoChavePix);
+      if (profile.contasPix && profile.contasPix.length > 0) {
+        setContasPix(profile.contasPix);
+      } else if (profile.chavePix) {
+        setContasPix([
+          {
+            id: "default_pix",
+            tipo: (profile.tipoChavePix as any) || "email",
+            chave: profile.chavePix,
+            favorecido: profile.establishmentName || profile.responsavel || "ArtFesta",
+            isDefault: true,
+          },
+        ]);
+      }
       if (profile.tipoDocumento) setTipoDoc(profile.tipoDocumento);
       if (profile.numeroDocumento) setNumDoc(profile.numeroDocumento);
       if (profile.cep) setCepEst(profile.cep);
@@ -225,6 +300,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         ? `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`
         : logradouroEst;
 
+      const contaPadrao = contasPix.find((c) => c.isDefault) || contasPix[0];
+
       await updateEstablishmentDetails({
         nome: nomeEst,
         endereco: enderecoFinal,
@@ -237,10 +314,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         cep: cepEst,
         responsavel: responsavelEst,
         telefone: telEst,
-        chavePix,
-        tipoChavePix,
-        tipoDocumento: tipoDoc,
-        numeroDocumento: numDoc,
+        chavePix: contaPadrao ? contaPadrao.chave : chavePix,
+        tipoChavePix: contaPadrao ? contaPadrao.tipo : tipoChavePix,
+        contasPix,
         logoUrl,
         store_logo_url: logoUrl,
         tituloCardapio,
@@ -608,36 +684,182 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t space-y-3">
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4 text-primary" /> Recebimentos via Pix
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pix-tipo">Tipo de Chave Pix</Label>
-                      <Select value={tipoChavePix} onValueChange={setTipoChavePix}>
-                        <SelectTrigger id="pix-tipo">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="email">E-mail</SelectItem>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="cnpj">CNPJ</SelectItem>
-                          <SelectItem value="telefone">Telefone</SelectItem>
-                          <SelectItem value="aleatoria">Chave Aleatória</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pix-chave">Chave Pix</Label>
-                      <Input
-                        id="pix-chave"
-                        value={chavePix}
-                        onChange={(e) => setChavePix(e.target.value)}
-                        placeholder="Informe sua chave Pix"
-                      />
-                    </div>
+                {/* SEÇÃO: GERENCIAMENTO DE MÚLTIPLAS CONTAS PIX */}
+                <div className="pt-3 border-t space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4 text-emerald-600" /> Gerenciador de Chaves Pix
+                    </h4>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {contasPix.length} chave(s)
+                    </Badge>
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Cadastre suas chaves Pix e informe o Nome do Favorecido para facilitar o recebimento das encomendas.
+                  </p>
+
+                  {/* LISTA DE CHAVES PIX */}
+                  {contasPix.length > 0 ? (
+                    <div className="space-y-2">
+                      {contasPix.map((conta) => (
+                        <div
+                          key={conta.id}
+                          className="p-3 rounded-xl border border-border bg-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-extrabold text-foreground">
+                                👤 {conta.favorecido}
+                              </span>
+                              {conta.isDefault ? (
+                                <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2">
+                                  Principal / Padrão
+                                </Badge>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleSetDefaultContaPix(conta.id)}
+                                  className="h-5 text-[10px] text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 p-1 font-semibold"
+                                >
+                                  Tornar Principal
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-xs font-mono font-bold text-muted-foreground">
+                              🔑 {conta.chave} <span className="uppercase text-[10px] text-muted-foreground">({conta.tipo})</span>
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverContaPix(conta.id)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full shrink-0"
+                            title="Remover chave Pix"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 text-center text-xs text-muted-foreground italic bg-muted/20 rounded-xl border border-dashed border-border">
+                      Nenhuma chave Pix cadastrada ainda. Clique abaixo para adicionar sua primeira chave.
+                    </div>
+                  )}
+
+                  {/* FORMULÁRIO INLINE PARA ADICIONAR NOVA CHAVE */}
+                  {!mostrarFormNovaContaPix ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMostrarFormNovaContaPix(true)}
+                      className="w-full text-xs font-bold border-dashed border-emerald-500/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 h-9"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1.5" /> + Adicionar Chave Pix
+                    </Button>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                          Nova Chave Pix
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setMostrarFormNovaContaPix(false)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-muted-foreground">
+                            Tipo de Chave
+                          </Label>
+                          <Select
+                            value={novaContaTipo}
+                            onValueChange={(val: any) => setNovaContaTipo(val)}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="email">E-mail</SelectItem>
+                              <SelectItem value="cpf">CPF</SelectItem>
+                              <SelectItem value="cnpj">CNPJ</SelectItem>
+                              <SelectItem value="telefone">Telefone</SelectItem>
+                              <SelectItem value="aleatoria">Chave Aleatória</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-muted-foreground">
+                            Chave Pix *
+                          </Label>
+                          <Input
+                            placeholder="Informe a chave Pix"
+                            value={novaContaChave}
+                            onChange={(e) => setNovaContaChave(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-muted-foreground">
+                            Nome do Favorecido *
+                          </Label>
+                          <Input
+                            placeholder="Ex: ArtFesta Confeitaria"
+                            value={novaContaFavorecido}
+                            onChange={(e) => setNovaContaFavorecido(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={novaContaDefault}
+                            onChange={(e) => setNovaContaDefault(e.target.checked)}
+                            className="rounded border-border text-emerald-600 focus:ring-emerald-500"
+                          />
+                          Definir como Chave Principal / Padrão
+                        </label>
+
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMostrarFormNovaContaPix(false)}
+                            className="text-xs h-7 text-muted-foreground"
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleAdicionarContaPix}
+                            className="text-xs h-7 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <Check className="w-3.5 h-3.5 mr-1" /> Salvar Chave Pix
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* SEÇÃO DE PERSONALIZAÇÃO DO CARDÁPIO DIGITAL (LOGO, TÍTULO, SLOGAN) */}
