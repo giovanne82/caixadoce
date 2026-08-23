@@ -124,6 +124,21 @@ function CardapioLojaView() {
   useEffect(() => {
     async function carregarDadosLoja() {
       try {
+        if (code === "CD-DEMO" || code === "DEMO-01") {
+          setLojaInfo({
+            nome: "Loja Caixa Doce (Demo)",
+            titulo_cardapio: "Cardápio de Demonstração — CaixaDoce",
+            slogan_cardapio: "Navegue pelos doces, teste as fotos e simule a experiência real do seu cliente!",
+            whatsapp: "11999999999",
+            telefone: "(11) 99999-9999",
+            logo_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80",
+            store_logo_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80",
+            chavePix: "demo@caixadoce.com.br",
+            cidade: "São Paulo / SP",
+          });
+          return;
+        }
+
         let estData = null;
 
         // 1. Busca por codigo

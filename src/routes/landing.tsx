@@ -53,7 +53,7 @@ export function LandingPageContent() {
   };
 
   const verCardapioDemo = () => {
-    navigate({ to: "/cardapio/$storeCode", params: { storeCode: "CD-1001" } });
+    navigate({ to: "/cardapio/$storeCode", params: { storeCode: "CD-DEMO" } });
   };
 
   return (
