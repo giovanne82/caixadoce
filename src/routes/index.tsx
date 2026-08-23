@@ -26,6 +26,7 @@ import {
   Camera,
   Layers,
   CalendarDays,
+  Package,
   Users,
   Cake,
   DollarSign,
@@ -1053,7 +1054,7 @@ function Index() {
               )}
               {podeAcessarAba("encomendas") && (
                 <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <CalendarDays className="w-4 h-4" /> Calendário
+                  <Package className="w-4 h-4" /> Encomendas
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -1212,8 +1213,8 @@ function Index() {
                 activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
               }`}
             >
-              <CalendarDays className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Agenda</span>
+              <Package className="w-5 h-5 mb-0.5 shrink-0" />
+              <span className="text-[9px] leading-none truncate w-full">Encomendas</span>
             </button>
           )}
 

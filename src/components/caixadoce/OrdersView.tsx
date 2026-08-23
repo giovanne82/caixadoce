@@ -839,7 +839,7 @@ export function OrdersView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Encomendas &amp; Calendário <CalendarDays className="w-6 h-6 text-primary" />
+            Minhas Encomendas <Package className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
             Gerencie datas de entrega, produtos pedidos e envie resumo no WhatsApp com 1 clique.
