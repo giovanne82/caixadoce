@@ -302,6 +302,7 @@ export function OrdersView({
   const [historicoPagamentos, setHistoricoPagamentos] = useState<PagamentoItem[]>([]);
   const [novoPagamentoValorFormatado, setNovoPagamentoValorFormatado] = useState("");
   const [novoPagamentoData, setNovoPagamentoData] = useState(() => new Date().toISOString().split("T")[0]);
+  const [mostrarFormNovoPagamento, setMostrarFormNovoPagamento] = useState(false);
 
   const totalPagoCalculado = useMemo(() => {
     return historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
@@ -478,6 +479,7 @@ export function OrdersView({
     setHistoricoPagamentos([]);
     setNovoPagamentoValorFormatado("");
     setNovoPagamentoData(new Date().toISOString().split("T")[0]);
+    setMostrarFormNovoPagamento(false);
     setInsumosTags([]);
     setBuscaItemProduto("");
     setBuscaTagInsumo("");
@@ -535,6 +537,7 @@ export function OrdersView({
 
     setNovoPagamentoValorFormatado("");
     setNovoPagamentoData(new Date().toISOString().split("T")[0]);
+    setMostrarFormNovoPagamento(false);
     setInsumosTags(ord.insumosNecessarios || []);
     setBuscaItemProduto("");
     setBuscaTagInsumo("");
@@ -2032,76 +2035,49 @@ export function OrdersView({
               />
             </div>
 
-            {/* SEÇÃO DE PAGAMENTOS RECEBIDOS E SALDO DEVEDOR (MINI HISTÓRICO DE PAGAMENTOS) */}
-            <div className="space-y-3 p-3.5 rounded-xl bg-muted/40 border border-border/80">
+            {/* CARD VISUAL: HISTÓRICO DE PAGAMENTOS */}
+            <div className="space-y-3 p-4 rounded-xl bg-card border border-border shadow-xs">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-emerald-600" /> Pagamentos Recebidos
-                </Label>
-                <Badge variant="outline" className="text-[10px] font-mono bg-background">
-                  {historicoPagamentos.length} pagamento(s)
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Histórico de Pagamentos
+                  </h4>
+                </div>
+
+                {/* REGRA DE QUITAÇÃO: TAG PAGO */}
+                {saldoDevedorCalculado <= 0 && valorTotalNum > 0 ? (
+                  <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-black text-xs px-2.5 py-0.5 shadow-xs flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" /> PAGO
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                    {historicoPagamentos.length} registro(s)
+                  </Badge>
+                )}
               </div>
 
-              {/* Inputs para Adicionar Pagamento */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
-                <div className="sm:col-span-5 space-y-1">
-                  <Label htmlFor="pay-val" className="text-[11px] font-semibold text-muted-foreground">
-                    Valor (R$)
-                  </Label>
-                  <Input
-                    id="pay-val"
-                    placeholder="R$ 0,00"
-                    value={novoPagamentoValorFormatado}
-                    onChange={(e) => setNovoPagamentoValorFormatado(aplicarMascaraMoedaInput(e.target.value))}
-                    className="h-8 text-xs font-bold font-mono bg-background"
-                  />
-                </div>
-                <div className="sm:col-span-4 space-y-1">
-                  <Label htmlFor="pay-date" className="text-[11px] font-semibold text-muted-foreground">
-                    Data do Pagamento
-                  </Label>
-                  <Input
-                    id="pay-date"
-                    type="date"
-                    value={novoPagamentoData}
-                    onChange={(e) => setNovoPagamentoData(e.target.value)}
-                    className="h-8 text-xs font-mono font-bold bg-background"
-                  />
-                </div>
-                <div className="sm:col-span-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleAdicionarPagamentoHistorico}
-                    className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
-                  </Button>
-                </div>
-              </div>
-
-              {/* Tabela/Lista Compacta de Pagamentos Já Adicionados */}
+              {/* RENDERIZAÇÃO DA LISTA LINHA POR LINHA */}
               {historicoPagamentos.length > 0 ? (
-                <div className="divide-y divide-border/60 bg-background rounded-lg border border-border/80 overflow-hidden">
-                  {historicoPagamentos.map((pag, idx) => (
-                    <div key={pag.id} className="p-2 px-3 flex items-center justify-between text-xs hover:bg-muted/30">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
-                          #{idx + 1}
+                <div className="divide-y divide-border/60 bg-muted/20 rounded-xl border border-border overflow-hidden">
+                  {historicoPagamentos.map((pag) => (
+                    <div
+                      key={pag.id}
+                      className="p-2.5 px-3 flex items-center justify-between text-xs hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-foreground font-semibold text-xs">
+                          {pag.data.split("-").reverse().join("/")}
                         </span>
-                        <div>
-                          <span className="font-mono text-foreground font-semibold text-xs">
-                            {pag.data.split("-").reverse().join("/")}
+                        {pag.observacao && (
+                          <span className="text-[11px] text-muted-foreground italic truncate max-w-[120px]">
+                            ({pag.observacao})
                           </span>
-                          {pag.observacao && (
-                            <span className="ml-2 text-[10px] text-muted-foreground italic">({pag.observacao})</span>
-                          )}
-                        </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                        <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
                           {formatarMoeda(pag.valor)}
                         </span>
                         <Button
@@ -2109,8 +2085,8 @@ export function OrdersView({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoverPagamentoHistorico(pag.id)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full"
-                          title="Excluir pagamento"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                          title="Remover pagamento"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -2119,51 +2095,124 @@ export function OrdersView({
                   ))}
                 </div>
               ) : (
-                <div className="p-2.5 text-center text-xs text-muted-foreground italic bg-background/50 rounded-lg border border-dashed border-border">
-                  Nenhum pagamento registrado ainda. Informe o valor e a data acima e clique em "+ Adicionar".
+                <div className="p-3 text-center text-xs text-muted-foreground italic bg-muted/10 rounded-xl border border-dashed border-border">
+                  Nenhum pagamento registrado nesta encomenda.
                 </div>
               )}
 
-              {/* RESUMO DE VALORES COM DESTAQUE VISUAL (VISOR DE TOTAIS) */}
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {/* 1. Valor Total */}
-                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
-                    Valor Total
-                  </span>
-                  <span className="text-xs sm:text-sm font-black font-mono text-blue-900 dark:text-blue-200">
-                    {formatarMoeda(valorTotalNum)}
-                  </span>
-                </div>
+              {/* FLUXO DE ADICIONAR NOVO PAGAMENTO */}
+              {saldoDevedorCalculado > 0 && (
+                <div>
+                  {!mostrarFormNovoPagamento ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMostrarFormNovoPagamento(true)}
+                      className="w-full text-xs font-bold border-dashed border-emerald-500/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-600 h-9"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1.5" /> + Adicionar pagamento
+                    </Button>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                          Novo Pagamento Recebido
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setMostrarFormNovoPagamento(false)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
 
-                {/* 2. Total Pago */}
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="pay-val" className="text-[11px] font-semibold text-muted-foreground">
+                            Valor Recebido (R$)
+                          </Label>
+                          <Input
+                            id="pay-val"
+                            placeholder="R$ 0,00"
+                            value={novoPagamentoValorFormatado}
+                            onChange={(e) => setNovoPagamentoValorFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                            className="h-8 text-xs font-bold font-mono bg-background"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="pay-date" className="text-[11px] font-semibold text-muted-foreground">
+                            Data
+                          </Label>
+                          <Input
+                            id="pay-date"
+                            type="date"
+                            value={novoPagamentoData}
+                            onChange={(e) => setNovoPagamentoData(e.target.value)}
+                            className="h-8 text-xs font-mono font-bold bg-background"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setMostrarFormNovoPagamento(false)}
+                          className="text-xs h-7 text-muted-foreground"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            handleAdicionarPagamentoHistorico();
+                            setMostrarFormNovoPagamento(false);
+                          }}
+                          className="text-xs h-7 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          <Check className="w-3.5 h-3.5 mr-1" /> Salvar Pagamento
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAINEL DE RESUMO DINÂMICO (MATEMÁTICA E QUITAÇÃO) */}
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
                     Total Pago
                   </span>
-                  <span className="text-xs sm:text-sm font-black font-mono text-emerald-900 dark:text-emerald-200">
+                  <span className="text-sm font-black font-mono text-emerald-900 dark:text-emerald-200">
                     {formatarMoeda(totalPagoCalculado)}
                   </span>
                 </div>
 
-                {/* 3. Falta Pagar (Saldo Devedor) */}
                 <div
                   className={`p-2.5 rounded-xl text-center border ${
-                    saldoDevedorCalculado === 0
-                      ? "bg-emerald-500/15 border-emerald-500/30"
-                      : "bg-rose-500/15 border-rose-500/30"
+                    saldoDevedorCalculado <= 0
+                      ? "bg-emerald-500/20 border-emerald-500/40"
+                      : "bg-rose-500/10 border-rose-500/25"
                   }`}
                 >
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider block ${
-                      saldoDevedorCalculado === 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"
+                      saldoDevedorCalculado <= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"
                     }`}
                   >
                     Falta Pagar
                   </span>
                   <span
-                    className={`text-xs sm:text-sm font-black font-mono ${
-                      saldoDevedorCalculado === 0 ? "text-emerald-900 dark:text-emerald-200" : "text-rose-900 dark:text-rose-200"
+                    className={`text-sm font-black font-mono ${
+                      saldoDevedorCalculado <= 0 ? "text-emerald-900 dark:text-emerald-200" : "text-rose-900 dark:text-rose-200"
                     }`}
                   >
                     {formatarMoeda(saldoDevedorCalculado)}
