@@ -375,55 +375,6 @@ export function FichaTecnicaModal({
             </div>
           </DialogHeader>
 
-          {/* CARDS DE RESUMO DE CUSTOS E PRECIFICAÇÃO */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Card className="bg-purple-500/10 border-purple-500/30 shadow-xs">
-              <CardContent className="p-3">
-                <span className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                  <PieChart className="w-3 h-3" /> Custo Insumos
-                </span>
-                <p className="text-lg font-black text-foreground mt-0.5">
-                  {formatarMoeda(totaisCalculados.custoInsumosTotal)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-amber-500/10 border-amber-500/30 shadow-xs">
-              <CardContent className="p-3">
-                <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                  <Scale className="w-3 h-3" /> Custo Receita
-                </span>
-                <p className="text-lg font-black text-foreground mt-0.5">
-                  {formatarMoeda(totaisCalculados.custoTotalReceita)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-blue-500/10 border-blue-500/30 shadow-xs">
-              <CardContent className="p-3">
-                <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                  <Calculator className="w-3 h-3" /> Custo Unitário
-                </span>
-                <p className="text-lg font-black text-foreground mt-0.5">
-                  {formatarMoeda(totaisCalculados.custoUnitarioItem)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-emerald-500/15 border-emerald-500/40 shadow-xs">
-              <CardContent className="p-3">
-                <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Preço Sugerido
-                </span>
-                <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  {rendimentoQtd > 1
-                    ? `${formatarMoeda(totaisCalculados.precoVendaSugeridoUnitario)}/un`
-                    : formatarMoeda(totaisCalculados.precoVendaSugeridoLote)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* FORMULÁRIO RÁPIDO DE INSERÇÃO DE INSUMO NA FICHA */}
           <Card className="border-border bg-muted/30">
             <CardContent className="p-4 space-y-3">
@@ -859,6 +810,55 @@ export function FichaTecnicaModal({
               )}
             </CardContent>
           </Card>
+
+          {/* QUADROS DE RESUMO FINANCEIRO COMPACTOS (REPOSICIONADOS PARA O FINAL DO CONTEÚDO) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <Card className="bg-purple-500/10 border-purple-500/30 shadow-2xs">
+              <CardContent className="p-2.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                  <PieChart className="w-3 h-3" /> Custo Insumos
+                </span>
+                <p className="text-base font-black font-mono text-foreground mt-0.5">
+                  {formatarMoeda(totaisCalculados.custoInsumosTotal)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-amber-500/10 border-amber-500/30 shadow-2xs">
+              <CardContent className="p-2.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                  <Scale className="w-3 h-3" /> Custo Receita
+                </span>
+                <p className="text-base font-black font-mono text-foreground mt-0.5">
+                  {formatarMoeda(totaisCalculados.custoTotalReceita)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-blue-500/10 border-blue-500/30 shadow-2xs">
+              <CardContent className="p-2.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                  <Calculator className="w-3 h-3" /> Custo Unitário
+                </span>
+                <p className="text-base font-black font-mono text-foreground mt-0.5">
+                  {formatarMoeda(totaisCalculados.custoUnitarioItem)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-emerald-500/15 border-emerald-500/40 shadow-2xs">
+              <CardContent className="p-2.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Preço Sugerido
+                </span>
+                <p className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {rendimentoQtd > 1
+                    ? `${formatarMoeda(totaisCalculados.precoVendaSugeridoUnitario)}/un`
+                    : formatarMoeda(totaisCalculados.precoVendaSugeridoLote)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* BANNER DE AVISO E RESPONSABILIDADE SOBRE PRECIFICAÇÃO */}
           <div className="p-3 bg-muted/60 border border-border rounded-xl text-[11px] leading-relaxed text-muted-foreground flex items-start gap-2.5">
