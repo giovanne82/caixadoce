@@ -412,18 +412,24 @@ export function FichaTecnicaModal({
           {/* FORMULÁRIO RÁPIDO DE INSERÇÃO DE INSUMO NA FICHA */}
           <Card className="border-border bg-muted/30">
             <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-purple-600" /> Adicionar Insumo à Receita
-                </span>
-                {origemPrecoInfo && (
-                  <span className="text-[11px] font-mono text-purple-600 dark:text-purple-300">
-                    {origemPrecoInfo}
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-purple-600" /> Adicionar Insumo à Receita
                   </span>
-                )}
+                  {origemPrecoInfo && (
+                    <span className="text-[11px] font-mono text-purple-600 dark:text-purple-300 font-semibold">
+                      {origemPrecoInfo}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11px] leading-relaxed text-purple-900 dark:text-purple-200 bg-purple-500/10 p-2.5 rounded-xl border border-purple-500/20">
+                  💡 <strong>Dica:</strong> Selecione o ingrediente como você comprou no mercado (ex: o pacote fechado de 1kg ou a caixa de 395g) e o valor pago. Depois, na tabela abaixo, basta informar o quanto usou na receita!
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end pt-1">
                 {/* Autocomplete do Insumo */}
                 <div className="sm:col-span-4 relative">
                   <Label className="text-xs font-bold">Ingrediente / Insumo</Label>
@@ -455,7 +461,9 @@ export function FichaTecnicaModal({
 
                 {/* Preço da Embalagem / Base */}
                 <div className="sm:col-span-3">
-                  <Label className="text-xs font-bold">Preço Embalagem (R$)</Label>
+                  <Label className="text-xs font-bold" title="Valor total pago na compra da embalagem">
+                    Preço Pago Embalagem (R$)
+                  </Label>
                   <Input
                     placeholder="R$ 0,00"
                     value={novoInsumoPrecoFormatado}
@@ -465,7 +473,9 @@ export function FichaTecnicaModal({
 
                 {/* Qtd Embalagem Original */}
                 <div className="sm:col-span-2">
-                  <Label className="text-xs font-bold">Qtd Emb. Orig.</Label>
+                  <Label className="text-xs font-bold" title="Quantidade contida no pacote original de compra">
+                    Qtd na Embalagem
+                  </Label>
                   <Input
                     type="number"
                     step="1"
@@ -477,7 +487,9 @@ export function FichaTecnicaModal({
 
                 {/* Qtd Usada na Receita */}
                 <div className="sm:col-span-2">
-                  <Label className="text-xs font-bold">Qtd Receita</Label>
+                  <Label className="text-xs font-bold" title="Quantidade utilizada nesta receita específica">
+                    Qtd Usada Receita
+                  </Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -515,6 +527,7 @@ export function FichaTecnicaModal({
                     type="button"
                     onClick={handleAdicionarInsumo}
                     className="h-9 w-9 p-0 bg-purple-600 hover:bg-purple-700 text-white shrink-0 mt-5 rounded-xl shadow-xs"
+                    title="Adicionar ingrediente à receita"
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
