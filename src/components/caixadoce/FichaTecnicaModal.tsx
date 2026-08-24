@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import {
   formatarMoeda,
+  aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
   type ProdutoCardapio,
   LISTA_SUGESTOES_INSUMOS,
@@ -51,6 +52,7 @@ import {
   salvarFichaTecnicaProduto,
   calcularPrecoMedioInsumo,
   calcularTotaisFichaTecnica,
+  calcularCustoItemFichaTecnica,
   type FichaTecnicaItem,
 } from "@/lib/ficha-tecnica-service";
 import { toast } from "sonner";
@@ -158,7 +160,11 @@ export function FichaTecnicaModal({
       return;
     }
 
-    const custoTotalItem = parseFloat((novoInsumoQtd * precoNum).toFixed(2));
+    const custoTotalItem = calcularCustoItemFichaTecnica(
+      novoInsumoQtd,
+      novoInsumoUnidade,
+      precoNum
+    );
 
     const novoItem: FichaTecnicaItem = {
       id: crypto.randomUUID(),
@@ -176,7 +182,7 @@ export function FichaTecnicaModal({
     setNovoInsumoQtd(100);
     setNovoInsumoPrecoFormatado("");
     setOrigemPrecoInfo("");
-    toast.success(`Insumo "${nomeLimpo}" adicionado à receita.`);
+    toast.success(`Insumo "${nomeLimpo}" adicionado à receita (Custo: ${formatarMoeda(custoTotalItem)}).`);
   };
 
   // Atualizar campo de um item existente na tabela (100% Editável)
@@ -191,7 +197,11 @@ export function FichaTecnicaModal({
         const atualizado = { ...item, [campo]: valor };
         const qtd = Number(atualizado.quantidadeUsada) || 0;
         const preco = Number(atualizado.precoUnitarioAplicado) || 0;
-        atualizado.custoTotalItem = parseFloat((qtd * preco).toFixed(2));
+        atualizado.custoTotalItem = calcularCustoItemFichaTecnica(
+          qtd,
+          atualizado.unidadeMedida,
+          preco
+        );
         return atualizado;
       })
     );
@@ -392,7 +402,16 @@ export function FichaTecnicaModal({
                 {/* Preço Unitário Aplicado */}
                 <div className="sm:col-span-3 flex items-center gap-2">
                   <div className="flex-1">
-                    <Label className="text-xs">Preço Unitário</Label>
+                    <Label className="text-xs font-semibold">
+                      Preço Base{" "}
+                      <span className="text-[10px] text-purple-600 dark:text-purple-300 font-bold">
+                        {novoInsumoUnidade === "g" || novoInsumoUnidade === "kg"
+                          ? "(R$ / kg)"
+                          : novoInsumoUnidade === "ml" || novoInsumoUnidade === "l"
+                          ? "(R$ / L)"
+                          : "(R$ / un)"}
+                      </span>
+                    </Label>
                     <Input
                       placeholder="R$ 0,00"
                       value={novoInsumoPrecoFormatado}
@@ -419,7 +438,7 @@ export function FichaTecnicaModal({
                   <TableHead>Ingrediente / Insumo</TableHead>
                   <TableHead className="w-28">Qtd Usada</TableHead>
                   <TableHead className="w-28">Unidade</TableHead>
-                  <TableHead className="w-36">Preço Unit. (R$)</TableHead>
+                  <TableHead className="w-40">Preço Base (R$)</TableHead>
                   <TableHead className="w-32 text-right">Custo Total</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
@@ -441,7 +460,7 @@ export function FichaTecnicaModal({
                         <Input
                           type="number"
                           step="0.01"
-                          className="h-8 text-xs w-24"
+                          className="h-8 text-xs w-24 font-semibold"
                           value={item.quantidadeUsada}
                           onChange={(e) =>
                             handleAtualizarItemExistente(
@@ -461,33 +480,34 @@ export function FichaTecnicaModal({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="g">g</SelectItem>
-                            <SelectItem value="kg">kg</SelectItem>
-                            <SelectItem value="ml">ml</SelectItem>
-                            <SelectItem value="l">l</SelectItem>
-                            <SelectItem value="un">un</SelectItem>
-                            <SelectItem value="bdj">bdj</SelectItem>
-                            <SelectItem value="pct">pct</SelectItem>
-                            <SelectItem value="cx">cx</SelectItem>
+                            <SelectItem value="g">g (grama)</SelectItem>
+                            <SelectItem value="kg">kg (quilo)</SelectItem>
+                            <SelectItem value="ml">ml (ml)</SelectItem>
+                            <SelectItem value="l">l (litro)</SelectItem>
+                            <SelectItem value="un">un (unid)</SelectItem>
+                            <SelectItem value="bdj">bdj (bandj)</SelectItem>
+                            <SelectItem value="pct">pct (pacote)</SelectItem>
+                            <SelectItem value="cx">cx (caixa)</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.0001"
-                          className="h-8 text-xs w-32 font-mono"
-                          value={item.precoUnitarioAplicado}
-                          onChange={(e) =>
-                            handleAtualizarItemExistente(
-                              item.id,
-                              "precoUnitarioAplicado",
-                              parseFloat(e.target.value) || 0
-                            )
+                          placeholder="R$ 0,00"
+                          className="h-8 text-xs w-36 font-mono font-bold"
+                          value={
+                            item.precoUnitarioAplicado
+                              ? formatarMoeda(item.precoUnitarioAplicado)
+                              : ""
                           }
+                          onChange={(e) => {
+                            const masked = aplicarMascaraMoedaInput(e.target.value);
+                            const num = converterMoedaInputParaNumero(masked);
+                            handleAtualizarItemExistente(item.id, "precoUnitarioAplicado", num);
+                          }}
                         />
                       </TableCell>
-                      <TableCell className="text-right font-extrabold text-xs font-mono">
+                      <TableCell className="text-right font-black text-xs font-mono text-emerald-600 dark:text-emerald-400">
                         {formatarMoeda(item.custoTotalItem)}
                       </TableCell>
                       <TableCell className="text-right">

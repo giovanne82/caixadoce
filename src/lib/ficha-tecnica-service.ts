@@ -355,16 +355,48 @@ export async function obterFichaTecnicaProduto(
 }
 
 /**
+ * Calcula o custo real de um item da Ficha Técnica convertendo unidades de medida:
+ * - Se a unidade da receita for 'g' (gramas) e o preço do insumo for por 'kg' (quilo):
+ *   custo = (quantidadeUsada / 1000) * precoUnitarioKg (ex: 100g de chocolate a R$ 40/kg = R$ 4,00)
+ * - Se a unidade da receita for 'ml' (mililitros) e o preço for por 'l' (litro):
+ *   custo = (quantidadeUsada / 1000) * precoUnitarioLitro (ex: 250ml de creme a R$ 20/L = R$ 5,00)
+ * - Demais unidades (kg, l, un, bdj, pct, cx): custo = quantidadeUsada * precoUnitario
+ */
+export function calcularCustoItemFichaTecnica(
+  quantidadeUsada: number,
+  unidadeMedida: string,
+  precoUnitarioAplicado: number
+): number {
+  const qtd = Number(quantidadeUsada) || 0;
+  const preco = Number(precoUnitarioAplicado) || 0;
+  const unid = (unidadeMedida || "g").toLowerCase();
+
+  if (unid === "g") {
+    return parseFloat(((qtd / 1000) * preco).toFixed(2));
+  }
+
+  if (unid === "ml") {
+    return parseFloat(((qtd / 1000) * preco).toFixed(2));
+  }
+
+  return parseFloat((qtd * preco).toFixed(2));
+}
+
+/**
  * Realiza os cálculos de Custo, Margem e Preço Sugerido da Ficha Técnica
  */
 export function calcularTotaisFichaTecnica(
-  itens: { quantidadeUsada: number; precoUnitarioAplicado: number }[],
+  itens: { quantidadeUsada: number; unidadeMedida?: string; precoUnitarioAplicado: number }[],
   rendimentoQtd: number = 1,
   custosOperacionaisPerc: number = 15,
   margemLucroPerc: number = 100
 ): CalculoFichaTecnicaResultado {
   const custoInsumosTotal = itens.reduce((sum, item) => {
-    const totalItem = (Number(item.quantidadeUsada) || 0) * (Number(item.precoUnitarioAplicado) || 0);
+    const totalItem = calcularCustoItemFichaTecnica(
+      item.quantidadeUsada,
+      item.unidadeMedida || "g",
+      item.precoUnitarioAplicado
+    );
     return sum + totalItem;
   }, 0);
 
