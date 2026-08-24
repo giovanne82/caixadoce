@@ -382,13 +382,18 @@ export default {
           const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
           const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
 
-          // Se for aprovado instantaneamente (Cartão), atualiza a assinatura no Supabase
+          // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
           if (status === "approved" && estabelecimentoCodigo) {
             try {
               const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
               const supabaseKey =
                 process.env.VITE_SUPABASE_ANON_KEY ||
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+              const duracaoDias = planoId === "anual" ? 365 : 30;
+              const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+              const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
+              const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
               await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
                 method: "PATCH",
@@ -402,9 +407,13 @@ export default {
                   plano_id: "ilimitado",
                   plano_status: "ativo",
                   plano_atualizado_em: new Date().toISOString(),
+                  plano_expira_em: dataExpiracao,
+                  metodo_pagamento: tipoPag,
+                  mercadopago_pagamento_id: String(paymentId),
+                  mercadopago_assinatura_id: mpData.subscription_id ? String(mpData.subscription_id) : null,
                 }),
               });
-              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo)!`);
+              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
             } catch (err) {
               console.error("[MercadoPago Direct] Erro ao atualizar Supabase:", err);
             }
@@ -468,6 +477,12 @@ export default {
                   process.env.VITE_SUPABASE_ANON_KEY ||
                   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
+                const planoIdMeta = meta.plano_id || "ilimitado";
+                const duracaoDias = planoIdMeta === "anual" ? 365 : 30;
+                const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+                const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "").toLowerCase();
+                const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+
                 await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabCodigo)}`, {
                   method: "PATCH",
                   headers: {
@@ -480,9 +495,13 @@ export default {
                     plano_id: "ilimitado",
                     plano_status: "ativo",
                     plano_atualizado_em: new Date().toISOString(),
+                    plano_expira_em: dataExpiracao,
+                    metodo_pagamento: tipoPag,
+                    mercadopago_pagamento_id: String(payloadId),
+                    mercadopago_assinatura_id: paymentData.subscription_id ? String(paymentData.subscription_id) : null,
                   }),
                 });
-                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado com sucesso para 'ilimitado' (Ativo)!`);
+                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
               }
             }
           }

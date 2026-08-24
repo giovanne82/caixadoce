@@ -115,6 +115,10 @@ export interface InfoPlanoEstabelecimento {
   diasRestantesTrial?: number;
   dataInicio?: string;
   dataRenovacao?: string;
+  dataExpiracao?: string;
+  tipoPagamento?: "pix" | "cartao_credito" | "stripe" | string;
+  mercadoPagoPaymentId?: string;
+  mercadoPagoSubscriptionId?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
 }
@@ -125,8 +129,19 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     const raw = localStorage.getItem(`caixadoce_plano_${code}`);
     if (raw) {
       const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
-      // Se o plano já estiver assinado ativamente via Stripe, mantém o status ativo
+      // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
       if (parsed.status === "ativo") {
+        if (parsed.dataExpiracao) {
+          const expMs = new Date(parsed.dataExpiracao).getTime();
+          if (Date.now() > expMs) {
+            return {
+              ...parsed,
+              planoId: "basico",
+              status: "expirado",
+              diasRestantesTrial: 0,
+            };
+          }
+        }
         return parsed;
       }
 
