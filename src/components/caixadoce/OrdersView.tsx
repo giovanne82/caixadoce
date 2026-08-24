@@ -959,7 +959,7 @@ export function OrdersView({
       const matchPagamento =
         filtroPagamento === "pendente"
           ? e.statusPagamento === "pendente" || e.statusPagamento === "cartao_pendente" || e.statusPagamento === "pix_pendente" || !e.statusPagamento
-          : e.statusPagamento === "pago" || e.statusPagamento === "pago_integral" || e.statusPagamento === "sinal_pago" || e.statusPagamento === "pago_na_entrega";
+          : (e.statusPagamento as string) === "pago" || e.statusPagamento === "pago_integral" || e.statusPagamento === "sinal_pago" || e.statusPagamento === "pago_na_entrega";
       const matchBusca =
         !busca ||
         e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||

@@ -38,6 +38,74 @@ const DEFAULT_KEY_PARTS = ["AQ.Ab8RN6Ij_", "Mm0GJhNk6JnMyn_AFiJN66hfYH6BF4ceVVAi
 const PROD_GEMINI_API_KEY = DEFAULT_KEY_PARTS.join("");
 
 /**
+ * Compacta e redimensiona imagens pesadas tiradas pela câmera do celular
+ * reduzindo arquivos de 10MB+ para ~200KB antes do envio para a API do Gemini.
+ */
+export async function comprimirImagemParaBase64(
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1600,
+  quality = 0.8
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // Se for PDF ou arquivo não imagem, converter direto
+    if (!file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+
+        console.log(
+          `[OCR Compress] Foto da câmera reduzida de ${(file.size / 1024 / 1024).toFixed(2)}MB para ~${Math.round(
+            (compressedBase64.length * 0.75) / 1024
+          )}KB (${width}x${height}px)`
+        );
+
+        resolve(compressedBase64);
+      };
+      img.onerror = (err) => reject(err);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+export const converterImagemParaBase64 = comprimirImagemParaBase64;
+
+/**
  * Chamada otimizada para a API do Gemini utilizando modelos flash oficiais com fallback dinâmico
  * e retentativas para garantir resiliência total contra erros 404/503.
  */
@@ -134,7 +202,17 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Gemini API - ${modelName}] HTTP ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${errText}`);
+        console.error(`[Gemini API Log] Modelo: ${modelName} | HTTP Status: ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}) | Detalhe:`, errText);
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Chave de API da Inteligência Artificial inválida ou sem autorização.");
+        }
+
+        if (response.status === 413 || response.status === 400) {
+          if (errText.toLowerCase().includes("payload") || errText.toLowerCase().includes("size") || errText.toLowerCase().includes("too large")) {
+            throw new Error("A imagem da notinha é muito grande. O aplicativo a comprimiu automaticamente, por favor tente novamente.");
+          }
+        }
 
         if (tentativa < MAX_TENTATIVAS) {
           const delayMs = 1500 * tentativa;
@@ -152,8 +230,13 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
     } catch (err: any) {
       clearTimeout(timer);
-      console.warn(`[Gemini API - ${GEMINI_MODEL}] Erro na tentativa ${tentativa}/${MAX_TENTATIVAS}:`, err.message);
+      console.error(`[Gemini API Error] Modelo: ${modelName} | Erro na tentativa ${tentativa}/${MAX_TENTATIVAS}:`, err.message || err);
       ultimoErro = err;
+
+      // Erros de autenticação ou aborto manual não devem insistir nas retentativas
+      if (err.message?.includes("Chave de API") || err.name === "AbortError") {
+        break;
+      }
 
       if (tentativa < MAX_TENTATIVAS) {
         const delayMs = 1500 * tentativa;
@@ -165,29 +248,19 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
   throw new Error(
     ultimoErro?.name === "AbortError"
-      ? "A leitura da notinha demorou mais que o esperado (Timeout). Por favor, tente enviar novamente."
-      : MENSAGEM_ERRO_ALTO_VOLUME
+      ? "A leitura da notinha demorou mais que o esperado (Timeout de rede). Por favor, tente enviar novamente."
+      : ultimoErro?.message || MENSAGEM_ERRO_ALTO_VOLUME
   );
-}
-
-export async function converterImagemParaBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      resolve(reader.result as string);
-    };
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
 }
 
 export async function processarNotinhaComOCR(
   file: File,
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Processando notinha...");
+  onStepProgress?.("Otimizando e comprimindo imagem da notinha...");
 
-  const imageBase64 = await converterImagemParaBase64(file);
+  // Otimização e compressão automática da imagem de câmera de celular
+  const imageBase64 = await comprimirImagemParaBase64(file);
   const parsedJSON = await extractReceiptDataWithGemini(imageBase64, onStepProgress);
 
   onStepProgress?.("Organizando itens e populando o modal de revisão...");

@@ -56,6 +56,7 @@ import {
   calcularTotaisFichaTecnica,
   calcularCustoItemFichaTecnica,
   type FichaTecnicaItem,
+  type HistoricoCompraInsumo,
 } from "@/lib/ficha-tecnica-service";
 import { toast } from "sonner";
 
