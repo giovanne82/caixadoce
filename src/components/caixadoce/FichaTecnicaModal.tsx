@@ -98,10 +98,11 @@ export function FichaTecnicaModal({
   // Form de Inserção de Novo Insumo na Ficha (Campos livres sem setas numéricas)
   const [novoInsumoNome, setNovoInsumoNome] = useState("");
   const [novoInsumoQtdStr, setNovoInsumoQtdStr] = useState<string>("100");
-  const [novoInsumoQtdOriginalStr, setNovoInsumoQtdOriginalStr] = useState<string>("1000");
+  const [novoInsumoQtdOriginalStr, setNovoInsumoQtdOriginalStr] = useState<string>("1");
   const [novoInsumoQtd, setNovoInsumoQtd] = useState<number>(100);
-  const [novoInsumoQtdOriginal, setNovoInsumoQtdOriginal] = useState<number>(1000);
-  const [novoInsumoUnidade, setNovoInsumoUnidade] = useState<"g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx">("g");
+  const [novoInsumoQtdOriginal, setNovoInsumoQtdOriginal] = useState<number>(1);
+  const [novoInsumoUnidadeCompra, setNovoInsumoUnidadeCompra] = useState<string>("kg");
+  const [novoInsumoUnidade, setNovoInsumoUnidade] = useState<string>("g");
   const [novoInsumoPrecoFormatado, setNovoInsumoPrecoFormatado] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [buscandoPrecoMedio, setBuscandoPrecoMedio] = useState(false);
@@ -158,21 +159,6 @@ export function FichaTecnicaModal({
     }
   }, [open, produto, estabelecimentoCodigo]);
 
-  // Altera unidade de medida e ajusta a Qtd da Embalagem Original padrão
-  const handleTrocarUnidade = (val: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx") => {
-    setNovoInsumoUnidade(val);
-    if (val === "g" || val === "ml") {
-      setNovoInsumoQtdOriginalStr("1000");
-      setNovoInsumoQtdOriginal(1000);
-    } else if (val === "pct" || val === "cx") {
-      setNovoInsumoQtdOriginalStr("25");
-      setNovoInsumoQtdOriginal(25);
-    } else {
-      setNovoInsumoQtdOriginalStr("1");
-      setNovoInsumoQtdOriginal(1);
-    }
-  };
-
   // Quando um insumo é selecionado do autocomplete ou digitado, busca seu Preço Médio no Supabase
   const handleSelecionarSugestao = async (nomeInsumo: string) => {
     setNovoInsumoNome(nomeInsumo);
@@ -196,7 +182,7 @@ export function FichaTecnicaModal({
     }
   };
 
-  // Adicionar Insumo na Ficha Técnica (Proporcional: (Preço Embalagem / Qtd Orig) * Qtd Usada)
+  // Adicionar Insumo na Ficha Técnica (Proporcional com conversão automática de unidades)
   const handleAdicionarInsumo = () => {
     const nomeLimpo = novoInsumoNome.trim();
     const precoEmb = converterMoedaInputParaNumero(novoInsumoPrecoFormatado);
@@ -217,7 +203,8 @@ export function FichaTecnicaModal({
       qtdUsadaVal,
       novoInsumoUnidade,
       precoEmb,
-      qtdEmbOrig
+      qtdEmbOrig,
+      novoInsumoUnidadeCompra
     );
 
     const novoItem: FichaTecnicaItem = {
@@ -229,6 +216,7 @@ export function FichaTecnicaModal({
       qtdEmbalagemOriginal: qtdEmbOrig,
       quantidadeUsada: qtdUsadaVal,
       unidadeMedida: novoInsumoUnidade,
+      unidadeEmbalagem: novoInsumoUnidadeCompra,
       precoUnitarioAplicado: precoEmb,
       custoTotalItem,
     };
@@ -255,12 +243,15 @@ export function FichaTecnicaModal({
         const precoEmb = Number(atualizado.precoEmbalagem ?? atualizado.precoUnitarioAplicado ?? 0);
         const qtdEmbOrig = Number(atualizado.qtdEmbalagemOriginal) > 0 ? Number(atualizado.qtdEmbalagemOriginal) : 1;
         const qtdUsada = Number(atualizado.quantidadeUsada) || 0;
+        const unidUso = atualizado.unidadeMedida || "g";
+        const unidCompra = atualizado.unidadeEmbalagem || unidUso;
         
         atualizado.custoTotalItem = calcularCustoItemFichaTecnica(
           qtdUsada,
-          atualizado.unidadeMedida,
+          unidUso,
           precoEmb,
-          qtdEmbOrig
+          qtdEmbOrig,
+          unidCompra
         );
         return atualizado;
       })
@@ -424,11 +415,12 @@ export function FichaTecnicaModal({
                   )}
                 </div>
 
-                {/* Preço da Embalagem / Qtd Embalagem / Qtd Receita / Unidade em Grid Responsivo */}
-                <div className="grid grid-cols-2 sm:grid-cols-7 sm:col-span-8 gap-2 items-end">
-                  <div className="col-span-1 sm:col-span-2">
-                    <Label className="text-xs font-bold truncate block" title="Valor total pago na compra da embalagem">
-                      Preço Embalagem
+                {/* Preço do produto / Qtd Embalagem / Qtd Receita em Grid Responsivo */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  {/* Preço do produto */}
+                  <div className="sm:col-span-4">
+                    <Label className="text-xs font-bold truncate block" title="Valor pago no produto/embalagem">
+                      Preço do produto
                     </Label>
                     <Input
                       type="text"
@@ -439,64 +431,74 @@ export function FichaTecnicaModal({
                     />
                   </div>
 
-                  <div className="col-span-1 sm:col-span-2">
-                    <Label className="text-xs font-bold flex items-center gap-1 truncate" title="Quantidade contida no pacote original de compra">
-                      <span>Qtd Emb.</span>
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 font-extrabold uppercase bg-purple-500/10 text-purple-600 border-purple-500/30">
-                        ({novoInsumoUnidade})
-                      </Badge>
+                  {/* Qtd Embalagem com dropdown de Unidade de Compra */}
+                  <div className="sm:col-span-4">
+                    <Label className="text-xs font-bold truncate block" title="Quantidade contida na embalagem original de compra">
+                      Qtd Embalagem
                     </Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="1000"
-                      value={novoInsumoQtdOriginalStr}
-                      onChange={(e) => {
-                        setNovoInsumoQtdOriginalStr(e.target.value);
-                        setNovoInsumoQtdOriginal(parseNumberInput(e.target.value));
-                      }}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="1"
+                        className="flex-1 min-w-0"
+                        value={novoInsumoQtdOriginalStr}
+                        onChange={(e) => {
+                          setNovoInsumoQtdOriginalStr(e.target.value);
+                          setNovoInsumoQtdOriginal(parseNumberInput(e.target.value));
+                        }}
+                      />
+                      <Select
+                        value={novoInsumoUnidadeCompra}
+                        onValueChange={(val: any) => setNovoInsumoUnidadeCompra(val)}
+                      >
+                        <SelectTrigger className="h-9 w-20 shrink-0 text-xs px-2 font-bold bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">Kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="l">L</SelectItem>
+                          <SelectItem value="ml">ml</SelectItem>
+                          <SelectItem value="un">Unid.</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
-                  <div className="col-span-1 sm:col-span-2">
-                    <Label className="text-xs font-bold flex items-center gap-1 truncate" title="Quantidade utilizada nesta receita específica">
-                      <span>Qtd Receita</span>
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-                        ({novoInsumoUnidade})
-                      </Badge>
+                  {/* Qtd Receita com dropdown de Unidade de Uso */}
+                  <div className="sm:col-span-4">
+                    <Label className="text-xs font-bold truncate block" title="Quantidade utilizada nesta receita">
+                      Qtd Receita
                     </Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="100"
-                      value={novoInsumoQtdStr}
-                      onChange={(e) => {
-                        setNovoInsumoQtdStr(e.target.value);
-                        setNovoInsumoQtd(parseNumberInput(e.target.value));
-                      }}
-                    />
-                  </div>
-
-                  <div className="col-span-1 sm:col-span-1">
-                    <Label className="text-xs font-bold">Unid.</Label>
-                    <Select
-                      value={novoInsumoUnidade}
-                      onValueChange={(val: any) => handleTrocarUnidade(val)}
-                    >
-                      <SelectTrigger className="h-9 px-1 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="g">g</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="ml">ml</SelectItem>
-                        <SelectItem value="l">L</SelectItem>
-                        <SelectItem value="un">un</SelectItem>
-                        <SelectItem value="bdj">bdj</SelectItem>
-                        <SelectItem value="pct">pct</SelectItem>
-                        <SelectItem value="cx">cx</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="100"
+                        className="flex-1 min-w-0"
+                        value={novoInsumoQtdStr}
+                        onChange={(e) => {
+                          setNovoInsumoQtdStr(e.target.value);
+                          setNovoInsumoQtd(parseNumberInput(e.target.value));
+                        }}
+                      />
+                      <Select
+                        value={novoInsumoUnidade}
+                        onValueChange={(val: any) => setNovoInsumoUnidade(val)}
+                      >
+                        <SelectTrigger className="h-9 w-20 shrink-0 text-xs px-2 font-bold bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">Kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="l">L</SelectItem>
+                          <SelectItem value="ml">ml</SelectItem>
+                          <SelectItem value="un">Unid.</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
@@ -527,8 +529,7 @@ export function FichaTecnicaModal({
                 itens.map((item) => {
                   const precoEmbVal = item.precoEmbalagem ?? item.precoUnitarioAplicado ?? 0;
                   const qtdEmbOrigVal =
-                    item.qtdEmbalagemOriginal ??
-                    (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? 1000 : 1);
+                    item.qtdEmbalagemOriginal ?? 1;
 
                   return (
                     <div key={item.id} className="p-3.5 rounded-xl border border-border bg-card space-y-3 shadow-2xs">
@@ -544,9 +545,10 @@ export function FichaTecnicaModal({
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* Preço do produto */}
                         <div>
-                          <Label className="text-[10px] font-bold text-muted-foreground">Preço Embalagem (R$)</Label>
+                          <Label className="text-[10px] font-bold text-muted-foreground">Preço do produto (R$)</Label>
                           <Input
                             type="text"
                             inputMode="decimal"
@@ -562,35 +564,14 @@ export function FichaTecnicaModal({
                           />
                         </div>
 
+                        {/* Qtd Embalagem + Unidade de Compra */}
                         <div>
-                          <Label className="text-[10px] font-bold text-muted-foreground">Unidade</Label>
-                          <Select
-                            value={item.unidadeMedida}
-                            onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeMedida", val)}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="g">g</SelectItem>
-                              <SelectItem value="kg">kg</SelectItem>
-                              <SelectItem value="ml">ml</SelectItem>
-                              <SelectItem value="l">L</SelectItem>
-                              <SelectItem value="un">un</SelectItem>
-                              <SelectItem value="bdj">bdj</SelectItem>
-                              <SelectItem value="pct">pct</SelectItem>
-                              <SelectItem value="cx">cx</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-[10px] font-bold text-muted-foreground">Qtd Emb. Orig.</Label>
+                          <Label className="text-[10px] font-bold text-muted-foreground">Qtd Embalagem</Label>
                           <div className="flex items-center gap-1">
                             <Input
                               type="text"
                               inputMode="decimal"
-                              className="h-8 text-xs font-semibold text-center"
+                              className="h-8 text-xs font-semibold text-center flex-1 min-w-0"
                               value={qtdEmbOrigVal}
                               onChange={(e) =>
                                 handleAtualizarItemExistente(
@@ -600,17 +581,32 @@ export function FichaTecnicaModal({
                                 )
                               }
                             />
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.unidadeMedida}</span>
+                            <Select
+                              value={item.unidadeEmbalagem || (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? "kg" : item.unidadeMedida)}
+                              onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeEmbalagem", val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs w-16 px-1 shrink-0">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="kg">Kg</SelectItem>
+                                <SelectItem value="g">g</SelectItem>
+                                <SelectItem value="l">L</SelectItem>
+                                <SelectItem value="ml">ml</SelectItem>
+                                <SelectItem value="un">Unid.</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
 
+                        {/* Qtd na Receita + Unidade de Uso */}
                         <div>
                           <Label className="text-[10px] font-bold text-purple-600 dark:text-purple-300">Qtd na Receita</Label>
                           <div className="flex items-center gap-1">
                             <Input
                               type="text"
                               inputMode="decimal"
-                              className="h-8 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40"
+                              className="h-8 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40 flex-1 min-w-0"
                               value={item.quantidadeUsada}
                               onChange={(e) =>
                                 handleAtualizarItemExistente(
@@ -620,7 +616,21 @@ export function FichaTecnicaModal({
                                 )
                               }
                             />
-                            <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-300 uppercase">{item.unidadeMedida}</span>
+                            <Select
+                              value={item.unidadeMedida}
+                              onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeMedida", val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs w-16 px-1 shrink-0 font-bold text-purple-600 dark:text-purple-300 border-purple-500/40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="kg">Kg</SelectItem>
+                                <SelectItem value="g">g</SelectItem>
+                                <SelectItem value="l">L</SelectItem>
+                                <SelectItem value="ml">ml</SelectItem>
+                                <SelectItem value="un">Unid.</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                       </div>
@@ -652,10 +662,9 @@ export function FichaTecnicaModal({
                 <TableHeader className="bg-muted/60">
                   <TableRow>
                     <TableHead>Ingrediente / Insumo</TableHead>
-                    <TableHead className="w-32">Preço Embalagem (R$)</TableHead>
-                    <TableHead className="w-32 text-center">Qtd Emb. Orig.</TableHead>
-                    <TableHead className="w-32 text-center">Qtd na Receita</TableHead>
-                    <TableHead className="w-20">Unidade</TableHead>
+                    <TableHead className="w-32">Preço do produto (R$)</TableHead>
+                    <TableHead className="w-44 text-center">Qtd Embalagem</TableHead>
+                    <TableHead className="w-44 text-center">Qtd na Receita</TableHead>
                     <TableHead className="w-32 text-right">Custo Total (R$)</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -663,7 +672,7 @@ export function FichaTecnicaModal({
                 <TableBody>
                   {itens.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-xs">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-xs">
                         Nenhum ingrediente adicionado à receita ainda. Digite acima para começar.
                       </TableCell>
                     </TableRow>
@@ -671,8 +680,7 @@ export function FichaTecnicaModal({
                     itens.map((item) => {
                       const precoEmbVal = item.precoEmbalagem ?? item.precoUnitarioAplicado ?? 0;
                       const qtdEmbOrigVal =
-                        item.qtdEmbalagemOriginal ??
-                        (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? 1000 : 1);
+                        item.qtdEmbalagemOriginal ?? 1;
 
                       return (
                         <TableRow key={item.id}>
@@ -681,7 +689,7 @@ export function FichaTecnicaModal({
                             {item.insumoNome}
                           </TableCell>
 
-                          {/* Preço da Embalagem / Base */}
+                          {/* Preço do produto */}
                           <TableCell>
                             <Input
                               type="text"
@@ -698,7 +706,7 @@ export function FichaTecnicaModal({
                             />
                           </TableCell>
 
-                          {/* Qtd Embalagem Original */}
+                          {/* Qtd Embalagem Original com Dropdown de Unidade de Compra */}
                           <TableCell>
                             <div className="flex items-center justify-center gap-1">
                               <Input
@@ -714,19 +722,31 @@ export function FichaTecnicaModal({
                                   )
                                 }
                               />
-                              <span className="text-[10px] font-bold text-muted-foreground uppercase w-6 text-left">
-                                {item.unidadeMedida}
-                              </span>
+                              <Select
+                                value={item.unidadeEmbalagem || (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? "kg" : item.unidadeMedida)}
+                                onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeEmbalagem", val)}
+                              >
+                                <SelectTrigger className="h-8 text-xs w-16 px-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="kg">Kg</SelectItem>
+                                  <SelectItem value="g">g</SelectItem>
+                                  <SelectItem value="l">L</SelectItem>
+                                  <SelectItem value="ml">ml</SelectItem>
+                                  <SelectItem value="un">Unid.</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                           </TableCell>
 
-                          {/* Qtd Usada na Receita */}
+                          {/* Qtd Usada na Receita com Dropdown de Unidade de Uso */}
                           <TableCell>
                             <div className="flex items-center justify-center gap-1">
                               <Input
                                 type="text"
                                 inputMode="decimal"
-                                className="h-8 text-xs font-bold w-16 text-center text-purple-700 dark:text-purple-300 px-1"
+                                className="h-8 text-xs font-bold w-16 text-center text-purple-700 dark:text-purple-300 px-1 border-purple-500/40"
                                 value={item.quantidadeUsada}
                                 onChange={(e) =>
                                   handleAtualizarItemExistente(
@@ -736,48 +756,38 @@ export function FichaTecnicaModal({
                                   )
                                 }
                               />
-                              <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-400 uppercase w-6 text-left">
-                                {item.unidadeMedida}
-                              </span>
+                              <Select
+                                value={item.unidadeMedida}
+                                onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeMedida", val)}
+                              >
+                                <SelectTrigger className="h-8 text-xs w-16 px-1 font-bold text-purple-600 dark:text-purple-300 border-purple-500/40">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="kg">Kg</SelectItem>
+                                  <SelectItem value="g">g</SelectItem>
+                                  <SelectItem value="l">L</SelectItem>
+                                  <SelectItem value="ml">ml</SelectItem>
+                                  <SelectItem value="un">Unid.</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                           </TableCell>
 
-                          {/* Unidade */}
-                          <TableCell>
-                            <Select
-                              value={item.unidadeMedida}
-                              onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeMedida", val)}
-                            >
-                              <SelectTrigger className="h-8 text-xs w-20">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="g">g</SelectItem>
-                                <SelectItem value="kg">kg</SelectItem>
-                                <SelectItem value="ml">ml</SelectItem>
-                                <SelectItem value="l">L</SelectItem>
-                                <SelectItem value="un">un</SelectItem>
-                                <SelectItem value="bdj">bdj</SelectItem>
-                                <SelectItem value="pct">pct</SelectItem>
-                                <SelectItem value="cx">cx</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-
-                          {/* Custo Total do Item */}
-                          <TableCell className="text-right font-black text-xs font-mono text-emerald-600 dark:text-emerald-400">
+                          {/* Custo Total */}
+                          <TableCell className="text-right font-black font-mono text-xs text-emerald-600 dark:text-emerald-400">
                             {formatarMoeda(item.custoTotalItem)}
                           </TableCell>
 
-                          {/* Excluir */}
-                          <TableCell className="text-right">
+                          {/* Ação */}
+                          <TableCell>
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => handleRemoverItem(item.id)}
                               className="h-7 w-7 text-rose-500 hover:bg-rose-500/10"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -788,7 +798,7 @@ export function FichaTecnicaModal({
                 {itens.length > 0 && (
                   <TableFooter className="bg-purple-500/10 border-t-2 border-purple-500/30">
                     <TableRow>
-                      <TableCell colSpan={5} className="font-extrabold text-xs text-purple-900 dark:text-purple-200 uppercase tracking-wider py-3">
+                      <TableCell colSpan={4} className="font-extrabold text-xs text-purple-900 dark:text-purple-200 uppercase tracking-wider py-3">
                         Total Insumos / Custo da Receita:
                       </TableCell>
                       <TableCell className="text-right font-black text-sm font-mono text-purple-700 dark:text-purple-300 py-3">

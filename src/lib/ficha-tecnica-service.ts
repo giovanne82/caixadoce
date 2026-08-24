@@ -39,10 +39,11 @@ export interface FichaTecnicaItem {
   produtoId: string;
   insumoNome: string;
   insumoPadraoId?: string;
-  precoEmbalagem: number; // Preço pago pela embalagem/fardo/quilo (ex: R$ 38,50)
-  qtdEmbalagemOriginal: number; // Qtd da embalagem original (ex: 1000g para 1kg, 25 un para fardo)
+  precoEmbalagem: number; // Preço pago pela embalagem/produto (ex: R$ 34,90)
+  qtdEmbalagemOriginal: number; // Qtd da embalagem original de compra (ex: 1kg, 1000g)
   quantidadeUsada: number; // Qtd usada na receita (ex: 100g, 2 un, 250ml)
-  unidadeMedida: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx";
+  unidadeMedida: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx" | string; // Unidade de Uso
+  unidadeEmbalagem?: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx" | string; // Unidade de Compra
   precoUnitarioAplicado?: number; // Compatibilidade com precoEmbalagem
   custoTotalItem: number;
   createdAt?: string;
@@ -398,8 +399,9 @@ export async function obterFichaTecnicaProduto(
       const mapeados: FichaTecnicaItem[] = data.map((d: any) => {
         const precoEmb = Number(d.preco_embalagem ?? d.preco_unitario_aplicado ?? 0);
         const unid = d.unidade_medida || "g";
+        const unidEmb = d.unidade_embalagem || d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
         const qtdEmb = Number(
-          d.qtd_embalagem_original ?? (unid === "g" || unid === "ml" ? 1000 : 1)
+          d.qtd_embalagem_original ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
         );
         const qtdUsada = Number(d.quantidade_usada ?? 0);
 
@@ -412,10 +414,11 @@ export async function obterFichaTecnicaProduto(
           qtdEmbalagemOriginal: qtdEmb,
           quantidadeUsada: qtdUsada,
           unidadeMedida: unid,
+          unidadeEmbalagem: unidEmb,
           precoUnitarioAplicado: precoEmb,
           custoTotalItem:
             Number(d.custo_total_item) ||
-            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb),
+            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
           createdAt: d.created_at,
         };
       });
@@ -432,8 +435,9 @@ export async function obterFichaTecnicaProduto(
       return parsed.map((d) => {
         const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
         const unid = d.unidadeMedida || "g";
+        const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
         const qtdEmb = Number(
-          d.qtdEmbalagemOriginal ?? (unid === "g" || unid === "ml" ? 1000 : 1)
+          d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
         );
         const qtdUsada = Number(d.quantidadeUsada ?? 0);
 
@@ -446,10 +450,11 @@ export async function obterFichaTecnicaProduto(
           qtdEmbalagemOriginal: qtdEmb,
           quantidadeUsada: qtdUsada,
           unidadeMedida: unid,
+          unidadeEmbalagem: unidEmb,
           precoUnitarioAplicado: precoEmb,
           custoTotalItem:
             Number(d.custoTotalItem) ||
-            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb),
+            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
           createdAt: d.createdAt,
         };
       });
@@ -524,13 +529,14 @@ export function calcularTotaisFichaTecnica(
   const custoInsumosTotal = itens.reduce((sum, item) => {
     const precoEmb = Number(item.precoEmbalagem ?? item.precoUnitarioAplicado ?? 0);
     const qtdEmb = Number(
-      item.qtdEmbalagemOriginal ?? (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? 1000 : 1)
+      item.qtdEmbalagemOriginal ?? (item.unidadeEmbalagem === "kg" || item.unidadeEmbalagem === "l" ? 1 : 1000)
     );
     const totalItem = calcularCustoItemFichaTecnica(
       item.quantidadeUsada,
       item.unidadeMedida || "g",
       precoEmb,
-      qtdEmb
+      qtdEmb,
+      item.unidadeEmbalagem || item.unidadeMedida
     );
     return sum + totalItem;
   }, 0);
