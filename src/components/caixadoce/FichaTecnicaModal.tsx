@@ -38,6 +38,7 @@ import {
   Info,
   Scale,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -80,6 +81,10 @@ export function FichaTecnicaModal({
   const [rendimentoQtd, setRendimentoQtd] = useState<number>(1);
   const [custosOperacionaisPerc, setCustosOperacionaisPerc] = useState<number>(15);
   const [margemLucroPerc, setMargemLucroPerc] = useState<number>(100);
+
+  // Preço de Venda Personalizado & Escolha de Opção
+  const [opcaoPrecoUsar, setOpcaoPrecoUsar] = useState<"sugerido" | "personalizado">("sugerido");
+  const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
 
   // Form de Inserção de Novo Insumo na Ficha
   const [novoInsumoNome, setNovoInsumoNome] = useState("");
@@ -241,7 +246,57 @@ export function FichaTecnicaModal({
     );
   }, [itens, rendimentoQtd, custosOperacionaisPerc, margemLucroPerc]);
 
-  // Aplicar Preço de Venda Sugerido ao Produto do Cardápio
+  // Preço Sugerido Efetivo (Unitário se rendimento > 1, ou Lote/Receita)
+  const precoSugeridoEfetivo = useMemo(() => {
+    return rendimentoQtd > 1
+      ? totaisCalculados.precoVendaSugeridoUnitario
+      : totaisCalculados.precoVendaSugeridoLote;
+  }, [rendimentoQtd, totaisCalculados]);
+
+  // Custo Base Efetivo (Unitário se rendimento > 1, ou Receita Total)
+  const custoBaseEfetivo = useMemo(() => {
+    return rendimentoQtd > 1
+      ? totaisCalculados.custoUnitarioItem
+      : totaisCalculados.custoTotalReceita;
+  }, [rendimentoQtd, totaisCalculados]);
+
+  // Inicializa o campo de Preço Personalizado quando o modal abre ou a sugestão muda
+  useEffect(() => {
+    if (open && produto) {
+      const precoInicial = precoSugeridoEfetivo > 0 ? precoSugeridoEfetivo : produto.preco || 0;
+      if (precoInicial > 0) {
+        setPrecoPersonalizadoFormatado(formatarMoeda(precoInicial));
+      }
+    }
+  }, [open, produto, precoSugeridoEfetivo]);
+
+  // Preço Personalizado convertido para número
+  const precoPersonalizadoNum = useMemo(() => {
+    return converterMoedaInputParaNumero(precoPersonalizadoFormatado);
+  }, [precoPersonalizadoFormatado]);
+
+  // Cálculos de Lucro Comparativo (Sugerido vs Personalizado)
+  const comparativoLucro = useMemo(() => {
+    const lucroSugeridoVal = precoSugeridoEfetivo - custoBaseEfetivo;
+    const percSugerido = custoBaseEfetivo > 0 ? (lucroSugeridoVal / custoBaseEfetivo) * 100 : margemLucroPerc;
+
+    const lucroPersonalizadoVal = precoPersonalizadoNum - custoBaseEfetivo;
+    const percPersonalizado = custoBaseEfetivo > 0 ? (lucroPersonalizadoVal / custoBaseEfetivo) * 100 : 0;
+
+    return {
+      lucroSugeridoVal: parseFloat(lucroSugeridoVal.toFixed(2)),
+      percSugerido: parseFloat(percSugerido.toFixed(1)),
+      lucroPersonalizadoVal: parseFloat(lucroPersonalizadoVal.toFixed(2)),
+      percPersonalizado: parseFloat(percPersonalizado.toFixed(1)),
+    };
+  }, [precoSugeridoEfetivo, custoBaseEfetivo, precoPersonalizadoNum, margemLucroPerc]);
+
+  // Preço Final Escolhido para Salvar no Cardápio
+  const precoFinalSalvar = useMemo(() => {
+    return opcaoPrecoUsar === "sugerido" ? precoSugeridoEfetivo : precoPersonalizadoNum;
+  }, [opcaoPrecoUsar, precoSugeridoEfetivo, precoPersonalizadoNum]);
+
+  // Aplicar Preço de Venda Selecionado ao Produto do Cardápio
   const handleSalvarEAplicarPreco = async () => {
     if (!produto) return;
     setSalvando(true);
@@ -249,15 +304,10 @@ export function FichaTecnicaModal({
       // 1. Salvar Itens da Ficha Técnica no Supabase
       await salvarFichaTecnicaProduto(estabelecimentoCodigo, produto.id, itens);
 
-      // 2. Atualizar Preço do Produto no Cardápio
-      const precoFinalAplicar =
-        rendimentoQtd > 1
-          ? totaisCalculados.precoVendaSugeridoUnitario
-          : totaisCalculados.precoVendaSugeridoLote;
+      // 2. Atualizar Preço do Produto no Cardápio com o valor escolhido
+      await onAplicarPrecoProduto(produto.id, precoFinalSalvar);
 
-      await onAplicarPrecoProduto(produto.id, precoFinalAplicar);
-
-      toast.success(`Preço de R$ ${precoFinalAplicar.toFixed(2).replace(".", ",")} aplicado ao produto com sucesso!`);
+      toast.success(`Preço de ${formatarMoeda(precoFinalSalvar)} aplicado ao produto com sucesso!`);
       onOpenChange(false);
     } catch (e: any) {
       toast.error(`Erro ao salvar ficha técnica: ${e.message}`);
@@ -584,12 +634,139 @@ export function FichaTecnicaModal({
               </div>
             </CardContent>
           </Card>
+          {/* SEÇÃO: PREÇO PERSONALIZADO E COMPARATIVO DE LUCRO */}
+          <Card className="border-purple-500/30 bg-purple-500/5 shadow-xs">
+            <CardContent className="p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-purple-600" /> Escolha de Preço &amp; Comparativo de Lucro
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Escolha entre o preço sugerido pela IA ou digite seu valor personalizado.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 bg-background p-1 rounded-xl border border-border">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={opcaoPrecoUsar === "sugerido" ? "default" : "ghost"}
+                    onClick={() => setOpcaoPrecoUsar("sugerido")}
+                    className="h-7 text-xs font-bold"
+                  >
+                    Usar Sugerido ({formatarMoeda(precoSugeridoEfetivo)})
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={opcaoPrecoUsar === "personalizado" ? "default" : "ghost"}
+                    onClick={() => setOpcaoPrecoUsar("personalizado")}
+                    className="h-7 text-xs font-bold"
+                  >
+                    Usar Personalizado
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* CARD DO PREÇO SUGERIDO */}
+                <div
+                  onClick={() => setOpcaoPrecoUsar("sugerido")}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    opcaoPrecoUsar === "sugerido"
+                      ? "bg-purple-600/10 border-purple-500 ring-2 ring-purple-500/30"
+                      : "bg-card border-border hover:border-purple-500/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-muted-foreground">Preço Sugerido (IA)</span>
+                    <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-600 border-purple-500/30 font-bold">
+                      Margem {margemLucroPerc}%
+                    </Badge>
+                  </div>
+                  <p className="text-xl font-black font-mono text-purple-700 dark:text-purple-300 mt-1">
+                    {formatarMoeda(precoSugeridoEfetivo)}
+                    {rendimentoQtd > 1 && <span className="text-xs text-muted-foreground font-normal"> /un</span>}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground font-medium">Lucro Estimado:</span>
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                      +{formatarMoeda(comparativoLucro.lucroSugeridoVal)} ({comparativoLucro.percSugerido}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* CARD DO PREÇO PERSONALIZADO (INPUT MOEDA EDITÁVEL) */}
+                <div
+                  onClick={() => setOpcaoPrecoUsar("personalizado")}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    opcaoPrecoUsar === "personalizado"
+                      ? "bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/30"
+                      : "bg-card border-border hover:border-emerald-500/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs font-bold text-foreground">Preço de Venda Personalizado *</Label>
+                    <span className="text-[10px] text-muted-foreground">Digite seu valor</span>
+                  </div>
+
+                  <Input
+                    placeholder="R$ 0,00"
+                    value={precoPersonalizadoFormatado}
+                    onChange={(e) => {
+                      const masked = aplicarMascaraMoedaInput(e.target.value);
+                      setPrecoPersonalizadoFormatado(masked);
+                      setOpcaoPrecoUsar("personalizado");
+                    }}
+                    className="h-9 text-base font-black font-mono text-foreground bg-background border-emerald-500/40 focus:border-emerald-600"
+                  />
+
+                  <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground font-medium">Lucro Estimado:</span>
+                    <span className={`font-extrabold font-mono ${
+                      comparativoLucro.lucroPersonalizadoVal <= 0
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-emerald-600 dark:text-emerald-400"
+                    }`}>
+                      {comparativoLucro.lucroPersonalizadoVal >= 0 ? "+" : ""}
+                      {formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} ({comparativoLucro.percPersonalizado}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* BANNER DE ALERTA DE LUCRO OU PREJUÍZO */}
+              {comparativoLucro.lucroPersonalizadoVal <= 0 ? (
+                <div className="p-3 bg-rose-500/15 border border-rose-500/40 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <span>
+                    <strong>Atenção (Prejuízo Detectado)!</strong> O preço personalizado de {formatarMoeda(precoPersonalizadoNum)} resulta em prejuízo de {formatarMoeda(Math.abs(comparativoLucro.lucroPersonalizadoVal))} ({comparativoLucro.percPersonalizado}%). O preço de venda está abaixo dos custos da receita ({formatarMoeda(custoBaseEfetivo)}).
+                  </span>
+                </div>
+              ) : comparativoLucro.percPersonalizado < 20 ? (
+                <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Margem Baixa:</strong> Seu lucro líquido estimado é de apenas {formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} ({comparativoLucro.percPersonalizado}%). Considere aumentar um pouco o valor para cobrir imprevistos.
+                  </span>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    Preço seguro com margem de lucro de <strong>{comparativoLucro.percPersonalizado}%</strong> (+{formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} de lucro líquido).
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Rodapé do Modal */}
         <DialogFooter className="p-4 sm:p-6 border-t border-border bg-card shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-muted-foreground">
-            Preço de Venda Atual no Cardápio: <strong className="text-foreground font-mono">{formatarMoeda(produto.preco)}</strong>
+            Preço Atual no Cardápio: <strong className="text-foreground font-mono">{formatarMoeda(produto.preco)}</strong>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -602,7 +779,7 @@ export function FichaTecnicaModal({
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-1.5 shadow-md flex-1 sm:flex-initial"
             >
               <CheckCircle2 className="w-4 h-4" />
-              Aplicar Preço Sugerido ({formatarMoeda(rendimentoQtd > 1 ? totaisCalculados.precoVendaSugeridoUnitario : totaisCalculados.precoVendaSugeridoLote)})
+              Aplicar Preço ({formatarMoeda(precoFinalSalvar)})
             </Button>
           </div>
         </DialogFooter>
