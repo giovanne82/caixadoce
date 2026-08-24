@@ -73,7 +73,7 @@ export function MercadoPagoBrick({
       const publicKey =
         (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
         (import.meta as any).env?.MERCADOPAGO_PUBLIC_KEY ||
-        "APP_USR-f34f71a4-9dfb-4f9e-a8df-ce6df1bc0b50";
+        "TEST-f6c7f24c-d52c-4592-9fd4-874bd16d636e";
 
       try {
         const mp = new window.MercadoPago(publicKey, { locale: "pt-BR" });
