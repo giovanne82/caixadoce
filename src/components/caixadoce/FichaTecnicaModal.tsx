@@ -356,25 +356,25 @@ export function FichaTecnicaModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:w-[900px] max-w-[900px] h-[92vh] sm:h-[850px] max-h-[850px] flex flex-col p-0 overflow-hidden rounded-2xl border-purple-500/30">
-        {/* Cabeçalho do Modal */}
-        <DialogHeader className="p-4 sm:p-6 pb-3 border-b border-border bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold shrink-0 border border-purple-500/30">
-              <Calculator className="w-5 h-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg sm:text-xl font-extrabold text-foreground flex items-center gap-2">
-                Ficha Técnica &amp; Precificação: {produto.nome}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Soma de insumos, margem de lucro e preço de venda sugerido baseado no seu histórico de notas.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        {/* Conteúdo Central Rolável */}
+        {/* Conteúdo Central Rolável (Incluindo Cabeçalho Estático) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 min-h-0">
+          {/* Cabeçalho do Modal (Estático / Rola junto com a página) */}
+          <DialogHeader className="p-4 sm:p-5 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 border-b border-border bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold shrink-0 border border-purple-500/30">
+                <Calculator className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg sm:text-xl font-extrabold text-foreground flex items-center gap-2">
+                  Ficha Técnica &amp; Precificação: {produto.nome}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Soma de insumos, margem de lucro e preço de venda sugerido baseado no seu histórico de notas.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
           {/* CARDS DE RESUMO DE CUSTOS E PRECIFICAÇÃO */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card className="bg-purple-500/10 border-purple-500/30 shadow-xs">
