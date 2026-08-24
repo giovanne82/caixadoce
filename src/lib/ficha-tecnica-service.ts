@@ -122,18 +122,27 @@ export async function calcularPrecoMedioInsumo(
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   const nomeLimpo = insumoNome.trim().toLowerCase();
 
+  // Palavras-chave relevantes (desconsiderando numerais curtos e conectivos)
+  const tokens = nomeLimpo
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !["com", "para", "sem", "das", "dos", "que"].includes(w));
+
+  // 1. Busca no Supabase por compras do usuário (historico_compras_insumos)
   try {
-    // 1. Busca no Supabase por compras do usuário
     const { data, error } = await supabase
       .from("historico_compras_insumos" as any)
       .select("*")
       .eq("estabelecimento_codigo", code);
 
     if (!error && data && data.length > 0) {
-      // Filtrar compras correspondentes pelo nome ou sinônimo
       const comprasFiltradas = data.filter((item: any) => {
         const itemNome = (item.nome_insumo || "").toLowerCase();
-        return itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome);
+        if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
+        if (tokens.length > 0) {
+          const acertos = tokens.filter((tok) => itemNome.includes(tok));
+          return acertos.length >= Math.ceil(tokens.length * 0.6);
+        }
+        return false;
       });
 
       if (comprasFiltradas.length > 0) {
@@ -148,7 +157,7 @@ export async function calcularPrecoMedioInsumo(
         });
 
         if (somaQtdTotal > 0) {
-          const precoUnitarioCalculado = parseFloat((somaValorTotal / somaQtdTotal).toFixed(4));
+          const precoUnitarioCalculado = parseFloat((somaValorTotal / somaQtdTotal).toFixed(2));
           return {
             precoMedioUnitario: precoUnitarioCalculado,
             totalComprasRegistradas: comprasFiltradas.length,
@@ -158,31 +167,66 @@ export async function calcularPrecoMedioInsumo(
       }
     }
   } catch (e) {
-    console.warn("Aviso ao buscar histórico de compras no Supabase:", e);
+    console.warn("Aviso ao buscar histórico no Supabase:", e);
   }
 
-  // 2. Fallback no Cache Local
+  // 2. Fallback no Cache Local (Historico de Insumos & Notinhas Escaneadas)
   try {
-    const raw = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
-    if (raw) {
-      const historicoLocal: HistoricoCompraInsumo[] = JSON.parse(raw);
-      const comprasFiltradas = historicoLocal.filter((item) =>
-        item.nomeInsumo.toLowerCase().includes(nomeLimpo) || nomeLimpo.includes(item.nomeInsumo.toLowerCase())
-      );
+    const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
+    const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
+    
+    let itensLocal: { nome: string; valorTotal: number; qtd: number }[] = [];
 
-      if (comprasFiltradas.length > 0) {
-        let somaValorTotal = 0;
-        let somaQtdTotal = 0;
+    if (rawHistorico) {
+      const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
+      parsed.forEach((h) => {
+        itensLocal.push({
+          nome: h.nomeInsumo,
+          valorTotal: h.valorPagoTotal,
+          qtd: h.quantidadeTotalUnidades || h.quantidadeComprada || 1,
+        });
+      });
+    }
 
-        comprasFiltradas.forEach((c) => {
-          somaValorTotal += c.valorPagoTotal;
-          somaQtdTotal += c.quantidadeTotalUnidades || c.quantidadeComprada || 1;
+    if (rawDespesas) {
+      const parsedDespesas: any[] = JSON.parse(rawDespesas);
+      parsedDespesas.forEach((d) => {
+        if (Array.isArray(d.itens)) {
+          d.itens.forEach((it: any) => {
+            itensLocal.push({
+              nome: it.nome || "Insumo",
+              valorTotal: Number(it.valorTotal) || 0,
+              qtd: Number(it.quantidade) || 1,
+            });
+          });
+        }
+      });
+    }
+
+    if (itensLocal.length > 0) {
+      const matches = itensLocal.filter((it) => {
+        const itemNome = (it.nome || "").toLowerCase();
+        if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
+        if (tokens.length > 0) {
+          const acertos = tokens.filter((tok) => itemNome.includes(tok));
+          return acertos.length >= Math.ceil(tokens.length * 0.6);
+        }
+        return false;
+      });
+
+      if (matches.length > 0) {
+        let somaValor = 0;
+        let somaQtd = 0;
+
+        matches.forEach((m) => {
+          somaValor += m.valorTotal;
+          somaQtd += m.qtd;
         });
 
-        if (somaQtdTotal > 0) {
+        if (somaQtd > 0) {
           return {
-            precoMedioUnitario: parseFloat((somaValorTotal / somaQtdTotal).toFixed(4)),
-            totalComprasRegistradas: comprasFiltradas.length,
+            precoMedioUnitario: parseFloat((somaValor / somaQtd).toFixed(2)),
+            totalComprasRegistradas: matches.length,
             deNotaFiscal: true,
           };
         }
@@ -190,13 +234,19 @@ export async function calcularPrecoMedioInsumo(
     }
   } catch {}
 
-  // 3. Fallback no Catálogo Mestre Padrão
-  const padraoEncontrado = INSUMOS_PADRAO_CATALOGO.find(
-    (i) =>
-      i.nome.toLowerCase().includes(nomeLimpo) ||
-      nomeLimpo.includes(i.nome.toLowerCase()) ||
-      i.sinonimos?.some((s) => nomeLimpo.includes(s.toLowerCase()))
-  );
+  // 3. Fallback no Catálogo Mestre Padrão de Confeitaria
+  const padraoEncontrado = INSUMOS_PADRAO_CATALOGO.find((i) => {
+    const iNome = i.nome.toLowerCase();
+    if (iNome.includes(nomeLimpo) || nomeLimpo.includes(iNome)) return true;
+    if (i.sinonimos?.some((s) => nomeLimpo.includes(s.toLowerCase()) || s.toLowerCase().includes(nomeLimpo))) {
+      return true;
+    }
+    if (tokens.length > 0) {
+      const acertos = tokens.filter((tok) => iNome.includes(tok));
+      return acertos.length >= Math.ceil(tokens.length * 0.5);
+    }
+    return false;
+  });
 
   if (padraoEncontrado) {
     return {
@@ -206,8 +256,22 @@ export async function calcularPrecoMedioInsumo(
     };
   }
 
+  // 4. Estimativa Realista por Categoria caso seja um insumo personalizado novo
+  if (nomeLimpo.includes("choc") || nomeLimpo.includes("cacau") || nomeLimpo.includes("melken") || nomeLimpo.includes("sicao")) {
+    return { precoMedioUnitario: 38.50, totalComprasRegistradas: 0, deNotaFiscal: false };
+  }
+  if (nomeLimpo.includes("leite") || nomeLimpo.includes("creme") || nomeLimpo.includes("moca")) {
+    return { precoMedioUnitario: 7.50, totalComprasRegistradas: 0, deNotaFiscal: false };
+  }
+  if (nomeLimpo.includes("morango") || nomeLimpo.includes("uva") || nomeLimpo.includes("fruta")) {
+    return { precoMedioUnitario: 8.50, totalComprasRegistradas: 0, deNotaFiscal: false };
+  }
+  if (nomeLimpo.includes("caixa") || nomeLimpo.includes("embalagem") || nomeLimpo.includes("cakeboard")) {
+    return { precoMedioUnitario: 5.50, totalComprasRegistradas: 0, deNotaFiscal: false };
+  }
+
   return {
-    precoMedioUnitario: 10.0, // valor inicial padrão
+    precoMedioUnitario: 15.00,
     totalComprasRegistradas: 0,
     deNotaFiscal: false,
   };

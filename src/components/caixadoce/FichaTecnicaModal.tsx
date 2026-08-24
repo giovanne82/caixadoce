@@ -131,15 +131,16 @@ export function FichaTecnicaModal({
 
     try {
       const res = await calcularPrecoMedioInsumo(estabelecimentoCodigo, nomeInsumo, novoInsumoUnidade);
-      setNovoInsumoPrecoFormatado(`R$ ${res.precoMedioUnitario.toFixed(4).replace(".", ",")}`);
+      const valorFormatado = `R$ ${res.precoMedioUnitario.toFixed(2).replace(".", ",")}`;
+      setNovoInsumoPrecoFormatado(valorFormatado);
       
       if (res.deNotaFiscal) {
-        setOrigemPrecoInfo(`⚡ Média de ${res.totalComprasRegistradas} notas escaneadas nesta loja`);
+        setOrigemPrecoInfo(`⚡ Média Real de ${valorFormatado} em ${res.totalComprasRegistradas} nota(s) escaneada(s)`);
       } else {
-        setOrigemPrecoInfo("💡 Preço sugerido do catálogo de confeitaria");
+        setOrigemPrecoInfo(`💡 Preço Sugerido: ${valorFormatado}`);
       }
     } catch {
-      setNovoInsumoPrecoFormatado("R$ 10,00");
+      setNovoInsumoPrecoFormatado("R$ 38,50");
     } finally {
       setBuscandoPrecoMedio(false);
     }
