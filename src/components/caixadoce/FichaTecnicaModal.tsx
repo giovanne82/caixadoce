@@ -23,6 +23,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -655,7 +656,51 @@ export function FichaTecnicaModal({
                   })
                 )}
               </TableBody>
+              {itens.length > 0 && (
+                <TableFooter className="bg-purple-500/10 border-t-2 border-purple-500/30">
+                  <TableRow>
+                    <TableCell colSpan={5} className="font-extrabold text-xs text-purple-900 dark:text-purple-200 uppercase tracking-wider py-3">
+                      Total Insumos / Custo da Receita:
+                    </TableCell>
+                    <TableCell className="text-right font-black text-sm font-mono text-purple-700 dark:text-purple-300 py-3">
+                      {formatarMoeda(totaisCalculados.custoInsumosTotal)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
             </Table>
+          </div>
+
+          {/* BLOCO DE DESTAQUE: CUSTO TOTAL DA RECEITA (APENAS INSUMOS) */}
+          <div className="p-3.5 bg-gradient-to-r from-purple-500/15 via-purple-500/5 to-purple-500/15 border-2 border-purple-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-xs shrink-0">
+                <Calculator className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-purple-950 dark:text-purple-200">
+                    Custo Total da Receita (Insumos)
+                  </h4>
+                  <Badge variant="outline" className="text-[10px] bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40 font-extrabold">
+                    {itens.length} ingrediente(s)
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Soma direta do custo proporcional de todos os insumos utilizados (sem custos operacionais ou margem).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:flex-col sm:items-end w-full sm:w-auto justify-between border-t sm:border-t-0 pt-2 sm:pt-0 border-purple-500/20">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Custo Base dos Insumos:
+              </span>
+              <span className="text-xl font-black font-mono text-purple-700 dark:text-purple-300">
+                {formatarMoeda(totaisCalculados.custoInsumosTotal)}
+              </span>
+            </div>
           </div>
 
           {/* PARÂMETROS DE RENDIMENTO & MARGEM DE LUCRO */}
