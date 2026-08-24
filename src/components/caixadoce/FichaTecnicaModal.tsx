@@ -848,26 +848,12 @@ export function FichaTecnicaModal({
                 </div>
               </div>
 
-              {/* BANNER DE ALERTA DE LUCRO OU PREJUÍZO */}
-              {comparativoLucro.lucroPersonalizadoVal <= 0 ? (
+              {/* AVISO APENAS SE HOUVER PREJUÍZO OBJETIVO (< R$ 0) */}
+              {comparativoLucro.lucroPersonalizadoVal < 0 && (
                 <div className="p-3 bg-rose-500/15 border border-rose-500/40 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 font-semibold">
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                   <span>
-                    <strong>Atenção (Prejuízo Detectado)!</strong> O preço personalizado de {formatarMoeda(precoPersonalizadoNum)} resulta em prejuízo de {formatarMoeda(Math.abs(comparativoLucro.lucroPersonalizadoVal))} ({comparativoLucro.percPersonalizado}%). O preço de venda está abaixo dos custos da receita ({formatarMoeda(custoBaseEfetivo)}).
-                  </span>
-                </div>
-              ) : comparativoLucro.percPersonalizado < 20 ? (
-                <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2 font-semibold">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span>
-                    <strong>Margem Baixa:</strong> Seu lucro líquido estimado é de apenas {formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} ({comparativoLucro.percPersonalizado}%). Considere aumentar um pouco o valor para cobrir imprevistos.
-                  </span>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>
-                    Preço seguro com margem de lucro de <strong>{comparativoLucro.percPersonalizado}%</strong> (+{formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} de lucro líquido).
+                    <strong>Atenção (Prejuízo Detectado):</strong> O preço personalizado de {formatarMoeda(precoPersonalizadoNum)} resulta em prejuízo de {formatarMoeda(Math.abs(comparativoLucro.lucroPersonalizadoVal))} ({comparativoLucro.percPersonalizado}%). O valor está abaixo dos custos da receita ({formatarMoeda(custoBaseEfetivo)}).
                   </span>
                 </div>
               )}
