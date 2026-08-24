@@ -90,18 +90,36 @@ export function FichaTecnicaModal({
   const [buscandoPrecoMedio, setBuscandoPrecoMedio] = useState(false);
   const [origemPrecoInfo, setOrigemPrecoInfo] = useState<string>("");
 
-  // Sugestões para o Autocomplete (Catálogo Padrão + Insumos de Confeitaria)
+  // Sugestões para o Autocomplete (Order-independent token search: "harald top", "top harald", etc.)
   const sugestoesFiltradas = useMemo(() => {
     const termo = novoInsumoNome.trim().toLowerCase();
     if (!termo) return [];
 
+    const queryTokens = termo.split(/\s+/).filter(Boolean);
+
     const deCatalogoPadrao = INSUMOS_PADRAO_CATALOGO.map((i) => i.nome);
-    const todasSugestoes = Array.from(new Set([...deCatalogoPadrao, ...LISTA_SUGESTOES_INSUMOS]));
+    
+    let deHistoricoUsuario: string[] = [];
+    try {
+      const rawH = localStorage.getItem(`caixadoce_historico_insumos_${estabelecimentoCodigo}`);
+      if (rawH) {
+        const parsed: HistoricoCompraInsumo[] = JSON.parse(rawH);
+        deHistoricoUsuario = parsed.map((h) => h.nomeInsumo);
+      }
+    } catch {}
+
+    const todasSugestoes = Array.from(
+      new Set([...deHistoricoUsuario, ...deCatalogoPadrao, ...LISTA_SUGESTOES_INSUMOS])
+    );
 
     return todasSugestoes
-      .filter((s) => s.toLowerCase().includes(termo))
-      .slice(0, 8);
-  }, [novoInsumoNome]);
+      .filter((sug) => {
+        const sugLower = sug.toLowerCase();
+        // Todas as palavras digitadas no termo devem estar presentes na sugestão (em qualquer ordem)
+        return queryTokens.every((tok) => sugLower.includes(tok));
+      })
+      .slice(0, 10);
+  }, [novoInsumoNome, estabelecimentoCodigo]);
 
   // Carregar a Ficha Técnica ao abrir o modal
   useEffect(() => {
