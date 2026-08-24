@@ -86,8 +86,18 @@ export function FichaTecnicaModal({
   const [opcaoPrecoUsar, setOpcaoPrecoUsar] = useState<"sugerido" | "personalizado">("sugerido");
   const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
 
-  // Form de Inserção de Novo Insumo na Ficha
+  // Helper para leitura limpa de números em campos de texto livre (aceita "100", "0,5", "0.5")
+  const parseNumberInput = (val: string): number => {
+    if (!val) return 0;
+    const clean = val.replace(",", ".").replace(/[^0-9.]/g, "");
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Form de Inserção de Novo Insumo na Ficha (Campos livres sem setas numéricas)
   const [novoInsumoNome, setNovoInsumoNome] = useState("");
+  const [novoInsumoQtdStr, setNovoInsumoQtdStr] = useState<string>("100");
+  const [novoInsumoQtdOriginalStr, setNovoInsumoQtdOriginalStr] = useState<string>("1000");
   const [novoInsumoQtd, setNovoInsumoQtd] = useState<number>(100);
   const [novoInsumoQtdOriginal, setNovoInsumoQtdOriginal] = useState<number>(1000);
   const [novoInsumoUnidade, setNovoInsumoUnidade] = useState<"g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx">("g");
@@ -151,10 +161,13 @@ export function FichaTecnicaModal({
   const handleTrocarUnidade = (val: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx") => {
     setNovoInsumoUnidade(val);
     if (val === "g" || val === "ml") {
+      setNovoInsumoQtdOriginalStr("1000");
       setNovoInsumoQtdOriginal(1000);
     } else if (val === "pct" || val === "cx") {
+      setNovoInsumoQtdOriginalStr("25");
       setNovoInsumoQtdOriginal(25);
     } else {
+      setNovoInsumoQtdOriginalStr("1");
       setNovoInsumoQtdOriginal(1);
     }
   };
@@ -187,19 +200,20 @@ export function FichaTecnicaModal({
     const nomeLimpo = novoInsumoNome.trim();
     const precoEmb = converterMoedaInputParaNumero(novoInsumoPrecoFormatado);
     const qtdEmbOrig = novoInsumoQtdOriginal > 0 ? novoInsumoQtdOriginal : 1;
+    const qtdUsadaVal = novoInsumoQtd > 0 ? novoInsumoQtd : 0;
 
     if (!nomeLimpo) {
       toast.error("Informe o nome do insumo.");
       return;
     }
 
-    if (novoInsumoQtd <= 0) {
+    if (qtdUsadaVal <= 0) {
       toast.error("Informe uma quantidade válida para a receita.");
       return;
     }
 
     const custoTotalItem = calcularCustoItemFichaTecnica(
-      novoInsumoQtd,
+      qtdUsadaVal,
       novoInsumoUnidade,
       precoEmb,
       qtdEmbOrig
@@ -212,7 +226,7 @@ export function FichaTecnicaModal({
       insumoNome: nomeLimpo,
       precoEmbalagem: precoEmb,
       qtdEmbalagemOriginal: qtdEmbOrig,
-      quantidadeUsada: novoInsumoQtd,
+      quantidadeUsada: qtdUsadaVal,
       unidadeMedida: novoInsumoUnidade,
       precoUnitarioAplicado: precoEmb,
       custoTotalItem,
@@ -220,6 +234,7 @@ export function FichaTecnicaModal({
 
     setItens((prev) => [...prev, novoItem]);
     setNovoInsumoNome("");
+    setNovoInsumoQtdStr("100");
     setNovoInsumoQtd(100);
     setNovoInsumoPrecoFormatado("");
     setOrigemPrecoInfo("");
@@ -465,37 +480,51 @@ export function FichaTecnicaModal({
                     Preço Pago Embalagem (R$)
                   </Label>
                   <Input
+                    type="text"
+                    inputMode="decimal"
                     placeholder="R$ 0,00"
                     value={novoInsumoPrecoFormatado}
                     onChange={(e) => setNovoInsumoPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
                   />
                 </div>
 
-                {/* Qtd Embalagem Original */}
+                {/* Qtd Embalagem Original vinculada à unidade */}
                 <div className="sm:col-span-2">
-                  <Label className="text-xs font-bold" title="Quantidade contida no pacote original de compra">
-                    Qtd na Embalagem
+                  <Label className="text-xs font-bold flex items-center gap-1" title="Quantidade contida no pacote original de compra">
+                    <span>Qtd Embalagem</span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-extrabold uppercase bg-purple-500/10 text-purple-600 border-purple-500/30">
+                      ({novoInsumoUnidade})
+                    </Badge>
                   </Label>
                   <Input
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={novoInsumoQtdOriginal}
-                    onChange={(e) => setNovoInsumoQtdOriginal(parseFloat(e.target.value) || 1)}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="1000"
+                    value={novoInsumoQtdOriginalStr}
+                    onChange={(e) => {
+                      setNovoInsumoQtdOriginalStr(e.target.value);
+                      setNovoInsumoQtdOriginal(parseNumberInput(e.target.value));
+                    }}
                   />
                 </div>
 
-                {/* Qtd Usada na Receita */}
+                {/* Qtd Usada na Receita vinculada à unidade */}
                 <div className="sm:col-span-2">
-                  <Label className="text-xs font-bold" title="Quantidade utilizada nesta receita específica">
-                    Qtd Usada Receita
+                  <Label className="text-xs font-bold flex items-center gap-1" title="Quantidade utilizada nesta receita específica">
+                    <span>Qtd Receita</span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                      ({novoInsumoUnidade})
+                    </Badge>
                   </Label>
                   <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={novoInsumoQtd}
-                    onChange={(e) => setNovoInsumoQtd(parseFloat(e.target.value) || 0)}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="100"
+                    value={novoInsumoQtdStr}
+                    onChange={(e) => {
+                      setNovoInsumoQtdStr(e.target.value);
+                      setNovoInsumoQtd(parseNumberInput(e.target.value));
+                    }}
                   />
                 </div>
 
@@ -542,10 +571,10 @@ export function FichaTecnicaModal({
               <TableHeader className="bg-muted/60">
                 <TableRow>
                   <TableHead>Ingrediente / Insumo</TableHead>
-                  <TableHead className="w-36">Preço Embalagem (R$)</TableHead>
-                  <TableHead className="w-28 text-center">Qtd Emb. Orig.</TableHead>
-                  <TableHead className="w-28 text-center">Qtd na Receita</TableHead>
-                  <TableHead className="w-24">Unidade</TableHead>
+                  <TableHead className="w-32">Preço Embalagem (R$)</TableHead>
+                  <TableHead className="w-32 text-center">Qtd Emb. Orig.</TableHead>
+                  <TableHead className="w-32 text-center">Qtd na Receita</TableHead>
+                  <TableHead className="w-20">Unidade</TableHead>
                   <TableHead className="w-32 text-right">Custo Total (R$)</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -574,8 +603,10 @@ export function FichaTecnicaModal({
                         {/* Preço da Embalagem / Base */}
                         <TableCell>
                           <Input
+                            type="text"
+                            inputMode="decimal"
                             placeholder="R$ 0,00"
-                            className="h-8 text-xs font-mono font-bold w-32"
+                            className="h-8 text-xs font-mono font-bold w-28"
                             value={precoEmbVal ? formatarMoeda(precoEmbVal) : ""}
                             onChange={(e) => {
                               const masked = aplicarMascaraMoedaInput(e.target.value);
@@ -586,40 +617,48 @@ export function FichaTecnicaModal({
                           />
                         </TableCell>
 
-                        {/* Qtd Embalagem Original */}
+                        {/* Qtd Embalagem Original (campo livre sem setas + sufixo da unidade) */}
                         <TableCell>
-                          <Input
-                            type="number"
-                            step="1"
-                            min="1"
-                            className="h-8 text-xs font-semibold w-24 text-center"
-                            value={qtdEmbOrigVal}
-                            onChange={(e) =>
-                              handleAtualizarItemExistente(
-                                item.id,
-                                "qtdEmbalagemOriginal",
-                                parseFloat(e.target.value) || 1
-                              )
-                            }
-                          />
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              className="h-8 text-xs font-semibold w-16 text-center px-1"
+                              value={qtdEmbOrigVal}
+                              onChange={(e) =>
+                                handleAtualizarItemExistente(
+                                  item.id,
+                                  "qtdEmbalagemOriginal",
+                                  parseNumberInput(e.target.value)
+                                )
+                              }
+                            />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase w-6 text-left">
+                              {item.unidadeMedida}
+                            </span>
+                          </div>
                         </TableCell>
 
-                        {/* Qtd Usada na Receita */}
+                        {/* Qtd Usada na Receita (campo livre sem setas + sufixo da unidade) */}
                         <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            className="h-8 text-xs font-bold w-24 text-center text-purple-700 dark:text-purple-300"
-                            value={item.quantidadeUsada}
-                            onChange={(e) =>
-                              handleAtualizarItemExistente(
-                                item.id,
-                                "quantidadeUsada",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                          />
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              className="h-8 text-xs font-bold w-16 text-center text-purple-700 dark:text-purple-300 px-1"
+                              value={item.quantidadeUsada}
+                              onChange={(e) =>
+                                handleAtualizarItemExistente(
+                                  item.id,
+                                  "quantidadeUsada",
+                                  parseNumberInput(e.target.value)
+                                )
+                              }
+                            />
+                            <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-400 uppercase w-6 text-left">
+                              {item.unidadeMedida}
+                            </span>
+                          </div>
                         </TableCell>
 
                         {/* Unidade */}
