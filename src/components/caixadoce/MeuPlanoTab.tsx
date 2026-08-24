@@ -3,22 +3,17 @@ import {
   Crown,
   Zap,
   CheckCircle2,
-  Clock,
   CreditCard,
   AlertTriangle,
   Check,
   Sparkles,
-  ShieldCheck,
   ArrowRight,
   ShoppingCart,
-  Receipt,
-  CalendarDays,
-  Cake,
-  DollarSign,
   X,
   Flame,
 } from "lucide-react";
 import { toast } from "sonner";
+import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import { useAuth } from "@/context/auth-context";
 import {
   obterPlanoEfetivoEstabelecimento,
@@ -26,6 +21,7 @@ import {
   type PlanoId,
   salvarDadosPlanoEstabelecimento,
 } from "@/lib/planos-utils";
+import { processarPagamentoMercadoPago } from "@/lib/mercadopago-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +33,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { initiateStripeCheckout } from "@/lib/stripe-service";
+
+// Inicialização do Mercado Pago SDK com a Public Key de teste
+const MP_PUBLIC_KEY =
+  (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
+  (import.meta as any).env?.VITE_MERCADO_PAGO_PUBLIC_KEY ||
+  "APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc";
+
+initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
 
 export function MeuPlanoTab() {
   const { user, profile, updateEstablishmentPlan } = useAuth();
@@ -45,9 +48,15 @@ export function MeuPlanoTab() {
   const userCreatedAt = (user as any)?.created_at || (profile as any)?.createdAt;
 
   const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
-  const [loadingStripe, setLoadingStripe] = useState(false);
+  const [modalCheckoutOpen, setModalCheckoutOpen] = useState(false);
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
+
+  // Estado para Pix QR Code
+  const [statusPixPending, setStatusPixPending] = useState(false);
+  const [pixQrCode, setPixQrCode] = useState("");
+  const [pixQrCodeBase64, setPixQrCodeBase64] = useState("");
 
   const recarregarPlano = () => {
     setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
@@ -57,33 +66,11 @@ export function MeuPlanoTab() {
     recarregarPlano();
   }, [activeCode, userCreatedAt]);
 
-  const handleAssinarStripe = async (planoKey: PlanoId) => {
-    setLoadingStripe(true);
-    try {
-      if (updateEstablishmentPlan) {
-        await updateEstablishmentPlan(planoKey, true);
-      }
-
-      salvarDadosPlanoEstabelecimento(activeCode, {
-        planoId: planoKey,
-        status: "ativo",
-      });
-
-      const { checkoutUrl } = await initiateStripeCheckout({
-        establishmentCode: activeCode,
-        userEmail: user?.email || "contato@caixadoce.com.br",
-        planId: planoKey,
-        returnUrl: window.location.href.split("?")[0],
-      });
-
-      toast.success("Redirecionando para o Stripe Checkout...");
-      recarregarPlano();
-      window.location.href = checkoutUrl;
-    } catch (e: any) {
-      toast.error(`Erro no checkout Stripe: ${e.message}`);
-    } finally {
-      setLoadingStripe(false);
-    }
+  const handleAbrirCheckout = () => {
+    setStatusPixPending(false);
+    setPixQrCode("");
+    setPixQrCodeBase64("");
+    setModalCheckoutOpen(true);
   };
 
   const handleMudarParaBasico = () => {
@@ -121,7 +108,7 @@ export function MeuPlanoTab() {
             Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Aproveite 14 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo.
+            Aproveite 14 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo via Mercado Pago.
           </p>
         </div>
       </div>
@@ -193,12 +180,11 @@ export function MeuPlanoTab() {
                 </Button>
               ) : (
                 <Button
-                  onClick={() => handleAssinarStripe("mensal")}
-                  disabled={loadingStripe}
+                  onClick={handleAbrirCheckout}
                   className="font-extrabold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white w-full sm:w-auto text-xs"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
-                  {loadingStripe ? "Conectando..." : "Assinar Mensal (R$ 19,90/mês)"}
+                  Assinar Mensal (R$ 19,90/mês)
                 </Button>
               )}
             </div>
@@ -316,7 +302,7 @@ export function MeuPlanoTab() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cobrança via cartão com o Stripe</span>
+                <span>Cobrança via Pix ou Cartão com Mercado Pago</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
@@ -326,8 +312,7 @@ export function MeuPlanoTab() {
           </CardContent>
           <div className="p-6 pt-0">
             <Button
-              onClick={() => handleAssinarStripe("mensal")}
-              disabled={loadingStripe}
+              onClick={handleAbrirCheckout}
               className="w-full font-extrabold shadow-lg bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white text-xs py-5"
             >
               {infoPlano.planoId === "mensal" && infoPlano.status === "ativo" ? "Plano Ativo" : "Assinar Plano Mensal (R$ 19,90/mês)"}
@@ -337,6 +322,119 @@ export function MeuPlanoTab() {
         </Card>
 
       </div>
+
+      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO */}
+      <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <CreditCard className="w-5 h-5 text-purple-600" /> Assinar Plano Mensal PRO (R$ 19,90/mês)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Escolha a forma de pagamento (Cartão de Crédito ou Pix) e conclua com total segurança via Mercado Pago.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            {statusPixPending ? (
+              <div className="space-y-4 text-center p-4 bg-muted/30 rounded-xl">
+                <Badge className="bg-amber-500 text-white font-bold">Aguardando Pagamento Pix</Badge>
+                <p className="text-xs text-muted-foreground">
+                  Escaneie o código QR abaixo no aplicativo do seu banco para ativar sua assinatura instantaneamente:
+                </p>
+                {pixQrCodeBase64 && (
+                  <img
+                    src={`data:image/png;base64,${pixQrCodeBase64}`}
+                    alt="QR Code Pix"
+                    className="w-48 h-48 mx-auto rounded-lg border border-border shadow-sm"
+                  />
+                )}
+                {pixQrCode && (
+                  <div className="space-y-2 pt-2">
+                    <textarea
+                      readOnly
+                      value={pixQrCode}
+                      className="w-full text-[11px] font-mono p-2 bg-muted rounded border border-border h-20 select-all"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pixQrCode);
+                        toast.success("Código Pix Copia e Cola copiado!");
+                      }}
+                      className="w-full font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      Copiar Código Pix
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Payment
+                initialization={{
+                  amount: 19.90,
+                  payer: {
+                    email: user?.email || "contato@caixadoce.com.br",
+                  },
+                }}
+                customization={{
+                  paymentMethods: {
+                    ticket: "all",
+                    bankTransfer: "all",
+                    creditCard: "all",
+                    debitCard: "all",
+                    mercadoPago: "all",
+                  },
+                }}
+                onSubmit={async ({ formData }) => {
+                  setLoadingCheckout(true);
+                  try {
+                    const result = await processarPagamentoMercadoPago(formData, activeCode, "mensal");
+
+                    if (result.status === "approved") {
+                      if (updateEstablishmentPlan) {
+                        await updateEstablishmentPlan("mensal", true);
+                      }
+                      salvarDadosPlanoEstabelecimento(activeCode, {
+                        planoId: "mensal",
+                        status: "ativo",
+                      });
+                      toast.success("🎉 Pagamento APROVADO! Assinatura ativada com sucesso!");
+                      setModalCheckoutOpen(false);
+                      recarregarPlano();
+                    } else if (result.status === "pending" || result.status === "in_process") {
+                      if (result.qr_code_base64) {
+                        setPixQrCodeBase64(result.qr_code_base64);
+                        setPixQrCode(result.qr_code || "");
+                        setStatusPixPending(true);
+                      }
+                      toast.info("Pagamento gerado! Aguardando confirmação (Pix).");
+                    } else {
+                      toast.error(`Status do pagamento: ${result.status_detail || result.status}`);
+                    }
+                  } catch (err: any) {
+                    toast.error(`Erro ao processar pagamento: ${err.message}`);
+                  } finally {
+                    setLoadingCheckout(false);
+                  }
+                }}
+                onError={(error) => {
+                  console.error("[MercadoPago Brick Error]", error);
+                }}
+                onReady={() => {
+                  console.log("[MercadoPago Brick] Formulário de pagamento pronto.");
+                }}
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setModalCheckoutOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* MODAL: CONFIRMAR CANCELAMENTO */}
       <Dialog open={modalCancelOpen} onOpenChange={setModalCancelOpen}>
