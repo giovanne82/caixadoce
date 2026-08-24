@@ -13,33 +13,24 @@ import {
   Flame,
 } from "lucide-react";
 import { toast } from "sonner";
-import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import { useAuth } from "@/context/auth-context";
 import {
   obterPlanoEfetivoEstabelecimento,
   PLANOS_CONFIG,
   salvarDadosPlanoEstabelecimento,
 } from "@/lib/planos-utils";
-import { processarPagamentoMercadoPago } from "@/lib/mercadopago-service";
+import { MercadoPagoBrick } from "@/components/caixadoce/MercadoPagoBrick";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-
-// Inicialização do Mercado Pago SDK com a Public Key de teste
-const MP_PUBLIC_KEY =
-  (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
-  (import.meta as any).env?.VITE_MERCADO_PAGO_PUBLIC_KEY ||
-  "APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc";
-
-initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
 
 export function MeuPlanoTab() {
   const { user, profile, updateEstablishmentPlan } = useAuth();
@@ -48,14 +39,8 @@ export function MeuPlanoTab() {
 
   const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
   const [modalCheckoutOpen, setModalCheckoutOpen] = useState(false);
-  const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
-
-  // Estado para Pix QR Code
-  const [statusPixPending, setStatusPixPending] = useState(false);
-  const [pixQrCode, setPixQrCode] = useState("");
-  const [pixQrCodeBase64, setPixQrCodeBase64] = useState("");
 
   const recarregarPlano = () => {
     setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
@@ -66,9 +51,22 @@ export function MeuPlanoTab() {
   }, [activeCode, userCreatedAt]);
 
   const handleAbrirCheckout = () => {
-    setStatusPixPending(false);
-    setPixQrCode("");
-    setPixQrCodeBase64("");
+    // Se o plano já estiver ativo, não abre o modal e avisa o usuário
+    const jaPossuiAssinaturaAtiva =
+      infoPlano.status === "ativo" &&
+      infoPlano.planoId !== "basico";
+
+    if (jaPossuiAssinaturaAtiva) {
+      toast.info("Seu plano já se encontra ativo! Você possui acesso ilimitado a todas as ferramentas do sistema.", {
+        duration: 4500,
+      });
+      const cardRef = document.getElementById("card-status-plano-ativo");
+      if (cardRef) {
+        cardRef.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
+
     setModalCheckoutOpen(true);
   };
 
@@ -97,6 +95,7 @@ export function MeuPlanoTab() {
   };
 
   const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
+  const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
 
   return (
     <div className="space-y-6">
@@ -127,10 +126,18 @@ export function MeuPlanoTab() {
             </p>
           </div>
         </div>
+        {!isPlanoAtivo && (
+          <Button
+            onClick={handleAbrirCheckout}
+            className="bg-white text-purple-900 hover:bg-amber-300 hover:text-purple-950 font-black text-xs shrink-0 shadow-md border-0"
+          >
+            Assinar Agora
+          </Button>
+        )}
       </div>
 
       {/* BANNER DE STATUS DO PLANO E TRIAL DE 14 DIAS */}
-      <Card className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
+      <Card id="card-status-plano-ativo" className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -153,7 +160,7 @@ export function MeuPlanoTab() {
                     }
                   >
                     {infoPlano.status === "ativo"
-                      ? "Assinatura Ativa"
+                      ? "Assinatura Ativa (Ilimitado)"
                       : infoPlano.status === "trial"
                       ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 14} dias grátis restantes`
                       : infoPlano.status === "expirado"
@@ -168,7 +175,7 @@ export function MeuPlanoTab() {
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              {infoPlano.status === "ativo" && infoPlano.planoId !== "basico" ? (
+              {isPlanoAtivo ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -312,10 +319,15 @@ export function MeuPlanoTab() {
           <div className="p-6 pt-0">
             <Button
               onClick={handleAbrirCheckout}
-              className="w-full font-extrabold shadow-lg bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white text-xs py-5"
+              disabled={isPlanoAtivo}
+              className={`w-full font-extrabold shadow-lg text-xs py-5 ${
+                isPlanoAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
+                  : "bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white"
+              }`}
             >
-              {infoPlano.planoId === "mensal" && infoPlano.status === "ativo" ? "Plano Ativo" : "Assinar Plano Mensal (R$ 19,90/mês)"}
-              <ArrowRight className="w-4 h-4 ml-1.5" />
+              {isPlanoAtivo ? "✓ Plano Já Ativo (Acesso Ilimitado)" : "Assinar Plano Mensal (R$ 19,90/mês)"}
+              {!isPlanoAtivo && <ArrowRight className="w-4 h-4 ml-1.5" />}
             </Button>
           </div>
         </Card>
@@ -324,114 +336,27 @@ export function MeuPlanoTab() {
 
       {/* MODAL: CHECKOUT BRICKS MERCADO PAGO */}
       <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-              <CreditCard className="w-5 h-5 text-purple-600" /> Assinar Plano Mensal PRO (R$ 19,90/mês)
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Escolha a forma de pagamento (Cartão de Crédito ou Pix) e conclua com total segurança via Mercado Pago.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-2">
-            {statusPixPending ? (
-              <div className="space-y-4 text-center p-4 bg-muted/30 rounded-xl">
-                <Badge className="bg-amber-500 text-white font-bold">Aguardando Pagamento Pix</Badge>
-                <p className="text-xs text-muted-foreground">
-                  Escaneie o código QR abaixo no aplicativo do seu banco para ativar sua assinatura instantaneamente:
-                </p>
-                {pixQrCodeBase64 && (
-                  <img
-                    src={`data:image/png;base64,${pixQrCodeBase64}`}
-                    alt="QR Code Pix"
-                    className="w-48 h-48 mx-auto rounded-lg border border-border shadow-sm"
-                  />
-                )}
-                {pixQrCode && (
-                  <div className="space-y-2 pt-2">
-                    <textarea
-                      readOnly
-                      value={pixQrCode}
-                      className="w-full text-[11px] font-mono p-2 bg-muted rounded border border-border h-20 select-all"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(pixQrCode);
-                        toast.success("Código Pix Copia e Cola copiado!");
-                      }}
-                      className="w-full font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      Copiar Código Pix
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Payment
-                initialization={{
-                  amount: 19.90,
-                  payer: {
-                    email: user?.email || "contato@caixadoce.com.br",
-                  },
-                }}
-                customization={{
-                  paymentMethods: {
-                    ticket: "all",
-                    bankTransfer: "all",
-                    creditCard: "all",
-                    debitCard: "all",
-                    mercadoPago: "all",
-                  },
-                }}
-                onSubmit={async ({ formData }) => {
-                  setLoadingCheckout(true);
-                  try {
-                    const result = await processarPagamentoMercadoPago(formData, activeCode, "mensal");
-
-                    if (result.status === "approved") {
-                      if (updateEstablishmentPlan) {
-                        await updateEstablishmentPlan("mensal", true);
-                      }
-                      salvarDadosPlanoEstabelecimento(activeCode, {
-                        planoId: "mensal",
-                        status: "ativo",
-                      });
-                      toast.success("🎉 Pagamento APROVADO! Assinatura ativada com sucesso!");
-                      setModalCheckoutOpen(false);
-                      recarregarPlano();
-                    } else if (result.status === "pending" || result.status === "in_process") {
-                      if (result.qr_code_base64) {
-                        setPixQrCodeBase64(result.qr_code_base64);
-                        setPixQrCode(result.qr_code || "");
-                        setStatusPixPending(true);
-                      }
-                      toast.info("Pagamento gerado! Aguardando confirmação (Pix).");
-                    } else {
-                      toast.error(`Status do pagamento: ${result.status_detail || result.status}`);
-                    }
-                  } catch (err: any) {
-                    toast.error(`Erro ao processar pagamento: ${err.message}`);
-                  } finally {
-                    setLoadingCheckout(false);
-                  }
-                }}
-                onError={(error) => {
-                  console.error("[MercadoPago Brick Error]", error);
-                }}
-                onReady={() => {
-                  console.log("[MercadoPago Brick] Formulário de pagamento pronto.");
-                }}
-              />
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setModalCheckoutOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <MercadoPagoBrick
+            estabelecimentoCodigo={activeCode}
+            userEmail={user?.email || "contato@caixadoce.com.br"}
+            planoId="mensal"
+            nomePlano="Plano Mensal Completo PRO"
+            valor={19.90}
+            onSuccess={() => {
+              salvarDadosPlanoEstabelecimento(activeCode, {
+                planoId: "mensal",
+                status: "ativo",
+              });
+              if (updateEstablishmentPlan) {
+                updateEstablishmentPlan("mensal" as any, true);
+              }
+              recarregarPlano();
+              setModalCheckoutOpen(false);
+              toast.success("🎉 Assinatura ativada com sucesso!");
+            }}
+            onCancel={() => setModalCheckoutOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
