@@ -33,8 +33,8 @@ export interface GeminiReceiptResponse {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Modelo oficial suportado pela Google Gemini API (v1beta generateContent)
-const GEMINI_MODELS = ["gemini-3.6-flash"];
+// Modelos oficiais suportados pela Google Gemini API (v1beta generateContent)
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 /**
  * Compacta e redimensiona imagens pesadas tiradas pela câmera do celular

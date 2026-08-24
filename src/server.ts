@@ -631,22 +631,30 @@ export default {
             );
           }
 
+          const getEnv = (key: string): string => {
+            const envObj = (env as Record<string, string>) || {};
+            const procObj = (process.env as Record<string, string>) || {};
+            return (envObj[key] || procObj[key] || "").trim();
+          };
+
           const mainKey =
-            process.env.VITE_GEMINI_API_KEY ||
-            process.env.GEMINI_API_KEY ||
+            getEnv("VITE_GEMINI_API_KEY") ||
+            getEnv("GEMINI_API_KEY") ||
+            getEnv("VITE_GEMINI_KEY") ||
             "";
 
           const fallbackKey =
-            process.env.VITE_GEMINI_API_KEY_FALLBACK ||
-            process.env.GEMINI_API_KEY_FALLBACK ||
+            getEnv("GEMINI_API_KEY_FALLBACK") ||
+            getEnv("VITE_GEMINI_API_KEY_FALLBACK") ||
+            getEnv("GEMINI_FALLBACK_KEY") ||
             "";
 
           const apiKeys = [];
-          if (mainKey && mainKey.trim()) {
-            apiKeys.push({ key: mainKey.trim(), label: "Principal (VITE_GEMINI_API_KEY)" });
+          if (mainKey) {
+            apiKeys.push({ key: mainKey, label: "Principal (VITE_GEMINI_API_KEY)" });
           }
-          if (fallbackKey && fallbackKey.trim() && fallbackKey.trim() !== mainKey.trim()) {
-            apiKeys.push({ key: fallbackKey.trim(), label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
+          if (fallbackKey && fallbackKey !== mainKey) {
+            apiKeys.push({ key: fallbackKey, label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
           }
 
           const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
@@ -702,45 +710,63 @@ Responda apenas com o JSON puro sem formatação markdown.`,
           };
 
           let lastError: any = null;
+          const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
           for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
             const keyInfo = apiKeys[keyIdx];
-            const modelName = "gemini-3.6-flash";
-            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
+            let keySuccess = false;
 
-            try {
-              const resGemini = await fetch(urlGemini, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(geminiBody),
-              });
+            for (const modelName of modelsToTry) {
+              const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
 
-              if (!resGemini.ok) {
-                const errText = await resGemini.text();
-                console.error(`[Server Gemini OCR Log] Chave ${keyInfo.label} | HTTP Status: ${resGemini.status} | Detalhe:`, errText);
+              try {
+                console.log(`[Server Gemini OCR] Tentando Chave: ${keyInfo.label} | Modelo: ${modelName}...`);
 
-                if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
-                  console.warn(`[Server Gemini Fallback] Chave ${keyInfo.label} falhou (HTTP ${resGemini.status}). Alternando para a próxima chave...`);
-                  lastError = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${resGemini.status}).`);
+                const resGemini = await fetch(urlGemini, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(geminiBody),
+                });
+
+                if (!resGemini.ok) {
+                  const errText = await resGemini.text();
+                  console.error(
+                    `[Server Gemini OCR Log] Chave ${keyInfo.label} | Modelo ${modelName} | Status: ${resGemini.status} | Detalhe:`,
+                    errText
+                  );
+
+                  lastError = new Error(
+                    `Chave ${keyInfo.label} (${modelName}) indisponível (HTTP ${resGemini.status}).`
+                  );
+
+                  // Se for erro 429 (Quota Exhausted) ou 403/401, pula para a próxima chave de contingência
+                  if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
+                    console.warn(
+                      `[Server Gemini Fallback Trigger] Cota esgotada (HTTP ${resGemini.status}) na chave ${keyInfo.label}. Alternando para a chave de contingência...`
+                    );
+                    break; // Sai do loop de modelos e pula para a próxima chave
+                  }
+
                   continue;
                 }
 
-                throw new Error(errText || `Erro na chamada do Gemini (HTTP ${resGemini.status})`);
+                const dataGemini = await resGemini.json();
+                const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+                const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                const parsedJSON = JSON.parse(jsonClean);
+
+                keySuccess = true;
+                return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+                  status: 200,
+                  headers: { "content-type": "application/json" },
+                });
+              } catch (err: any) {
+                console.error(`[Server Gemini Exception] Chave ${keyInfo.label} | Modelo ${modelName}:`, err?.message || err);
+                lastError = err;
               }
-
-              const dataGemini = await resGemini.json();
-              const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-              const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-              const parsedJSON = JSON.parse(jsonClean);
-
-              return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
-                status: 200,
-                headers: { "content-type": "application/json" },
-              });
-            } catch (err: any) {
-              console.error(`[Server Gemini Error] Chave ${keyInfo.label}:`, err.message || err);
-              lastError = err;
             }
+
+            if (keySuccess) break;
           }
 
           return new Response(
