@@ -385,10 +385,12 @@ export function FichaTecnicaModal({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 sm:gap-3 items-end pt-1">
-                {/* Autocomplete do Insumo */}
-                <div className="sm:col-span-4 relative">
-                  <Label className="text-xs font-bold">Ingrediente / Insumo</Label>
+              <div className="space-y-4 pt-1">
+                {/* LINHA 1: Ingrediente / Insumo (100% de largura) */}
+                <div className="w-full relative">
+                  <Label className="text-xs font-bold whitespace-nowrap block mb-1.5">
+                    Ingrediente / Insumo
+                  </Label>
                   <Input
                     placeholder="Ex: Chocolate Melken, Leite Condensado..."
                     value={novoInsumoNome}
@@ -397,6 +399,7 @@ export function FichaTecnicaModal({
                       setDropdownOpen(true);
                     }}
                     onFocus={() => setDropdownOpen(true)}
+                    className="h-10 text-xs w-full"
                   />
 
                   {dropdownOpen && sugestoesFiltradas.length > 0 && (
@@ -415,26 +418,26 @@ export function FichaTecnicaModal({
                   )}
                 </div>
 
-                {/* Preço do produto / Qtd Embalagem / Qtd Receita em Grid Responsivo Otimizado */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                {/* LINHA 2: Valores - Preço do produto / Qtd Embalagem / Qtd Receita em Grid 3 Colunas */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 items-end w-full">
                   {/* Preço do produto */}
-                  <div>
-                    <Label className="text-xs font-bold block mb-1" title="Valor pago no produto/embalagem">
+                  <div className="min-w-0">
+                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Valor pago no produto/embalagem">
                       Preço do produto
                     </Label>
                     <Input
                       type="text"
                       inputMode="decimal"
                       placeholder="R$ 0,00"
-                      className="h-9 text-xs font-mono font-bold"
+                      className="h-10 text-xs font-mono font-bold w-full"
                       value={novoInsumoPrecoFormatado}
                       onChange={(e) => setNovoInsumoPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
                     />
                   </div>
 
                   {/* Qtd Embalagem com dropdown de Unidade de Compra */}
-                  <div>
-                    <Label className="text-xs font-bold block mb-1" title="Quantidade contida na embalagem original de compra">
+                  <div className="min-w-0">
+                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Quantidade contida na embalagem original de compra">
                       Qtd Embalagem
                     </Label>
                     <div className="flex items-center gap-2">
@@ -442,7 +445,7 @@ export function FichaTecnicaModal({
                         type="text"
                         inputMode="decimal"
                         placeholder="1"
-                        className="h-9 text-xs font-semibold text-center flex-1 min-w-0"
+                        className="h-10 text-xs font-semibold text-center flex-1 min-w-[70px]"
                         value={novoInsumoQtdOriginalStr}
                         onChange={(e) => {
                           setNovoInsumoQtdOriginalStr(e.target.value);
@@ -453,7 +456,7 @@ export function FichaTecnicaModal({
                         value={novoInsumoUnidadeCompra}
                         onValueChange={(val: any) => setNovoInsumoUnidadeCompra(val)}
                       >
-                        <SelectTrigger className="h-9 w-22 shrink-0 text-xs px-2.5 font-bold bg-background">
+                        <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -468,16 +471,16 @@ export function FichaTecnicaModal({
                   </div>
 
                   {/* Qtd Receita com dropdown de Unidade de Uso */}
-                  <div>
-                    <Label className="text-xs font-bold block mb-1" title="Quantidade utilizada nesta receita">
-                      Qtd Receita
+                  <div className="min-w-0">
+                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5 text-purple-700 dark:text-purple-300" title="Quantidade utilizada nesta receita">
+                      Qtd na Receita
                     </Label>
                     <div className="flex items-center gap-2">
                       <Input
                         type="text"
                         inputMode="decimal"
                         placeholder="100"
-                        className="h-9 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40 flex-1 min-w-0"
+                        className="h-10 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40 flex-1 min-w-[70px]"
                         value={novoInsumoQtdStr}
                         onChange={(e) => {
                           setNovoInsumoQtdStr(e.target.value);
@@ -488,7 +491,7 @@ export function FichaTecnicaModal({
                         value={novoInsumoUnidade}
                         onValueChange={(val: any) => setNovoInsumoUnidade(val)}
                       >
-                        <SelectTrigger className="h-9 w-22 shrink-0 text-xs px-2.5 font-bold bg-background text-purple-600 dark:text-purple-300 border-purple-500/40">
+                        <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background text-purple-600 dark:text-purple-300 border-purple-500/40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -503,12 +506,12 @@ export function FichaTecnicaModal({
                   </div>
                 </div>
 
-                {/* Botão de Adicionar */}
-                <div className="pt-2 sm:pt-1">
+                {/* LINHA 3: Botão de Adicionar Insumo isolado abaixo */}
+                <div className="pt-2">
                   <Button
                     type="button"
                     onClick={handleAdicionarInsumo}
-                    className="w-full sm:w-auto h-9 bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-5 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs"
+                    className="w-full sm:w-auto h-10 bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-6 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Adicionar Insumo à Receita</span>
