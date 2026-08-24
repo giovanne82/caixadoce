@@ -41,8 +41,13 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+<<<<<<< HEAD
   Clock,
+=======
+  Calculator,
+>>>>>>> a268a45 (feat: ficha tecnica, inteligencia de insumos via IA, preco medio ponderado por usuario e precificacao automatica de produtos)
 } from "lucide-react";
+import { FichaTecnicaModal } from "./FichaTecnicaModal";
 import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
@@ -82,6 +87,8 @@ export function ProductsView({
   const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
   const [modalQrOpen, setModalQrOpen] = useState(false);
   const [modalNovaCatOpen, setModalNovaCatOpen] = useState(false);
+  const [modalFichaOpen, setModalFichaOpen] = useState(false);
+  const [produtoFichaAlvo, setProdutoFichaAlvo] = useState<ProdutoCardapio | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
@@ -197,6 +204,11 @@ export function ProductsView({
     setAvailableDays(prod.available_days || [1, 2, 3, 4, 5, 6]);
     setMinLeadTimeDays(prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1));
     setModalProdutoOpen(true);
+  };
+
+  const handleAbrirFichaTecnica = (prod: ProdutoCardapio) => {
+    setProdutoFichaAlvo(prod);
+    setModalFichaOpen(true);
   };
 
   const handleSalvar = async (e: React.FormEvent) => {
@@ -422,6 +434,17 @@ export function ProductsView({
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAbrirFichaTecnica(prod)}
+                      className="h-8 px-2.5 text-xs font-bold border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 gap-1"
+                      title="Ficha Técnica & Precificação"
+                    >
+                      <Calculator className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      <span className="hidden sm:inline">Ficha Técnica</span>
+                    </Button>
+
                     <Button
                       variant="ghost"
                       size="icon"
@@ -774,6 +797,16 @@ export function ProductsView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* MODAL: FICHA TÉCNICA & PRECIFICAÇÃO */}
+      <FichaTecnicaModal
+        open={modalFichaOpen}
+        onOpenChange={setModalFichaOpen}
+        produto={produtoFichaAlvo}
+        estabelecimentoCodigo={estabelecimentoCodigo}
+        onAplicarPrecoProduto={async (prodId, novoPreco) => {
+          await onEditarProduto(prodId, { preco: novoPreco });
+        }}
+      />
     </div>
   );
 }

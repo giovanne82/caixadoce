@@ -18,8 +18,15 @@ export interface GeminiReceiptResponse {
   sale_number?: string;
   items?: Array<{
     name: string;
+    standard_name?: string;
+    category?: string;
     quantity: number;
+    is_fardo_ou_pacote?: boolean;
+    embalagem_qtd?: number;
+    peso_ou_volume_g_ml?: number;
+    unidade_medida_base?: string;
     total_price: number;
+    unit_price_calculated?: number;
   }>;
   total_amount?: number;
 }
@@ -47,19 +54,36 @@ export async function extractReceiptDataWithGemini(
       {
         parts: [
           {
-            text: `Você é um leitor especialista em notas fiscais, NFC-e e cupons brasileiros. 
-Analise a imagem e extraia os dados estritamente em JSON puro com este formato:
+            text: `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
+Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
 {
-  "establishment": "Nome do estabelecimento",
+  "establishment": "Nome do estabelecimento ou supermercado",
   "date": "YYYY-MM-DD",
   "time": "HH:mm",
   "sale_number": "número da NF, NFCe, NFe, pedido ou cupom",
   "items": [
-    { "name": "Nome/Descrição do item", "quantity": 1, "total_price": 10.50 }
+    {
+      "name": "Nome/Descrição exata do item no cupom",
+      "standard_name": "Nome normalizado de confeitaria (ex: Chocolate Nobre Ao Leite Melken, Cobertura Fracionada Top Harald, Granulado Gourmet, Caixa Bolo Alta 25x25x18, Caixa Salgado Rasa 25x25x3, Morango Bandeja 250g)",
+      "category": "Chocolates & Coberturas | Lácteos & Recheios | Confeitos & Açúcares | Embalagens & Caixas | Aditivos & Corantes | Hortifrúti & Frutas | Outros Insumos",
+      "quantity": 1,
+      "is_fardo_ou_pacote": false,
+      "embalagem_qtd": 1,
+      "peso_ou_volume_g_ml": 1000,
+      "unidade_medida_base": "g | kg | ml | l | un | bdj | cx | pct",
+      "total_price": 10.50,
+      "unit_price_calculated": 10.50
+    }
   ],
   "total_amount": 10.50
 }
-Responda apenas com o JSON sem formatação markdown.`
+
+Regras Específicas de Confeitaria:
+1. DIFERENCIE CHOCOLATE NOBRE DE COBERTURA FRACIONADA: Se contiver 'MELKEN', 'SICAO', 'CALLEBAUT' ou 'NOBRE', classifique como 'Chocolate Nobre'. Se contiver 'TOP', 'HARALD TOP', 'FRACIONADO' ou 'MAVALERIO', classifique como 'Cobertura Fracionada'.
+2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
+3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
+4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
+Responda apenas com o JSON puro sem formatação markdown.`
           },
           {
             inline_data: {
@@ -153,16 +177,19 @@ export async function processarNotinhaComOCR(
   const itensFormatados: ItemNotaFiscal[] = (parsedJSON.items || []).map((it) => {
     const qtd = Number(it.quantity) || 1;
     const total = Number(it.total_price) || 0;
-    const unit = qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
-    const nomeLimpo = String(it.name || "Insumo").trim();
+    const unit = it.unit_price_calculated && it.unit_price_calculated > 0
+      ? Number(it.unit_price_calculated)
+      : qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
+    const nomeOriginal = String(it.name || "Insumo").trim();
+    const nomePadronizado = it.standard_name ? String(it.standard_name).trim() : nomeOriginal;
 
     return {
       id: crypto.randomUUID(),
-      nome: nomeLimpo,
+      nome: nomePadronizado,
       quantidade: qtd,
       valorUnitario: unit,
       valorTotal: total,
-      categoria: categorizarItemAutomatico(nomeLimpo),
+      categoria: (it.category as any) || categorizarItemAutomatico(nomePadronizado),
     };
   });
 

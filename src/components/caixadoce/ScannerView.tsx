@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { registrarCompraInsumo } from "@/lib/ficha-tecnica-service";
 import {
   Card,
   CardContent,
@@ -261,6 +262,25 @@ export function ScannerView({
         valorOutros: totaisNota.outros,
         itens: itensComFallback,
       });
+
+      // Registra cada insumo no histórico individual de compras do usuário para cálculo de preço médio
+      for (const item of itensComFallback) {
+        try {
+          await registrarCompraInsumo({
+            estabelecimentoCodigo: "CD-1001",
+            nomeInsumo: item.nome,
+            categoria: item.categoria || "Outros Insumos",
+            fornecedorNome,
+            dataCompra,
+            quantidadeComprada: item.quantidade || 1,
+            embalagemQtd: 1,
+            quantidadeTotalUnidades: item.quantidade || 1,
+            valorPagoTotal: item.valorTotal,
+            valorUnitarioCalculado: item.valorUnitario,
+            unidadeMedida: "un",
+          });
+        } catch {}
+      }
 
       setModalRevisaoOpen(false);
       toast.success("Notinha salva no caixa com sucesso!");
