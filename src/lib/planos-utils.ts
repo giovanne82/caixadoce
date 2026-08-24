@@ -33,10 +33,12 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     descricao: "Acesso total ilimitado a todas as ferramentas da plataforma sem fidelidade.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
+      "Ficha Técnica & Precificação de Produtos (Custo Real sem Prejuízo)",
+      "Atualização automática de custos com base no último preço comprado",
+      "Milhares de pré-cadastros de insumos para a Lista de Compras",
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Emissão de link de pagamento",
       "Cobrança via Pix ou Cartão com Mercado Pago",
       "Compartilhamento de conta com outro usuário",
     ],
@@ -51,10 +53,12 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     descricao: "A escolha mais inteligente e econômica para transformar a sua confeitaria com todos os recursos.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
+      "Ficha Técnica & Precificação de Produtos (Custo Real sem Prejuízo)",
+      "Atualização automática de custos com base no último preço comprado",
+      "Milhares de pré-cadastros de insumos para a Lista de Compras",
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Emissão de link de pagamento",
       "Cobrança via Pix ou Cartão com Mercado Pago",
       "Compartilhamento de conta com outro usuário",
     ],
@@ -80,11 +84,13 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     descricao: "Acesso total ilimitado.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
+      "Ficha Técnica & Precificação de Produtos (Custo Real sem Prejuízo)",
+      "Atualização automática de custos com base no último preço comprado",
+      "Milhares de pré-cadastros de insumos para a Lista de Compras",
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Emissão de link de pagamento",
-      "Cobrança via cartão com o Stripe",
+      "Cobrança via Pix ou Cartão com Mercado Pago",
       "Compartilhamento de conta com outro usuário",
     ],
     destaque: true,
@@ -99,11 +105,13 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     descricao: "A maior economia.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
+      "Ficha Técnica & Precificação de Produtos (Custo Real sem Prejuízo)",
+      "Atualização automática de custos com base no último preço comprado",
+      "Milhares de pré-cadastros de insumos para a Lista de Compras",
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Emissão de link de pagamento",
-      "Cobrança via cartão com o Stripe",
+      "Cobrança via Pix ou Cartão com Mercado Pago",
       "Compartilhamento de conta com outro usuário",
     ],
   },
@@ -115,18 +123,42 @@ export interface InfoPlanoEstabelecimento {
   diasRestantesTrial?: number;
   dataInicio?: string;
   dataRenovacao?: string;
+  dataExpiracao?: string;
+  tipoPagamento?: "pix" | "cartao_credito" | "stripe" | string;
+  mercadoPagoPaymentId?: string;
+  mercadoPagoSubscriptionId?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
 }
 
 export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?: string): InfoPlanoEstabelecimento {
   const code = (codigo || "DEFAULT").toUpperCase();
+
+  // Conta de Teste/Master (CD-1001) - Plano Mensal Completo PRO Vitalício sem expirar
+  if (code === "CD-1001") {
+    return {
+      planoId: "ilimitado",
+      status: "ativo",
+      dataExpiracao: "2099-12-31T23:59:59.000Z",
+    };
+  }
   try {
     const raw = localStorage.getItem(`caixadoce_plano_${code}`);
     if (raw) {
       const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
-      // Se o plano já estiver assinado ativamente via Stripe, mantém o status ativo
+      // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
       if (parsed.status === "ativo") {
+        if (parsed.dataExpiracao) {
+          const expMs = new Date(parsed.dataExpiracao).getTime();
+          if (Date.now() > expMs) {
+            return {
+              ...parsed,
+              planoId: "basico",
+              status: "expirado",
+              diasRestantesTrial: 0,
+            };
+          }
+        }
         return parsed;
       }
 

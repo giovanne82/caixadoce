@@ -337,7 +337,7 @@ export default {
           const accessToken =
             process.env.MERCADOPAGO_ACCESS_TOKEN ||
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-            "APP_USR-8395274950284758-082412-f1e2d3c4b5a69780-123456789";
+            "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
 
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
@@ -382,13 +382,18 @@ export default {
           const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
           const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
 
-          // Se for aprovado instantaneamente (Cartão), atualiza a assinatura no Supabase
+          // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
           if (status === "approved" && estabelecimentoCodigo) {
             try {
               const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
               const supabaseKey =
                 process.env.VITE_SUPABASE_ANON_KEY ||
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+              const duracaoDias = planoId === "anual" ? 365 : 30;
+              const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+              const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
+              const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
               await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
                 method: "PATCH",
@@ -402,9 +407,13 @@ export default {
                   plano_id: "ilimitado",
                   plano_status: "ativo",
                   plano_atualizado_em: new Date().toISOString(),
+                  plano_expira_em: dataExpiracao,
+                  metodo_pagamento: tipoPag,
+                  mercadopago_pagamento_id: String(paymentId),
+                  mercadopago_assinatura_id: mpData.subscription_id ? String(mpData.subscription_id) : null,
                 }),
               });
-              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo)!`);
+              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
             } catch (err) {
               console.error("[MercadoPago Direct] Erro ao atualizar Supabase:", err);
             }
@@ -448,7 +457,7 @@ export default {
             const accessToken =
               process.env.MERCADOPAGO_ACCESS_TOKEN ||
               process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-              "APP_USR-8395274950284758-082412-f1e2d3c4b5a69780-123456789";
+              "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
 
             const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${payloadId}`, {
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -468,6 +477,12 @@ export default {
                   process.env.VITE_SUPABASE_ANON_KEY ||
                   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
+                const planoIdMeta = meta.plano_id || "ilimitado";
+                const duracaoDias = planoIdMeta === "anual" ? 365 : 30;
+                const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+                const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "").toLowerCase();
+                const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+
                 await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabCodigo)}`, {
                   method: "PATCH",
                   headers: {
@@ -480,9 +495,13 @@ export default {
                     plano_id: "ilimitado",
                     plano_status: "ativo",
                     plano_atualizado_em: new Date().toISOString(),
+                    plano_expira_em: dataExpiracao,
+                    metodo_pagamento: tipoPag,
+                    mercadopago_pagamento_id: String(payloadId),
+                    mercadopago_assinatura_id: paymentData.subscription_id ? String(paymentData.subscription_id) : null,
                   }),
                 });
-                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado com sucesso para 'ilimitado' (Ativo)!`);
+                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
               }
             }
           }
@@ -497,6 +516,242 @@ export default {
             status: 200,
             headers: { "content-type": "application/json" },
           });
+        }
+      }
+
+      // =========================================================================
+      // ROTA 3: POST /api/mercadopago/cancel-subscription (Cancelamento de Recorrência)
+      // =========================================================================
+      if (url.pathname === "/api/mercadopago/cancel-subscription" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { estabelecimentoCodigo } = body;
+
+          if (!estabelecimentoCodigo) {
+            return new Response(
+              JSON.stringify({ error: "Código do estabelecimento é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey =
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          // 1. Resgata informações da assinatura do estabelecimento no Supabase
+          const getRes = await fetch(
+            `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=id,codigo,mercadopago_assinatura_id,mercadopago_pagamento_id`,
+            {
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+
+          let assinaturaId: string | null = null;
+          if (getRes.ok) {
+            const data = await getRes.json();
+            if (Array.isArray(data) && data.length > 0) {
+              assinaturaId = data[0]?.mercadopago_assinatura_id || null;
+            }
+          }
+
+          // 2. Se houver ID de assinatura recorrente (Preapproval), envia o cancelamento para o Mercado Pago
+          if (assinaturaId) {
+            const accessToken =
+              process.env.MERCADOPAGO_ACCESS_TOKEN ||
+              process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+              "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
+
+            const mpCancelRes = await fetch(`https://api.mercadopago.com/preapproval/${assinaturaId}`, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status: "cancelled" }),
+            });
+
+            if (!mpCancelRes.ok) {
+              const mpCancelErr = await mpCancelRes.json();
+              console.warn(`[MercadoPago Cancel Preapproval Warning] #${assinaturaId}:`, mpCancelErr);
+            } else {
+              console.log(`[MercadoPago Cancel Preapproval Success] Assinatura #${assinaturaId} cancelada com sucesso no Mercado Pago!`);
+            }
+          }
+
+          // 3. Atualiza o status do plano no Supabase para 'cancelado' e planoId 'basico'
+          await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
+            method: "PATCH",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              plano_id: "basico",
+              plano_status: "cancelado",
+              plano_atualizado_em: new Date().toISOString(),
+            }),
+          });
+
+          console.log(`[MercadoPago Cancel] Plano do estabelecimento ${estabelecimentoCodigo} atualizado para 'cancelado' (Básico)!`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Assinatura cancelada com sucesso no Mercado Pago e plano alterado para o Básico.",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago Cancel Error]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro ao processar o cancelamento da assinatura." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // ROTA 4: POST /api/gemini/ocr (Serviço de OCR com Fallback de Chave no Backend)
+      // =========================================================================
+      if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {
+        try {
+          const bodyPayload = await request.json();
+          const { imageBase64 } = bodyPayload;
+
+          if (!imageBase64) {
+            return new Response(
+              JSON.stringify({ error: "Imagem base64 da notinha é obrigatória." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const mainKey =
+            process.env.VITE_GEMINI_API_KEY ||
+            process.env.GEMINI_API_KEY ||
+            "";
+
+          const fallbackKey =
+            process.env.VITE_GEMINI_API_KEY_FALLBACK ||
+            process.env.GEMINI_API_KEY_FALLBACK ||
+            "";
+
+          const apiKeys = [];
+          if (mainKey && mainKey.trim()) {
+            apiKeys.push({ key: mainKey.trim(), label: "Principal (VITE_GEMINI_API_KEY)" });
+          }
+          if (fallbackKey && fallbackKey.trim() && fallbackKey.trim() !== mainKey.trim()) {
+            apiKeys.push({ key: fallbackKey.trim(), label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
+          }
+
+          const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+
+          const geminiBody = {
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
+Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
+{
+  "establishment": "Nome do estabelecimento ou supermercado",
+  "date": "YYYY-MM-DD",
+  "time": "HH:mm",
+  "sale_number": "número da NF, NFCe, NFe, pedido ou cupom",
+  "items": [
+    {
+      "name": "Nome/Descrição exata do item no cupom",
+      "standard_name": "Nome normalizado de confeitaria (ex: Chocolate Nobre Ao Leite Melken, Cobertura Fracionada Top Harald, Granulado Gourmet, Caixa Bolo Alta 25x25x18, Caixa Salgado Rasa 25x25x3, Morango Bandeja 250g)",
+      "category": "Chocolates & Coberturas | Lácteos & Recheios | Confeitos & Açúcares | Embalagens & Caixas | Aditivos & Corantes | Hortifrúti & Frutas | Outros Insumos",
+      "quantity": 1,
+      "is_fardo_ou_pacote": false,
+      "embalagem_qtd": 1,
+      "peso_ou_volume_g_ml": 1000,
+      "unidade_medida_base": "g | kg | ml | l | un | bdj | cx | pct",
+      "total_price": 10.50,
+      "unit_price_calculated": 10.50
+    }
+  ],
+  "total_amount": 10.50
+}
+
+Regras Específicas de Confeitaria:
+1. DIFERENCIE CHOCOLATE NOBRE DE COBERTURA FRACIONADA: Se contiver 'MELKEN', 'SICAO', 'CALLEBAUT' ou 'NOBRE', classifique como 'Chocolate Nobre'. Se contiver 'TOP', 'HARALD TOP', 'FRACIONADO' ou 'MAVALERIO', classifique como 'Cobertura Fracionada'.
+2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
+3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
+4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
+Responda apenas com o JSON puro sem formatação markdown.`,
+                  },
+                  {
+                    inline_data: {
+                      mime_type: "image/jpeg",
+                      data: cleanBase64,
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          };
+
+          let lastError: any = null;
+
+          for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
+            const keyInfo = apiKeys[keyIdx];
+            const modelName = "gemini-3.6-flash";
+            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
+
+            try {
+              const resGemini = await fetch(urlGemini, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(geminiBody),
+              });
+
+              if (!resGemini.ok) {
+                const errText = await resGemini.text();
+                console.error(`[Server Gemini OCR Log] Chave ${keyInfo.label} | HTTP Status: ${resGemini.status} | Detalhe:`, errText);
+
+                if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
+                  console.warn(`[Server Gemini Fallback] Chave ${keyInfo.label} falhou (HTTP ${resGemini.status}). Alternando para a próxima chave...`);
+                  lastError = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${resGemini.status}).`);
+                  continue;
+                }
+
+                throw new Error(errText || `Erro na chamada do Gemini (HTTP ${resGemini.status})`);
+              }
+
+              const dataGemini = await resGemini.json();
+              const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+              const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+              const parsedJSON = JSON.parse(jsonClean);
+
+              return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            } catch (err: any) {
+              console.error(`[Server Gemini Error] Chave ${keyInfo.label}:`, err.message || err);
+              lastError = err;
+            }
+          }
+
+          return new Response(
+            JSON.stringify({ error: lastError?.message || "Serviço de escaneamento indisponível no momento." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro interno ao processar OCR da notinha." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
         }
       }
 

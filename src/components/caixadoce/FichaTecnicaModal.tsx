@@ -172,9 +172,9 @@ export function FichaTecnicaModal({
       setNovoInsumoPrecoFormatado(valorFormatado);
       
       if (res.deNotaFiscal) {
-        setOrigemPrecoInfo(`⚡ Média Real de ${valorFormatado} em ${res.totalComprasRegistradas} nota(s) escaneada(s)`);
+        setOrigemPrecoInfo(`⚡ Último Preço Comprado: ${valorFormatado} (Com base na sua última compra/nota escaneada)`);
       } else {
-        setOrigemPrecoInfo(`💡 Preço Sugerido: ${valorFormatado}`);
+        setOrigemPrecoInfo(`💡 Preço Sugerido (Pré-cadastro): ${valorFormatado}`);
       }
     } catch {
       setNovoInsumoPrecoFormatado("R$ 38,50");

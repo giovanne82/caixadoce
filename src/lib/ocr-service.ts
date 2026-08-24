@@ -105,19 +105,68 @@ export async function comprimirImagemParaBase64(
 export const converterImagemParaBase64 = comprimirImagemParaBase64;
 
 /**
- * Chamada otimizada para a API do Gemini utilizando modelos flash oficiais com fallback dinâmico
- * e retentativas para garantir resiliência total contra erros 404/503.
+ * Resgata a lista de chaves de API do Gemini configuradas (Principal + Fallback/Contingência)
+ */
+export function obterChavesGeminiApi(): { key: string; label: string }[] {
+  const mainKey =
+    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    (import.meta as any).env?.GEMINI_API_KEY;
+
+  const fallbackKey =
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_FALLBACK ||
+    (import.meta as any).env?.GEMINI_API_KEY_FALLBACK;
+
+  const keys: { key: string; label: string }[] = [];
+
+  if (mainKey && typeof mainKey === "string" && mainKey.trim()) {
+    keys.push({ key: mainKey.trim(), label: "Principal (GEMINI_API_KEY)" });
+  }
+
+  if (
+    fallbackKey &&
+    typeof fallbackKey === "string" &&
+    fallbackKey.trim() &&
+    fallbackKey.trim() !== mainKey?.trim()
+  ) {
+    keys.push({ key: fallbackKey.trim(), label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
+  }
+
+  return keys;
+}
+
+/**
+ * Chamada otimizada para a API do Gemini utilizando modelos flash oficiais com sistema de redundância
+ * e fallback automático para a chave de contingência em caso de cota esgotada (429) ou instabilidade.
  */
 export async function extractReceiptDataWithGemini(
   imageBase64: string,
   onProgress?: (step: string) => void
 ): Promise<GeminiReceiptResponse> {
-  const apiKey =
-    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    (import.meta as any).env?.GEMINI_API_KEY;
+  // 1. Tenta processar via rota de backend com fallback de chaves no servidor (/api/gemini/ocr)
+  try {
+    onProgress?.("Processando notinha com IA no servidor...");
+    const resServer = await fetch("/api/gemini/ocr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64 }),
+    });
 
-  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-    throw new Error("Chave de API não configurada. Por favor, adicione sua VITE_GEMINI_API_KEY do Google AI Studio no arquivo .env.");
+    if (resServer.ok) {
+      const dataServer = await resServer.json();
+      if (dataServer.success && dataServer.data) {
+        return dataServer.data;
+      }
+    }
+  } catch (err) {
+    console.warn("[OCR Backend Call Warning] Falha na rota do servidor, utilizando fallback do cliente:", err);
+  }
+
+  const apiKeys = obterChavesGeminiApi();
+
+  if (apiKeys.length === 0) {
+    throw new Error(
+      "Chave de API não configurada. Por favor, adicione sua VITE_GEMINI_API_KEY do Google AI Studio no arquivo .env."
+    );
   }
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
@@ -172,78 +221,92 @@ Responda apenas com o JSON puro sem formatação markdown.`
     }
   };
 
-  const MAX_TENTATIVAS = 4;
+  const MAX_TENTATIVAS_POR_CHAVE = 3;
   const TIMEOUT_MS = 30000;
   const MENSAGEM_ERRO_ALTO_VOLUME =
     "Devido ao alto volume de leituras no momento, o servidor de escaneamento está temporariamente instável. Por favor, aguarde alguns segundos e envie a imagem novamente.";
 
   let ultimoErro: any = null;
 
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    const modelName = GEMINI_MODELS[(tentativa - 1) % GEMINI_MODELS.length];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  // Itera entre a chave Principal (GEMINI_API_KEY) e a de Contingência (GEMINI_API_KEY_FALLBACK)
+  for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
+    const keyInfo = apiKeys[keyIdx];
+    const isFallbackKey = keyIdx > 0;
 
-    if (tentativa > 1) {
-      onProgress?.(`Processando notinha com IA (${modelName})... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
-    } else {
-      onProgress?.(`Processando notinha com IA (${modelName})...`);
-    }
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_POR_CHAVE; tentativa++) {
+      const modelName = GEMINI_MODELS[(tentativa - 1) % GEMINI_MODELS.length];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const labelBase = isFallbackKey
+        ? `Alternado para Chave de Contingência (${modelName})...`
+        : `Processando notinha com IA (${modelName})...`;
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
+      onProgress?.(tentativa > 1 ? `${labelBase} (tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CHAVE})` : labelBase);
 
-      clearTimeout(timer);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[Gemini API Log] Modelo: ${modelName} | HTTP Status: ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}) | Detalhe:`, errText);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
 
-        if (response.status === 401 || response.status === 403) {
-          throw new Error("Chave de API da Inteligência Artificial inválida ou sem permissão.");
-        }
+        clearTimeout(timer);
 
-        if (response.status === 413 || response.status === 400) {
-          if (errText.toLowerCase().includes("payload") || errText.toLowerCase().includes("size") || errText.toLowerCase().includes("too large")) {
-            throw new Error("A imagem da notinha é muito grande. O aplicativo a comprimiu automaticamente, por favor tente novamente.");
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(
+            `[Gemini API Log] Chave: ${keyInfo.label} | Modelo: ${modelName} | HTTP Status: ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CHAVE}) | Detalhe:`,
+            errText
+          );
+
+          // Cota esgotada (429), Bloqueio (403) ou Falha de Chave -> Alterna imediatamente para a chave de fallback!
+          if (response.status === 429 || response.status === 403 || response.status === 401) {
+            console.warn(
+              `[Gemini API Fallback] Chave ${keyInfo.label} retornou HTTP ${response.status} (Cota Esgotada/Bloqueio). Alternando para chave de contingência...`
+            );
+            ultimoErro = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${response.status}).`);
+            break; // Interrompe as tentativas da chave atual e passa para a próxima chave no loop externo
           }
+
+          if (response.status === 413 || response.status === 400) {
+            if (errText.toLowerCase().includes("payload") || errText.toLowerCase().includes("size") || errText.toLowerCase().includes("too large")) {
+              throw new Error("A imagem da notinha é muito grande. O aplicativo a comprimiu automaticamente, por favor tente novamente.");
+            }
+          }
+
+          if (tentativa < MAX_TENTATIVAS_POR_CHAVE) {
+            const delayMs = 1500 * tentativa;
+            await sleep(delayMs);
+            continue;
+          }
+
+          ultimoErro = new Error(MENSAGEM_ERRO_ALTO_VOLUME);
+          break;
         }
 
-        if (tentativa < MAX_TENTATIVAS) {
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(jsonClean);
+
+      } catch (err: any) {
+        clearTimeout(timer);
+        console.error(`[Gemini API Error] Chave: ${keyInfo.label} | Modelo: ${modelName} | Erro na tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CHAVE}:`, err.message || err);
+        ultimoErro = err;
+
+        if (err.message?.includes("imagem da notinha é muito grande") || err.name === "AbortError") {
+          throw err;
+        }
+
+        if (tentativa < MAX_TENTATIVAS_POR_CHAVE) {
           const delayMs = 1500 * tentativa;
           await sleep(delayMs);
           continue;
         }
-
-        throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
-      }
-
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      return JSON.parse(jsonClean);
-
-    } catch (err: any) {
-      clearTimeout(timer);
-      console.error(`[Gemini API Error] Modelo: ${modelName} | Erro na tentativa ${tentativa}/${MAX_TENTATIVAS}:`, err.message || err);
-      ultimoErro = err;
-
-      // Erros de autenticação ou chave não configurada não devem fazer retentativas em loop
-      if (err.message?.includes("Chave de API") || err.name === "AbortError") {
-        break;
-      }
-
-      if (tentativa < MAX_TENTATIVAS) {
-        const delayMs = 1500 * tentativa;
-        await sleep(delayMs);
-        continue;
       }
     }
   }
