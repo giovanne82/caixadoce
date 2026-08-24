@@ -493,6 +493,180 @@ export default {
         }
       }
 
+      // =========================================================================
+      // ROTA 1: POST /api/mercadopago/process-payment (Checkout Bricks Handler)
+      // =========================================================================
+      if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { formData, selectedPaymentMethod, estabelecimentoCodigo, userEmail, planoId, valor } = body;
+
+          const accessToken =
+            process.env.MERCADOPAGO_ACCESS_TOKEN ||
+            process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+            "APP_USR-8395274950284758-082412-f1e2d3c4b5a69780-123456789";
+
+          // Monta o payload conforme a API v1/payments do Mercado Pago
+          const mpPayload: any = {
+            ...formData,
+            transaction_amount: Number(valor || formData?.transaction_amount || 19.90),
+            description: `Assinatura CaixaDoce Pro — ${planoId === "anual" ? "Plano Anual" : "Plano Mensal"}`,
+            external_reference: estabelecimentoCodigo || "CD-1001",
+            metadata: {
+              estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
+              plano_id: planoId || "ilimitado",
+              user_email: userEmail || "contato@caixadoce.com.br",
+            },
+          };
+
+          if (!mpPayload.payer?.email && userEmail) {
+            mpPayload.payer = { ...mpPayload.payer, email: userEmail };
+          }
+
+          const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+              "X-Idempotency-Key": `pay_${estabelecimentoCodigo}_${Date.now()}`,
+            },
+            body: JSON.stringify(mpPayload),
+          });
+
+          const mpData = await mpRes.json();
+
+          if (!mpRes.ok) {
+            console.error("[MercadoPago API Error]", mpData);
+            return new Response(
+              JSON.stringify({ error: mpData.message || mpData.cause?.[0]?.description || "Erro no processamento do Mercado Pago." }),
+              { status: mpRes.status, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const status = mpData.status;
+          const statusDetail = mpData.status_detail;
+          const paymentId = mpData.id;
+          const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
+          const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
+
+          // Se for aprovado instantaneamente (Cartão), atualiza a assinatura no Supabase
+          if (status === "approved" && estabelecimentoCodigo) {
+            try {
+              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+              const supabaseKey =
+                process.env.VITE_SUPABASE_ANON_KEY ||
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+              await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
+                method: "PATCH",
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                },
+                body: JSON.stringify({
+                  plano_id: "ilimitado",
+                  plano_status: "ativo",
+                  plano_atualizado_em: new Date().toISOString(),
+                }),
+              });
+              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo)!`);
+            } catch (err) {
+              console.error("[MercadoPago Direct] Erro ao atualizar Supabase:", err);
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              payment_id: paymentId,
+              status,
+              status_detail: statusDetail,
+              pix_qr_code_base64: pixQrCodeBase64,
+              pix_copia_e_cola: pixCopiaECola,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ error: err.message || "Falha interna no servidor de pagamento." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // ROTA 2: POST / GET /api/webhooks/mercadopago (Webhook de Atualização Automática)
+      // =========================================================================
+      if (url.pathname === "/api/webhooks/mercadopago") {
+        try {
+          const paymentId = url.searchParams.get("id") || url.searchParams.get("data.id");
+          let payloadId = paymentId;
+
+          if (!payloadId && request.method === "POST") {
+            try {
+              const body = await request.json();
+              payloadId = body?.data?.id || body?.id || body?.resource?.split("/").pop();
+            } catch {}
+          }
+
+          if (payloadId) {
+            const accessToken =
+              process.env.MERCADOPAGO_ACCESS_TOKEN ||
+              process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+              "APP_USR-8395274950284758-082412-f1e2d3c4b5a69780-123456789";
+
+            const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${payloadId}`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            if (paymentRes.ok) {
+              const paymentData = await paymentRes.json();
+              const status = paymentData.status;
+              const meta = paymentData.metadata || {};
+              const estabCodigo = meta.estabelecimento_codigo || paymentData.external_reference;
+
+              console.log(`[MercadoPago Webhook] Notificação do Pagamento #${payloadId} - Status: ${status} (Estab: ${estabCodigo})`);
+
+              if (status === "approved" && estabCodigo) {
+                const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+                const supabaseKey =
+                  process.env.VITE_SUPABASE_ANON_KEY ||
+                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+                await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabCodigo)}`, {
+                  method: "PATCH",
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                    "Content-Type": "application/json",
+                    Prefer: "return=minimal",
+                  },
+                  body: JSON.stringify({
+                    plano_id: "ilimitado",
+                    plano_status: "ativo",
+                    plano_atualizado_em: new Date().toISOString(),
+                  }),
+                });
+                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado com sucesso para 'ilimitado' (Ativo)!`);
+              }
+            }
+          }
+
+          return new Response(JSON.stringify({ status: "ok", received: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error("[MercadoPago Webhook Error]", err);
+          return new Response(JSON.stringify({ status: "ok", error: err.message }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
