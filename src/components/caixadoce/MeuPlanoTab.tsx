@@ -71,6 +71,14 @@ export function MeuPlanoTab() {
   };
 
   const handleMudarParaBasico = () => {
+    if (isPlanoAtivo) {
+      toast.info(
+        "Seu estabelecimento já possui um plano superior ativo. Para migrar para o Plano Básico, utilize a opção 'Gerenciar / Cancelar Assinatura' acima.",
+        { duration: 4500 }
+      );
+      return;
+    }
+
     salvarDadosPlanoEstabelecimento(activeCode, {
       planoId: "basico",
       status: "ativo",
@@ -267,10 +275,14 @@ export function MeuPlanoTab() {
             <Button
               variant="outline"
               className="w-full text-xs font-bold"
-              disabled={infoPlano.planoId === "basico" && infoPlano.status === "ativo"}
+              disabled={infoPlano.planoId === "basico" || isPlanoAtivo}
               onClick={handleMudarParaBasico}
             >
-              {infoPlano.planoId === "basico" && infoPlano.status === "ativo" ? "Plano Atual" : "Usar Plano Gratuito"}
+              {infoPlano.planoId === "basico"
+                ? "Plano Atual"
+                : isPlanoAtivo
+                ? "Plano Básico Desativado (Possui Assinatura Ativa)"
+                : "Usar Plano Gratuito"}
             </Button>
           </div>
         </Card>
