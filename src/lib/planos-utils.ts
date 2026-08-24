@@ -125,6 +125,15 @@ export interface InfoPlanoEstabelecimento {
 
 export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?: string): InfoPlanoEstabelecimento {
   const code = (codigo || "DEFAULT").toUpperCase();
+
+  // Conta de Teste/Master (CD-1001) - Plano Mensal Completo PRO Vitalício sem expirar
+  if (code === "CD-1001") {
+    return {
+      planoId: "ilimitado",
+      status: "ativo",
+      dataExpiracao: "2099-12-31T23:59:59.000Z",
+    };
+  }
   try {
     const raw = localStorage.getItem(`caixadoce_plano_${code}`);
     if (raw) {
