@@ -616,6 +616,145 @@ export default {
         }
       }
 
+      // =========================================================================
+      // ROTA 4: POST /api/gemini/ocr (Serviço de OCR com Fallback de Chave no Backend)
+      // =========================================================================
+      if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {
+        try {
+          const bodyPayload = await request.json();
+          const { imageBase64 } = bodyPayload;
+
+          if (!imageBase64) {
+            return new Response(
+              JSON.stringify({ error: "Imagem base64 da notinha é obrigatória." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const mainKey =
+            process.env.VITE_GEMINI_API_KEY ||
+            process.env.GEMINI_API_KEY ||
+            "";
+
+          const fallbackKey =
+            process.env.VITE_GEMINI_API_KEY_FALLBACK ||
+            process.env.GEMINI_API_KEY_FALLBACK ||
+            "";
+
+          const apiKeys = [];
+          if (mainKey && mainKey.trim()) {
+            apiKeys.push({ key: mainKey.trim(), label: "Principal (VITE_GEMINI_API_KEY)" });
+          }
+          if (fallbackKey && fallbackKey.trim() && fallbackKey.trim() !== mainKey.trim()) {
+            apiKeys.push({ key: fallbackKey.trim(), label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
+          }
+
+          const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+
+          const geminiBody = {
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
+Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
+{
+  "establishment": "Nome do estabelecimento ou supermercado",
+  "date": "YYYY-MM-DD",
+  "time": "HH:mm",
+  "sale_number": "número da NF, NFCe, NFe, pedido ou cupom",
+  "items": [
+    {
+      "name": "Nome/Descrição exata do item no cupom",
+      "standard_name": "Nome normalizado de confeitaria (ex: Chocolate Nobre Ao Leite Melken, Cobertura Fracionada Top Harald, Granulado Gourmet, Caixa Bolo Alta 25x25x18, Caixa Salgado Rasa 25x25x3, Morango Bandeja 250g)",
+      "category": "Chocolates & Coberturas | Lácteos & Recheios | Confeitos & Açúcares | Embalagens & Caixas | Aditivos & Corantes | Hortifrúti & Frutas | Outros Insumos",
+      "quantity": 1,
+      "is_fardo_ou_pacote": false,
+      "embalagem_qtd": 1,
+      "peso_ou_volume_g_ml": 1000,
+      "unidade_medida_base": "g | kg | ml | l | un | bdj | cx | pct",
+      "total_price": 10.50,
+      "unit_price_calculated": 10.50
+    }
+  ],
+  "total_amount": 10.50
+}
+
+Regras Específicas de Confeitaria:
+1. DIFERENCIE CHOCOLATE NOBRE DE COBERTURA FRACIONADA: Se contiver 'MELKEN', 'SICAO', 'CALLEBAUT' ou 'NOBRE', classifique como 'Chocolate Nobre'. Se contiver 'TOP', 'HARALD TOP', 'FRACIONADO' ou 'MAVALERIO', classifique como 'Cobertura Fracionada'.
+2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
+3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
+4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
+Responda apenas com o JSON puro sem formatação markdown.`,
+                  },
+                  {
+                    inline_data: {
+                      mime_type: "image/jpeg",
+                      data: cleanBase64,
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          };
+
+          let lastError: any = null;
+
+          for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
+            const keyInfo = apiKeys[keyIdx];
+            const modelName = "gemini-3.6-flash";
+            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
+
+            try {
+              const resGemini = await fetch(urlGemini, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(geminiBody),
+              });
+
+              if (!resGemini.ok) {
+                const errText = await resGemini.text();
+                console.error(`[Server Gemini OCR Log] Chave ${keyInfo.label} | HTTP Status: ${resGemini.status} | Detalhe:`, errText);
+
+                if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
+                  console.warn(`[Server Gemini Fallback] Chave ${keyInfo.label} falhou (HTTP ${resGemini.status}). Alternando para a próxima chave...`);
+                  lastError = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${resGemini.status}).`);
+                  continue;
+                }
+
+                throw new Error(errText || `Erro na chamada do Gemini (HTTP ${resGemini.status})`);
+              }
+
+              const dataGemini = await resGemini.json();
+              const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+              const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+              const parsedJSON = JSON.parse(jsonClean);
+
+              return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            } catch (err: any) {
+              console.error(`[Server Gemini Error] Chave ${keyInfo.label}:`, err.message || err);
+              lastError = err;
+            }
+          }
+
+          return new Response(
+            JSON.stringify({ error: lastError?.message || "Serviço de escaneamento indisponível no momento." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro interno ao processar OCR da notinha." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

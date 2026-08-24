@@ -142,6 +142,25 @@ export async function extractReceiptDataWithGemini(
   imageBase64: string,
   onProgress?: (step: string) => void
 ): Promise<GeminiReceiptResponse> {
+  // 1. Tenta processar via rota de backend com fallback de chaves no servidor (/api/gemini/ocr)
+  try {
+    onProgress?.("Processando notinha com IA no servidor...");
+    const resServer = await fetch("/api/gemini/ocr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64 }),
+    });
+
+    if (resServer.ok) {
+      const dataServer = await resServer.json();
+      if (dataServer.success && dataServer.data) {
+        return dataServer.data;
+      }
+    }
+  } catch (err) {
+    console.warn("[OCR Backend Call Warning] Falha na rota do servidor, utilizando fallback do cliente:", err);
+  }
+
   const apiKeys = obterChavesGeminiApi();
 
   if (apiKeys.length === 0) {
