@@ -33,10 +33,10 @@ export interface GeminiReceiptResponse {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const MODELS = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-8b"];
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 /**
- * Chamada otimizada para a API do Gemini (exclusivamente modelos FLASH estáveis)
+ * Chamada otimizada para a API do Gemini utilizando o modelo atualizado gemini-3.6-flash
  * com rotina de retry automático, timeout de 25s por tentativa e feedback de progresso.
  */
 export async function extractReceiptDataWithGemini(
@@ -47,6 +47,7 @@ export async function extractReceiptDataWithGemini(
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY não configurada.");
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const body = {
     contents: [
@@ -98,16 +99,18 @@ Responda apenas com o JSON puro sem formatação markdown.`
     }
   };
 
+  const MAX_TENTATIVAS = 3;
   const TIMEOUT_MS = 25000;
   const MENSAGEM_ERRO_ALTO_VOLUME = "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
 
   let ultimoErro: any = null;
 
-  for (let mIdx = 0; mIdx < MODELS.length; mIdx++) {
-    const modelName = MODELS[mIdx];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
-    onProgress?.(`⚡ Lendo notinha com Gemini Flash...`);
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    if (tentativa > 1) {
+      onProgress?.(`⚡ Processando notinha com Gemini Flash... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
+    } else {
+      onProgress?.("⚡ Lendo notinha com Gemini Flash (gemini-3.6-flash)...");
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -124,32 +127,16 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Gemini API - ${modelName}] HTTP ${response.status}: ${errText}`);
-
-        if (response.status === 404 && mIdx < MODELS.length - 1) {
-          continue;
-        }
+        console.warn(`[Gemini API - ${GEMINI_MODEL}] HTTP ${response.status}: ${errText}`);
 
         if (response.status === 503 || response.status === 429) {
-          await sleep(1500);
-          const retryRes = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          if (retryRes.ok) {
-            const retryData = await retryRes.json();
-            const rawText = retryData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-            const jsonClean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(jsonClean);
+          if (tentativa < MAX_TENTATIVAS) {
+            await sleep(1500 * tentativa);
+            continue;
           }
         }
 
-        if (mIdx < MODELS.length - 1) {
-          continue;
-        }
-
-        throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
+        throw new Error(`Falha no escaneamento (HTTP ${response.status}). ${MENSAGEM_ERRO_ALTO_VOLUME}`);
       }
 
       const data = await response.json();
@@ -159,10 +146,11 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
     } catch (err: any) {
       clearTimeout(timer);
-      console.warn(`[Gemini API - ${modelName}] Erro:`, err.message);
+      console.warn(`[Gemini API - ${GEMINI_MODEL}] Erro na tentativa ${tentativa}:`, err.message);
       ultimoErro = err;
 
-      if (mIdx < MODELS.length - 1) {
+      if (tentativa < MAX_TENTATIVAS) {
+        await sleep(1500 * tentativa);
         continue;
       }
     }
@@ -171,7 +159,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
   throw new Error(
     ultimoErro?.name === "AbortError"
       ? "A leitura da notinha demorou mais que o esperado (Timeout). Por favor, tente enviar novamente."
-      : MENSAGEM_ERRO_ALTO_VOLUME
+      : ultimoErro?.message || MENSAGEM_ERRO_ALTO_VOLUME
   );
 }
 
