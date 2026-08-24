@@ -956,7 +956,10 @@ export function OrdersView({
   // Lista Filtrada para a Tabela
   const encomendasFiltradas = useMemo(() => {
     return encomendas.filter((e) => {
-      const matchPagamento = filtroPagamento === "todos" || e.statusPagamento === filtroPagamento;
+      const matchPagamento =
+        filtroPagamento === "pendente"
+          ? e.statusPagamento === "pendente" || e.statusPagamento === "cartao_pendente" || e.statusPagamento === "pix_pendente" || !e.statusPagamento
+          : e.statusPagamento === "pago" || e.statusPagamento === "pago_integral" || e.statusPagamento === "sinal_pago" || e.statusPagamento === "pago_na_entrega";
       const matchBusca =
         !busca ||
         e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -1182,14 +1185,12 @@ export function OrdersView({
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
             <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-40">
+              <SelectTrigger className="h-8 text-xs w-32 font-semibold">
                 <SelectValue placeholder="Pagamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos Pagamentos</SelectItem>
-                <SelectItem value="pendente">Pendente (0%)</SelectItem>
-                <SelectItem value="sinal_pago">Sinal Pago (50%)</SelectItem>
-                <SelectItem value="pago_integral">100% Pago</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
               </SelectContent>
             </Select>
           </div>

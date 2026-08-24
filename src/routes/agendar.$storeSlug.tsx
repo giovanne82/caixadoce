@@ -832,7 +832,7 @@ function PublicStoreView() {
                 {/* 4. Forma de Pagamento */}
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-foreground uppercase tracking-wider">Forma de Pagamento</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
                       variant={metodoPagamento === "pix" ? "default" : "outline"}
@@ -843,14 +843,6 @@ function PublicStoreView() {
                     </Button>
                     <Button
                       type="button"
-                      variant={metodoPagamento === "cartao" ? "default" : "outline"}
-                      onClick={() => setMetodoPagamento("cartao")}
-                      className="h-8 text-[11px] font-semibold px-1"
-                    >
-                      <CreditCard className="w-3.5 h-3.5 mr-1 text-primary" /> Cartão (Stripe)
-                    </Button>
-                    <Button
-                      type="button"
                       variant={metodoPagamento === "entrega" ? "default" : "outline"}
                       onClick={() => setMetodoPagamento("entrega")}
                       className="h-8 text-[11px] font-semibold px-1"
@@ -858,61 +850,6 @@ function PublicStoreView() {
                       <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Na Entrega
                     </Button>
                   </div>
-
-                  {/* Exibição e Seleção de Parcelas quando escolhe Cartão */}
-                  {metodoPagamento === "cartao" && (
-                    <div className="space-y-2.5 pt-1">
-                      <div className="space-y-1">
-                        <Label htmlFor="sel-parcelas-agendar" className="text-xs font-semibold">
-                          Número de Parcelas no Cartão
-                        </Label>
-                        <Select
-                          value={String(parcelasSelecionadas)}
-                          onValueChange={(val) => setParcelasSelecionadas(Number(val))}
-                        >
-                          <SelectTrigger id="sel-parcelas-agendar" className="h-8 text-xs font-semibold bg-background">
-                            <SelectValue placeholder="Selecione as parcelas" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-56">
-                            {installmentOptions.map((opt) => (
-                              <SelectItem key={opt.installments} value={String(opt.installments)} className="text-xs font-medium">
-                                {opt.formattedOptionText}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* RESUMO DE PAGAMENTO REATIVO */}
-                      <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5 text-xs animate-fade-in">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Subtotal:</span>
-                          <span className="font-mono font-semibold">{feeResult.formattedSubtotal}</span>
-                        </div>
-                        {feeResult.feeAmount > 0 ? (
-                          <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
-                            <span>Taxa de Conveniência ({feeResult.installments}x):</span>
-                            <span className="font-mono">{feeResult.formattedFeeAmount}</span>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between text-emerald-600 font-semibold">
-                            <span>Taxa de Conveniência:</span>
-                            <span>Isento (absorvido pela loja)</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between pt-1.5 border-t border-primary/20 text-xs font-extrabold text-foreground">
-                          <span>Total a Pagar:</span>
-                          <span className="font-mono text-primary text-sm">{feeResult.formattedTotalAmount}</span>
-                        </div>
-                        <p className="text-[11px] font-extrabold text-primary text-right">
-                          ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground italic">
-                          💳 Taxa de processamento da operadora de cartão.
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Observações */}
