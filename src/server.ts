@@ -710,7 +710,7 @@ Responda apenas com o JSON puro sem formatação markdown.`,
           };
 
           let lastError: any = null;
-          const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
+          const modelsToTry = ["gemini-3.6-flash"];
 
           for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
             const keyInfo = apiKeys[keyIdx];
