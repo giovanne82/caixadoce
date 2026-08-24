@@ -1,139 +1,37 @@
-import { useState, useEffect } from "react";
-import { Bell, CheckCircle2, AlertCircle, CalendarClock, Receipt, Sparkles, X, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { Bell, Crown, AlertTriangle, CheckCircle2, ChevronRight, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { type TransacaoFinanceira } from "@/lib/caixadoce-data";
 import { obterPlanoEfetivoEstabelecimento, PLANOS_CONFIG } from "@/lib/planos-utils";
 
-export interface NotificacaoItem {
-  id: string;
-  titulo: string;
-  mensagem: string;
-  detalhe?: string;
-  dataHora: string;
-  tipo: "plano" | "notinha" | "financeiro" | "sistema";
-  lida: boolean;
-}
-
 interface NotificationBellProps {
-  transacoes?: TransacaoFinanceira[];
+  transacoes?: any[];
   despesas?: any[];
   establishmentCode?: string;
   onNavigateTab?: (tab: string) => void;
 }
 
+/**
+ * Sininho de Alerta do Sistema - Focado exclusivamente no Status do Plano de Assinatura
+ */
 export function NotificationBell({
-  transacoes = [],
-  despesas = [],
   establishmentCode = "CD-1001",
   onNavigateTab,
 }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [lidasIds, setLidasIds] = useState<string[]>([]);
-  const [notifSelecionada, setNotifSelecionada] = useState<NotificacaoItem | null>(null);
 
-  // Carrega IDs lidos do localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`caixadoce_notifs_lidas_${establishmentCode}`);
-      if (raw) setLidasIds(JSON.parse(raw));
-    } catch {}
-  }, [establishmentCode]);
+  // Status do plano de assinatura do estabelecimento
+  const infoPlano = obterPlanoEfetivoEstabelecimento(establishmentCode);
+  const isAssinaturaAtiva = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
+  const planoConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
 
-  // Salvar no localStorage quando atualizar
-  const marcarComoLida = (id: string) => {
-    setLidasIds((prev) => {
-      if (prev.includes(id)) return prev;
-      const updated = [...prev, id];
-      try {
-        localStorage.setItem(`caixadoce_notifs_lidas_${establishmentCode}`, JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
-
-  const marcarTodasComoLidas = () => {
-    const todosIds = gerarNotificacoes().map((n) => n.id);
-    setLidasIds(todosIds);
-    try {
-      localStorage.setItem(`caixadoce_notifs_lidas_${establishmentCode}`, JSON.stringify(todosIds));
-    } catch {}
-  };
-
-  // Gerador dinâmico de notificações com base nos dados do sistema
-  const gerarNotificacoes = (): NotificacaoItem[] => {
-    const lista: NotificacaoItem[] = [];
-
-    // 1. Notificação do Plano (Vencimento/Renovação)
-    const plano = obterPlanoEfetivoEstabelecimento(establishmentCode);
-    const planoConfig = PLANOS_CONFIG[plano.planoId];
-    const planoNome = planoConfig?.nome || "Plano Pro Completo";
-    lista.push({
-      id: `notif-plano-${establishmentCode}`,
-      titulo: `Status do Plano: ${planoNome}`,
-      mensagem: "Fique atento à data de renovação da sua assinatura para manter recursos ativos.",
-      detalhe: `Seu plano ativo (${planoNome}) inclui automações avançadas de caixa, recebimentos Stripe/Pix e colaboradores ilimitados. Mantenha os pagamentos em dia para evitar interrupções.`,
-      dataHora: "Hoje",
-      tipo: "plano",
-      lida: lidasIds.includes(`notif-plano-${establishmentCode}`),
-    });
-
-    // 2. Alerta de Notinha escaneada recente
-    if (despesas && despesas.length > 0) {
-      const ultimaDespesa = despesas[0];
-      const nomeInsumo = ultimaDespesa.nomeInsumo || ultimaDespesa.descricao || "Compra Confeitaria";
-      lista.push({
-        id: `notif-notinha-${ultimaDespesa.id || "1"}`,
-        titulo: "Nova notinha escaneada por colaborador",
-        mensagem: `Comprovante de "${nomeInsumo}" registrado no caixa.`,
-        detalhe: `Uma nova despesa/notinha foi escaneada e conciliada automaticamente com o fluxo de caixa. Valor: R$ ${(ultimaDespesa.valorTotal || 0).toFixed(2)}.`,
-        dataHora: "Recente",
-        tipo: "notinha",
-        lida: lidasIds.includes(`notif-notinha-${ultimaDespesa.id || "1"}`),
-      });
-    } else {
-      lista.push({
-        id: "notif-notinha-demo",
-        titulo: "Scanner de Notinhas Ativo",
-        mensagem: "Fotografe cupons fiscais para alimentar o estoque e o caixa automaticamente.",
-        detalhe: "O leitor de OCR com inteligência artificial detecta itens, valores e datas das notas de insumos enviadas por você ou sua equipe.",
-        dataHora: "Recente",
-        tipo: "notinha",
-        lida: lidasIds.includes("notif-notinha-demo"),
-      });
+  const handleIrParaPlanos = () => {
+    setOpen(false);
+    if (onNavigateTab) {
+      onNavigateTab("configuracoes");
     }
-
-    // 3. Lançamentos Pendentes
-    const pendentes = transacoes.filter((t) => t.status === "pendente");
-    if (pendentes.length > 0) {
-      lista.push({
-        id: `notif-financeiro-pendentes-${pendentes.length}`,
-        titulo: "Cobranças Pendentes de Liquidação",
-        mensagem: `Você tem ${pendentes.length} lançamento(s) aguardando confirmação.`,
-        detalhe: `Existem ${pendentes.length} cobranças pendentes na aba Gestão Financeira. Verifique os comprovantes ou pagamentos via Pix/Stripe para dar baixa.`,
-        dataHora: "Pendente",
-        tipo: "financeiro",
-        lida: lidasIds.includes(`notif-financeiro-pendentes-${pendentes.length}`),
-      });
-    }
-
-    // 4. Aviso do Sistema
-    lista.push({
-      id: "notif-boas-vindas",
-      titulo: "Sistema CaixaDoce Atualizado",
-      mensagem: "Gestão financeira, PDV de colaboradores e links de pagamento ativos.",
-      detalhe: "Sua plataforma CaixaDoce está 100% pronta. Use a aba Financeiro para gerar cobranças avulsas e gerenciar sua loja.",
-      dataHora: "Sistema",
-      tipo: "sistema",
-      lida: lidasIds.includes("notif-boas-vindas"),
-    });
-
-    return lista;
   };
-
-  const notificacoes = gerarNotificacoes();
-  const naoLidasCount = notificacoes.filter((n) => !n.lida).length;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -141,123 +39,102 @@ export function NotificationBell({
         <Button
           variant="ghost"
           size="sm"
-          title="Notificações e Avisos do Sistema"
-          className="relative h-8 w-8 p-0 text-[#2E1A47] hover:text-[#7C3AED] bg-white/80 hover:bg-[#7C3AED]/10 border border-[#E8E0F2] rounded-xl transition-all shadow-xs"
+          title={
+            isAssinaturaAtiva
+              ? "Plano Assinado & Ativo"
+              : "Atenção: Regularize sua Assinatura do CaixaDoce"
+          }
+          className={`relative h-8 w-8 p-0 rounded-xl transition-all shadow-xs ${
+            isAssinaturaAtiva
+              ? "opacity-40 hover:opacity-100 text-stone-400 bg-stone-100/60 dark:bg-stone-800/40 border border-stone-200 dark:border-stone-800 hover:bg-stone-200/60"
+              : "bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white border-2 border-amber-300 animate-pulse shadow-md hover:scale-105"
+          }`}
         >
-          <Bell className="w-4 h-4 text-[#7C3AED]" />
-          {naoLidasCount > 0 && (
+          <Bell className={`w-4 h-4 ${isAssinaturaAtiva ? "text-stone-400" : "text-white animate-bounce"}`} />
+
+          {/* Badge / Indicador de Alerta caso a assinatura NÃO esteja ativa */}
+          {!isAssinaturaAtiva && (
             <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-rose-600 text-[9px] font-bold text-white shadow-xs">
-                {naoLidasCount}
+              <span className="relative inline-flex items-center justify-center rounded-full h-4 w-4 bg-rose-600 text-[9px] font-black text-white shadow-xs">
+                !
               </span>
             </span>
           )}
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 sm:w-96 p-0 shadow-xl border-[#E8E0F2] rounded-2xl overflow-hidden bg-background">
-        {/* Cabeçalho do Popover */}
-        <div className="p-3.5 border-b border-border bg-[#F3EEF9] flex items-center justify-between">
+      <PopoverContent align="end" className="w-80 sm:w-96 p-0 shadow-2xl border-border rounded-2xl overflow-hidden bg-card font-sans">
+        {/* Cabeçalho */}
+        <div className={`p-4 border-b ${isAssinaturaAtiva ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"} flex items-center justify-between`}>
           <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-[#7C3AED]" />
-            <h4 className="font-bold text-xs text-[#2E1A47] uppercase tracking-wider">
-              Notificações do Sistema
-            </h4>
-            {naoLidasCount > 0 && (
-              <Badge className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {naoLidasCount} nova(s)
-              </Badge>
+            {isAssinaturaAtiva ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-rose-500 animate-bounce" />
             )}
+            <h4 className="font-extrabold text-xs text-foreground uppercase tracking-wider">
+              Aviso de Assinatura &amp; Plano
+            </h4>
           </div>
 
-          {naoLidasCount > 0 && (
-            <button
-              onClick={marcarTodasComoLidas}
-              className="text-[11px] font-semibold text-[#7C3AED] hover:underline flex items-center gap-1"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Marcar lidas
-            </button>
-          )}
+          <Badge variant={isAssinaturaAtiva ? "default" : "destructive"} className="text-[10px] px-2 py-0.5 font-bold">
+            {isAssinaturaAtiva ? "Plano em Dia" : "Ação Necessária"}
+          </Badge>
         </div>
 
-        {/* Notificação expandida / detalhe */}
-        {notifSelecionada ? (
-          <div className="p-4 space-y-3 bg-muted/20 animate-in fade-in-50 duration-200">
-            <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
-              <div className="flex items-center gap-2">
-                {notifSelecionada.tipo === "plano" && <CalendarClock className="w-4 h-4 text-purple-600" />}
-                {notifSelecionada.tipo === "notinha" && <Receipt className="w-4 h-4 text-amber-500" />}
-                {notifSelecionada.tipo === "financeiro" && <AlertCircle className="w-4 h-4 text-rose-500" />}
-                {notifSelecionada.tipo === "sistema" && <Sparkles className="w-4 h-4 text-emerald-500" />}
-                <h5 className="font-extrabold text-xs text-foreground">{notifSelecionada.titulo}</h5>
+        {/* Corpo Informativo */}
+        <div className="p-4 space-y-3">
+          {isAssinaturaAtiva ? (
+            <div className="space-y-2 text-left">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
+                <Crown className="w-4 h-4" />
+                <span>{planoConfig.nome} (Ativo)</span>
               </div>
-              <button
-                onClick={() => setNotifSelecionada(null)}
-                className="text-muted-foreground hover:text-foreground p-0.5 rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Sua assinatura do plano está em dia e com todos os recursos ilimitados liberados (Scanner de Notinhas com IA, Gestão Financeira, Impressão de Pedidos e muito mais).
+              </p>
+              {infoPlano.dataExpiracao && (
+                <p className="text-[11px] font-mono text-muted-foreground pt-1">
+                  Válido até: <strong>{new Date(infoPlano.dataExpiracao).toLocaleDateString("pt-BR")}</strong>
+                </p>
+              )}
             </div>
-
-            <p className="text-xs text-foreground leading-relaxed">{notifSelecionada.detalhe || notifSelecionada.mensagem}</p>
-
-            <div className="pt-2 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground font-mono">{notifSelecionada.dataHora}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs font-semibold"
-                onClick={() => setNotifSelecionada(null)}
-              >
-                Voltar à lista
-              </Button>
-            </div>
-          </div>
-        ) : (
-          /* Lista de Notificações */
-          <div className="divide-y divide-border/50 max-h-80 overflow-y-auto">
-            {notificacoes.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => {
-                  marcarComoLida(n.id);
-                  setNotifSelecionada(n);
-                }}
-                className={`p-3.5 hover:bg-[#F3EEF9]/60 cursor-pointer transition-colors flex items-start gap-3 relative ${
-                  !n.lida ? "bg-purple-50/50 dark:bg-purple-950/20" : ""
-                }`}
-              >
-                {/* Indicador de Não Lida (Bolinha vermelha) */}
-                {!n.lida && (
-                  <span className="absolute top-4 left-2 w-2 h-2 rounded-full bg-rose-500 shadow-xs"></span>
-                )}
-
-                <div className="shrink-0 mt-0.5 pl-1">
-                  {n.tipo === "plano" && <CalendarClock className="w-4 h-4 text-purple-600" />}
-                  {n.tipo === "notinha" && <Receipt className="w-4 h-4 text-amber-500" />}
-                  {n.tipo === "financeiro" && <AlertCircle className="w-4 h-4 text-rose-500" />}
-                  {n.tipo === "sistema" && <Sparkles className="w-4 h-4 text-emerald-500" />}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <p className={`text-xs truncate ${!n.lida ? "font-extrabold text-foreground" : "font-semibold text-muted-foreground"}`}>
-                      {n.titulo}
-                    </p>
-                    <span className="text-[10px] text-muted-foreground shrink-0 font-mono">{n.dataHora}</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-tight">
-                    {n.mensagem}
-                  </p>
-                </div>
-
-                <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 self-center" />
+          ) : (
+            <div className="space-y-2 text-left">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-extrabold text-sm">
+                <ShieldAlert className="w-4 h-4" />
+                <span>
+                  {infoPlano.status === "expirado"
+                    ? "Assinatura Expirada"
+                    : infoPlano.status === "cancelado"
+                    ? "Assinatura Cancelada"
+                    : "Plano Básico (Sem Assinatura PRO)"}
+                </span>
               </div>
-            ))}
+              <p className="text-xs text-foreground font-medium leading-relaxed">
+                {infoPlano.status === "expirado" || infoPlano.status === "cancelado"
+                  ? "Sua assinatura foi interrompida. Regularize o pagamento para manter liberados o Scanner por IA e a Gestão Financeira."
+                  : "Seu estabelecimento está no Plano Básico. Assine o Plano Mensal Completo para liberar o Scanner de Notinhas com IA e o fluxo financeiro."}
+              </p>
+            </div>
+          )}
+
+          {/* Botão de Ação */}
+          <div className="pt-2">
+            <Button
+              onClick={handleIrParaPlanos}
+              className={`w-full text-xs font-extrabold shadow-md flex items-center justify-center gap-2 ${
+                isAssinaturaAtiva
+                  ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  : "bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white hover:opacity-90"
+              }`}
+            >
+              <span>{isAssinaturaAtiva ? "Gerenciar Assinatura" : "Regularizar Assinatura Agora"}</span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
-        )}
+        </div>
       </PopoverContent>
     </Popover>
   );
