@@ -460,23 +460,55 @@ export async function obterFichaTecnicaProduto(
 }
 
 /**
- * Calcula o custo real de um item da Ficha Técnica:
- * Custo Proporcional = (Preço da Embalagem / Qtd da Embalagem Original) * Qtd Usada na Receita
- * Exemplo 1: (R$ 38,50 / 1000g) * 100g = R$ 3,85
- * Exemplo 2: (R$ 12,50 / 25 un) * 2 un = R$ 1,00
- * Exemplo 3: (R$ 20,00 / 1000ml) * 250ml = R$ 5,00
+ * Calcula o custo real de um item da Ficha Técnica vinculando unidades e fazendo conversão matemática:
+ * Exemplo 1: Embalagem de 1kg a R$ 38,50 e uso de 250g -> (38,50 / 1000g) * 250g = R$ 9,63
+ * Exemplo 2: Embalagem de 1L a R$ 20,00 e uso de 250ml -> (20,00 / 1000ml) * 250ml = R$ 5,00
+ * Exemplo 3: Embalagem de 25 un a R$ 12,50 e uso de 2 un -> (12,50 / 25un) * 2un = R$ 1,00
  */
 export function calcularCustoItemFichaTecnica(
   quantidadeUsada: number,
   unidadeMedida: string,
   precoEmbalagem: number,
-  qtdEmbalagemOriginal: number = 1000
+  qtdEmbalagemOriginal: number = 1000,
+  unidadeEmbalagem?: string
 ): number {
   const qtdUsada = Number(quantidadeUsada) || 0;
   const precoEmb = Number(precoEmbalagem) || 0;
   const qtdEmbOrig = Number(qtdEmbalagemOriginal) > 0 ? Number(qtdEmbalagemOriginal) : 1;
 
-  const custoCalculado = (precoEmb / qtdEmbOrig) * qtdUsada;
+  const uUsada = (unidadeMedida || "g").toLowerCase();
+  const uEmb = (unidadeEmbalagem || uUsada).toLowerCase();
+
+  let fatorUsadaG = 1;
+  if (uUsada === "kg") fatorUsadaG = 1000;
+  else if (uUsada === "g") fatorUsadaG = 1;
+
+  let fatorEmbG = 1;
+  if (uEmb === "kg") fatorEmbG = 1000;
+  else if (uEmb === "g") fatorEmbG = 1;
+
+  let fatorUsadaMl = 1;
+  if (uUsada === "l") fatorUsadaMl = 1000;
+  else if (uUsada === "ml") fatorUsadaMl = 1;
+
+  let fatorEmbMl = 1;
+  if (uEmb === "l") fatorEmbMl = 1000;
+  else if (uEmb === "ml") fatorEmbMl = 1;
+
+  let qtdUsadaBase = qtdUsada;
+  let qtdEmbBase = qtdEmbOrig;
+
+  if ((uUsada === "g" || uUsada === "kg") && (uEmb === "g" || uEmb === "kg")) {
+    qtdUsadaBase = qtdUsada * fatorUsadaG;
+    qtdEmbBase = qtdEmbOrig * fatorEmbG;
+  } else if ((uUsada === "ml" || uUsada === "l") && (uEmb === "ml" || uEmb === "l")) {
+    qtdUsadaBase = qtdUsada * fatorUsadaMl;
+    qtdEmbBase = qtdEmbOrig * fatorEmbMl;
+  }
+
+  if (qtdEmbBase <= 0) qtdEmbBase = 1;
+
+  const custoCalculado = (precoEmb / qtdEmbBase) * qtdUsadaBase;
   return parseFloat(custoCalculado.toFixed(2));
 }
 

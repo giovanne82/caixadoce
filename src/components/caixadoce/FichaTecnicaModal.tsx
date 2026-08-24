@@ -713,10 +713,10 @@ export function FichaTecnicaModal({
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold">Rendimento da Receita (Peças/Bolo)</Label>
                 <Input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="decimal"
                   value={rendimentoQtd}
-                  onChange={(e) => setRendimentoQtd(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setRendimentoQtd(parseNumberInput(e.target.value) || 1)}
                 />
                 <span className="text-[10px] text-muted-foreground">Ex: 100 coxinhas, 50 brigadeiros ou 1 bolo</span>
               </div>
@@ -724,11 +724,10 @@ export function FichaTecnicaModal({
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold">Custos Operacionais (%)</Label>
                 <Input
-                  type="number"
-                  min="0"
-                  max="100"
+                  type="text"
+                  inputMode="decimal"
                   value={custosOperacionaisPerc}
-                  onChange={(e) => setCustosOperacionaisPerc(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setCustosOperacionaisPerc(parseNumberInput(e.target.value))}
                 />
                 <span className="text-[10px] text-muted-foreground">Gás, energia, água e embalagem</span>
               </div>
@@ -736,10 +735,10 @@ export function FichaTecnicaModal({
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold">Margem de Lucro (%)</Label>
                 <Input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={margemLucroPerc}
-                  onChange={(e) => setMargemLucroPerc(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setMargemLucroPerc(parseNumberInput(e.target.value))}
                 />
                 <span className="text-[10px] text-muted-foreground">Ex: 100% de lucro sobre os custos</span>
               </div>
@@ -823,6 +822,8 @@ export function FichaTecnicaModal({
                   </div>
 
                   <Input
+                    type="text"
+                    inputMode="decimal"
                     placeholder="R$ 0,00"
                     value={precoPersonalizadoFormatado}
                     onChange={(e) => {
@@ -872,6 +873,14 @@ export function FichaTecnicaModal({
               )}
             </CardContent>
           </Card>
+
+          {/* BANNER DE AVISO E RESPONSABILIDADE SOBRE PRECIFICAÇÃO */}
+          <div className="p-3 bg-muted/60 border border-border rounded-xl text-[11px] leading-relaxed text-muted-foreground flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p>
+              <strong>Aviso Importante:</strong> Esta ferramenta de precificação é um auxílio gerencial. Para que o cálculo seja correto, é fundamental que o usuário informe os valores reais e as proporções exatas de cada insumo. O <em>Caixa Doce</em> não se responsabiliza por eventuais erros de cálculo ou margens de lucro incorretas. Recomendamos a conferência periódica dos custos.
+            </p>
+          </div>
         </div>
 
         {/* Rodapé do Modal */}
