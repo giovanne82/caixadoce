@@ -833,6 +833,10 @@ export interface Encomenda {
   observacoes?: string;
   enderecoEntrega?: string;
   tipoEntrega?: "retirada" | "delivery";
+  temTopoBolo?: boolean;
+  detalhesTopoBolo?: string;
+  temVela?: boolean;
+  detalhesVela?: string;
   createdAt?: string;
 }
 
@@ -1145,6 +1149,14 @@ export function gerarMensagemResumoWhatsApp(
     itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
   }
 
+  let topoVelaTexto = "";
+  if (encomenda.temTopoBolo) {
+    topoVelaTexto += `\n🎂 *Topo de Bolo:* ${encomenda.detalhesTopoBolo || "Sim"}`;
+  }
+  if (encomenda.temVela) {
+    topoVelaTexto += `\n🕯️ *Vela:* ${encomenda.detalhesVela || "Sim"}`;
+  }
+
   // Exibe a Chave Pix limpa, o favorecido e o valor devido na mensagem do WhatsApp
   let blocoPix = "";
   const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
@@ -1160,7 +1172,7 @@ Olá, *${encomenda.clienteNome}*! Seu pedido foi registrado com sucesso. Seguem 
 
 📅 *Data Prevista:* ${dataFormatada} às ${hora}
 🎂 *Itens Pedidos:*
-${itensTexto}
+${itensTexto}${topoVelaTexto}
 
 📍 *Modalidade:* ${modalidade}
 ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : ""}

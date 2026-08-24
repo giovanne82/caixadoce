@@ -800,82 +800,16 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                       Forma de Pagamento
                     </Label>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       <Button
                         type="button"
-                        variant={metodoPagamento === "pix" ? "default" : "outline"}
-                        onClick={() => setMetodoPagamento("pix")}
+                        variant="default"
                         className="h-9 text-xs font-bold flex items-center justify-center gap-1.5"
                       >
-                        <QrCode className="w-3.5 h-3.5 text-emerald-500" />
-                        Pix Direto (Sem taxa)
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant={metodoPagamento === "cartao" ? "default" : "outline"}
-                        onClick={() => setMetodoPagamento("cartao")}
-                        className="h-9 text-xs font-bold flex items-center justify-center gap-1.5"
-                      >
-                        <CreditCard className="w-3.5 h-3.5 text-primary" />
-                        Cartão (Stripe)
+                        <QrCode className="w-3.5 h-3.5 text-white" />
+                        Pix Direto
                       </Button>
                     </div>
-
-                    {/* Exibição e Seleção de Parcelas quando escolhe Cartão */}
-                    {metodoPagamento === "cartao" && (
-                      <div className="space-y-3 pt-1">
-                        <div className="space-y-1">
-                          <Label htmlFor="sel-parcelas" className="text-xs font-semibold">
-                            Número de Parcelas no Cartão
-                          </Label>
-                          <Select
-                            value={String(parcelasSelecionadas)}
-                            onValueChange={(val) => setParcelasSelecionadas(Number(val))}
-                          >
-                            <SelectTrigger id="sel-parcelas" className="h-9 text-xs font-semibold bg-background">
-                              <SelectValue placeholder="Selecione as parcelas" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                              {installmentOptions.map((opt) => (
-                                <SelectItem key={opt.installments} value={String(opt.installments)} className="text-xs font-medium">
-                                  {opt.formattedOptionText}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* RESUMO DE PAGAMENTO REATIVO */}
-                        <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs animate-fade-in">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Subtotal:</span>
-                            <span className="font-mono font-semibold">{feeResult.formattedSubtotal}</span>
-                          </div>
-                          {feeResult.feeAmount > 0 ? (
-                            <div className="flex justify-between text-amber-700 dark:text-amber-300 font-semibold">
-                              <span>Taxa de Conveniência ({feeResult.installments}x):</span>
-                              <span className="font-mono">{feeResult.formattedFeeAmount}</span>
-                            </div>
-                          ) : (
-                            <div className="flex justify-between text-emerald-600 font-semibold">
-                              <span>Taxa de Conveniência:</span>
-                              <span>Isento (absorvido pela loja)</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between pt-2 border-t border-primary/20 text-sm font-extrabold text-foreground">
-                            <span>Total a Pagar:</span>
-                            <span className="font-mono text-primary">{feeResult.formattedTotalAmount}</span>
-                          </div>
-                          <p className="text-[11px] font-extrabold text-primary text-right">
-                            ou {feeResult.installments}x de {feeResult.formattedInstallmentValue}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground italic">
-                            💳 Taxa de processamento da operadora de cartão.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-1">
