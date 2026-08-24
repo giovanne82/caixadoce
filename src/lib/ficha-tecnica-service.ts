@@ -114,8 +114,9 @@ export const INSUMOS_PADRAO_CATALOGO: InsumoPadrao[] = [
 ];
 
 /**
- * Calcula o preço médio ponderado individual de um insumo especificamente para aquele estabelecimento/usuário.
- * Se não houver compras registradas daquela confeiteira, retorna o preço base padrão.
+ * Busca o ÚLTIMO PREÇO COMPRADO de determinado insumo especificamente para aquele estabelecimento/usuário.
+ * Se o item digitado/selecionado foi capturado em notas ou compras anteriores, o sistema sugere estritamente
+ * o valor da última compra realizada. Se não houver histórico, retorna o preço base padrão.
  */
 export async function calcularPrecoMedioInsumo(
   estabelecimentoCodigo: string,
@@ -130,12 +131,13 @@ export async function calcularPrecoMedioInsumo(
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !["com", "para", "sem", "das", "dos", "que"].includes(w));
 
-  // 1. Busca no Supabase por compras do usuário (historico_compras_insumos)
+  // 1. Busca no Supabase por compras do usuário ordenadas pela mais recente (created_at DESC)
   try {
     const { data, error } = await supabase
       .from("historico_compras_insumos" as any)
       .select("*")
-      .eq("estabelecimento_codigo", code);
+      .eq("estabelecimento_codigo", code)
+      .order("created_at", { ascending: false });
 
     if (!error && data && data.length > 0) {
       const comprasFiltradas = data.filter((item: any) => {
@@ -149,20 +151,13 @@ export async function calcularPrecoMedioInsumo(
       });
 
       if (comprasFiltradas.length > 0) {
-        let somaValorTotal = 0;
-        let somaQtdTotal = 0;
+        // Pega ESTRITAMENTE o valor da última compra realizada
+        const ultimaCompra = comprasFiltradas[0];
+        const valorPago = Number(ultimaCompra.valor_pago_total) || Number(ultimaCompra.valor_unitario_calculado) || 0;
 
-        comprasFiltradas.forEach((c: any) => {
-          const valor = Number(c.valor_pago_total) || 0;
-          const qtd = Number(c.quantidade_total_unidades) || Number(c.quantidade_comprada) || 1;
-          somaValorTotal += valor;
-          somaQtdTotal += qtd;
-        });
-
-        if (somaQtdTotal > 0) {
-          const precoUnitarioCalculado = parseFloat((somaValorTotal / somaQtdTotal).toFixed(2));
+        if (valorPago > 0) {
           return {
-            precoMedioUnitario: precoUnitarioCalculado,
+            precoMedioUnitario: parseFloat(valorPago.toFixed(2)),
             totalComprasRegistradas: comprasFiltradas.length,
             deNotaFiscal: true,
           };
@@ -173,12 +168,12 @@ export async function calcularPrecoMedioInsumo(
     console.warn("Aviso ao buscar histórico no Supabase:", e);
   }
 
-  // 2. Fallback no Cache Local (Historico de Insumos & Notinhas Escaneadas)
+  // 2. Fallback no Cache Local (Notinhas & Histórico ordenados pelo registro mais recente)
   try {
     const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
     const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
     
-    let itensLocal: { nome: string; valorTotal: number; qtd: number }[] = [];
+    let itensLocal: { nome: string; valorTotal: number; timestamp: number }[] = [];
 
     if (rawHistorico) {
       const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
@@ -186,7 +181,7 @@ export async function calcularPrecoMedioInsumo(
         itensLocal.push({
           nome: h.nomeInsumo,
           valorTotal: h.valorPagoTotal,
-          qtd: h.quantidadeTotalUnidades || h.quantidadeComprada || 1,
+          timestamp: new Date(h.createdAt || h.dataCompra || 0).getTime(),
         });
       });
     }
@@ -194,12 +189,13 @@ export async function calcularPrecoMedioInsumo(
     if (rawDespesas) {
       const parsedDespesas: any[] = JSON.parse(rawDespesas);
       parsedDespesas.forEach((d) => {
+        const t = new Date(d.dataCompra || d.createdAt || 0).getTime();
         if (Array.isArray(d.itens)) {
           d.itens.forEach((it: any) => {
             itensLocal.push({
               nome: it.nome || "Insumo",
               valorTotal: Number(it.valorTotal) || 0,
-              qtd: Number(it.quantidade) || 1,
+              timestamp: t,
             });
           });
         }
@@ -207,6 +203,9 @@ export async function calcularPrecoMedioInsumo(
     }
 
     if (itensLocal.length > 0) {
+      // Ordena do registro mais recente para o mais antigo
+      itensLocal.sort((a, b) => b.timestamp - a.timestamp);
+
       const matches = itensLocal.filter((it) => {
         const itemNome = (it.nome || "").toLowerCase();
         if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
@@ -218,17 +217,10 @@ export async function calcularPrecoMedioInsumo(
       });
 
       if (matches.length > 0) {
-        let somaValor = 0;
-        let somaQtd = 0;
-
-        matches.forEach((m) => {
-          somaValor += m.valorTotal;
-          somaQtd += m.qtd;
-        });
-
-        if (somaQtd > 0) {
+        const ultimoItem = matches[0];
+        if (ultimoItem.valorTotal > 0) {
           return {
-            precoMedioUnitario: parseFloat((somaValor / somaQtd).toFixed(2)),
+            precoMedioUnitario: parseFloat(ultimoItem.valorTotal.toFixed(2)),
             totalComprasRegistradas: matches.length,
             deNotaFiscal: true,
           };
@@ -279,6 +271,8 @@ export async function calcularPrecoMedioInsumo(
     deNotaFiscal: false,
   };
 }
+
+export const calcularUltimoPrecoInsumo = calcularPrecoMedioInsumo;
 
 /**
  * Salva novo registro de compra de insumo no histórico individual do usuário

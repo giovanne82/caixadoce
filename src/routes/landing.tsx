@@ -8,6 +8,7 @@ import {
   Sparkles,
   Camera,
   CreditCard,
+  Calculator,
   CheckCircle2,
   ArrowRight,
   ShieldCheck,
@@ -263,39 +264,43 @@ export function LandingPageContent() {
               </CardContent>
             </Card>
 
-            {/* CARD 3: Pagamentos & Agenda Automática */}
+            {/* CARD 3: Ficha Técnica & Precificação Exata Sem Prejuízo */}
             <Card className="bg-white border border-slate-200/90 rounded-3xl shadow-lg shadow-slate-200/50 overflow-hidden flex flex-col relative group hover:border-amber-300 transition-all">
               <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-amber-600" />
-                  <span className="text-sm font-bold text-amber-950">💳 3. Pagamentos &amp; Agenda</span>
+                  <Calculator className="w-5 h-5 text-amber-600" />
+                  <span className="text-sm font-bold text-amber-950">📊 3. Ficha Técnica &amp; Precificação</span>
                 </div>
-                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Stripe &amp; Pix</Badge>
+                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Sem Prejuízo</Badge>
               </div>
 
               <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
                 <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  Receba por Pix ou Cartão de Crédito direto na sua conta. Seu cliente escolhe a data/hora permitida e o pedido já entra na sua agenda de produção.
+                  Descubra o custo real exato do seu produto final e precifique corretamente para NUNCA ter prejuízo. À medida que você adiciona notinhas, o sistema atualiza o custo dos insumos automaticamente com base no <strong>último preço comprado</strong>!
                 </p>
 
-                {/* MOCKUP VISUAL PAGAMENTO E CALENDÁRIO */}
+                {/* MOCKUP VISUAL FICHA TÉCNICA & PREÇO DE VENDA */}
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                   <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
                     <div>
-                      <div className="text-[10px] text-slate-500 font-bold uppercase">Status Pagamento</div>
-                      <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Sinal 50% Confirmado
+                      <div className="text-[10px] text-slate-500 font-bold uppercase">Custo Real da Receita</div>
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                        🎂 Bolo Vulcano Ninho (2kg)
                       </div>
                     </div>
-                    <span className="text-sm font-mono font-bold text-slate-900">R$ 70,00</span>
+                    <span className="text-sm font-mono font-bold text-rose-600">R$ 28,40</span>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between shadow-2xs">
                     <div>
-                      <div className="text-[10px] text-slate-500 font-bold uppercase">Data de Entrega</div>
-                      <div className="text-xs font-bold text-amber-800">Sábado às 15:00</div>
+                      <div className="text-[10px] text-emerald-800 font-bold uppercase">Preço Venda Sugerido</div>
+                      <div className="text-xs font-bold text-emerald-700">Lucro Garantido (62%)</div>
                     </div>
-                    <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold">Agenda OK</span>
+                    <span className="text-base font-mono font-black text-emerald-700">R$ 75,00</span>
+                  </div>
+
+                  <div className="text-[10px] text-center font-bold text-purple-700 bg-purple-50 p-1.5 rounded-lg border border-purple-200">
+                    ⚡ Custos atualizados automaticamente pela última compra!
                   </div>
                 </div>
               </CardContent>
@@ -317,7 +322,6 @@ export function LandingPageContent() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* PLANO BÁSICO (GRATUITO) */}
             {/* PLANO BÁSICO (GRATUITO - APENAS LISTA DE COMPRAS) */}
             <Card className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-md">
               <div className="space-y-4">
@@ -342,15 +346,15 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Ficha Técnica &amp; Precificação Sem Prejuízo (Bloqueado)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="line-through">Calendário de Encomendas &amp; Clientes (Bloqueado)</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="line-through">Painel Financeiro &amp; Fluxo de Caixa (Bloqueado)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Cardápio Digital Personalizado (Bloqueado)</span>
                   </div>
                 </div>
               </div>
@@ -376,7 +380,7 @@ export function LandingPageContent() {
                     <span>Plano Pro Mensal</span>
                     <Badge className="bg-purple-100 text-purple-800 font-bold text-[10px]">Mais Vendido</Badge>
                   </h3>
-                  <p className="text-xs text-purple-700 font-medium">Automação total com Inteligência Artificial e Pagamentos Online.</p>
+                  <p className="text-xs text-purple-700 font-medium">Automação total com Inteligência Artificial e Precificação Sem Prejuízo.</p>
                 </div>
 
                 <div className="space-y-1">
@@ -394,6 +398,18 @@ export function LandingPageContent() {
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Escanear a Notinha com IA (Ilimitado)</span>
                   </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Ficha Técnica &amp; Precificação (Custo Real sem Prejuízo)</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Atualização automática com base no <strong>último preço comprado</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Milhares de pré-cadastros de insumos para Lista de Compras</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
@@ -408,11 +424,7 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Emissão de link de pagamento</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Cobrança via cartão com o Stripe</span>
+                    <span>Cobrança via Pix ou Cartão de Crédito (Mercado Pago)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />

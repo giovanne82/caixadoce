@@ -322,6 +322,18 @@ export function MeuPlanoTab() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span><strong>Ficha Técnica &amp; Precificação de Produtos (Margem Real sem Prejuízo)</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Atualização automática de custos com base no <strong>último preço comprado</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Milhares de pré-cadastros de insumos para agilizar sua Lista de Compras</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                 <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
               </li>
               <li className="flex items-start gap-2">
@@ -334,11 +346,7 @@ export function MeuPlanoTab() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Emissão de link de pagamento</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cobrança via Pix ou Cartão com Mercado Pago</span>
+                <span>Cobrança via Pix ou Cartão de Crédito (Mercado Pago)</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
