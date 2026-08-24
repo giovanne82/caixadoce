@@ -16,7 +16,7 @@ interface NotificationBellProps {
  * Sininho de Alerta do Sistema - Focado exclusivamente no Status do Plano de Assinatura
  */
 export function NotificationBell({
-  establishmentCode = "CD-1001",
+  establishmentCode = "",
   onNavigateTab,
 }: NotificationBellProps) {
   const [open, setOpen] = useState(false);

@@ -46,6 +46,7 @@ import {
   type ListaCompras,
 } from "@/lib/caixadoce-data";
 import { useScanner } from "@/context/scanner-context";
+import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
@@ -80,6 +81,9 @@ export function ScannerView({
     setModalRevisaoOpen,
     processarArquivoOCR,
   } = useScanner();
+
+  const { profile } = useAuth();
+  const activeCode = profile?.establishmentCode || "";
 
   // Modal de Visualização de Detalhes da Notinha
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
@@ -237,8 +241,8 @@ export function ScannerView({
 
   // Salvar Despesa Confirmada
   const handleSalvarDespesaConfirmada = async () => {
-    if (!fornecedorNome || itensExtraidos.length === 0) {
-      toast.error("Informe o estabelecimento e certifique-se de que há itens na notinha.");
+    if (itensExtraidos.length === 0) {
+      toast.error("Por favor, adicione pelo menos 1 item na notinha.");
       return;
     }
 
@@ -251,7 +255,7 @@ export function ScannerView({
       }));
 
       await onSalvarDespesa({
-        estabelecimentoCodigo: "CD-1001",
+        estabelecimentoCodigo: activeCode,
         fornecedorNome,
         fornecedorEndereco,
         numeroNota,
@@ -270,7 +274,7 @@ export function ScannerView({
       for (const item of itensComFallback) {
         try {
           await registrarCompraInsumo({
-            estabelecimentoCodigo: "CD-1001",
+            estabelecimentoCodigo: activeCode,
             nomeInsumo: item.nome,
             categoria: item.categoria || "Outros Insumos",
             fornecedorNome,

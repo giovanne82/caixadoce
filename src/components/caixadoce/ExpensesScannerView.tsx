@@ -63,6 +63,7 @@ import {
   type ItemNotaFiscal,
   type CategoriaDespesaItem,
 } from "@/lib/caixadoce-data";
+import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 
 interface ExpensesScannerViewProps {
@@ -262,6 +263,9 @@ export function ExpensesScannerView({
   }, [itensExtraidos]);
 
   // Salvar Despesa Confirmada
+  const { profile } = useAuth();
+  const activeCode = profile?.establishmentCode || "";
+
   const handleSalvarDespesaConfirmada = async () => {
     if (!fornecedorNome || itensExtraidos.length === 0) {
       toast.error("Informe o estabelecimento e certifique-se de que há itens na nota.");
@@ -271,7 +275,7 @@ export function ExpensesScannerView({
     setSalvando(true);
     try {
       await onSalvarDespesa({
-        estabelecimentoCodigo: "CD-1001",
+        estabelecimentoCodigo: activeCode,
         fornecedorNome,
         dataCompra,
         valorTotal: totaisNota.total,

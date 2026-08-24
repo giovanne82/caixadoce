@@ -51,7 +51,7 @@ function formatarTelefoneBR(val: string): string {
 
 export function ColaboradoresTab() {
   const { profile } = useAuth();
-  const activeCode = profile?.establishmentCode || "CD-1001";
+  const activeCode = profile?.establishmentCode || "";
 
   const [colaboradores, setColaboradores] = useState<Colaborador[]>(() => {
     try {

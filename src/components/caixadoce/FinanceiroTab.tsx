@@ -98,14 +98,14 @@ export function FinanceiroTab({
   transacoes,
   despesas = [],
   encomendas = [],
-  establishmentCode = "CD-1001",
+  establishmentCode = "",
   onAdicionarTransacao,
   onRemoverTransacao,
   onAtualizarStatus,
   onEditarDespesa,
   onReatribuirEstabelecimento,
 }: FinanceiroTabProps) {
-  const code = establishmentCode || "CD-1001";
+  const code = establishmentCode || "";
 
   // Busca de Encomendas no Supabase para Agregação no Financeiro
   const [encomendasBanco, setEncomendasBanco] = useState<any[]>([]);

@@ -34,7 +34,7 @@ import {
 
 export function MeuPlanoTab() {
   const { user, profile, updateEstablishmentPlan } = useAuth();
-  const activeCode = profile?.establishmentCode || "CD-1001";
+  const activeCode = profile?.establishmentCode || "";
   const userCreatedAt = (user as any)?.created_at || (profile as any)?.createdAt;
 
   const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));

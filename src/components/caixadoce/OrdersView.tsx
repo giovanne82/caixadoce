@@ -159,6 +159,7 @@ export function OrdersView({
   onCriarClienteRapido,
 }: OrdersViewProps) {
   const { profile } = useAuth();
+  const activeCode = profile?.establishmentCode || "";
   // Modos de Visualização: 'lista' | 'semana' | 'mes' | 'compras'
   const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("lista");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -191,7 +192,7 @@ export function OrdersView({
         if (!error && data && data.length > 0) {
           const map: Record<string, string[]> = {};
           data.forEach((row: any) => {
-            const listId = row.shopping_list_id || "global";
+            const listId = String(row.shopping_list_id);
             const rId = String(row.receipt_id);
             if (!map[listId]) map[listId] = [];
             if (!map[listId].includes(rId)) map[listId].push(rId);
@@ -200,7 +201,7 @@ export function OrdersView({
         } else {
           const map: Record<string, string[]> = {};
           encomendas.forEach((e) => {
-            const localIds = obterNotinhasVinculadasPorLista(e.id, "CD-1001");
+            const localIds = activeCode ? obterNotinhasVinculadasPorLista(e.id, activeCode) : [];
             if (localIds.length > 0) map[e.id] = localIds;
           });
           setLinkedMap(map);
@@ -208,7 +209,7 @@ export function OrdersView({
       } catch {}
     }
     carregarNotinhasPorLista();
-  }, [encomendas]);
+  }, [encomendas, activeCode]);
 
   // Handlers para Vincular / Desvincular Notinha em Lista Específica
   const handleVincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
@@ -217,7 +218,7 @@ export function OrdersView({
 
     const novosIds = [...atuais, receiptId];
     setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, "CD-1001");
+    if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
     setBuscaNotinhaMap((prev) => ({ ...prev, [shoppingListId]: "" }));
     setDropdownAbertoMap((prev) => ({ ...prev, [shoppingListId]: false }));
 
@@ -238,7 +239,7 @@ export function OrdersView({
     const atuais = linkedMap[shoppingListId] || [];
     const novosIds = atuais.filter((id) => id !== receiptId);
     setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, "CD-1001");
+    if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
 
     try {
       await supabase
@@ -273,9 +274,9 @@ export function OrdersView({
   };
 
   // Catálogo de Insumos & Produtos & Clientes
-  const catalogoInsumos = useMemo(() => obterCatalogoInsumos("CD-1001"), []);
-  const listaProdutos = useMemo(() => (produtos.length > 0 ? produtos : obterProdutosCardapio("CD-1001")), [produtos]);
-  const listaClientes = useMemo(() => (clientes.length > 0 ? clientes : obterClientes("CD-1001")), [clientes]);
+  const catalogoInsumos = useMemo(() => (activeCode ? obterCatalogoInsumos(activeCode) : []), [activeCode]);
+  const listaProdutos = useMemo(() => (produtos.length > 0 ? produtos : (activeCode ? obterProdutosCardapio(activeCode) : [])), [produtos, activeCode]);
+  const listaClientes = useMemo(() => (clientes.length > 0 ? clientes : (activeCode ? obterClientes(activeCode) : [])), [clientes, activeCode]);
 
   // Autocomplete de Clientes
   const [dropdownClientesAberto, setDropdownClientesAberto] = useState(false);
@@ -346,7 +347,7 @@ export function OrdersView({
         if (!prodId) continue;
 
         try {
-          const itensFicha = await obterFichaTecnicaProduto("CD-1001", prodId);
+          const itensFicha = activeCode ? await obterFichaTecnicaProduto(activeCode, prodId) : [];
           if (!itensFicha || itensFicha.length === 0) continue;
 
           const qtdEncomendada = item.quantidade || 1;
@@ -652,7 +653,7 @@ export function OrdersView({
     };
 
     setInsumosTags((prev) => [...prev, novaTag]);
-    salvarNovoInsumoCatalogo("CD-1001", nomeLimpo);
+    if (activeCode) salvarNovoInsumoCatalogo(activeCode, nomeLimpo);
     setBuscaTagInsumo("");
     setDropdownInsumosAberto(false);
   };

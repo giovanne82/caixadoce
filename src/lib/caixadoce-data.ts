@@ -119,7 +119,8 @@ export const CLIENTES_PADRAO: Cliente[] = [
 ];
 
 export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     const raw = localStorage.getItem(`caixadoce_customers_${code}`);
     if (raw) return JSON.parse(raw);
@@ -128,7 +129,8 @@ export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
 }
 
 export function salvarClientesStorage(estabelecimentoCodigo: string, lista: Cliente[]) {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return;
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     localStorage.setItem(`caixadoce_customers_${code}`, JSON.stringify(lista));
   } catch (e) {
@@ -159,22 +161,10 @@ export interface ProdutoCardapio {
 
 export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
   {
-    id: "prod-1",
+    id: "prod_1",
     estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo Vulcão Ninho com Nutella",
-    descricao: "Massa fofinha de chocolate ou baunilha, com piscina cremosa de brigadeiro de Leite Ninho e cobertura generosa de Nutella pura.",
-    preco: 95.0,
-    categoria: "Bolos Decorados",
-    fotoUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo Red Velvet Especial",
-    descricao: "Massa aveludada vermelha, recheio especial de cream cheese frosting suave e morangos frescos no topo.",
+    nome: "Bolo de Aniversário 2kg",
+    descricao: "Massa pão de ló com recheio de brigadeiro gourmet e cobertura de chantininho.",
     preco: 140.0,
     categoria: "Bolos Decorados",
     fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
@@ -1187,7 +1177,8 @@ export function obterNotinhasVinculadasPorLista(
   shoppingListId: string,
   estabelecimentoCodigo?: string
 ): string[] {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
     if (raw) return JSON.parse(raw);
@@ -1200,7 +1191,8 @@ export function salvarNotinhasVinculadasPorLista(
   receiptIds: string[],
   estabelecimentoCodigo?: string
 ) {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return;
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     localStorage.setItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`, JSON.stringify(receiptIds));
   } catch (e) {
@@ -1209,7 +1201,8 @@ export function salvarNotinhasVinculadasPorLista(
 }
 
 export function obterNotinhasVinculadasLista(estabelecimentoCodigo?: string): string[] {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}`);
     if (raw) return JSON.parse(raw);
@@ -1218,7 +1211,8 @@ export function obterNotinhasVinculadasLista(estabelecimentoCodigo?: string): st
 }
 
 export function salvarNotinhasVinculadasLista(estabelecimentoCodigo: string, receiptIds: string[]) {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  if (!estabelecimentoCodigo) return;
+  const code = estabelecimentoCodigo.toUpperCase();
   try {
     localStorage.setItem(`caixadoce_linked_receipts_${code}`, JSON.stringify(receiptIds));
   } catch (e) {

@@ -98,7 +98,7 @@ export function DespesasView({
   encomendas = [],
   clientes = [],
   produtos = [],
-  estabelecimentoCodigo = "CD-1001",
+  estabelecimentoCodigo = "",
   onExcluirDespesa,
   onEditarDespesa,
   onReatribuirEstabelecimento,

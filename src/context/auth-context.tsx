@@ -165,7 +165,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       ? `CD-${rawCode}`
       : rawCode.toUpperCase();
 
-    const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode) || ESTABELECIMENTO_PADRAO;
+    const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
 
     let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
     if (isColab && !abasPermitidas) {
@@ -191,11 +191,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     return {
       role: isColab ? "operador" : "admin",
-      establishmentCode: masterEst.codigo || formattedCode,
-      establishmentName: masterEst.nome || `Confeitaria ${formattedCode}`,
-      establishmentAddress: masterEst.endereco || ESTABELECIMENTO_PADRAO.endereco,
-      chavePix: masterEst.chavePix || ESTABELECIMENTO_PADRAO.chavePix,
-      tipoChavePix: masterEst.tipoChavePix || ESTABELECIMENTO_PADRAO.tipoChavePix,
+      establishmentCode: formattedCode,
+      establishmentName: masterEst?.nome || `Confeitaria ${formattedCode}`,
+      establishmentAddress: masterEst?.endereco || "",
+      chavePix: masterEst?.chavePix || "",
+      tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
     };
   };

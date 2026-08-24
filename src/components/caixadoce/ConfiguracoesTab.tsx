@@ -72,7 +72,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     deleteUserAccount,
   } = useAuth();
 
-  const activeCode = profile?.establishmentCode || "CD-1001";
+  const activeCode = profile?.establishmentCode || "";
 
   // User Profile Form
   const [nomeUsuario, setNomeUsuario] = useState(user?.name || "");

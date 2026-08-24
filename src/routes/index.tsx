@@ -163,11 +163,18 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
-  // 1. Carrega dados do Supabase confiantemente no RLS / tabela direta sem filtros obsoletos
+  // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
+      // ISOLAMENTO DE DADOS: Nunca buscar registros sem um código de estabelecimento ou usuário autenticado
+      if (!activeCode || !user?.id) return [];
+
       try {
-        let query = supabase.from(tableName as any).select("*");
+        let query = supabase
+          .from(tableName as any)
+          .select("*")
+          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode},user_id.eq.${user.id}`);
+
         if (orderColumn) {
           query = query.order(orderColumn, { ascending });
         }
@@ -176,14 +183,20 @@ function Index() {
         if (!res.error && res.data) return res.data;
 
         if (res.error) {
-          console.error(
-            `[Supabase GET Error] Tabela: "${tableName}" | Status: ${res.status} | Mensagem:`,
-            res.error.message
+          console.warn(
+            `[Supabase Filter Warning] Tabela "${tableName}" | Erro no OR filter: ${res.error.message}. Tentando filtro simples por estabelecimento...`
           );
 
-          // Fallback sem ordenação caso a coluna de ordenação não exista
           try {
-            const rawRes = await supabase.from(tableName as any).select("*");
+            let fallbackQuery = supabase
+              .from(tableName as any)
+              .select("*")
+              .eq("estabelecimento_codigo", activeCode);
+
+            if (orderColumn) {
+              fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+            }
+            const rawRes = await fallbackQuery;
             if (!rawRes.error && rawRes.data) return rawRes.data;
           } catch {}
         }
@@ -193,7 +206,7 @@ function Index() {
         return [];
       }
     },
-    []
+    [user?.id]
   );
 
   // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
@@ -513,14 +526,20 @@ function Index() {
           address: dados.endereco,
           notes: dados.observacoes,
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode);
     } catch (e) {
       console.warn("Aviso ao editar cliente:", e);
     }
   };
 
   const excluirCliente = async (id: string) => {
-    const { error } = await supabase.from("customers").delete().eq("id", id);
+    const { error } = await supabase
+      .from("customers")
+      .delete()
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
+
     if (error) {
       toast.error(`Falha ao excluir cliente no banco de dados: ${error.message}`);
       return;
@@ -609,7 +628,8 @@ function Index() {
         tempo_preparo_horas: dados.tempoPreparoHoras,
         prep_time_hours: dados.tempoPreparoHoras,
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
 
     if (error) {
       console.error("[Supabase Error] Falha ao editar produto:", error);
@@ -626,7 +646,11 @@ function Index() {
   };
 
   const excluirProduto = async (id: string) => {
-    const { error } = await supabase.from("produtos").delete().eq("id", id);
+    const { error } = await supabase
+      .from("produtos")
+      .delete()
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
 
     if (error) {
       console.error("[Supabase Error] Falha ao excluir produto:", error);
@@ -750,7 +774,8 @@ function Index() {
         detalhes_vela: dados.detalhesVela,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
 
     if (error) {
       console.error("[Supabase Error] Falha ao atualizar encomenda:", error);
@@ -767,7 +792,12 @@ function Index() {
   };
 
   const excluirEncomenda = async (id: string) => {
-    const { error } = await supabase.from("encomendas").delete().eq("id", id);
+    const { error } = await supabase
+      .from("encomendas")
+      .delete()
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
+
     if (error) {
       console.error("[Supabase Error] Falha ao excluir encomenda:", error);
       toast.error(`Falha ao excluir no banco: ${error.message}`);
@@ -801,7 +831,8 @@ function Index() {
           await supabase
             .from("encomendas")
             .update({ insumos_necessarios: encAlvo.insumosNecessarios })
-            .eq("id", encomendaId);
+            .eq("id", encomendaId)
+            .eq("estabelecimento_codigo", activeCode);
         } catch {}
       }
     }
@@ -829,6 +860,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
+          user_id: user?.id || null,
           data: item.data,
           motivo: item.motivo,
         },
@@ -837,7 +869,12 @@ function Index() {
   };
 
   const desbloquearData = async (id: string) => {
-    const { error } = await supabase.from("datas_bloqueadas").delete().eq("id", id);
+    const { error } = await supabase
+      .from("datas_bloqueadas")
+      .delete()
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
+
     if (error) {
       toast.error(`Falha ao desbloquear data no banco de dados: ${error.message}`);
       return;
@@ -913,8 +950,8 @@ function Index() {
   const excluirDespesa = async (id: string) => {
     const notaTarget = despesas.find((d) => d.id === id);
 
-    // Deleção simultânea em cascata na tabela despesas e na tabela transacoes_financeiras
-    const reqDeleteDespesa = supabase.from("despesas").delete().eq("id", id);
+    // Deleção simultânea em cascata filtrada estritamente pelo estabelecimento
+    const reqDeleteDespesa = supabase.from("despesas").delete().eq("id", id).eq("estabelecimento_codigo", activeCode);
     let reqDeleteTransacao: any = null;
 
     if (notaTarget) {
@@ -922,6 +959,7 @@ function Index() {
       reqDeleteTransacao = supabase
         .from("transacoes_financeiras")
         .delete()
+        .eq("estabelecimento_codigo", activeCode)
         .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${notaTarget.fornecedorNome}`);
     }
 
@@ -962,6 +1000,7 @@ function Index() {
       const { data, error } = await supabase
         .from("transacoes_financeiras")
         .select("*")
+        .eq("estabelecimento_codigo", activeCode)
         .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${despesa.fornecedorNome}`);
 
       const existeRemoto = !error && Array.isArray(data) && data.length > 0;
@@ -1010,7 +1049,12 @@ function Index() {
     if (dados.valorOutros !== undefined) updatePayload.valor_outros = dados.valorOutros;
     if (dados.itens !== undefined) updatePayload.itens = dados.itens;
 
-    const { error } = await supabase.from("despesas").update(updatePayload).eq("id", id);
+    const { error } = await supabase
+      .from("despesas")
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
+
     if (error) {
       toast.error(`Erro ao atualizar notinha no Supabase: ${error.message}`);
       return;
@@ -1031,6 +1075,7 @@ function Index() {
     const { error } = await supabase
       .from("despesas")
       .update({ fornecedor_nome: novoNomeTrim })
+      .eq("estabelecimento_codigo", activeCode)
       .eq("fornecedor_nome", nomeAntigo);
 
     if (error) {
@@ -1068,6 +1113,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
+          user_id: user?.id || null,
           descricao: item.descricao,
           valor: item.valor,
           tipo: item.tipo,
@@ -1085,7 +1131,12 @@ function Index() {
   };
 
   const removerTransacao = async (id: string) => {
-    const { error } = await supabase.from("transacoes_financeiras").delete().eq("id", id);
+    const { error } = await supabase
+      .from("transacoes_financeiras")
+      .delete()
+      .eq("id", id)
+      .eq("estabelecimento_codigo", activeCode);
+
     if (error) {
       toast.error(`Falha ao excluir lançamento no banco de dados: ${error.message}`);
       return;
@@ -1096,15 +1147,19 @@ function Index() {
     try {
       localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
-    toast.success("Lançamento financeiro excluído com sucesso.");
+    toast.info("Lançamento removido do financeiro.");
   };
 
-  const atualizarStatusTransacao = async (id: string, status: StatusTransacao) => {
+  const atualizarStatusTransacao = async (id: string, status: "concluida" | "pendente" | "cancelada") => {
     const atualizadas = transacoes.map((t) => (t.id === id ? { ...t, status } : t));
     setTransacoes(atualizadas);
     try {
       localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
-      await supabase.from("transacoes_financeiras").update({ status }).eq("id", id);
+      await supabase
+        .from("transacoes_financeiras")
+        .update({ status })
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode);
     } catch {}
     toast.info(`Status alterado para ${status === "concluida" ? "Concluído" : "Pendente"}.`);
   };

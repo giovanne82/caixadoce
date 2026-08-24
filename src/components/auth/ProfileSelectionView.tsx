@@ -7,7 +7,7 @@ import { ArrowRight, Store, LogOut, ShieldCheck } from "lucide-react";
 export function ProfileSelectionView() {
   const { user, profile, selectProfile, logout } = useAuth();
 
-  const activeCode = profile?.establishmentCode || "CD-1001";
+  const activeCode = profile?.establishmentCode || "";
   const activeName = profile?.establishmentName || `Confeitaria ${user?.name || ""}`;
 
   const handleEntrar = () => {
