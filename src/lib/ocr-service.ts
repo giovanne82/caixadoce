@@ -33,9 +33,8 @@ export interface GeminiReceiptResponse {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
-const DEFAULT_KEY_PARTS = ["AQ.Ab8RN6Ij_", "Mm0GJhNk6JnMyn_AFiJN66hfYH6BF4ceVVAiHCiTQ"];
-const PROD_GEMINI_API_KEY = DEFAULT_KEY_PARTS.join("");
+// Modelos oficiais suportados pela Google Gemini API (v1beta generateContent)
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 /**
  * Compacta e redimensiona imagens pesadas tiradas pela câmera do celular
@@ -115,8 +114,11 @@ export async function extractReceiptDataWithGemini(
 ): Promise<GeminiReceiptResponse> {
   const apiKey =
     (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    (import.meta as any).env?.GEMINI_API_KEY ||
-    PROD_GEMINI_API_KEY;
+    (import.meta as any).env?.GEMINI_API_KEY;
+
+  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+    throw new Error("Chave de API não configurada. Por favor, adicione sua VITE_GEMINI_API_KEY do Google AI Studio no arquivo .env.");
+  }
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
 
@@ -170,7 +172,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
     }
   };
 
-  const MAX_TENTATIVAS = 5;
+  const MAX_TENTATIVAS = 4;
   const TIMEOUT_MS = 30000;
   const MENSAGEM_ERRO_ALTO_VOLUME =
     "Devido ao alto volume de leituras no momento, o servidor de escaneamento está temporariamente instável. Por favor, aguarde alguns segundos e envie a imagem novamente.";
@@ -182,9 +184,9 @@ Responda apenas com o JSON puro sem formatação markdown.`
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     if (tentativa > 1) {
-      onProgress?.(`Processando notinha... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
+      onProgress?.(`Processando notinha com IA (${modelName})... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
     } else {
-      onProgress?.("Processando notinha...");
+      onProgress?.(`Processando notinha com IA (${modelName})...`);
     }
 
     const controller = new AbortController();
@@ -205,7 +207,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
         console.error(`[Gemini API Log] Modelo: ${modelName} | HTTP Status: ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}) | Detalhe:`, errText);
 
         if (response.status === 401 || response.status === 403) {
-          throw new Error("Chave de API da Inteligência Artificial inválida ou sem autorização.");
+          throw new Error("Chave de API da Inteligência Artificial inválida ou sem permissão.");
         }
 
         if (response.status === 413 || response.status === 400) {
@@ -233,7 +235,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
       console.error(`[Gemini API Error] Modelo: ${modelName} | Erro na tentativa ${tentativa}/${MAX_TENTATIVAS}:`, err.message || err);
       ultimoErro = err;
 
-      // Erros de autenticação ou aborto manual não devem insistir nas retentativas
+      // Erros de autenticação ou chave não configurada não devem fazer retentativas em loop
       if (err.message?.includes("Chave de API") || err.name === "AbortError") {
         break;
       }
