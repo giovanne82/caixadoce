@@ -340,11 +340,15 @@ export async function salvarFichaTecnicaProduto(
 
   // 1. Salvar no Supabase (Remove anteriores e insere novos)
   try {
-    await supabase
+    const { error: delErr } = await supabase
       .from("ficha_tecnica_itens" as any)
       .delete()
       .eq("estabelecimento_codigo", code)
       .eq("produto_id", produtoId);
+
+    if (delErr) {
+      console.warn("Aviso ao limpar itens antigos da ficha técnica no Supabase:", delErr.message);
+    }
 
     for (const item of itensFormatados) {
       await supabase.from("ficha_tecnica_itens" as any).insert([

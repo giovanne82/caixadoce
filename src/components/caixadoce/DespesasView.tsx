@@ -183,23 +183,26 @@ export function DespesasView({
 
   const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
     try {
-      const { error } = await supabase
+      let res = await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("shopping_list_id", shoppingListId)
-        .eq("receipt_id", receiptId);
+        .eq("receipt_id", receiptId)
+        .select();
 
-      if (error) {
-        toast.error(`Falha ao desvincular notinha no banco: ${error.message}`);
+      if (res.error) {
+        toast.error(`Falha ao desvincular notinha no banco: ${res.error.message}`);
         return;
       }
-    } catch {}
 
-    const atuais = linkedMap[shoppingListId] || [];
-    const novosIds = atuais.filter((id) => id !== receiptId);
-    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
-    toast.info("Notinha desvinculada desta lista.");
+      const atuais = linkedMap[shoppingListId] || [];
+      const novosIds = atuais.filter((id) => id !== receiptId);
+      setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+      salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
+      toast.info("Notinha desvinculada desta lista.");
+    } catch (e: any) {
+      toast.error(`Erro ao desvincular notinha: ${e?.message || e}`);
+    }
   };
 
   // Sugestões de Notinhas para uma Lista Específica
@@ -384,29 +387,44 @@ export function DespesasView({
   // Excluir Lista de Compras
   const handleExcluirLista = async (listaId: string) => {
     try {
-      const { error } = await supabase
+      let res = await supabase
         .from("listas_compras")
         .delete()
-        .eq("id", listaId);
+        .eq("id", listaId)
+        .select();
 
-      if (error) {
-        toast.error(`Falha ao excluir lista de compras no banco: ${error.message}`);
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("shopping_lists" as any)
+          .delete()
+          .eq("id", listaId)
+          .select();
+      }
+
+      if (res.error) {
+        toast.error(`Falha ao excluir lista de compras no banco: ${res.error.message}`);
         return;
       }
-    } catch (err: any) {
-      console.warn("Aviso ao deletar lista no Supabase:", err);
-    }
 
-    const atualizadas = listas.filter((l) => l.id !== listaId);
-    setListas(atualizadas);
-    if (expandedListaId === listaId) setExpandedListaId(null);
-    try {
-      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
-    } catch {}
-    if (onAtualizarListasCompras) {
-      onAtualizarListasCompras(atualizadas);
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para lista_compras id:", listaId);
+        toast.error("Não foi possível excluir a lista de compras no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizadas = listas.filter((l) => l.id !== listaId);
+      setListas(atualizadas);
+      if (expandedListaId === listaId) setExpandedListaId(null);
+      try {
+        localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
+      } catch {}
+      if (onAtualizarListasCompras) {
+        onAtualizarListasCompras(atualizadas);
+      }
+      toast.success("Lista de compras excluída com sucesso.");
+    } catch (err: any) {
+      toast.error(`Erro ao excluir lista de compras: ${err?.message || err}`);
     }
-    toast.success("Lista de compras excluída com sucesso.");
   };
 
   // Abrir Modal de Edição de Lista

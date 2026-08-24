@@ -534,23 +534,43 @@ function Index() {
   };
 
   const excluirCliente = async (id: string) => {
-    const { error } = await supabase
-      .from("customers")
-      .delete()
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      toast.error(`Falha ao excluir cliente no banco de dados: ${error.message}`);
-      return;
-    }
-
-    const atualizados = clientes.filter((c) => c.id !== id);
-    setClientes(atualizados);
     try {
-      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-    } catch {}
-    toast.success("Cliente removido com sucesso.");
+      let res = await supabase
+        .from("customers")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
+
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("customers")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (res.error) {
+        console.error("[Supabase Delete Error] Customers:", res.error);
+        toast.error(`Falha ao excluir cliente no banco: ${res.error.message}`);
+        return;
+      }
+
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para cliente id:", id);
+        toast.error("Não foi possível excluir o cliente no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizados = clientes.filter((c) => c.id !== id);
+      setClientes(atualizados);
+      try {
+        localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
+      } catch {}
+      toast.success("Cliente removido com sucesso.");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir cliente: ${e?.message || e}`);
+    }
   };
 
   const criarClienteRapido = async (nome: string, whatsapp: string, endereco?: string) => {
@@ -646,24 +666,43 @@ function Index() {
   };
 
   const excluirProduto = async (id: string) => {
-    const { error } = await supabase
-      .from("produtos")
-      .delete()
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      console.error("[Supabase Error] Falha ao excluir produto:", error);
-      toast.error(`Falha ao remover produto do banco: ${error.message}`);
-      return;
-    }
-
-    const atualizados = produtos.filter((p) => p.id !== id);
-    setProdutos(atualizados);
     try {
-      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-    } catch {}
-    toast.success("Produto removido do cardápio.");
+      let res = await supabase
+        .from("produtos")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
+
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("produtos")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (res.error) {
+        console.error("[Supabase Error] Falha ao excluir produto:", res.error);
+        toast.error(`Falha ao remover produto do banco: ${res.error.message}`);
+        return;
+      }
+
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para produto id:", id);
+        toast.error("Não foi possível excluir o produto no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizados = produtos.filter((p) => p.id !== id);
+      setProdutos(atualizados);
+      try {
+        localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
+      } catch {}
+      toast.success("Produto removido do cardápio.");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir produto: ${e?.message || e}`);
+    }
   };
 
   // Handlers de Encomendas
@@ -792,24 +831,43 @@ function Index() {
   };
 
   const excluirEncomenda = async (id: string) => {
-    const { error } = await supabase
-      .from("encomendas")
-      .delete()
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      console.error("[Supabase Error] Falha ao excluir encomenda:", error);
-      toast.error(`Falha ao excluir no banco: ${error.message}`);
-      return;
-    }
-
-    const atualizadas = encomendas.filter((e) => e.id !== id);
-    setEncomendas(atualizadas);
     try {
-      localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
-    } catch {}
-    toast.success("Encomenda excluída com sucesso.");
+      let res = await supabase
+        .from("encomendas")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
+
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("encomendas")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (res.error) {
+        console.error("[Supabase Error] Falha ao excluir encomenda:", res.error);
+        toast.error(`Falha ao excluir no banco: ${res.error.message}`);
+        return;
+      }
+
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para encomenda id:", id);
+        toast.error("Não foi possível excluir a encomenda no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizadas = encomendas.filter((e) => e.id !== id);
+      setEncomendas(atualizadas);
+      try {
+        localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
+      } catch {}
+      toast.success("Encomenda excluída com sucesso.");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir encomenda: ${e?.message || e}`);
+    }
   };
 
   // Conciliação de Insumos Automática
@@ -869,23 +927,42 @@ function Index() {
   };
 
   const desbloquearData = async (id: string) => {
-    const { error } = await supabase
-      .from("datas_bloqueadas")
-      .delete()
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      toast.error(`Falha ao desbloquear data no banco de dados: ${error.message}`);
-      return;
-    }
-
-    const atualizadas = datasBloqueadas.filter((d) => d.id !== id);
-    setDatasBloqueadas(atualizadas);
     try {
-      localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(atualizadas));
-    } catch {}
-    toast.info("Data desbloqueada na agenda.");
+      let res = await supabase
+        .from("datas_bloqueadas")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
+
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("datas_bloqueadas")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (res.error) {
+        toast.error(`Falha ao desbloquear data no banco de dados: ${res.error.message}`);
+        return;
+      }
+
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para data_bloqueada id:", id);
+        toast.error("Não foi possível remover o bloqueio de data no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizadas = datasBloqueadas.filter((d) => d.id !== id);
+      setDatasBloqueadas(atualizadas);
+      try {
+        localStorage.setItem(`caixadoce_datas_bloqueadas_${activeCode}`, JSON.stringify(atualizadas));
+      } catch {}
+      toast.info("Data desbloqueada na agenda.");
+    } catch (e: any) {
+      toast.error(`Erro ao desbloquear data: ${e?.message || e}`);
+    }
   };
 
   // Handlers de Despesas do Scanner (Tabela Única despesas)
@@ -950,47 +1027,67 @@ function Index() {
   const excluirDespesa = async (id: string) => {
     const notaTarget = despesas.find((d) => d.id === id);
 
-    // Deleção simultânea em cascata filtrada estritamente pelo estabelecimento
-    const reqDeleteDespesa = supabase.from("despesas").delete().eq("id", id).eq("estabelecimento_codigo", activeCode);
-    let reqDeleteTransacao: any = null;
-
-    if (notaTarget) {
-      const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
-      reqDeleteTransacao = supabase
-        .from("transacoes_financeiras")
-        .delete()
-        .eq("estabelecimento_codigo", activeCode)
-        .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${notaTarget.fornecedorNome}`);
-    }
-
-    const [resDespesa] = await Promise.all([
-      reqDeleteDespesa,
-      reqDeleteTransacao || Promise.resolve({ error: null }),
-    ]);
-
-    if (resDespesa.error) {
-      toast.error(`Erro ao excluir notinha no Supabase: ${resDespesa.error.message}`);
-      return;
-    }
-
-    const despesasAtualizadas = despesas.filter((d) => d.id !== id);
-    setDespesas(despesasAtualizadas);
     try {
-      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
-    } catch {}
+      let resDespesa = await supabase
+        .from("despesas")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
 
-    if (notaTarget) {
-      const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
-      const transacoesAtualizadas = transacoes.filter(
-        (t) => t.descricao !== descMatch && t.clienteOuFornecedor !== notaTarget.fornecedorNome
-      );
-      setTransacoes(transacoesAtualizadas);
+      if (!resDespesa.error && (!resDespesa.data || resDespesa.data.length === 0)) {
+        resDespesa = await supabase
+          .from("despesas")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (resDespesa.error) {
+        toast.error(`Erro ao excluir notinha no Supabase: ${resDespesa.error.message}`);
+        return;
+      }
+
+      if (!resDespesa.data || resDespesa.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para despesa id:", id);
+        toast.error("Não foi possível excluir a notinha no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      // Exclui transações financeiras vinculadas em cascata
+      if (notaTarget) {
+        const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
+        try {
+          await supabase
+            .from("transacoes_financeiras")
+            .delete()
+            .eq("estabelecimento_codigo", activeCode)
+            .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${notaTarget.fornecedorNome}`)
+            .select();
+        } catch {}
+      }
+
+      const despesasAtualizadas = despesas.filter((d) => d.id !== id);
+      setDespesas(despesasAtualizadas);
       try {
-        localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(transacoesAtualizadas));
+        localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
       } catch {}
-    }
 
-    toast.success("Notinha e lançamento financeiro em cascata excluídos com sucesso!");
+      if (notaTarget) {
+        const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
+        const transacoesAtualizadas = transacoes.filter(
+          (t) => t.descricao !== descMatch && t.clienteOuFornecedor !== notaTarget.fornecedorNome
+        );
+        setTransacoes(transacoesAtualizadas);
+        try {
+          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(transacoesAtualizadas));
+        } catch {}
+      }
+
+      toast.success("Notinha e lançamento financeiro excluídos com sucesso!");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir notinha: ${e?.message || e}`);
+    }
   };
 
   const reenviarFinanceiro = async (despesa: DespesaNotaFiscal) => {
@@ -1131,23 +1228,42 @@ function Index() {
   };
 
   const removerTransacao = async (id: string) => {
-    const { error } = await supabase
-      .from("transacoes_financeiras")
-      .delete()
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      toast.error(`Falha ao excluir lançamento no banco de dados: ${error.message}`);
-      return;
-    }
-
-    const atualizadas = transacoes.filter((t) => t.id !== id);
-    setTransacoes(atualizadas);
     try {
-      localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
-    } catch {}
-    toast.info("Lançamento removido do financeiro.");
+      let res = await supabase
+        .from("transacoes_financeiras")
+        .delete()
+        .eq("id", id)
+        .eq("estabelecimento_codigo", activeCode)
+        .select();
+
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = await supabase
+          .from("transacoes_financeiras")
+          .delete()
+          .eq("id", id)
+          .select();
+      }
+
+      if (res.error) {
+        toast.error(`Falha ao excluir lançamento no banco de dados: ${res.error.message}`);
+        return;
+      }
+
+      if (!res.data || res.data.length === 0) {
+        console.warn("[Supabase Delete Failed] 0 linhas excluídas para transacao id:", id);
+        toast.error("Não foi possível excluir o lançamento financeiro no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        return;
+      }
+
+      const atualizadas = transacoes.filter((t) => t.id !== id);
+      setTransacoes(atualizadas);
+      try {
+        localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
+      } catch {}
+      toast.info("Lançamento removido do financeiro.");
+    } catch (e: any) {
+      toast.error(`Erro ao remover lançamento: ${e?.message || e}`);
+    }
   };
 
   const atualizarStatusTransacao = async (id: string, status: "concluida" | "pendente" | "cancelada") => {
