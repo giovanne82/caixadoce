@@ -82,13 +82,31 @@ export function MeuPlanoTab() {
   const handleConfirmarCancelamento = async () => {
     setProcessandoCancelamento(true);
     try {
+      const res = await fetch("/api/mercadopago/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estabelecimentoCodigo: activeCode }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Falha ao processar cancelamento no Mercado Pago.");
+      }
+
       salvarDadosPlanoEstabelecimento(activeCode, {
         planoId: "basico",
         status: "cancelado",
       });
+      if (updateEstablishmentPlan) {
+        await updateEstablishmentPlan("basico" as any, false);
+      }
+
       setModalCancelOpen(false);
       recarregarPlano();
-      toast.info("Assinatura cancelada. Seu plano mudou para o Plano Básico.");
+      toast.info("Assinatura cancelada com sucesso no Mercado Pago. Seu plano mudou para o Plano Básico.");
+    } catch (err: any) {
+      console.error("[Cancel Subscription Error]", err);
+      toast.error(`Erro ao cancelar assinatura: ${err.message}`);
     } finally {
       setProcessandoCancelamento(false);
     }

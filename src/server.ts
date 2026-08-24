@@ -519,6 +519,103 @@ export default {
         }
       }
 
+      // =========================================================================
+      // ROTA 3: POST /api/mercadopago/cancel-subscription (Cancelamento de Recorrência)
+      // =========================================================================
+      if (url.pathname === "/api/mercadopago/cancel-subscription" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { estabelecimentoCodigo } = body;
+
+          if (!estabelecimentoCodigo) {
+            return new Response(
+              JSON.stringify({ error: "Código do estabelecimento é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey =
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          // 1. Resgata informações da assinatura do estabelecimento no Supabase
+          const getRes = await fetch(
+            `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=id,codigo,mercadopago_assinatura_id,mercadopago_pagamento_id`,
+            {
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+
+          let assinaturaId: string | null = null;
+          if (getRes.ok) {
+            const data = await getRes.json();
+            if (Array.isArray(data) && data.length > 0) {
+              assinaturaId = data[0]?.mercadopago_assinatura_id || null;
+            }
+          }
+
+          // 2. Se houver ID de assinatura recorrente (Preapproval), envia o cancelamento para o Mercado Pago
+          if (assinaturaId) {
+            const accessToken =
+              process.env.MERCADOPAGO_ACCESS_TOKEN ||
+              process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+              "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
+
+            const mpCancelRes = await fetch(`https://api.mercadopago.com/preapproval/${assinaturaId}`, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status: "cancelled" }),
+            });
+
+            if (!mpCancelRes.ok) {
+              const mpCancelErr = await mpCancelRes.json();
+              console.warn(`[MercadoPago Cancel Preapproval Warning] #${assinaturaId}:`, mpCancelErr);
+            } else {
+              console.log(`[MercadoPago Cancel Preapproval Success] Assinatura #${assinaturaId} cancelada com sucesso no Mercado Pago!`);
+            }
+          }
+
+          // 3. Atualiza o status do plano no Supabase para 'cancelado' e planoId 'basico'
+          await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
+            method: "PATCH",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              plano_id: "basico",
+              plano_status: "cancelado",
+              plano_atualizado_em: new Date().toISOString(),
+            }),
+          });
+
+          console.log(`[MercadoPago Cancel] Plano do estabelecimento ${estabelecimentoCodigo} atualizado para 'cancelado' (Básico)!`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Assinatura cancelada com sucesso no Mercado Pago e plano alterado para o Básico.",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago Cancel Error]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro ao processar o cancelamento da assinatura." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
