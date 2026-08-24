@@ -33,13 +33,13 @@ export interface GeminiReceiptResponse {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 const DEFAULT_KEY_PARTS = ["AQ.Ab8RN6Ij_", "Mm0GJhNk6JnMyn_AFiJN66hfYH6BF4ceVVAiHCiTQ"];
 const PROD_GEMINI_API_KEY = DEFAULT_KEY_PARTS.join("");
 
 /**
- * Chamada otimizada para a API do Gemini utilizando o modelo de produção gemini-3.6-flash
- * com a chave de produção paga, rotina de até 5 tentativas com backoff e timeout de 30s.
+ * Chamada otimizada para a API do Gemini utilizando modelos flash oficiais com fallback dinâmico
+ * e retentativas para garantir resiliência total contra erros 404/503.
  */
 export async function extractReceiptDataWithGemini(
   imageBase64: string,
@@ -51,7 +51,6 @@ export async function extractReceiptDataWithGemini(
     PROD_GEMINI_API_KEY;
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const body = {
     contents: [
@@ -92,11 +91,11 @@ Responda apenas com o JSON puro sem formatação markdown.`
           {
             inline_data: {
               mime_type: "image/jpeg",
-              data: cleanBase64
-            }
-          }
-        ]
-      }
+              data: cleanBase64,
+            },
+          },
+        ],
+      },
     ],
     generationConfig: {
       response_mime_type: "application/json"
@@ -105,11 +104,15 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
   const MAX_TENTATIVAS = 5;
   const TIMEOUT_MS = 30000;
-  const MENSAGEM_ERRO_ALTO_VOLUME = "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
+  const MENSAGEM_ERRO_ALTO_VOLUME =
+    "Devido ao alto volume de leituras no momento, o servidor de escaneamento está temporariamente instável. Por favor, aguarde alguns segundos e envie a imagem novamente.";
 
   let ultimoErro: any = null;
 
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    const modelName = GEMINI_MODELS[(tentativa - 1) % GEMINI_MODELS.length];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
     if (tentativa > 1) {
       onProgress?.(`Processando notinha... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
     } else {
@@ -131,7 +134,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Gemini API - ${GEMINI_MODEL}] HTTP ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${errText}`);
+        console.warn(`[Gemini API - ${modelName}] HTTP ${response.status} (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${errText}`);
 
         if (tentativa < MAX_TENTATIVAS) {
           const delayMs = 1500 * tentativa;
