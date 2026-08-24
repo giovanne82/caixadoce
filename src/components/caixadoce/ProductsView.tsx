@@ -41,11 +41,8 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-<<<<<<< HEAD
   Clock,
-=======
   Calculator,
->>>>>>> a268a45 (feat: ficha tecnica, inteligencia de insumos via IA, preco medio ponderado por usuario e precificacao automatica de produtos)
 } from "lucide-react";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
 import {
@@ -425,58 +422,58 @@ export function ProductsView({
                   </CardHeader>
                 </div>
 
-                <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground block font-medium">Preço de Venda</span>
-                    <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
-                      {formatarMoeda(prod.preco)}
-                    </span>
-                  </div>
+                <div className="px-3.5 pt-2">
+                  <Button
+                    type="button"
+                    onClick={() => handleAbrirFichaTecnica(prod)}
+                    className="w-full h-8 text-xs font-extrabold bg-purple-600/10 hover:bg-purple-600/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 gap-1.5 flex items-center justify-center rounded-xl transition-all shadow-2xs"
+                  >
+                    <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                    <span>🧮 Ficha Técnica &amp; Custos</span>
+                  </Button>
+                </div>
 
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAbrirFichaTecnica(prod)}
-                      className="h-8 px-2.5 text-xs font-bold border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 gap-1"
-                      title="Ficha Técnica & Precificação"
-                    >
-                      <Calculator className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                      <span className="hidden sm:inline">Ficha Técnica</span>
-                    </Button>
+                  <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block font-medium">Preço de Venda</span>
+                      <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
+                        {formatarMoeda(prod.preco)}
+                      </span>
+                    </div>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleToggleAtivo(prod)}
-                      title={isAtivo ? "Pausar Produto" : "Ativar Produto"}
-                    >
-                      {isAtivo ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleToggleAtivo(prod)}
+                        title={isAtivo ? "Pausar Produto" : "Ativar Produto"}
+                      >
+                        {isAtivo ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+                      </Button>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                      onClick={() => handleAbrirEdicao(prod)}
-                      title="Editar Produto"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                        onClick={() => handleAbrirEdicao(prod)}
+                        title="Editar Produto"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-rose-600 hover:text-rose-700"
-                      onClick={() => onExcluirProduto(prod.id)}
-                      title="Excluir Produto"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardFooter>
-              </Card>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-rose-600 hover:text-rose-700"
+                        onClick={() => onExcluirProduto(prod.id)}
+                        title="Excluir Produto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
             );
           })
         )}
@@ -549,6 +546,26 @@ export function ProductsView({
                 />
               </div>
             </div>
+
+            {editingId && (
+              <div className="pt-1 pb-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const p = produtos.find((item) => item.id === editingId);
+                    if (p) {
+                      setModalProdutoOpen(false);
+                      handleAbrirFichaTecnica(p);
+                    }
+                  }}
+                  className="w-full h-8.5 text-xs font-extrabold border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 gap-1.5 flex items-center justify-center rounded-xl transition-all shadow-2xs"
+                >
+                  <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span>🧮 Abrir Ficha Técnica &amp; Calcular Custos</span>
+                </Button>
+              </div>
+            )}
 
             <div className="space-y-1">
               <div className="flex items-center justify-between">
