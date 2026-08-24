@@ -132,40 +132,43 @@ export async function calcularPrecoMedioInsumo(
     .filter((w) => w.length >= 3 && !["com", "para", "sem", "das", "dos", "que"].includes(w));
 
   // 1. Busca no Supabase por compras do usuário ordenadas pela mais recente (created_at DESC)
-  try {
-    const { data, error } = await supabase
-      .from("historico_compras_insumos" as any)
-      .select("*")
-      .eq("estabelecimento_codigo", code)
-      .order("created_at", { ascending: false });
+  const tabelasCandidatas = ["historico_compras_insumos", "historico_compras"];
+  for (const tab of tabelasCandidatas) {
+    try {
+      const { data, error } = await supabase
+        .from(tab as any)
+        .select("*")
+        .eq("estabelecimento_codigo", code)
+        .order("created_at", { ascending: false });
 
-    if (!error && data && data.length > 0) {
-      const comprasFiltradas = data.filter((item: any) => {
-        const itemNome = (item.nome_insumo || "").toLowerCase();
-        if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
-        if (tokens.length > 0) {
-          const acertos = tokens.filter((tok) => itemNome.includes(tok));
-          return acertos.length >= Math.ceil(tokens.length * 0.6);
-        }
-        return false;
-      });
+      if (!error && data && data.length > 0) {
+        const comprasFiltradas = data.filter((item: any) => {
+          const itemNome = (item.nome_insumo || item.nome || "").toLowerCase();
+          if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
+          if (tokens.length > 0) {
+            const acertos = tokens.filter((tok) => itemNome.includes(tok));
+            return acertos.length >= Math.ceil(tokens.length * 0.6);
+          }
+          return false;
+        });
 
-      if (comprasFiltradas.length > 0) {
-        // Pega ESTRITAMENTE o valor da última compra realizada
-        const ultimaCompra = comprasFiltradas[0];
-        const valorPago = Number(ultimaCompra.valor_pago_total) || Number(ultimaCompra.valor_unitario_calculado) || 0;
+        if (comprasFiltradas.length > 0) {
+          // Pega ESTRITAMENTE o valor da última compra realizada
+          const ultimaCompra = comprasFiltradas[0];
+          const valorPago = Number(ultimaCompra.valor_pago_total) || Number(ultimaCompra.valor_unitario_calculado) || Number(ultimaCompra.valor_unitario) || 0;
 
-        if (valorPago > 0) {
-          return {
-            precoMedioUnitario: parseFloat(valorPago.toFixed(2)),
-            totalComprasRegistradas: comprasFiltradas.length,
-            deNotaFiscal: true,
-          };
+          if (valorPago > 0) {
+            return {
+              precoMedioUnitario: parseFloat(valorPago.toFixed(2)),
+              totalComprasRegistradas: comprasFiltradas.length,
+              deNotaFiscal: true,
+            };
+          }
         }
       }
+    } catch (e) {
+      console.warn(`Aviso ao buscar histórico na tabela ${tab}:`, e);
     }
-  } catch (e) {
-    console.warn("Aviso ao buscar histórico no Supabase:", e);
   }
 
   // 2. Fallback no Cache Local (Notinhas & Histórico ordenados pelo registro mais recente)
@@ -289,24 +292,29 @@ export async function registrarCompraInsumo(
     createdAt: new Date().toISOString(),
   };
 
-  // 1. Salvar no Supabase
+  // 1. Salvar no Supabase (com fallback resiliente de tabela)
   try {
-    await supabase.from("historico_compras_insumos" as any).insert([
-      {
-        id: novaCompra.id,
-        estabelecimento_codigo: code,
-        nome_insumo: novaCompra.nomeInsumo,
-        categoria: novaCompra.categoria,
-        fornecedor_nome: novaCompra.fornecedorNome,
-        data_compra: novaCompra.dataCompra,
-        quantidade_comprada: novaCompra.quantidadeComprada,
-        embalagem_qtd: novaCompra.embalagemQtd || 1,
-        quantidade_total_unidades: novaCompra.quantidadeTotalUnidades,
-        valor_pago_total: novaCompra.valorPagoTotal,
-        valor_unitario_calculado: novaCompra.valorUnitarioCalculado,
-        unidade_medida: novaCompra.unidadeMedida,
-      },
-    ]);
+    const payload = {
+      id: novaCompra.id,
+      estabelecimento_codigo: code,
+      nome_insumo: novaCompra.nomeInsumo,
+      categoria: novaCompra.categoria,
+      fornecedor_nome: novaCompra.fornecedorNome,
+      data_compra: novaCompra.dataCompra,
+      quantidade_comprada: novaCompra.quantidadeComprada,
+      embalagem_qtd: novaCompra.embalagemQtd || 1,
+      quantidade_total_unidades: novaCompra.quantidadeTotalUnidades,
+      valor_pago_total: novaCompra.valorPagoTotal,
+      valor_unitario_calculado: novaCompra.valorUnitarioCalculado,
+      unidade_medida: novaCompra.unidadeMedida,
+    };
+
+    const res = await supabase.from("historico_compras_insumos" as any).insert([payload]);
+
+    if (res.error) {
+      // Se a tabela historico_compras_insumos não existir (404 / 42P01), tenta a tabela alternativa
+      await supabase.from("historico_compras" as any).insert([payload]);
+    }
   } catch (e) {
     console.warn("Aviso ao salvar no Supabase (historico_compras_insumos):", e);
   }
