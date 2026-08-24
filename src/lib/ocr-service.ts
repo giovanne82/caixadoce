@@ -33,11 +33,12 @@ export interface GeminiReceiptResponse {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const GEMINI_FLASH_PRIMARY = "gemini-2.5-flash";
+const GEMINI_FLASH_FALLBACK = "gemini-1.5-flash";
+
 /**
- * Chamada para a API do Gemini com rotina de retry automático e backoff.
- * Em caso de status 503 (Service Unavailable) ou 429 (Rate Limit), executa até 2 novas tentativas
- * com intervalo de 1,5 segundos (1500ms) entre elas.
- * O feedback de carregamento "Processando notinha..." permanece ativo durante as retentativas.
+ * Chamada otimizada para a API do Gemini (exclusivamente modelos FLASH)
+ * com rotina de retry automático, timeout de 25s por tentativa e feedback de progresso.
  */
 export async function extractReceiptDataWithGemini(
   imageBase64: string,
@@ -47,7 +48,6 @@ export async function extractReceiptDataWithGemini(
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY não configurada.");
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
 
   const body = {
     contents: [
@@ -99,31 +99,44 @@ Responda apenas com o JSON puro sem formatação markdown.`
     }
   };
 
-  const MAX_TENTATIVAS = 5;
+  const MAX_TENTATIVAS = 3;
+  const TIMEOUT_MS = 25000;
   const MENSAGEM_ERRO_ALTO_VOLUME = "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
 
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    try {
-      if (tentativa > 1) {
-        onProgress?.(`Processando notinha... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
-      } else {
-        onProgress?.("Processando notinha...");
-      }
+  let modelName = GEMINI_FLASH_PRIMARY;
 
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+    if (tentativa > 1) {
+      onProgress?.(`⚡ Processando notinha com Gemini Flash... (tentativa ${tentativa}/${MAX_TENTATIVAS})`);
+    } else {
+      onProgress?.("⚡ Enviando comprovante para o Gemini Flash AI...");
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
 
+      clearTimeout(timer);
+
       if (!response.ok) {
-        const errText = await response.text();
-        const status = response.status;
+        if (response.status === 404 && modelName !== GEMINI_FLASH_FALLBACK) {
+          console.warn(`[Gemini Flash] Modelo ${modelName} 404. Alternando para ${GEMINI_FLASH_FALLBACK}...`);
+          modelName = GEMINI_FLASH_FALLBACK;
+          continue;
+        }
 
         if (tentativa < MAX_TENTATIVAS) {
           const delayMs = 1000 * tentativa;
-          console.warn(`[Gemini API] Erro HTTP ${status}. Retentando em ${delayMs}ms (Tentativa ${tentativa}/${MAX_TENTATIVAS})...`);
-          onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
+          console.warn(`[Gemini API] Erro HTTP ${response.status}. Retentando em ${delayMs}ms...`);
           await sleep(delayMs);
           continue;
         }
@@ -137,15 +150,24 @@ Responda apenas com o JSON puro sem formatação markdown.`
       return JSON.parse(jsonClean);
 
     } catch (err: any) {
+      clearTimeout(timer);
+
+      if (err.name === "AbortError") {
+        console.warn(`[Gemini Flash] Timeout de ${TIMEOUT_MS}ms na tentativa ${tentativa}.`);
+        onProgress?.(`⏳ Leitura demorando... Tentando novamente (${tentativa + 1}/${MAX_TENTATIVAS})...`);
+      }
+
       if (tentativa < MAX_TENTATIVAS) {
         const delayMs = 1000 * tentativa;
-        console.warn(`[Gemini API] Falha na tentativa ${tentativa}/${MAX_TENTATIVAS}: ${err.message}. Aguardando ${delayMs}ms...`);
-        onProgress?.(`Processando notinha... (tentativa ${tentativa + 1}/${MAX_TENTATIVAS})`);
         await sleep(delayMs);
         continue;
       }
 
-      throw new Error(MENSAGEM_ERRO_ALTO_VOLUME);
+      throw new Error(
+        err.name === "AbortError"
+          ? "A leitura da notinha demorou mais que o esperado (Timeout). Por favor, tente enviar novamente."
+          : MENSAGEM_ERRO_ALTO_VOLUME
+      );
     }
   }
 

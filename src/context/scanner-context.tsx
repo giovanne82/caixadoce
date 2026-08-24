@@ -39,6 +39,11 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const processarArquivoOCR = useCallback(async (file: File) => {
+    if (isScanning) {
+      toast.warning("Já existe um escaneamento de notinha em andamento. Aguarde a conclusão.");
+      return;
+    }
+
     setSelectedFile(file);
     setError(null);
 
@@ -51,7 +56,7 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
     }
 
     setIsScanning(true);
-    setScanStepMessage("Iniciando leitura de comprovante com IA...");
+    setScanStepMessage("⚡ Conectando ao Gemini 2.5 Flash AI...");
     setExtractedData(null);
 
     try {

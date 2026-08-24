@@ -168,8 +168,11 @@ export function ScannerView({
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && !isScanning) {
       processarArquivoOCR(file);
+    }
+    if (e.target) {
+      e.target.value = "";
     }
   };
 
@@ -314,6 +317,7 @@ export function ScannerView({
             type="file"
             ref={fileInputRef}
             accept="image/*,.pdf"
+            disabled={isScanning}
             className="hidden"
             onChange={handleFileChange}
           />
@@ -324,13 +328,17 @@ export function ScannerView({
                 <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
                 <Sparkles className="w-6 h-6 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">Lendo e Processando Notinha...</h3>
+              <h3 className="text-lg font-bold text-foreground">Lendo Notinha com Gemini Flash AI...</h3>
               <p className="text-xs text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
             </div>
           ) : (
             <div
-              onClick={() => fileInputRef.current?.click()}
-              className="py-12 px-6 text-center cursor-pointer border border-border/70 rounded-2xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all flex flex-col items-center justify-center max-w-xl mx-auto"
+              onClick={() => {
+                if (!isScanning) fileInputRef.current?.click();
+              }}
+              className={`py-12 px-6 text-center border border-border/70 rounded-2xl bg-muted/20 transition-all flex flex-col items-center justify-center max-w-xl mx-auto ${
+                isScanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/40 hover:border-primary/50"
+              }`}
             >
               <div className="p-4 rounded-2xl bg-primary/10 text-primary mb-3">
                 <UploadCloud className="w-10 h-10" />
@@ -341,7 +349,7 @@ export function ScannerView({
               <p className="text-xs text-muted-foreground mt-1">
                 Formatos aceitos: JPG, PNG ou PDF (comprovantes fiscais de compras)
               </p>
-              <Button size="sm" className="mt-5 font-bold shadow-sm px-6 h-9">
+              <Button size="sm" disabled={isScanning} className="mt-5 font-bold shadow-sm px-6 h-9">
                 <Camera className="w-4 h-4 mr-2" /> Selecionar Arquivo da Notinha
               </Button>
             </div>
