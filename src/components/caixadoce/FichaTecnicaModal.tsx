@@ -662,17 +662,17 @@ export function FichaTecnicaModal({
               )}
             </div>
 
-            {/* VISTA DESKTOP: TABELA */}
-            <div className="hidden sm:block border border-border rounded-xl overflow-x-auto shadow-2xs bg-card">
-              <Table>
+            {/* VISTA DESKTOP: TABELA (100% visível sem rolagem horizontal) */}
+            <div className="hidden sm:block border border-border rounded-xl shadow-2xs bg-card overflow-hidden w-full">
+              <Table className="w-full table-fixed">
                 <TableHeader className="bg-muted/60">
-                  <TableRow>
-                    <TableHead className="min-w-[180px]">Ingrediente / Insumo</TableHead>
-                    <TableHead className="min-w-[140px]">Preço do produto (R$)</TableHead>
-                    <TableHead className="min-w-[170px] text-center">Qtd Embalagem</TableHead>
-                    <TableHead className="min-w-[170px] text-center">Qtd na Receita</TableHead>
-                    <TableHead className="min-w-[120px] text-right">Custo Total (R$)</TableHead>
-                    <TableHead className="w-12"></TableHead>
+                  <TableRow className="border-b border-border">
+                    <TableHead className="py-2.5 px-2 text-left text-xs font-bold">Ingrediente / Insumo</TableHead>
+                    <TableHead className="w-24 py-2.5 px-1 text-left text-xs font-bold">Preço (R$)</TableHead>
+                    <TableHead className="w-36 py-2.5 px-1 text-center text-xs font-bold">Qtd Embalagem</TableHead>
+                    <TableHead className="w-36 py-2.5 px-1 text-center text-xs font-bold">Qtd na Receita</TableHead>
+                    <TableHead className="w-24 py-2.5 px-2 text-right text-xs font-bold">Custo Total</TableHead>
+                    <TableHead className="w-9 py-2.5 px-1 text-center"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -685,23 +685,22 @@ export function FichaTecnicaModal({
                   ) : (
                     itens.map((item) => {
                       const precoEmbVal = item.precoEmbalagem ?? item.precoUnitarioAplicado ?? 0;
-                      const qtdEmbOrigVal =
-                        item.qtdEmbalagemOriginal ?? 1;
+                      const qtdEmbOrigVal = item.qtdEmbalagemOriginal ?? 1;
 
                       return (
-                        <TableRow key={item.id}>
-                          {/* Nome */}
-                          <TableCell className="font-semibold text-xs text-foreground">
+                        <TableRow key={item.id} className="border-b border-border/60 hover:bg-muted/30">
+                          {/* Nome do Ingrediente com quebra de linha permitida */}
+                          <TableCell className="py-2 px-2 text-xs font-semibold text-foreground whitespace-normal break-words leading-tight">
                             {item.insumoNome}
                           </TableCell>
 
                           {/* Preço do produto */}
-                          <TableCell>
+                          <TableCell className="py-2 px-1">
                             <Input
                               type="text"
                               inputMode="decimal"
                               placeholder="R$ 0,00"
-                              className="h-8 text-xs font-mono font-bold w-28"
+                              className="h-8 text-xs font-mono font-bold w-full px-1.5"
                               value={precoEmbVal ? formatarMoeda(precoEmbVal) : ""}
                               onChange={(e) => {
                                 const masked = aplicarMascaraMoedaInput(e.target.value);
@@ -713,12 +712,12 @@ export function FichaTecnicaModal({
                           </TableCell>
 
                           {/* Qtd Embalagem Original com Dropdown de Unidade de Compra */}
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-1.5 min-w-[150px]">
+                          <TableCell className="py-2 px-1">
+                            <div className="flex items-center justify-center gap-1">
                               <Input
                                 type="text"
                                 inputMode="decimal"
-                                className="h-8 text-xs font-semibold w-20 text-center px-1.5 shrink-0"
+                                className="h-8 text-xs font-semibold w-14 text-center px-1 shrink-0"
                                 value={qtdEmbOrigVal}
                                 onChange={(e) =>
                                   handleAtualizarItemExistente(
@@ -732,7 +731,7 @@ export function FichaTecnicaModal({
                                 value={item.unidadeEmbalagem || (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? "kg" : item.unidadeMedida)}
                                 onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeEmbalagem", val)}
                               >
-                                <SelectTrigger className="h-8 text-xs w-20 px-2 shrink-0 font-bold">
+                                <SelectTrigger className="h-8 text-xs w-[68px] px-1 shrink-0 font-bold">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -747,12 +746,12 @@ export function FichaTecnicaModal({
                           </TableCell>
 
                           {/* Qtd Usada na Receita com Dropdown de Unidade de Uso */}
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-1.5 min-w-[150px]">
+                          <TableCell className="py-2 px-1">
+                            <div className="flex items-center justify-center gap-1">
                               <Input
                                 type="text"
                                 inputMode="decimal"
-                                className="h-8 text-xs font-bold w-20 text-center text-purple-700 dark:text-purple-300 px-1.5 border-purple-500/40 shrink-0"
+                                className="h-8 text-xs font-bold w-14 text-center text-purple-700 dark:text-purple-300 px-1 border-purple-500/40 shrink-0"
                                 value={item.quantidadeUsada}
                                 onChange={(e) =>
                                   handleAtualizarItemExistente(
@@ -766,7 +765,7 @@ export function FichaTecnicaModal({
                                 value={item.unidadeMedida}
                                 onValueChange={(val) => handleAtualizarItemExistente(item.id, "unidadeMedida", val)}
                               >
-                                <SelectTrigger className="h-8 text-xs w-20 px-2 shrink-0 font-bold text-purple-600 dark:text-purple-300 border-purple-500/40">
+                                <SelectTrigger className="h-8 text-xs w-[68px] px-1 shrink-0 font-bold text-purple-600 dark:text-purple-300 border-purple-500/40">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -781,19 +780,19 @@ export function FichaTecnicaModal({
                           </TableCell>
 
                           {/* Custo Total */}
-                          <TableCell className="text-right font-black font-mono text-xs text-emerald-600 dark:text-emerald-400">
+                          <TableCell className="py-2 px-2 text-right font-black font-mono text-xs text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                             {formatarMoeda(item.custoTotalItem)}
                           </TableCell>
 
                           {/* Ação */}
-                          <TableCell>
+                          <TableCell className="py-2 px-1 text-center">
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => handleRemoverItem(item.id)}
                               className="h-7 w-7 text-rose-500 hover:bg-rose-500/10"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -804,13 +803,13 @@ export function FichaTecnicaModal({
                 {itens.length > 0 && (
                   <TableFooter className="bg-purple-500/10 border-t-2 border-purple-500/30">
                     <TableRow>
-                      <TableCell colSpan={4} className="font-extrabold text-xs text-purple-900 dark:text-purple-200 uppercase tracking-wider py-3">
+                      <TableCell colSpan={4} className="font-extrabold text-xs text-purple-900 dark:text-purple-200 uppercase tracking-wider py-3 px-2">
                         Total Insumos / Custo da Receita:
                       </TableCell>
-                      <TableCell className="text-right font-black text-sm font-mono text-purple-700 dark:text-purple-300 py-3">
+                      <TableCell className="text-right font-black text-sm font-mono text-purple-700 dark:text-purple-300 py-3 px-2 whitespace-nowrap">
                         {formatarMoeda(totaisCalculados.custoInsumosTotal)}
                       </TableCell>
-                      <TableCell></TableCell>
+                      <TableCell className="py-3 px-1"></TableCell>
                     </TableRow>
                   </TableFooter>
                 )}
