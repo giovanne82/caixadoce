@@ -39,9 +39,11 @@ export interface FichaTecnicaItem {
   produtoId: string;
   insumoNome: string;
   insumoPadraoId?: string;
-  quantidadeUsada: number;
+  precoEmbalagem: number; // Preço pago pela embalagem/fardo/quilo (ex: R$ 38,50)
+  qtdEmbalagemOriginal: number; // Qtd da embalagem original (ex: 1000g para 1kg, 25 un para fardo)
+  quantidadeUsada: number; // Qtd usada na receita (ex: 100g, 2 un, 250ml)
   unidadeMedida: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx";
-  precoUnitarioAplicado: number;
+  precoUnitarioAplicado?: number; // Compatibilidade com precoEmbalagem
   custoTotalItem: number;
   createdAt?: string;
 }
@@ -393,17 +395,30 @@ export async function obterFichaTecnicaProduto(
       .eq("produto_id", produtoId);
 
     if (!error && data && data.length > 0) {
-      const mapeados: FichaTecnicaItem[] = data.map((d: any) => ({
-        id: String(d.id),
-        estabelecimentoCodigo: d.estabelecimento_codigo,
-        produtoId: d.produto_id,
-        insumoNome: d.insumo_nome,
-        quantidadeUsada: Number(d.quantidade_usada),
-        unidadeMedida: d.unidade_medida || "g",
-        precoUnitarioAplicado: Number(d.preco_unitario_aplicado),
-        custoTotalItem: Number(d.custo_total_item),
-        createdAt: d.created_at,
-      }));
+      const mapeados: FichaTecnicaItem[] = data.map((d: any) => {
+        const precoEmb = Number(d.preco_embalagem ?? d.preco_unitario_aplicado ?? 0);
+        const unid = d.unidade_medida || "g";
+        const qtdEmb = Number(
+          d.qtd_embalagem_original ?? (unid === "g" || unid === "ml" ? 1000 : 1)
+        );
+        const qtdUsada = Number(d.quantidade_usada ?? 0);
+
+        return {
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo,
+          produtoId: d.produto_id,
+          insumoNome: d.insumo_nome,
+          precoEmbalagem: precoEmb,
+          qtdEmbalagemOriginal: qtdEmb,
+          quantidadeUsada: qtdUsada,
+          unidadeMedida: unid,
+          precoUnitarioAplicado: precoEmb,
+          custoTotalItem:
+            Number(d.custo_total_item) ||
+            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb),
+          createdAt: d.created_at,
+        };
+      });
       localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
       return mapeados;
     }
@@ -412,54 +427,78 @@ export async function obterFichaTecnicaProduto(
   // 2. Cache Local
   try {
     const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: any[] = JSON.parse(raw);
+      return parsed.map((d) => {
+        const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
+        const unid = d.unidadeMedida || "g";
+        const qtdEmb = Number(
+          d.qtdEmbalagemOriginal ?? (unid === "g" || unid === "ml" ? 1000 : 1)
+        );
+        const qtdUsada = Number(d.quantidadeUsada ?? 0);
+
+        return {
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimentoCodigo,
+          produtoId: d.produtoId,
+          insumoNome: d.insumoNome,
+          precoEmbalagem: precoEmb,
+          qtdEmbalagemOriginal: qtdEmb,
+          quantidadeUsada: qtdUsada,
+          unidadeMedida: unid,
+          precoUnitarioAplicado: precoEmb,
+          custoTotalItem:
+            Number(d.custoTotalItem) ||
+            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb),
+          createdAt: d.createdAt,
+        };
+      });
+    }
   } catch {}
 
   return [];
 }
 
 /**
- * Calcula o custo real de um item da Ficha Técnica convertendo unidades de medida:
- * - Se a unidade da receita for 'g' (gramas) e o preço do insumo for por 'kg' (quilo):
- *   custo = (quantidadeUsada / 1000) * precoUnitarioKg (ex: 100g de chocolate a R$ 40/kg = R$ 4,00)
- * - Se a unidade da receita for 'ml' (mililitros) e o preço for por 'l' (litro):
- *   custo = (quantidadeUsada / 1000) * precoUnitarioLitro (ex: 250ml de creme a R$ 20/L = R$ 5,00)
- * - Demais unidades (kg, l, un, bdj, pct, cx): custo = quantidadeUsada * precoUnitario
+ * Calcula o custo real de um item da Ficha Técnica:
+ * Custo Proporcional = (Preço da Embalagem / Qtd da Embalagem Original) * Qtd Usada na Receita
+ * Exemplo 1: (R$ 38,50 / 1000g) * 100g = R$ 3,85
+ * Exemplo 2: (R$ 12,50 / 25 un) * 2 un = R$ 1,00
+ * Exemplo 3: (R$ 20,00 / 1000ml) * 250ml = R$ 5,00
  */
 export function calcularCustoItemFichaTecnica(
   quantidadeUsada: number,
   unidadeMedida: string,
-  precoUnitarioAplicado: number
+  precoEmbalagem: number,
+  qtdEmbalagemOriginal: number = 1000
 ): number {
-  const qtd = Number(quantidadeUsada) || 0;
-  const preco = Number(precoUnitarioAplicado) || 0;
-  const unid = (unidadeMedida || "g").toLowerCase();
+  const qtdUsada = Number(quantidadeUsada) || 0;
+  const precoEmb = Number(precoEmbalagem) || 0;
+  const qtdEmbOrig = Number(qtdEmbalagemOriginal) > 0 ? Number(qtdEmbalagemOriginal) : 1;
 
-  if (unid === "g") {
-    return parseFloat(((qtd / 1000) * preco).toFixed(2));
-  }
-
-  if (unid === "ml") {
-    return parseFloat(((qtd / 1000) * preco).toFixed(2));
-  }
-
-  return parseFloat((qtd * preco).toFixed(2));
+  const custoCalculado = (precoEmb / qtdEmbOrig) * qtdUsada;
+  return parseFloat(custoCalculado.toFixed(2));
 }
 
 /**
  * Realiza os cálculos de Custo, Margem e Preço Sugerido da Ficha Técnica
  */
 export function calcularTotaisFichaTecnica(
-  itens: { quantidadeUsada: number; unidadeMedida?: string; precoUnitarioAplicado: number }[],
+  itens: FichaTecnicaItem[],
   rendimentoQtd: number = 1,
   custosOperacionaisPerc: number = 15,
   margemLucroPerc: number = 100
 ): CalculoFichaTecnicaResultado {
   const custoInsumosTotal = itens.reduce((sum, item) => {
+    const precoEmb = Number(item.precoEmbalagem ?? item.precoUnitarioAplicado ?? 0);
+    const qtdEmb = Number(
+      item.qtdEmbalagemOriginal ?? (item.unidadeMedida === "g" || item.unidadeMedida === "ml" ? 1000 : 1)
+    );
     const totalItem = calcularCustoItemFichaTecnica(
       item.quantidadeUsada,
       item.unidadeMedida || "g",
-      item.precoUnitarioAplicado
+      precoEmb,
+      qtdEmb
     );
     return sum + totalItem;
   }, 0);
