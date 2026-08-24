@@ -688,6 +688,10 @@ function Index() {
         endereco_entrega: item.enderecoEntrega,
         delivery_address: item.enderecoEntrega,
         observacoes: item.observacoes,
+        tem_topo_bolo: item.temTopoBolo || false,
+        detalhes_topo_bolo: item.detalhesTopoBolo || "",
+        tem_vela: item.temVela || false,
+        detalhes_vela: item.detalhesVela || "",
       },
     ]);
 
@@ -740,6 +744,10 @@ function Index() {
         endereco_entrega: dados.enderecoEntrega,
         delivery_address: dados.enderecoEntrega,
         observacoes: dados.observacoes,
+        tem_topo_bolo: dados.temTopoBolo,
+        detalhes_topo_bolo: dados.detalhesTopoBolo,
+        tem_vela: dados.temVela,
+        detalhes_vela: dados.detalhesVela,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

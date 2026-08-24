@@ -72,14 +72,17 @@ import {
   Building2,
   Eye,
   Link2,
-  Unlink,
-  Cookie,
   UtensilsCrossed,
   Package,
   MapPin,
   CreditCard,
   QrCode,
+  Flame,
+  Sparkles,
+  PlusCircle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { obterFichaTecnicaProduto, type FichaTecnicaItem } from "@/lib/ficha-tecnica-service";
 import {
   formatarMoeda,
   formatarWhatsappLink,
@@ -302,6 +305,115 @@ export function OrdersView({
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
   const [observacoes, setObservacoes] = useState("");
+
+  // Personalização Especial (Topo de Bolo & Vela)
+  const [temTopoBolo, setTemTopoBolo] = useState(false);
+  const [detalhesTopoBolo, setDetalhesTopoBolo] = useState("");
+  const [temVela, setTemVela] = useState(false);
+  const [detalhesVela, setDetalhesVela] = useState("");
+
+  // Sugestão de Compra Automática de Insumos calculada a partir da Ficha Técnica dos produtos do pedido
+  const [sugestaoCompraInsumos, setSugestaoCompraInsumos] = useState<
+    Array<{
+      insumoNome: string;
+      quantidadeTotal: number;
+      unidadeMedida: string;
+      custoEstimadoTotal: number;
+      produtosRelacionados: string[];
+    }>
+  >([]);
+
+  useEffect(() => {
+    async function calcularSugestaoFicha() {
+      if (!itensTags || itensTags.length === 0) {
+        setSugestaoCompraInsumos([]);
+        return;
+      }
+
+      const mapaInsumos: Record<
+        string,
+        {
+          insumoNome: string;
+          quantidadeTotal: number;
+          unidadeMedida: string;
+          custoEstimadoTotal: number;
+          produtos: Set<string>;
+        }
+      > = {};
+
+      for (const item of itensTags) {
+        const prodId = item.produtoId || listaProdutos.find((p) => p.nome.toLowerCase() === item.nome.toLowerCase())?.id;
+        if (!prodId) continue;
+
+        try {
+          const itensFicha = await obterFichaTecnicaProduto("CD-1001", prodId);
+          if (!itensFicha || itensFicha.length === 0) continue;
+
+          const qtdEncomendada = item.quantidade || 1;
+
+          for (const fItem of itensFicha) {
+            const key = `${fItem.insumoNome.toLowerCase()}_${fItem.unidadeMedida}`;
+            const precoEmb = Number(fItem.precoEmbalagem ?? fItem.precoUnitarioAplicado ?? 0);
+            const qtdEmbOrig = Number(fItem.qtdEmbalagemOriginal) > 0 ? Number(fItem.qtdEmbalagemOriginal) : 1000;
+            const custoItem = (precoEmb / qtdEmbOrig) * fItem.quantidadeUsada * qtdEncomendada;
+            const qtdNecessaria = fItem.quantidadeUsada * qtdEncomendada;
+
+            if (!mapaInsumos[key]) {
+              mapaInsumos[key] = {
+                insumoNome: fItem.insumoNome,
+                quantidadeTotal: 0,
+                unidadeMedida: fItem.unidadeMedida,
+                custoEstimadoTotal: 0,
+                produtos: new Set<string>(),
+              };
+            }
+
+            mapaInsumos[key].quantidadeTotal += qtdNecessaria;
+            mapaInsumos[key].custoEstimadoTotal += custoItem;
+            mapaInsumos[key].produtos.add(`${item.nome} (${qtdEncomendada}x)`);
+          }
+        } catch {}
+      }
+
+      const resultado = Object.values(mapaInsumos).map((m) => ({
+        insumoNome: m.insumoNome,
+        quantidadeTotal: m.quantidadeTotal,
+        unidadeMedida: m.unidadeMedida,
+        custoEstimadoTotal: parseFloat(m.custoEstimadoTotal.toFixed(2)),
+        produtosRelacionados: Array.from(m.produtos),
+      }));
+
+      setSugestaoCompraInsumos(resultado);
+    }
+
+    calcularSugestaoFicha();
+  }, [itensTags, listaProdutos]);
+
+  const handleImportarSugestaoParaPedido = () => {
+    if (sugestaoCompraInsumos.length === 0) return;
+
+    let adicionados = 0;
+    setInsumosTags((prev) => {
+      const novos = [...prev];
+      for (const sug of sugestaoCompraInsumos) {
+        const jaExiste = novos.find(
+          (t) => t.nome.toLowerCase() === sug.insumoNome.toLowerCase()
+        );
+        if (!jaExiste) {
+          novos.push({
+            id: crypto.randomUUID(),
+            nome: sug.insumoNome,
+            quantidade: `${sug.quantidadeTotal} ${sug.unidadeMedida}`,
+            comprado: false,
+          });
+          adicionados++;
+        }
+      }
+      return novos;
+    });
+
+    toast.success(`${adicionados} insumo(s) da Ficha Técnica importado(s) para o pedido!`);
+  };
 
   // Modal de Seleção Rápida de Conta Pix no momento do Envio
   const [modalSelecaoPixOpen, setModalSelecaoPixOpen] = useState(false);
@@ -579,6 +691,10 @@ export function OrdersView({
     setTipoEntrega("retirada");
     setEnderecoEntrega("");
     setObservacoes("");
+    setTemTopoBolo(false);
+    setDetalhesTopoBolo("");
+    setTemVela(false);
+    setDetalhesVela("");
     setModalEncomendaOpen(true);
   };
 
@@ -634,6 +750,10 @@ export function OrdersView({
     setTipoEntrega(ord.tipoEntrega || "retirada");
     setEnderecoEntrega(ord.enderecoEntrega || "");
     setObservacoes(ord.observacoes || "");
+    setTemTopoBolo(ord.temTopoBolo || false);
+    setDetalhesTopoBolo(ord.detalhesTopoBolo || "");
+    setTemVela(ord.temVela || false);
+    setDetalhesVela(ord.detalhesVela || "");
     setModalEncomendaOpen(true);
   };
 
@@ -681,6 +801,10 @@ export function OrdersView({
         tipoEntrega,
         enderecoEntrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         observacoes,
+        temTopoBolo,
+        detalhesTopoBolo: temTopoBolo ? detalhesTopoBolo : "",
+        temVela,
+        detalhesVela: temVela ? detalhesVela : "",
       };
 
       if (editingId) {
@@ -1955,6 +2079,20 @@ export function OrdersView({
                           {ord.observacoes && (
                             <p className="text-[11px] text-muted-foreground italic">Obs: {ord.observacoes}</p>
                           )}
+                          {(ord.temTopoBolo || ord.temVela) && (
+                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-border/50">
+                              {ord.temTopoBolo && (
+                                <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30">
+                                  🎂 Topo: {ord.detalhesTopoBolo || "Sim"}
+                                </Badge>
+                              )}
+                              {ord.temVela && (
+                                <Badge variant="outline" className="text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                                  🕯️ Vela: {ord.detalhesVela || "Sim"}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Insumos Necessários */}
@@ -2302,6 +2440,50 @@ export function OrdersView({
               </div>
             </div>
 
+            {/* PAINEL DE SUGESTÃO DE COMPRA AUTOMÁTICA DE INSUMOS DA FICHA TÉCNICA */}
+            {sugestaoCompraInsumos.length > 0 && (
+              <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-2xs">
+                <CardContent className="p-3.5 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <ShoppingCart className="w-4 h-4 text-emerald-600 shrink-0" /> Sugestão de Compra de Insumos para este Pedido
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Calculado automaticamente a partir das Fichas Técnicas dos produtos selecionados.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleImportarSugestaoParaPedido}
+                      className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 rounded-xl shadow-xs"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" /> Importar para Insumos do Pedido
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {sugestaoCompraInsumos.map((sug, idx) => (
+                      <div key={idx} className="p-2.5 bg-background border border-emerald-500/20 rounded-xl flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-extrabold text-foreground truncate">{sug.insumoNome}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Qtd: <strong className="text-foreground font-bold">{sug.quantidadeTotal} {sug.unidadeMedida}</strong>
+                            {sug.produtosRelacionados.length > 0 && ` • (${sug.produtosRelacionados.join(", ")})`}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 border-emerald-500/30 shrink-0">
+                          ~{formatarMoeda(sug.custoEstimadoTotal)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* VALOR TOTAL DA ENCOMENDA */}
             <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-1">
               <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total da Encomenda (R$) *</Label>
@@ -2644,11 +2826,87 @@ export function OrdersView({
               <Label htmlFor="enc-obs" className="text-xs font-semibold">Observações / Detalhes</Label>
               <Input
                 id="enc-obs"
-                placeholder="Ex: Nome no topo do bolo, vela inclusa..."
+                placeholder="Ex: Entregar com cuidado, embalagem especial..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 className="h-8 text-xs"
               />
+            </div>
+
+            {/* PERSONALIZAÇÃO ESPECIAL DO PEDIDO (TOPO DE BOLO E VELA) */}
+            <div className="p-4 border border-purple-500/25 bg-purple-500/5 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600 shrink-0" /> Personalização Especial do Pedido
+                </h4>
+                <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/30 font-bold">
+                  Opcional
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* TOPO DE BOLO */}
+                <div className="p-3 bg-card border border-border rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="chkTopoBolo"
+                      checked={temTopoBolo}
+                      onCheckedChange={(checked) => {
+                        setTemTopoBolo(!!checked);
+                        if (!checked) setDetalhesTopoBolo("");
+                      }}
+                    />
+                    <Label htmlFor="chkTopoBolo" className="text-xs font-extrabold flex items-center gap-1.5 cursor-pointer text-foreground">
+                      <Cake className="w-4 h-4 text-purple-600 shrink-0" /> [ ] Tem Topo de Bolo?
+                    </Label>
+                  </div>
+
+                  {temTopoBolo && (
+                    <div className="pt-1.5 space-y-1">
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Detalhes do Topo de Bolo (Tema, Nome, Idade)
+                      </Label>
+                      <Input
+                        placeholder="Ex: Tema Patrulha Canina, Nome Gabriel, 5 anos"
+                        value={detalhesTopoBolo}
+                        onChange={(e) => setDetalhesTopoBolo(e.target.value)}
+                        className="text-xs font-medium"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* VELA */}
+                <div className="p-3 bg-card border border-border rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="chkVela"
+                      checked={temVela}
+                      onCheckedChange={(checked) => {
+                        setTemVela(!!checked);
+                        if (!checked) setDetalhesVela("");
+                      }}
+                    />
+                    <Label htmlFor="chkVela" className="text-xs font-extrabold flex items-center gap-1.5 cursor-pointer text-foreground">
+                      <Flame className="w-4 h-4 text-amber-600 shrink-0" /> [ ] Tem Vela?
+                    </Label>
+                  </div>
+
+                  {temVela && (
+                    <div className="pt-1.5 space-y-1">
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Numeração ou Tipo da Vela
+                      </Label>
+                      <Input
+                        placeholder="Ex: Número 3, Vela Sparkler, Vela Glitter Rosa"
+                        value={detalhesVela}
+                        onChange={(e) => setDetalhesVela(e.target.value)}
+                        className="text-xs font-medium"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <DialogFooter className="pt-2 border-t flex justify-between">
@@ -2879,6 +3137,24 @@ export function OrdersView({
                   <div className="pt-2 border-t border-border/50 text-xs">
                     <span className="font-bold text-foreground">📝 Observações:</span>{" "}
                     <span className="text-muted-foreground italic">{encomendaDetalhes.observacoes}</span>
+                  </div>
+                )}
+
+                {(encomendaDetalhes.temTopoBolo || encomendaDetalhes.temVela) && (
+                  <div className="pt-2 border-t border-border/50 text-xs space-y-1">
+                    <span className="font-bold text-foreground block">✨ Personalização Especial:</span>
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {encomendaDetalhes.temTopoBolo && (
+                        <Badge variant="outline" className="text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30">
+                          🎂 Topo: {encomendaDetalhes.detalhesTopoBolo || "Sim"}
+                        </Badge>
+                      )}
+                      {encomendaDetalhes.temVela && (
+                        <Badge variant="outline" className="text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                          🕯️ Vela: {encomendaDetalhes.detalhesVela || "Sim"}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
