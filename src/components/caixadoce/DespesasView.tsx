@@ -480,6 +480,35 @@ export function DespesasView({
     );
   };
 
+  // Excluir Item Individual da Lista de Compras
+  const handleExcluirItemLista = async (listaId: string, itemId: string) => {
+    const listaAlvo = listas.find((l) => l.id === listaId);
+    if (!listaAlvo) return;
+
+    const novosItens = listaAlvo.itens.filter((it) => it.id !== itemId);
+    const atualizadas = listas.map((l) => (l.id === listaId ? { ...l, itens: novosItens } : l));
+
+    setListas(atualizadas);
+
+    if (onAtualizarListasCompras) {
+      onAtualizarListasCompras(atualizadas);
+    }
+
+    try {
+      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
+
+      await supabase
+        .from("listas_compras" as any)
+        .update({ itens: novosItens })
+        .eq("id", listaId)
+        .eq("estabelecimento_codigo", estabelecimentoCodigo);
+    } catch (e) {
+      console.warn("Aviso ao excluir item da lista no Supabase:", e);
+    }
+
+    toast.success("Produto removido da lista de compras!");
+  };
+
   // Concluir Lista de Compras
   const handleConcluirLista = (listaId: string) => {
     setListas((prev) =>
@@ -849,15 +878,15 @@ export function DespesasView({
                             <div
                               key={it.id}
                               onClick={() => handleToggleItemComprado(lista.id, it.id)}
-                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none ${
+                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none group ${
                                 it.comprado
                                   ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 line-through opacity-80"
                                   : "bg-muted/30 text-foreground border-border hover:border-primary/40 shadow-2xs"
                               }`}
                             >
-                              <div className="flex items-center gap-2.5 truncate">
+                              <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
                                 <span
-                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] ${
+                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
                                     it.comprado ? "bg-emerald-600 text-white" : "border-2 border-primary"
                                   }`}
                                 >
@@ -867,6 +896,17 @@ export function DespesasView({
                                   {it.quantidade} {it.unidade || "un"} x {it.nome}
                                 </span>
                               </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExcluirItemLista(lista.id, it.id);
+                                }}
+                                className="p-1 rounded-lg hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors shrink-0 opacity-80 hover:opacity-100"
+                                title="Excluir este item da lista"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           ))}
                         </div>
