@@ -810,37 +810,67 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   };
 
   const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
-    // 1. Atualizar no Supabase PRIMEIRO
+    const valTotal = Number(dados.valorTotal) || 0;
+    const valEntrada = Number(dados.valorEntrada) || 0;
+
+    // 1. Atualizar no Supabase PRIMEIRO com payload padronizado
     const payloadUpdate: Record<string, any> = {
       cliente_id: dados.clienteId,
       cliente_nome: dados.clienteNome,
       cliente_whatsapp: dados.clienteWhatsapp,
       data_entrega: dados.dataEntrega,
-      horario_entrega: dados.horarioEntrega,
+      horario_entrega: dados.horarioEntrega || "14:00",
       itens: dados.itens,
-      itens_detalhes: dados.itensDetalhes,
-      insumos_necessarios: dados.insumosNecessarios,
-      valor_total: Number(dados.valorTotal) || 0,
-      valor_entrada: Number(dados.valorEntrada) || 0,
+      itens_detalhes: dados.itensDetalhes || [],
+      insumos_necessarios: dados.insumosNecessarios || [],
+      valor_total: valTotal,
+      total_amount: valTotal,
+      valor_entrada: valEntrada,
       historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
-      status_pagamento: dados.statusPagamento,
-      status: dados.status,
-      tipo_entrega: dados.tipoEntrega,
-      endereco_entrega: dados.enderecoEntrega,
-      observacoes: dados.observacoes,
-      tem_topo_bolo: dados.temTopoBolo,
-      detalhes_topo_bolo: dados.detalhesTopoBolo,
-      tem_vela: dados.temVela,
-      tipo_vela: dados.detalhesVela || (dados as any).tipoVela,
-      detalhes_vela: dados.detalhesVela,
+      status_pagamento: dados.statusPagamento || "pendente",
+      status: dados.status || "pendente",
+      tipo_entrega: dados.tipoEntrega || "retirada",
+      endereco_entrega: dados.enderecoEntrega || "",
+      observacoes: dados.observacoes || "",
+      tem_topo_bolo: dados.temTopoBolo ?? false,
+      detalhes_topo_bolo: dados.detalhesTopoBolo || "",
+      tem_vela: dados.temVela ?? false,
+      tipo_vela: dados.detalhesVela || (dados as any).tipoVela || "",
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from("encomendas")
       .update(payloadUpdate)
       .eq("id", id)
       .eq("estabelecimento_codigo", activeCode);
+
+    if (error) {
+      console.warn("[Supabase Warning] Falha na atualização padrão de encomenda, acionando fallback:", error.message);
+      
+      const payloadFallback = {
+        cliente_nome: dados.clienteNome,
+        cliente_whatsapp: dados.clienteWhatsapp,
+        data_entrega: dados.dataEntrega,
+        horario_entrega: dados.horarioEntrega || "14:00",
+        itens: dados.itens,
+        valor_total: valTotal,
+        total_amount: valTotal,
+        valor_entrada: valEntrada,
+        historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+        status_pagamento: dados.statusPagamento || "pendente",
+        status: dados.status || "pendente",
+        observacoes: dados.observacoes || "",
+        updated_at: new Date().toISOString(),
+      };
+
+      let resMin = await supabase
+        .from("encomendas")
+        .update(payloadFallback)
+        .eq("id", id);
+      
+      error = resMin.error;
+    }
 
     if (error) {
       console.error("[Supabase Error] Falha ao atualizar encomenda:", error);
