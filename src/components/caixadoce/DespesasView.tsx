@@ -317,7 +317,7 @@ export function DespesasView({
   };
 
   // Gerar a Lista de Compras Final Consolidada
-  const handleCriarListaConsolidada = () => {
+  const handleCriarListaConsolidada = async () => {
     if (insumosConsolidadosPreview.length === 0) {
       toast.error("Nenhum insumo ou ingrediente para consolidar.");
       return;
@@ -344,10 +344,34 @@ export function DespesasView({
       createdAt: new Date().toISOString(),
     };
 
-    setListas((prev) => [novaLista, ...prev]);
+    const novasListas = [novaLista, ...listas];
+    setListas(novasListas);
     setExpandedListaId(novaLista.id);
     setModalConsolidarOpen(false);
-    toast.success(`⚡ Lista Consolidada com ${itensLista.length} insumos criada com sucesso!`);
+
+    if (onAtualizarListasCompras) {
+      onAtualizarListasCompras(novasListas);
+    }
+
+    try {
+      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(novasListas));
+
+      await supabase.from("listas_compras" as any).upsert([
+        {
+          id: novaLista.id,
+          estabelecimento_codigo: estabelecimentoCodigo,
+          nome: novaLista.nome,
+          data: novaLista.createdAt,
+          status: novaLista.status,
+          itens: novaLista.itens,
+          valor_estimado: 0,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao salvar lista consolidada no Supabase:", e);
+    }
+
+    toast.success(`⚡ Lista de Insumos com ${itensLista.length} item(ns) criada e salva na Lista de Compras!`);
   };
 
   // Sincronizar com props externas e localStorage
@@ -1385,7 +1409,7 @@ export function DespesasView({
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-extrabold flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" /> Ver Listas de Encomendas dos Clientes
+              <Sparkles className="w-5 h-5 text-purple-600" /> Criar Lista de Insumos das Encomendas
             </DialogTitle>
             <DialogDescription className="text-xs">
               Selecione as encomendas ativas/pendentes abaixo. O sistema cruzará os itens dos pedidos com a Ficha Técnica do Cardápio, somando a quantidade exata de cada insumo necessário!
