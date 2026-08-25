@@ -34,7 +34,6 @@ import { type Colaborador } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 const ABAS_DISPONIVEIS = [
-  { id: "scanner", label: "Escanear (Leitor de Notinhas)" },
   { id: "despesas", label: "Lista de Compras & Notinhas" },
   { id: "produtos", label: "Cardápio Digital" },
   { id: "encomendas", label: "Gestão de Encomendas" },
@@ -151,22 +150,6 @@ export function ColaboradoresTab() {
       const cleanCode = activeCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
 
-      try {
-        await supabase.auth.signUp({
-          email: syntheticEmail,
-          password: pin,
-          options: {
-            data: {
-              name: nome,
-              role: "colaborador",
-              establishmentCode: activeCode,
-            },
-          },
-        });
-      } catch (err) {
-        console.warn("Aviso ao registrar no Supabase Auth:", err);
-      }
-
       const novo: Colaborador = {
         id: crypto.randomUUID(),
         estabelecimentoCodigo: activeCode,
@@ -178,8 +161,6 @@ export function ColaboradoresTab() {
         dataCadastro: new Date().toLocaleDateString("pt-BR"),
         abasPermitidas,
       };
-
-      salvarLista([novo, ...colaboradores]);
 
       const payload = {
         id: novo.id,
@@ -193,10 +174,15 @@ export function ColaboradoresTab() {
       };
 
       try {
-        await supabase.from("colaboradores").upsert([payload], { onConflict: "id" });
+        const { error } = await supabase.from("colaboradores").upsert([payload], { onConflict: "id" });
+        if (error) {
+          console.warn("Aviso ao salvar no Supabase colaboradores:", error.message);
+        }
       } catch (err) {
         console.warn("Aviso ao salvar no Supabase colaboradores:", err);
       }
+
+      salvarLista([novo, ...colaboradores]);
 
       setModalNovo(false);
       setNome("");
