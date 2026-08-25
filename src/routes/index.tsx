@@ -56,7 +56,38 @@ import {
   LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
 
+function RouteErrorFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-center space-y-4">
+      <div className="w-16 h-16 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto">
+        <Shield className="w-8 h-8" />
+      </div>
+      <h2 className="text-xl font-extrabold text-foreground">Sessão de Login Expirada</h2>
+      <p className="text-xs text-muted-foreground max-w-md">
+        A tentativa de conexão com redes sociais expirou ou foi cancelada. Clique no botão abaixo para recarregar a tela inicial.
+      </p>
+      <Button
+        onClick={() => {
+          if (typeof window !== "undefined") {
+            window.location.href = window.location.origin;
+          }
+        }}
+        className="font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white"
+      >
+        Voltar para a Tela Inicial
+      </Button>
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    error: search.error as string | undefined,
+    error_code: search.error_code as string | undefined,
+    error_description: search.error_description as string | undefined,
+    tab: search.tab as string | undefined,
+    code: search.code as string | undefined,
+  }),
   head: () => ({
     meta: [
       { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
@@ -65,6 +96,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Index,
+  errorComponent: RouteErrorFallback,
 });
 
 function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
@@ -124,6 +156,25 @@ function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string
 
 function Index() {
   const { user, profile, isMounted, authLoading, logout, switchProfile } = useAuth();
+
+  // Limpeza e tratamento de erros de redirecionamento OAuth na URL
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      const errCode = params.get("error_code") || params.get("error");
+      const errDesc = params.get("error_description");
+
+      if (errCode || errDesc) {
+        window.history.replaceState({}, "", window.location.pathname);
+        if (errCode?.includes("bad_oauth_state") || errDesc?.includes("expired") || errDesc?.includes("OAuth")) {
+          toast.error("Sessão de login expirada ou cancelada. Por favor, tente entrar novamente.");
+        } else {
+          toast.error(`Aviso de Autenticação: ${errDesc || errCode}`);
+        }
+      }
+    }
+  }, []);
+
   // Scanner é a tela inicial padrão
   const [activeTab, setActiveTab] = useState<string>("scanner");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
