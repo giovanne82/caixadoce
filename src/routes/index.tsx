@@ -56,7 +56,38 @@ import {
   LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
 
+function RouteErrorFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-center space-y-4">
+      <div className="w-16 h-16 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto">
+        <Shield className="w-8 h-8" />
+      </div>
+      <h2 className="text-xl font-extrabold text-foreground">Sessão de Login Expirada</h2>
+      <p className="text-xs text-muted-foreground max-w-md">
+        A tentativa de conexão com redes sociais expirou ou foi cancelada. Clique no botão abaixo para recarregar a tela inicial.
+      </p>
+      <Button
+        onClick={() => {
+          if (typeof window !== "undefined") {
+            window.location.href = window.location.origin;
+          }
+        }}
+        className="font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white"
+      >
+        Voltar para a Tela Inicial
+      </Button>
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    error: search.error as string | undefined,
+    error_code: search.error_code as string | undefined,
+    error_description: search.error_description as string | undefined,
+    tab: search.tab as string | undefined,
+    code: search.code as string | undefined,
+  }),
   head: () => ({
     meta: [
       { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
@@ -65,6 +96,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Index,
+  errorComponent: RouteErrorFallback,
 });
 
 function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
@@ -77,7 +109,7 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       <div className="space-y-2">
         <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Pro</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
+          Seu período de testes de 7 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
           Assine o Plano Mensal Completo (R$ 19,90/mês) para desbloquear todos os módulos.
@@ -124,6 +156,25 @@ function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string
 
 function Index() {
   const { user, profile, isMounted, authLoading, logout, switchProfile } = useAuth();
+
+  // Limpeza e tratamento de erros de redirecionamento OAuth na URL
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      const errCode = params.get("error_code") || params.get("error");
+      const errDesc = params.get("error_description");
+
+      if (errCode || errDesc) {
+        window.history.replaceState({}, "", window.location.pathname);
+        if (errCode?.includes("bad_oauth_state") || errDesc?.includes("expired") || errDesc?.includes("OAuth")) {
+          toast.error("Sessão de login expirada ou cancelada. Por favor, tente entrar novamente.");
+        } else {
+          toast.error(`Aviso de Autenticação: ${errDesc || errCode}`);
+        }
+      }
+    }
+  }, []);
+
   // Scanner é a tela inicial padrão
   const [activeTab, setActiveTab] = useState<string>("scanner");
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
@@ -145,86 +196,74 @@ function Index() {
   const activeCode = profile?.establishmentCode || "CD-1001";
   const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
+  const ABAS_PERMITIDAS_COLABORADOR = ["despesas", "produtos", "encomendas"];
+
   const podeAcessarAba = useCallback((abaId: string): boolean => {
     if (!profile || profile.role === "admin") return true;
-    const permitidas = profile.abasPermitidas || ["dashboard", "scanner", "despesas", "encomendas", "produtos", "financeiro"];
-    if (abaId === "scanner") return permitidas.includes("scanner") || permitidas.includes("dashboard");
-    return permitidas.includes(abaId);
+    if (profile.role === "operador") {
+      return ABAS_PERMITIDAS_COLABORADOR.includes(abaId);
+    }
+    return true;
   }, [profile]);
 
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
-      const permitidas = profile.abasPermitidas || ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
-      const primeira = permitidas.find((a) => podeAcessarAba(a)) || "despesas";
-      toast.error("Acesso Negado: Você não possui permissão para acessar este módulo.");
-      setActiveTab(primeira);
+      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Lista de Compras, Cardápio e Encomendas.");
+      setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
+function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return userId;
+  }
+  if (ownerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerUserId)) {
+    return ownerUserId;
+  }
+  return "00000000-0000-0000-0000-000000000000";
+}
+
   // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a nomes de tabela (404)
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
-      // ISOLAMENTO DE DADOS: Nunca buscar registros sem um código de estabelecimento ou usuário autenticado
-      if (!activeCode || !user?.id) return [];
+      // ISOLAMENTO DE DADOS POR ESTABELECIMENTO
+      if (!activeCode) return [];
 
-      // Mapeamento de sinonimos / nomes alternativos de tabelas para prevencao de Erro 404
-      const TABLE_ALIASES: Record<string, string[]> = {
-        despesas: ["expenses", "notinhas"],
-        listas_compras: ["shopping_lists", "listas"],
-        transacoes_financeiras: ["financial_transactions", "transacoes"],
-        produtos: ["products", "cardapio"],
-        encomendas: ["orders", "pedidos"],
-        datas_bloqueadas: ["blocked_dates"],
-        customers: ["clientes"],
-        historico_compras_insumos: ["historico_compras"],
-      };
+      try {
+        let query = supabase
+          .from(tableName as any)
+          .select("*")
+          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
 
-      const candidateTables = [tableName, ...(TABLE_ALIASES[tableName] || [])];
-
-      for (const tableCandidate of candidateTables) {
-        try {
-          let query = supabase
-            .from(tableCandidate as any)
-            .select("*")
-            .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode},user_id.eq.${user.id}`);
-
-          if (orderColumn) {
-            query = query.order(orderColumn, { ascending });
-          }
-          const res = await query;
-
-          if (!res.error && res.data) return res.data;
-
-          if (res.error) {
-            // Se for erro de tabela inexistente (404 / 42P01), pula para o proximo candidato silenciosamente
-            const is404 = res.status === 404 || res.error.code === "42P01" || res.error.message?.includes("does not exist");
-            if (is404) {
-              console.warn(`[Supabase 404] Tabela "${tableCandidate}" não existe. Tentando alternativa...`);
-              continue;
-            }
-
-            console.warn(
-              `[Supabase Filter Warning] Tabela "${tableCandidate}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
-            );
-
-            try {
-              let fallbackQuery = supabase
-                .from(tableCandidate as any)
-                .select("*")
-                .eq("estabelecimento_codigo", activeCode);
-
-              if (orderColumn) {
-                fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
-              }
-              const rawRes = await fallbackQuery;
-              if (!rawRes.error && rawRes.data) return rawRes.data;
-            } catch {}
-          }
-        } catch (err: any) {
-          console.error(`[Supabase Exception] Tabela "${tableCandidate}":`, err?.message || err);
+        if (orderColumn) {
+          query = query.order(orderColumn, { ascending });
         }
+        const res = await query;
+
+        if (!res.error && res.data) return res.data;
+
+        if (res.error) {
+          console.warn(
+            `[Supabase Filter Warning] Tabela "${tableName}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
+          );
+
+          try {
+            let fallbackQuery = supabase
+              .from(tableName as any)
+              .select("*")
+              .eq("estabelecimento_codigo", activeCode);
+
+            if (orderColumn) {
+              fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+            }
+            const rawRes = await fallbackQuery;
+            if (!rawRes.error && rawRes.data) return rawRes.data;
+          } catch {}
+        }
+      } catch (err: any) {
+        console.error(`[Supabase Exception] Tabela "${tableName}":`, err?.message || err);
       }
       return [];
     },
@@ -498,17 +537,25 @@ function Index() {
       }
     };
 
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
-
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleFocus);
     };
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
-
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    const cleanWhatsapp = dados.whatsapp?.replace(/\D/g, "") || "";
+    const clienteExistente = clientes.find((c) => {
+      const cPhone = c.whatsapp?.replace(/\D/g, "") || "";
+      if (cleanWhatsapp && cPhone && cleanWhatsapp === cPhone) return true;
+      return c.nome.trim().toLowerCase() === dados.nome.trim().toLowerCase();
+    });
+
+    if (clienteExistente) {
+      await editarCliente(clienteExistente.id, dados);
+      return clienteExistente;
+    }
+
     const novo: Cliente = {
       ...dados,
       id: crypto.randomUUID(),
@@ -520,19 +567,24 @@ function Index() {
     setClientes(atualizados);
     try {
       localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-      await supabase.from("customers").insert([
-        {
-          id: novo.id,
-          estabelecimento_codigo: activeCode,
-          name: novo.nome,
-          whatsapp: novo.whatsapp,
-          address: novo.endereco,
-          notes: novo.observacoes,
-        },
-      ]);
+      await supabase.from("customers").upsert(
+        [
+          {
+            id: novo.id,
+            user_id: getValidUuid(user?.id, profile?.ownerUserId),
+            estabelecimento_codigo: activeCode,
+            name: novo.nome,
+            whatsapp: novo.whatsapp,
+            address: novo.endereco || "",
+            notes: novo.observacoes || "",
+          },
+        ],
+        { onConflict: "id" }
+      );
     } catch (e) {
       console.warn("Aviso ao salvar cliente:", e);
     }
+    return novo;
   };
 
   const editarCliente = async (id: string, dados: Partial<Cliente>) => {
@@ -578,17 +630,9 @@ function Index() {
         return;
       }
 
-      if (!res.data || res.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para cliente id:", id);
-        toast.error("Não foi possível excluir o cliente no banco de dados. Verifique a permissão (RLS) no Supabase.");
-        return;
-      }
-
       const atualizados = clientes.filter((c) => c.id !== id);
       setClientes(atualizados);
-      try {
-        localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-      } catch {}
+      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
       toast.success("Cliente removido com sucesso.");
     } catch (e: any) {
       toast.error(`Erro ao excluir cliente: ${e?.message || e}`);
@@ -602,125 +646,74 @@ function Index() {
     }
   };
 
-  // Handlers de Produtos (Tabela Oficial produtos)
-  const criarProduto = async (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => {
-    const novo: ProdutoCardapio = {
-      ...dados,
-      id: crypto.randomUUID(),
-      estabelecimentoCodigo: activeCode,
-      createdAt: new Date().toISOString(),
-    };
-
-    // 1. Enviar para o Supabase PRIMEIRO
-    const { error } = await supabase.from("produtos").insert([
-      {
-        id: novo.id,
-        user_id: user?.id || null,
-        estabelecimento_codigo: activeCode,
-        codigo: activeCode,
-        store_id: activeCode,
-        nome: novo.nome,
-        name: novo.nome,
-        descricao: novo.descricao,
-        description: novo.descricao,
-        preco: novo.preco,
-        price: novo.preco,
-        foto_url: novo.fotoUrl,
-        image_url: novo.fotoUrl,
-        categoria: novo.categoria,
-        category: novo.categoria,
-        ativo: novo.ativo !== false,
-        is_active: novo.ativo !== false,
-        tempo_preparo_horas: novo.tempoPreparoHoras || 24,
-        prep_time_hours: novo.tempoPreparoHoras || 24,
-      },
-    ]);
-
-    if (error) {
-      console.error("[Supabase Error] Falha ao criar produto:", error);
-      toast.error(`Falha ao salvar produto no banco: ${error.message || "Erro de conexão"}`);
-      throw error; // Interrompe a submissão para não fechar o formulário nem atualizar o estado local
-    }
-
-    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
+  // Handlers de Produtos
+  const criarProduto = async (novo: Produto) => {
     const atualizados = [novo, ...produtos];
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
-  };
 
-  const editarProduto = async (id: string, dados: Partial<ProdutoCardapio>) => {
-    // 1. Atualizar no Supabase PRIMEIRO
-    const { error } = await supabase
-      .from("produtos")
-      .update({
-        nome: dados.nome,
-        name: dados.nome,
-        descricao: dados.descricao,
-        description: dados.descricao,
-        preco: dados.preco,
-        price: dados.preco,
-        foto_url: dados.fotoUrl,
-        image_url: dados.fotoUrl,
-        categoria: dados.categoria,
-        category: dados.categoria,
-        ativo: dados.ativo,
-        is_active: dados.ativo,
-        tempo_preparo_horas: dados.tempoPreparoHoras,
-        prep_time_hours: dados.tempoPreparoHoras,
-      })
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
+    const { error } = await supabase.from("produtos").insert([
+      {
+        id: novo.id,
+        user_id: getValidUuid(user?.id, profile?.ownerUserId),
+        estabelecimento_codigo: activeCode,
+        codigo: activeCode,
+        store_id: activeCode,
+        nome: novo.nome,
+        categoria: novo.categoria,
+        preco: Number(novo.preco) || 0,
+        descricao: novo.descricao || "",
+        imagem: novo.imagem || "",
+        insumos: novo.insumos || [],
+        disponivel: novo.disponivel !== false,
+      },
+    ]);
 
     if (error) {
-      console.error("[Supabase Error] Falha ao editar produto:", error);
-      toast.error(`Falha ao atualizar produto no banco: ${error.message || "Erro de conexão"}`);
-      throw error; // Interrompe a submissão
+      console.warn("[Supabase Error] Falha ao criar produto no banco:", error.message);
     }
+  };
 
-    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
+  const editarProduto = async (id: string, dados: Partial<Produto>) => {
     const atualizados = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p));
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
+
+    const payload: Record<string, any> = {};
+    if (dados.nome !== undefined) payload.nome = dados.nome;
+    if (dados.categoria !== undefined) payload.categoria = dados.categoria;
+    if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
+    if (dados.descricao !== undefined) payload.descricao = dados.descricao;
+    if (dados.imagem !== undefined) payload.imagem = dados.imagem;
+    if (dados.insumos !== undefined) payload.insumos = dados.insumos;
+    if (dados.disponivel !== undefined) payload.disponivel = dados.disponivel;
+
+    const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
+    if (error) {
+      console.warn("[Supabase Error] Falha ao editar produto no banco:", error.message);
+    }
   };
 
   const excluirProduto = async (id: string) => {
     try {
-      let res = await supabase
-        .from("produtos")
-        .delete()
-        .eq("id", id)
-        .eq("estabelecimento_codigo", activeCode)
-        .select();
-
+      let res = await supabase.from("produtos").delete().eq("id", id).eq("estabelecimento_codigo", activeCode).select();
       if (!res.error && (!res.data || res.data.length === 0)) {
-        res = await supabase
-          .from("produtos")
-          .delete()
-          .eq("id", id)
-          .select();
+        res = await supabase.from("produtos").delete().eq("id", id).select();
       }
 
       if (res.error) {
-        console.error("[Supabase Error] Falha ao excluir produto:", res.error);
-        toast.error(`Falha ao remover produto do banco: ${res.error.message}`);
-        return;
-      }
-
-      if (!res.data || res.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para produto id:", id);
-        toast.error("Não foi possível excluir o produto no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        console.error("[Supabase Delete Error] Produtos:", res.error);
+        toast.error(`Falha ao excluir produto no banco: ${res.error.message}`);
         return;
       }
 
       const atualizados = produtos.filter((p) => p.id !== id);
       setProdutos(atualizados);
-      try {
-        localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      } catch {}
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
       toast.success("Produto removido do cardápio.");
     } catch (e: any) {
       toast.error(`Erro ao excluir produto: ${e?.message || e}`);
@@ -735,50 +728,72 @@ function Index() {
       estabelecimentoCodigo: activeCode,
     };
 
-    // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas)
-    const { error } = await supabase.from("encomendas").insert([
-      {
+    let valTotal = Number(item.valorTotal) || Number((item as any).totalAmount) || Number((item as any).total_amount) || 0;
+    if (valTotal <= 0 && Array.isArray(item.itensDetalhes) && item.itensDetalhes.length > 0) {
+      valTotal = item.itensDetalhes.reduce((acc, it: any) => acc + (Number(it.subtotal || it.precoUnitario) || 0), 0);
+    }
+    valTotal = Math.max(0, valTotal);
+    const valEntrada = Math.max(0, Number(item.valorEntrada) || Number((item as any).downPayment) || Number((item as any).valor_entrada) || 0);
+
+    const detVela = item.detalhesVela || (item as any).tipoVela || "";
+    const detTopo = item.detalhesTopoBolo || "";
+    const temTopo = item.temTopoBolo || false;
+    const temVela = item.temVela || false;
+
+    // 1. Payload Padronizado sem colunas fantasmas
+    const payloadStandard: Record<string, any> = {
+      id: item.id,
+      user_id: getValidUuid(user?.id, profile?.ownerUserId),
+      estabelecimento_codigo: activeCode,
+      cliente_id: item.clienteId || null,
+      cliente_nome: item.clienteNome,
+      cliente_whatsapp: item.clienteWhatsapp,
+      data_entrega: item.dataEntrega,
+      horario_entrega: item.horarioEntrega || "14:00",
+      itens: item.itens,
+      itens_detalhes: item.itensDetalhes || [],
+      insumos_necessarios: item.insumosNecessarios || [],
+      valor_total: valTotal,
+      total_amount: valTotal,
+      valor_entrada: valEntrada,
+      historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
+      status_pagamento: item.statusPagamento || "pendente",
+      status: item.status || "pendente",
+      tipo_entrega: item.tipoEntrega || "retirada",
+      endereco_entrega: item.enderecoEntrega || "",
+      observacoes: item.observacoes || "",
+      tem_topo_bolo: temTopo,
+      detalhes_topo_bolo: detTopo,
+      tem_vela: temVela,
+      tipo_vela: detVela,
+    };
+
+    let { error } = await supabase.from("encomendas").insert([payloadStandard]);
+
+    if (error) {
+      console.warn("[Supabase Warning] Tentativa com payload padronizado falhou, acionando fallback minimalista:", error.message);
+      
+      // Fallback Minimalista: Colunas essenciais garantindo total_amount preenchido
+      const payloadMinimal = {
         id: item.id,
-        user_id: user?.id || null,
+        user_id: getValidUuid(user?.id, profile?.ownerUserId),
         estabelecimento_codigo: activeCode,
-        codigo: activeCode,
-        store_id: activeCode,
-        cliente_id: item.clienteId,
         cliente_nome: item.clienteNome,
-        customer_name: item.clienteNome,
-        client_name: item.clienteNome,
         cliente_whatsapp: item.clienteWhatsapp,
-        customer_phone: item.clienteWhatsapp,
-        client_phone: item.clienteWhatsapp,
         data_entrega: item.dataEntrega,
-        delivery_date: item.dataEntrega,
-        horario_entrega: item.horarioEntrega,
-        delivery_time: item.horarioEntrega,
+        horario_entrega: item.horarioEntrega || "14:00",
         itens: item.itens,
-        itens_detalhes: item.itensDetalhes || [],
-        insumos_necessarios: item.insumosNecessarios || [],
-        valor_total: Number(item.valorTotal) || 0,
-        total_price: Number(item.valorTotal) || 0,
-        total_amount: Number(item.valorTotal) || 0,
-        amount: Number(item.valorTotal) || 0,
-        valor_entrada: Number(item.valorEntrada) || 0,
-        down_payment: Number(item.valorEntrada) || 0,
-        historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
-        payments_history: item.paymentsHistory || item.historicoPagamentos || [],
-        status_pagamento: item.statusPagamento,
-        payment_status: item.statusPagamento,
-        status: item.status,
-        tipo_entrega: item.tipoEntrega,
-        delivery_type: item.tipoEntrega,
-        endereco_entrega: item.enderecoEntrega,
-        delivery_address: item.enderecoEntrega,
-        observacoes: item.observacoes,
-        tem_topo_bolo: item.temTopoBolo || false,
-        detalhes_topo_bolo: item.detalhesTopoBolo || "",
-        tem_vela: item.temVela || false,
-        detalhes_vela: item.detalhesVela || "",
-      },
-    ]);
+        valor_total: valTotal,
+        total_amount: valTotal,
+        valor_entrada: valEntrada,
+        status: item.status || "pendente",
+        status_pagamento: item.statusPagamento || "pendente",
+        observacoes: item.observacoes || "",
+      };
+
+      let resMin = await supabase.from("encomendas").insert([payloadMinimal]);
+      error = resMin.error;
+    }
 
     if (error) {
       console.error("[Supabase Error] Falha ao criar encomenda:", error);
@@ -795,48 +810,67 @@ function Index() {
   };
 
   const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
-    // 1. Atualizar no Supabase PRIMEIRO
-    const { error } = await supabase
+    const valTotal = Number(dados.valorTotal) || 0;
+    const valEntrada = Number(dados.valorEntrada) || 0;
+
+    // 1. Atualizar no Supabase PRIMEIRO com payload padronizado
+    const payloadUpdate: Record<string, any> = {
+      cliente_id: dados.clienteId,
+      cliente_nome: dados.clienteNome,
+      cliente_whatsapp: dados.clienteWhatsapp,
+      data_entrega: dados.dataEntrega,
+      horario_entrega: dados.horarioEntrega || "14:00",
+      itens: dados.itens,
+      itens_detalhes: dados.itensDetalhes || [],
+      insumos_necessarios: dados.insumosNecessarios || [],
+      valor_total: valTotal,
+      total_amount: valTotal,
+      valor_entrada: valEntrada,
+      historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+      status_pagamento: dados.statusPagamento || "pendente",
+      status: dados.status || "pendente",
+      tipo_entrega: dados.tipoEntrega || "retirada",
+      endereco_entrega: dados.enderecoEntrega || "",
+      observacoes: dados.observacoes || "",
+      tem_topo_bolo: dados.temTopoBolo ?? false,
+      detalhes_topo_bolo: dados.detalhesTopoBolo || "",
+      tem_vela: dados.temVela ?? false,
+      tipo_vela: dados.detalhesVela || (dados as any).tipoVela || "",
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error } = await supabase
       .from("encomendas")
-      .update({
-        cliente_id: dados.clienteId,
-        cliente_nome: dados.clienteNome,
-        customer_name: dados.clienteNome,
-        client_name: dados.clienteNome,
-        cliente_whatsapp: dados.clienteWhatsapp,
-        customer_phone: dados.clienteWhatsapp,
-        client_phone: dados.clienteWhatsapp,
-        data_entrega: dados.dataEntrega,
-        delivery_date: dados.dataEntrega,
-        horario_entrega: dados.horarioEntrega,
-        delivery_time: dados.horarioEntrega,
-        itens: dados.itens,
-        itens_detalhes: dados.itensDetalhes,
-        insumos_necessarios: dados.insumosNecessarios,
-        valor_total: Number(dados.valorTotal) || 0,
-        total_price: Number(dados.valorTotal) || 0,
-        total_amount: Number(dados.valorTotal) || 0,
-        amount: Number(dados.valorTotal) || 0,
-        valor_entrada: Number(dados.valorEntrada) || 0,
-        down_payment: Number(dados.valorEntrada) || 0,
-        historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
-        payments_history: dados.paymentsHistory || dados.historicoPagamentos || [],
-        status_pagamento: dados.statusPagamento,
-        payment_status: dados.statusPagamento,
-        status: dados.status,
-        tipo_entrega: dados.tipoEntrega,
-        delivery_type: dados.tipoEntrega,
-        endereco_entrega: dados.enderecoEntrega,
-        delivery_address: dados.enderecoEntrega,
-        observacoes: dados.observacoes,
-        tem_topo_bolo: dados.temTopoBolo,
-        detalhes_topo_bolo: dados.detalhesTopoBolo,
-        tem_vela: dados.temVela,
-        detalhes_vela: dados.detalhesVela,
-        updated_at: new Date().toISOString(),
-      })
+      .update(payloadUpdate)
       .eq("id", id)
       .eq("estabelecimento_codigo", activeCode);
+
+    if (error) {
+      console.warn("[Supabase Warning] Falha na atualização padrão de encomenda, acionando fallback:", error.message);
+      
+      const payloadFallback = {
+        cliente_nome: dados.clienteNome,
+        cliente_whatsapp: dados.clienteWhatsapp,
+        data_entrega: dados.dataEntrega,
+        horario_entrega: dados.horarioEntrega || "14:00",
+        itens: dados.itens,
+        valor_total: valTotal,
+        total_amount: valTotal,
+        valor_entrada: valEntrada,
+        historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+        status_pagamento: dados.statusPagamento || "pendente",
+        status: dados.status || "pendente",
+        observacoes: dados.observacoes || "",
+        updated_at: new Date().toISOString(),
+      };
+
+      let resMin = await supabase
+        .from("encomendas")
+        .update(payloadFallback)
+        .eq("id", id);
+      
+      error = resMin.error;
+    }
 
     if (error) {
       console.error("[Supabase Error] Falha ao atualizar encomenda:", error);
@@ -940,7 +974,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: user?.id || null,
+          user_id: getValidUuid(user?.id, profile?.ownerUserId),
           data: item.data,
           motivo: item.motivo,
         },
@@ -998,7 +1032,7 @@ function Index() {
     const payload = {
       id: item.id,
       estabelecimento_codigo: activeCode,
-      user_id: user?.id || null,
+      user_id: getValidUuid(user?.id),
       fornecedor_nome: item.fornecedorNome,
       fornecedor_endereco: item.fornecedorEndereco || null,
       numero_nota: item.numeroNota || null,
@@ -1232,7 +1266,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: user?.id || null,
+          user_id: getValidUuid(user?.id, profile?.ownerUserId),
           descricao: item.descricao,
           valor: item.valor,
           tipo: item.tipo,
@@ -1370,7 +1404,7 @@ function Index() {
       <ScannerProgressBanner activeTab={activeTab} onNavigateTab={setActiveTab} />
 
       {/* Conteúdo Principal / Tabs */}
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
@@ -1384,14 +1418,14 @@ function Index() {
                   <Layers className="w-4 h-4" /> Lista de Compras
                 </TabsTrigger>
               )}
-              {podeAcessarAba("encomendas") && (
-                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Package className="w-4 h-4" /> Encomendas
-                </TabsTrigger>
-              )}
               {podeAcessarAba("produtos") && (
                 <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                   <Cake className="w-4 h-4" /> Cardápio
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("encomendas") && (
+                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Package className="w-4 h-4" /> Encomendas
                 </TabsTrigger>
               )}
               {podeAcessarAba("financeiro") && (
@@ -1514,78 +1548,92 @@ function Index() {
         </Tabs>
       </main>
 
-      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Compacta) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-purple-900/40 text-white md:hidden py-1 px-1 shadow-2xl">
-        <div className="grid grid-cols-6 w-full items-center text-center">
+      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Alta Visibilidade & Ergonomia) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#160B29]/95 backdrop-blur-lg border-t-2 border-[#7C3AED]/40 text-white md:hidden px-1 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.4)]">
+        <div className="grid grid-cols-6 w-full items-center text-center gap-1">
           {podeAcessarAba("scanner") && (
             <button
               onClick={() => setActiveTab("scanner")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "scanner"
+                  ? "bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Camera className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Escanear</span>
+              <Camera className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "scanner" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Escanear</span>
             </button>
           )}
 
           {podeAcessarAba("despesas") && (
             <button
               onClick={() => setActiveTab("despesas")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "despesas"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Layers className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Compras</span>
+              <Layers className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "despesas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Compras</span>
             </button>
           )}
 
-          {podeAcessarAba("encomendas") && (
-            <button
-              onClick={() => setActiveTab("encomendas")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-              }`}
-            >
-              <Package className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Encomendas</span>
-            </button>
-          )}
-
+          {/* CARDÁPIO COLOCADO ANTES DE ENCOMENDAS */}
           {podeAcessarAba("produtos") && (
             <button
               onClick={() => setActiveTab("produtos")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "produtos"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Cake className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Cardápio</span>
+              <Cake className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "produtos" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Cardápio</span>
+            </button>
+          )}
+
+          {/* ENCOMENDAS COLOCADO APÓS CARDÁPIO */}
+          {podeAcessarAba("encomendas") && (
+            <button
+              onClick={() => setActiveTab("encomendas")}
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "encomendas"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
+              }`}
+            >
+              <Package className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "encomendas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Encomendas</span>
             </button>
           )}
 
           {podeAcessarAba("financeiro") && (
             <button
               onClick={() => setActiveTab("financeiro")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "financeiro"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <DollarSign className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Financeiro</span>
+              <DollarSign className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "financeiro" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Financeiro</span>
             </button>
           )}
 
           {(podeAcessarAba("config") || podeAcessarAba("plano")) && (
             <button
               onClick={() => setActiveTab("config")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "config" || activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "config" || activeTab === "plano"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Settings className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Ajustes</span>
+              <Settings className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "config" || activeTab === "plano" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Ajustes</span>
             </button>
           )}
         </div>

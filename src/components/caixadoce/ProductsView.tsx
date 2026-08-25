@@ -43,7 +43,10 @@ import {
   Sparkles,
   Clock,
   Calculator,
+  Upload,
 } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
+import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
 import {
   formatarMoeda,
@@ -88,6 +91,54 @@ export function ProductsView({
   const [produtoFichaAlvo, setProdutoFichaAlvo] = useState<ProdutoCardapio | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // Personalização Visual do Cardápio
+  const { profile, updateEstablishmentDetails } = useAuth();
+  const fileInputRefLogo = useRef<HTMLInputElement>(null);
+  const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false);
+  const [logoUrlCustom, setLogoUrlCustom] = useState(profile?.logoUrl || profile?.store_logo_url || "");
+  const [tituloCardapioCustom, setTituloCardapioCustom] = useState(profile?.tituloCardapio || profile?.menu_title || "");
+  const [sloganCardapioCustom, setSloganCardapioCustom] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
+  const [salvandoVisual, setSalvandoVisual] = useState(false);
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
+
+  const handleSalvarVisual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSalvandoVisual(true);
+    try {
+      await updateEstablishmentDetails({
+        logoUrl: logoUrlCustom,
+        store_logo_url: logoUrlCustom,
+        tituloCardapio: tituloCardapioCustom,
+        menu_title: tituloCardapioCustom,
+        sloganCardapio: sloganCardapioCustom,
+        menu_slogan: sloganCardapioCustom,
+      });
+      toast.success("Personalização visual do Cardápio salva com sucesso!");
+      setModalPersonalizarOpen(false);
+    } catch (err: any) {
+      toast.error("Erro ao salvar personalização visual: " + (err.message || ""));
+    } finally {
+      setSalvandoVisual(false);
+    }
+  };
+
+  const handleUploadLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEnviandoLogo(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoUrlCustom(reader.result as string);
+      setEnviandoLogo(false);
+      toast.success("Logo carregada! Clique em Salvar para aplicar no cardápio.");
+    };
+    reader.onerror = () => {
+      setEnviandoLogo(false);
+      toast.error("Erro ao ler imagem.");
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Categorias Customizadas
   const [categoriasCustom, setCategoriasCustom] = useState<string[]>(() => {
@@ -283,6 +334,20 @@ export function ProductsView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setLogoUrlCustom(profile?.logoUrl || profile?.store_logo_url || "");
+              setTituloCardapioCustom(profile?.tituloCardapio || profile?.menu_title || "");
+              setSloganCardapioCustom(profile?.sloganCardapio || profile?.menu_slogan || "");
+              setModalPersonalizarOpen(true);
+            }}
+            className="h-8.5 font-bold text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 border-0 shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5 mr-1" /> Personalizar Visual
+          </Button>
+
           <Button
             variant="secondary"
             size="sm"
@@ -812,6 +877,124 @@ export function ProductsView({
               <Copy className="w-3.5 h-3.5 mr-1" /> Copiar Link do Cardápio
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: PERSONALIZAÇÃO VISUAL DO CARDÁPIO (LOGO, TÍTULO, SLOGAN) */}
+      <Dialog open={modalPersonalizarOpen} onOpenChange={setModalPersonalizarOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600" /> Personalização Visual do Cardápio Digital
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Configure a logo, o título público e o slogan exibidos aos clientes no seu cardápio público.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSalvarVisual} className="space-y-4 py-2 font-sans">
+            {/* 1. Upload de Logo do Estabelecimento */}
+            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-purple-600" /> Logo do Estabelecimento
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Esta imagem será exibida no cabeçalho do seu cardápio público. Se deixada em branco, será utilizada a marca padrão.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                <div className="w-20 h-20 rounded-2xl bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative group">
+                  {logoUrlCustom ? (
+                    <img src={logoUrlCustom} alt="Logo da loja" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center p-1">
+                      <CaixaDoceLogo size="sm" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-center sm:text-left">
+                  <input
+                    ref={fileInputRefLogo}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadLogoFile}
+                    className="hidden"
+                  />
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={enviandoLogo}
+                      onClick={() => fileInputRefLogo.current?.click()}
+                      className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                    >
+                      <Upload className="w-3.5 h-3.5 mr-1.5" />
+                      {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
+                    </Button>
+                    {logoUrlCustom && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLogoUrlCustom("")}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Título e Slogan do Cardápio */}
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="menu-title-custom" className="text-xs font-bold">
+                  Título do Cardápio (Público)
+                </Label>
+                <Input
+                  id="menu-title-custom"
+                  value={tituloCardapioCustom}
+                  onChange={(e) => setTituloCardapioCustom(e.target.value)}
+                  placeholder="Cardápio de Bolos & Doces Especiais"
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Exibido no cabeçalho do seu cardápio público. Padrão: <em>'Cardápio de Bolos & Doces Especiais'</em>
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="menu-slogan-custom" className="text-xs font-bold">
+                  Slogan / Descrição do Cardápio
+                </Label>
+                <Textarea
+                  id="menu-slogan-custom"
+                  rows={2}
+                  value={sloganCardapioCustom}
+                  onChange={(e) => setSloganCardapioCustom(e.target.value)}
+                  placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Exibido como mensagem de apresentação aos clientes.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2 border-t flex items-center justify-between">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalPersonalizarOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={salvandoVisual} className="font-extrabold text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-md">
+                {salvandoVisual ? "Salvando..." : "Salvar Alterações Visuais"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
       {/* MODAL: FICHA TÉCNICA & PRECIFICAÇÃO */}

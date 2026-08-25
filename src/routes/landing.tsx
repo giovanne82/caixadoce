@@ -155,7 +155,7 @@ export function LandingPageContent() {
               onClick={irParaLogin}
               className="h-14 px-8 text-base font-extrabold bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl shadow-xl shadow-purple-600/25 border border-purple-400/30 transition-all transform hover:-translate-y-0.5"
             >
-              <Zap className="w-5 h-5 mr-2 text-amber-300" /> Testar 14 Dias Grátis Agora
+              <Zap className="w-5 h-5 mr-2 text-amber-300" /> Testar 7 Dias Grátis Agora
             </Button>
           </div>
 
@@ -289,7 +289,7 @@ export function LandingPageContent() {
                   <Calculator className="w-5 h-5 text-amber-600" />
                   <span className="text-sm font-bold text-amber-950">📊 3. Ficha Técnica &amp; Precificação</span>
                 </div>
-                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Mercado Pago &amp; Pix</Badge>
+                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Precificação Sem Prejuízo</Badge>
               </div>
 
               <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
@@ -510,7 +510,7 @@ export function LandingPageContent() {
             {/* PLANO PRO (MENSAL COMPLETO - R$ 19,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15 transform lg:-translate-y-2">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-xs px-4 py-1 rounded-full shadow-md flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5 text-slate-950" /> 14 DIAS GRÁTIS DE TESTE
+                <Crown className="w-3.5 h-3.5 text-slate-950" /> 7 DIAS GRÁTIS DE TESTE
               </div>
 
               <div className="space-y-4 pt-2">
@@ -528,7 +528,7 @@ export function LandingPageContent() {
                     <span className="text-4xl font-black text-purple-700">
                       R$ 19,90
                     </span>
-                    <span className="text-xs text-slate-600 font-semibold">/ mês (com 14 dias grátis)</span>
+                    <span className="text-xs text-slate-600 font-semibold">/ mês (com 7 dias grátis)</span>
                   </div>
                 </div>
 
@@ -563,14 +563,6 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Emissão de link de pagamento</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Cobrança via Pix ou Cartão com Mercado Pago</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Compartilhamento de conta com outro usuário</span>
                   </div>
                 </div>
@@ -580,7 +572,7 @@ export function LandingPageContent() {
                 onClick={irParaLogin}
                 className="w-full h-12 text-sm font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-600/30 transition-all"
               >
-                Testar 14 Dias Grátis Agora
+                Testar 7 Dias Grátis Agora
               </Button>
             </Card>
           </div>
@@ -607,7 +599,7 @@ export function LandingPageContent() {
               },
               {
                 q: "Preciso cadastrar cartão de crédito para testar?",
-                a: "Não! Você pode iniciar o seu teste gratuito de 14 dias do Plano Pro imediatamente sem informar nenhum cartão de crédito.",
+                a: "Não! Você pode iniciar o seu teste gratuito de 7 dias do Plano Pro imediatamente sem informar nenhum cartão de crédito.",
               },
               {
                 q: "Como o CaixaDoce ajuda a controlar o lucro da minha confeitaria?",
@@ -652,7 +644,7 @@ export function LandingPageContent() {
                 onClick={irParaLogin}
                 className="h-14 px-8 text-base font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-2xl shadow-xl transition-all"
               >
-                Testar 14 Dias Grátis <ArrowRight className="w-5 h-5 ml-2" />
+                Testar 7 Dias Grátis <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </div>
           </div>
@@ -858,7 +850,7 @@ export function LandingPageContent() {
             </div>
 
             <div className="p-3.5 bg-slate-100 rounded-xl text-xs text-slate-600 leading-relaxed">
-              💡 <strong>Vendas pelo WhatsApp:</strong> Seu cliente faz o pedido no cardápio e recebe a confirmação direta no WhatsApp com link de pagamento seguro Mercado Pago.
+              💡 <strong>Vendas pelo WhatsApp:</strong> Seu cliente faz o pedido no cardápio e você recebe a confirmação organizada diretamente no seu WhatsApp.
             </div>
           </div>
         </DialogContent>

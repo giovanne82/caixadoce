@@ -381,42 +381,29 @@ function PublicStoreView() {
         observacoes,
       };
 
-      // 1. Salva no Supabase (Tabela Oficial encomendas)
-      const { error } = await supabase.from("encomendas").insert([
-        {
-          id: novaEncomenda.id,
-          estabelecimento_codigo: cleanCode,
-          codigo: cleanCode,
-          store_id: cleanCode,
-          user_id: (storeInfo as any).user_id || null,
-          cliente_nome: novaEncomenda.clienteNome,
-          customer_name: novaEncomenda.clienteNome,
-          client_name: novaEncomenda.clienteNome,
-          cliente_whatsapp: novaEncomenda.clienteWhatsapp,
-          customer_phone: novaEncomenda.clienteWhatsapp,
-          client_phone: novaEncomenda.clienteWhatsapp,
-          data_entrega: novaEncomenda.dataEntrega,
-          delivery_date: novaEncomenda.dataEntrega,
-          horario_entrega: novaEncomenda.horarioEntrega,
-          delivery_time: novaEncomenda.horarioEntrega,
-          itens: novaEncomenda.itens,
-          valor_total: Number(novaEncomenda.valorTotal) || 0,
-          total_price: Number(novaEncomenda.valorTotal) || 0,
-          total_amount: Number(novaEncomenda.valorTotal) || 0,
-          amount: Number(novaEncomenda.valorTotal) || 0,
-          valor_entrada: Number(novaEncomenda.valorEntrada) || 0,
-          down_payment: Number(novaEncomenda.valorEntrada) || 0,
-          status_pagamento: novaEncomenda.statusPagamento,
-          payment_status: novaEncomenda.statusPagamento,
-          status: novaEncomenda.status,
-          tipo_entrega: novaEncomenda.tipoEntrega,
-          delivery_type: novaEncomenda.tipoEntrega,
-          endereco_entrega: novaEncomenda.enderecoEntrega,
-          delivery_address: novaEncomenda.enderecoEntrega,
-          observacoes: novaEncomenda.observacoes,
-          notes: novaEncomenda.observacoes,
-        },
-      ]);
+      const valTotalAgenda = Math.max(0, Number(novaEncomenda.valorTotal) || 0);
+      const valEntradaAgenda = Math.max(0, Number(novaEncomenda.valorEntrada) || 0);
+
+      const payloadInsert: Record<string, any> = {
+        id: novaEncomenda.id,
+        estabelecimento_codigo: cleanCode,
+        user_id: (storeInfo as any)?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((storeInfo as any).user_id) ? (storeInfo as any).user_id : null,
+        cliente_nome: novaEncomenda.clienteNome,
+        cliente_whatsapp: novaEncomenda.clienteWhatsapp,
+        data_entrega: novaEncomenda.dataEntrega,
+        horario_entrega: novaEncomenda.horarioEntrega,
+        itens: novaEncomenda.itens,
+        valor_total: valTotalAgenda,
+        total_amount: valTotalAgenda,
+        valor_entrada: valEntradaAgenda,
+        status_pagamento: novaEncomenda.statusPagamento,
+        status: novaEncomenda.status,
+        tipo_entrega: novaEncomenda.tipoEntrega,
+        endereco_entrega: novaEncomenda.enderecoEntrega,
+        observacoes: novaEncomenda.observacoes,
+      };
+
+      const { error } = await supabase.from("encomendas").insert([payloadInsert]);
 
       if (error) {
         console.error("Erro ao salvar encomenda no Supabase:", error);

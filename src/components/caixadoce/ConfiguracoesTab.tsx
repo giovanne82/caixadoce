@@ -48,6 +48,7 @@ import {
   Image as ImageIcon,
   Sparkles,
   Edit2,
+  Users,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -486,7 +487,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Assinatura &amp; Meu Plano</h4>
                     <Badge className="bg-purple-600 text-white text-[10px] font-bold">
                       {infoPlano.status === "trial"
-                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 14} dias restantes)`
+                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 7} dias restantes)`
                         : infoPlano.planoId === "basico"
                         ? "Plano Básico Gratuito"
                         : "Plano Pro Ativo"}
@@ -495,7 +496,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   <p className="text-xs text-slate-600">
                     {infoPlano.planoId === "basico"
                       ? "Você está usando o Plano Básico. Faça upgrade para o Plano Pro e libere o scanner por IA ilimitado."
-                      : "Acesso ilimitado liberado para leitura por IA, pagamentos online e agendamento de encomendas."}
+                      : "Acesso ilimitado liberado para leitura por IA, ficha técnica e agendamento de encomendas."}
                   </p>
                 </div>
               </div>
@@ -514,9 +515,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       })()}
 
       <Tabs defaultValue="empresa" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-2">
+        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3">
           <TabsTrigger value="empresa" className="flex items-center gap-1.5 font-bold">
             <Building2 className="w-4 h-4" /> Perfil &amp; Estabelecimento
+          </TabsTrigger>
+          <TabsTrigger value="colaboradores" className="flex items-center gap-1.5 font-bold">
+            <Users className="w-4 h-4" /> Colaboradores &amp; Equipe
           </TabsTrigger>
           <TabsTrigger value="seguranca" className="flex items-center gap-1.5 font-bold">
             <Lock className="w-4 h-4" /> Segurança
@@ -949,108 +953,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   )}
                 </div>
 
-                {/* SEÇÃO DE PERSONALIZAÇÃO DO CARDÁPIO DIGITAL (LOGO, TÍTULO, SLOGAN) */}
-                <div className="pt-3 border-t space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    <h4 className="text-sm font-bold text-foreground">
-                      Personalização do Cardápio Digital Público
-                    </h4>
-                  </div>
-
-                  {/* 1. Upload de Logo do Estabelecimento */}
-                  <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
-                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-purple-600" /> Logo do Estabelecimento
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Esta imagem será exibida no cabeçalho do seu cardápio público. Se deixada em branco, será utilizada a logomarca padrão do CaixaDoce.
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
-                      <div className="w-20 h-20 rounded-2xl bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative group">
-                        {logoUrl ? (
-                          <img src={logoUrl} alt="Logo da loja" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="text-center p-1">
-                            <CaixaDoceLogo size="sm" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2 text-center sm:text-left">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleUploadLogoFile}
-                          className="hidden"
-                        />
-                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={enviandoLogo}
-                            onClick={() => fileInputRef.current?.click()}
-                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
-                          >
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                            {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
-                          </Button>
-                          {logoUrl && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setLogoUrl("")}
-                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2. Título e Slogan do Cardápio */}
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="menu-title" className="text-xs font-bold">
-                        Título do Cardápio (Público)
-                      </Label>
-                      <Input
-                        id="menu-title"
-                        value={tituloCardapio}
-                        onChange={(e) => setTituloCardapio(e.target.value)}
-                        placeholder="Cardápio de Bolos & Doces Especiais"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Exibido no cabeçalho do seu cardápio público. Padrão: <em>'Cardápio de Bolos & Doces Especiais'</em>
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="menu-slogan" className="text-xs font-bold">
-                        Slogan / Descrição do Cardápio
-                      </Label>
-                      <Textarea
-                        id="menu-slogan"
-                        rows={2}
-                        value={sloganCardapio}
-                        onChange={(e) => setSloganCardapio(e.target.value)}
-                        placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
-                        className="text-xs"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Exibido como mensagem de apresentação. Padrão: <em>'Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe.'</em>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
                 <Button type="submit" disabled={salvandoEst} className="font-semibold shadow-sm mt-2">
                   <Save className="w-4 h-4 mr-1.5" />
                   {salvandoEst ? "Salvando..." : "Salvar Dados do Estabelecimento"}
@@ -1058,6 +960,11 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
               </form>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* TAB: GESTÃO DE COLABORADORES & EQUIPE */}
+        <TabsContent value="colaboradores" className="space-y-6">
+          <ColaboradoresTab />
         </TabsContent>
 
         {/* TAB: SEGURANÇA */}

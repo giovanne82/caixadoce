@@ -173,60 +173,62 @@ export async function calcularPrecoMedioInsumo(
 
   // 2. Fallback no Cache Local (Notinhas & Histórico ordenados pelo registro mais recente)
   try {
-    const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
-    const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
-    
-    let itensLocal: { nome: string; valorTotal: number; timestamp: number }[] = [];
+    if (typeof window !== "undefined") {
+      const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
+      const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
+      
+      let itensLocal: { nome: string; valorTotal: number; timestamp: number }[] = [];
 
-    if (rawHistorico) {
-      const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
-      parsed.forEach((h) => {
-        itensLocal.push({
-          nome: h.nomeInsumo,
-          valorTotal: h.valorPagoTotal,
-          timestamp: new Date(h.createdAt || h.dataCompra || 0).getTime(),
-        });
-      });
-    }
-
-    if (rawDespesas) {
-      const parsedDespesas: any[] = JSON.parse(rawDespesas);
-      parsedDespesas.forEach((d) => {
-        const t = new Date(d.dataCompra || d.createdAt || 0).getTime();
-        if (Array.isArray(d.itens)) {
-          d.itens.forEach((it: any) => {
-            itensLocal.push({
-              nome: it.nome || "Insumo",
-              valorTotal: Number(it.valorTotal) || 0,
-              timestamp: t,
-            });
+      if (rawHistorico) {
+        const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
+        parsed.forEach((h) => {
+          itensLocal.push({
+            nome: h.nomeInsumo,
+            valorTotal: h.valorPagoTotal,
+            timestamp: new Date(h.createdAt || h.dataCompra || 0).getTime(),
           });
-        }
-      });
-    }
+        });
+      }
 
-    if (itensLocal.length > 0) {
-      // Ordena do registro mais recente para o mais antigo
-      itensLocal.sort((a, b) => b.timestamp - a.timestamp);
+      if (rawDespesas) {
+        const parsedDespesas: any[] = JSON.parse(rawDespesas);
+        parsedDespesas.forEach((d) => {
+          const t = new Date(d.dataCompra || d.createdAt || 0).getTime();
+          if (Array.isArray(d.itens)) {
+            d.itens.forEach((it: any) => {
+              itensLocal.push({
+                nome: it.nome || "Insumo",
+                valorTotal: Number(it.valorTotal) || 0,
+                timestamp: t,
+              });
+            });
+          }
+        });
+      }
 
-      const matches = itensLocal.filter((it) => {
-        const itemNome = (it.nome || "").toLowerCase();
-        if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
-        if (tokens.length > 0) {
-          const acertos = tokens.filter((tok) => itemNome.includes(tok));
-          return acertos.length >= Math.ceil(tokens.length * 0.6);
-        }
-        return false;
-      });
+      if (itensLocal.length > 0) {
+        // Ordena do registro mais recente para o mais antigo
+        itensLocal.sort((a, b) => b.timestamp - a.timestamp);
 
-      if (matches.length > 0) {
-        const ultimoItem = matches[0];
-        if (ultimoItem.valorTotal > 0) {
-          return {
-            precoMedioUnitario: parseFloat(ultimoItem.valorTotal.toFixed(2)),
-            totalComprasRegistradas: matches.length,
-            deNotaFiscal: true,
-          };
+        const matches = itensLocal.filter((it) => {
+          const itemNome = (it.nome || "").toLowerCase();
+          if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
+          if (tokens.length > 0) {
+            const acertos = tokens.filter((tok) => itemNome.includes(tok));
+            return acertos.length >= Math.ceil(tokens.length * 0.6);
+          }
+          return false;
+        });
+
+        if (matches.length > 0) {
+          const ultimoItem = matches[0];
+          if (ultimoItem.valorTotal > 0) {
+            return {
+              precoMedioUnitario: parseFloat(ultimoItem.valorTotal.toFixed(2)),
+              totalComprasRegistradas: matches.length,
+              deNotaFiscal: true,
+            };
+          }
         }
       }
     }
@@ -321,10 +323,12 @@ export async function registrarCompraInsumo(
 
   // 2. Salvar no Cache Local
   try {
-    const raw = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
-    const lista: HistoricoCompraInsumo[] = raw ? JSON.parse(raw) : [];
-    lista.unshift(novaCompra);
-    localStorage.setItem(`caixadoce_historico_insumos_${code}`, JSON.stringify(lista));
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
+      const lista: HistoricoCompraInsumo[] = raw ? JSON.parse(raw) : [];
+      lista.unshift(novaCompra);
+      localStorage.setItem(`caixadoce_historico_insumos_${code}`, JSON.stringify(lista));
+    }
   } catch {}
 }
 
@@ -378,7 +382,9 @@ export async function salvarFichaTecnicaProduto(
 
   // 2. Salvar no Cache Local
   try {
-    localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(itensFormatados));
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(itensFormatados));
+    }
   } catch {}
 
   return itensFormatados;
@@ -428,42 +434,46 @@ export async function obterFichaTecnicaProduto(
           createdAt: d.created_at,
         };
       });
-      localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
+      }
       return mapeados;
     }
   } catch {}
 
   // 2. Cache Local
   try {
-    const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
-    if (raw) {
-      const parsed: any[] = JSON.parse(raw);
-      return parsed.map((d) => {
-        const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
-        const unid = d.unidadeMedida || "g";
-        const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
-        const qtdEmb = Number(
-          d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
-        );
-        const qtdUsada = Number(d.quantidadeUsada ?? 0);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        return parsed.map((d) => {
+          const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
+          const unid = d.unidadeMedida || "g";
+          const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
+          const qtdEmb = Number(
+            d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
+          );
+          const qtdUsada = Number(d.quantidadeUsada ?? 0);
 
-        return {
-          id: String(d.id),
-          estabelecimentoCodigo: d.estabelecimentoCodigo,
-          produtoId: d.produtoId,
-          insumoNome: d.insumoNome,
-          precoEmbalagem: precoEmb,
-          qtdEmbalagemOriginal: qtdEmb,
-          quantidadeUsada: qtdUsada,
-          unidadeMedida: unid,
-          unidadeEmbalagem: unidEmb,
-          precoUnitarioAplicado: precoEmb,
-          custoTotalItem:
-            Number(d.custoTotalItem) ||
-            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
-          createdAt: d.createdAt,
-        };
-      });
+          return {
+            id: String(d.id),
+            estabelecimentoCodigo: d.estabelecimentoCodigo || code,
+            produtoId: String(d.produtoId || produtoId),
+            insumoNome: d.insumoNome || d.nome,
+            precoEmbalagem: precoEmb,
+            qtdEmbalagemOriginal: qtdEmb,
+            quantidadeUsada: qtdUsada,
+            unidadeMedida: unid,
+            unidadeEmbalagem: unidEmb,
+            precoUnitarioAplicado: precoEmb,
+            custoTotalItem:
+              Number(d.custoTotalItem) ||
+              calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
+            createdAt: d.createdAt,
+          };
+        });
+      }
     }
   } catch {}
 
@@ -567,4 +577,184 @@ export function calcularTotaisFichaTecnica(
     precoVendaSugeridoUnitario,
     precoVendaSugeridoLote,
   };
+}
+
+export interface InsumoConsolidado {
+  insumoNome: string;
+  quantidadeTotal: number;
+  unidadeMedida: string;
+  custoEstimadoTotal: number;
+  pedidosOrigem: string[];
+}
+
+/**
+ * Consolida as receitas dos produtos pertencentes a uma lista de encomendas ativas/pendentes.
+ * Soma as quantidades dos insumos idênticos (mesmo nome e mesma unidade ou conversão).
+ */
+export async function consolidarReceitasEncomendas(
+  estabelecimentoCodigo: string,
+  encomendasSelecionadas: any[],
+  produtosCardapio: any[] = []
+): Promise<InsumoConsolidado[]> {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  const mapaConsolidado: Record<string, InsumoConsolidado> = {};
+
+  for (const enc of encomendasSelecionadas) {
+    const numPedido = enc.clienteNome ? `${enc.clienteNome} (#${(enc.id || "").slice(0, 4)})` : `#${(enc.id || "").slice(0, 4)}`;
+    
+    // 1. Extrair os itens do pedido (suporta itensDetalhes ou itens string/array)
+    let itensDaEncomenda: Array<{ nome: string; quantidade: number; produtoId?: string }> = [];
+
+    if (Array.isArray(enc.itensDetalhes) && enc.itensDetalhes.length > 0) {
+      itensDaEncomenda = enc.itensDetalhes.map((it: any) => ({
+        nome: it.nome || it.name || "Item sem nome",
+        quantidade: Number(it.quantidade) || 1,
+        produtoId: it.produtoId || it.produto_id,
+      }));
+    } else if (Array.isArray(enc.itens) && enc.itens.length > 0) {
+      itensDaEncomenda = enc.itens.map((it: any) => ({
+        nome: typeof it === "string" ? it : (it.nome || it.name || "Item sem nome"),
+        quantidade: typeof it === "string" ? 1 : (Number(it.quantidade) || 1),
+        produtoId: typeof it === "object" ? (it.produtoId || it.produto_id) : undefined,
+      }));
+    } else if (typeof enc.itens === "string" && enc.itens.trim()) {
+      // Faz o parse da string de itens (ex: "1x Bolo vulcão chocolate com morango, 2x Trufas")
+      const partes = enc.itens.split(/[,;\n]+/);
+      for (const p of partes) {
+        const str = p.trim();
+        if (!str) continue;
+        const match = str.match(/^(?:(\d+)\s*x\s*)?(.+)$/i);
+        if (match) {
+          const qtd = Number(match[1]) || 1;
+          const nome = match[2].trim();
+          itensDaEncomenda.push({ nome, quantidade: qtd });
+        } else {
+          itensDaEncomenda.push({ nome: str, quantidade: 1 });
+        }
+      }
+    }
+
+    let insumosProcessadosParaPedido = false;
+
+    // 2. Para cada item da encomenda, busca a receita do produto no cardápio
+    for (const item of itensDaEncomenda) {
+      const qtdProduto = Math.max(1, Number(item.quantidade) || 1);
+      const nomeItemLimpo = (item.nome || "").trim().toLowerCase();
+      
+      // Tentar encontrar o produto no cardápio pelo ID ou por nome (fuzzy match)
+      const prodCardapio = produtosCardapio.find((p: any) => {
+        if (item.produtoId && p.id === item.produtoId) return true;
+        const pNome = (p.nome || "").trim().toLowerCase();
+        return pNome === nomeItemLimpo || pNome.includes(nomeItemLimpo) || nomeItemLimpo.includes(pNome);
+      });
+
+      let receitaItens: FichaTecnicaItem[] = [];
+
+      if (prodCardapio) {
+        // Tentar obter via Supabase
+        receitaItens = await obterFichaTecnicaProduto(code, prodCardapio.id);
+        
+        // Se vazia, tentar obter de prodCardapio.insumos (propriedade local do produto)
+        if ((!receitaItens || receitaItens.length === 0) && Array.isArray(prodCardapio.insumos) && prodCardapio.insumos.length > 0) {
+          receitaItens = prodCardapio.insumos.map((ins: any) => ({
+            id: ins.id || crypto.randomUUID(),
+            estabelecimentoCodigo: code,
+            produtoId: prodCardapio.id,
+            insumoNome: ins.nome || ins.insumoNome || "Insumo",
+            quantidadeUsada: Number(ins.quantidade || ins.quantidadeUsada || 1),
+            unidadeMedida: ins.unidade || ins.unidadeMedida || "un",
+            precoEmbalagem: Number(ins.preco || ins.precoEmbalagem || 0),
+            qtdEmbalagemOriginal: Number(ins.qtdEmbalagem || ins.qtdEmbalagemOriginal || 1),
+            unidadeEmbalagem: ins.unidadeEmbalagem || ins.unidade || "un",
+            precoUnitarioAplicado: 0,
+            custoTotalItem: 0,
+          }));
+        }
+      }
+
+      if (receitaItens.length > 0) {
+        insumosProcessadosParaPedido = true;
+        for (const ing of receitaItens) {
+          const nomeChave = (ing.insumoNome || "").trim().toLowerCase();
+          if (!nomeChave) continue;
+          const unid = ing.unidadeMedida || "un";
+          const chaveUnica = `${nomeChave}_${unid}`;
+          const qtdIngredienteCalculada = (Number(ing.quantidadeUsada) || 0) * qtdProduto;
+          const custoCalculado = (Number(ing.custoTotalItem) || 0) * qtdProduto;
+
+          if (!mapaConsolidado[chaveUnica]) {
+            mapaConsolidado[chaveUnica] = {
+              insumoNome: ing.insumoNome.trim(),
+              quantidadeTotal: 0,
+              unidadeMedida: unid,
+              custoEstimadoTotal: 0,
+              pedidosOrigem: [],
+            };
+          }
+
+          mapaConsolidado[chaveUnica].quantidadeTotal += qtdIngredienteCalculada;
+          mapaConsolidado[chaveUnica].custoEstimadoTotal += custoCalculado;
+          if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+            mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: Se não encontrou receita em nenhum produto, processa os insumosNecessarios vinculados à encomenda
+    if (!insumosProcessadosParaPedido && Array.isArray(enc.insumosNecessarios) && enc.insumosNecessarios.length > 0) {
+      for (const ins of enc.insumosNecessarios) {
+        const nomeInsumo = typeof ins === "string" ? ins : (ins.nome || ins.insumoNome || "");
+        const nomeChave = nomeInsumo.trim().toLowerCase();
+        if (!nomeChave) continue;
+        const unid = typeof ins === "object" ? (ins.unidade || ins.unidadeMedida || "un") : "un";
+        const chaveUnica = `${nomeChave}_${unid}`;
+        const qtd = typeof ins === "object" ? (Number(ins.quantidade || ins.qtd) || 1) : 1;
+
+        if (!mapaConsolidado[chaveUnica]) {
+          mapaConsolidado[chaveUnica] = {
+            insumoNome: nomeInsumo.trim(),
+            quantidadeTotal: 0,
+            unidadeMedida: unid,
+            custoEstimadoTotal: 0,
+            pedidosOrigem: [],
+          };
+        }
+
+        mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
+        if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+          mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+        }
+      }
+      insumosProcessadosParaPedido = true;
+    }
+
+    // 4. Último Fallback: Se não encontrou receitas nem insumosNecessarios, usa os próprios nomes dos itens do pedido
+    if (!insumosProcessadosParaPedido && itensDaEncomenda.length > 0) {
+      for (const item of itensDaEncomenda) {
+        const nomeChave = (item.nome || "").trim().toLowerCase();
+        if (!nomeChave) continue;
+        const unid = "un";
+        const chaveUnica = `${nomeChave}_${unid}`;
+        const qtd = Math.max(1, Number(item.quantidade) || 1);
+
+        if (!mapaConsolidado[chaveUnica]) {
+          mapaConsolidado[chaveUnica] = {
+            insumoNome: item.nome.trim(),
+            quantidadeTotal: 0,
+            unidadeMedida: unid,
+            custoEstimadoTotal: 0,
+            pedidosOrigem: [],
+          };
+        }
+
+        mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
+        if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+          mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+        }
+      }
+    }
+  }
+
+  return Object.values(mapaConsolidado);
 }

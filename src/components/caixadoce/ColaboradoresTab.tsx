@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -34,11 +34,9 @@ import { type Colaborador } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 const ABAS_DISPONIVEIS = [
-  { id: "dashboard", label: "Dashboard (Visão Geral)" },
-  { id: "financeiro", label: "Financeiro & Vendas" },
-  { id: "colaboradores", label: "Controle de Equipe" },
-  { id: "config", label: "Configurações" },
-  { id: "plano", label: "Meu Plano & Stripe" },
+  { id: "despesas", label: "Lista de Compras & Notinhas" },
+  { id: "produtos", label: "Cardápio Digital" },
+  { id: "encomendas", label: "Gestão de Encomendas" },
 ];
 
 function formatarTelefoneBR(val: string): string {
@@ -55,19 +53,25 @@ export function ColaboradoresTab() {
 
   const [colaboradores, setColaboradores] = useState<Colaborador[]>(() => {
     try {
-      const raw = localStorage.getItem(`caixadoce_colaboradores_${activeCode}`);
-      return raw ? JSON.parse(raw) : [];
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem(`caixadoce_colaboradores_${activeCode}`);
+        return raw ? JSON.parse(raw) : [];
+      }
     } catch {
       return [];
     }
+    return [];
   });
 
   const [modalNovo, setModalNovo] = useState(false);
   const [nome, setNome] = useState("");
   const [pin, setPin] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["dashboard", "financeiro"]);
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["despesas", "produtos", "encomendas"]);
   const [salvando, setSalvando] = useState(false);
+
+  const maxColaboradores = 1;
+  const temLimiteAtingido = colaboradores.length >= maxColaboradores;
 
   const salvarLista = (novaLista: Colaborador[]) => {
     setColaboradores(novaLista);
@@ -78,6 +82,47 @@ export function ColaboradoresTab() {
     }
   };
 
+  const fetchColaboradores = useCallback(async () => {
+    if (!activeCode) return;
+    try {
+      const { data, error } = await supabase
+        .from("colaboradores")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode);
+
+      if (!error && data) {
+        const mapeados: Colaborador[] = data.map((d: any) => ({
+          id: String(d.id),
+          estabelecimentoCodigo: d.estabelecimento_codigo || activeCode,
+          nome: d.nome || d.name || "Colaborador",
+          email: d.email || "",
+          pin: d.pin || "1234",
+          telefone: d.telefone || d.phone || "",
+          ativo: d.ativo !== false && d.is_active !== false,
+          dataCadastro: d.created_at ? new Date(d.created_at).toLocaleDateString("pt-BR") : new Date().toLocaleDateString("pt-BR"),
+          abasPermitidas: d.abas_permitidas || d.allowed_tabs || ["scanner", "despesas", "produtos", "encomendas"],
+        }));
+        setColaboradores(mapeados);
+        localStorage.setItem(`caixadoce_colaboradores_${activeCode}`, JSON.stringify(mapeados));
+      }
+    } catch (e) {
+      console.warn("Aviso ao carregar colaboradores do Supabase:", e);
+    }
+  }, [activeCode]);
+
+  useEffect(() => {
+    fetchColaboradores();
+
+    const channel = supabase
+      .channel(`realtime_colaboradores_${activeCode}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "colaboradores" }, () => fetchColaboradores())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCode, fetchColaboradores]);
+
   const handleToggleAba = (abaId: string) => {
     setAbasPermitidas((prev) =>
       prev.includes(abaId) ? prev.filter((a) => a !== abaId) : [...prev, abaId]
@@ -86,6 +131,10 @@ export function ColaboradoresTab() {
 
   const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (colaboradores.length >= maxColaboradores) {
+      toast.error("O limite do seu plano é de no máximo 1 colaborador por loja.");
+      return;
+    }
     if (!nome || !pin) {
       toast.error("Preencha o nome e o PIN de acesso do colaborador.");
       return;
@@ -101,22 +150,6 @@ export function ColaboradoresTab() {
       const cleanCode = activeCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
 
-      try {
-        await supabase.auth.signUp({
-          email: syntheticEmail,
-          password: pin,
-          options: {
-            data: {
-              name: nome,
-              role: "colaborador",
-              establishmentCode: activeCode,
-            },
-          },
-        });
-      } catch (err) {
-        console.warn("Aviso ao registrar no Supabase Auth:", err);
-      }
-
       const novo: Colaborador = {
         id: crypto.randomUUID(),
         estabelecimentoCodigo: activeCode,
@@ -129,22 +162,71 @@ export function ColaboradoresTab() {
         abasPermitidas,
       };
 
-      salvarLista([novo, ...colaboradores]);
+      // Assegura que o registro do estabelecimento mestre existe na tabela 'estabelecimentos' para satisfazer a chave estrangeira
+      let storeUuid: string | null = null;
+      try {
+        const { data: estData } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo")
+          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`);
+
+        if (estData && estData.length > 0) {
+          storeUuid = estData[0].id;
+        } else {
+          // Cria o estabelecimento mestre se ainda nao existir
+          const { data: newEst } = await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Confeitaria ${activeCode}` }], { onConflict: "codigo" })
+            .select("id")
+            .single();
+          if (newEst) storeUuid = newEst.id;
+        }
+      } catch (e) {
+        console.warn("Aviso ao verificar estabelecimento mestre:", e);
+      }
+
+      const payloadPrimary: any = {
+        id: novo.id,
+        estabelecimento_codigo: activeCode,
+        nome: novo.nome,
+        email: syntheticEmail,
+        pin,
+        telefone: novo.telefone,
+        abas_permitidas: abasPermitidas,
+        ativo: true,
+      };
+      if (storeUuid) {
+        payloadPrimary.estabelecimento_id = storeUuid;
+      }
 
       try {
-        await supabase.from("colaboradores").insert([
-          {
-            id: novo.id,
-            estabelecimento_codigo: activeCode,
-            nome: novo.nome,
-            email: syntheticEmail,
-            pin,
-            telefone: novo.telefone,
-            abas_permitidas: abasPermitidas,
-            ativo: true,
-          },
-        ]);
-      } catch {}
+        let { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+
+        if (error && (error.code === "23503" || error.message?.includes("foreign key"))) {
+          console.warn("[Supabase] Chave estrangeira violada. Tentando assegurar o estabelecimento mestre...");
+          await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+
+          let retryRes = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+          if (retryRes.error && storeUuid) {
+            const payloadAlt = { ...payloadPrimary, estabelecimento_codigo: storeUuid };
+            await supabase.from("colaboradores").upsert([payloadAlt], { onConflict: "id" });
+          }
+        } else if (error && (error.message?.includes("pin") || error.code === "PGRST204")) {
+          const payloadFallback = {
+            ...payloadPrimary,
+            codigo_pin: pin,
+            pin_code: pin,
+          };
+          delete payloadFallback.pin;
+          await supabase.from("colaboradores").upsert([payloadFallback], { onConflict: "id" });
+        }
+      } catch (err) {
+        console.warn("Aviso ao salvar no Supabase colaboradores:", err);
+      }
+
+      salvarLista([novo, ...colaboradores]);
 
       setModalNovo(false);
       setNome("");
@@ -156,15 +238,27 @@ export function ColaboradoresTab() {
     }
   };
 
-  const handleRemover = (id: string) => {
+  const handleRemover = async (id: string) => {
     salvarLista(colaboradores.filter((c) => c.id !== id));
+    try {
+      await supabase.from("colaboradores").delete().eq("id", id);
+    } catch {}
     toast.success("Colaborador removido da equipe.");
   };
 
-  const handleToggleStatus = (id: string) => {
+  const handleToggleStatus = async (id: string) => {
+    const colab = colaboradores.find((c) => c.id === id);
+    if (!colab) return;
+    const novoStatus = !colab.ativo;
+
     salvarLista(
-      colaboradores.map((c) => (c.id === id ? { ...c, ativo: !c.ativo } : c))
+      colaboradores.map((c) => (c.id === id ? { ...c, ativo: novoStatus } : c))
     );
+
+    try {
+      await supabase.from("colaboradores").update({ ativo: novoStatus }).eq("id", id);
+    } catch {}
+
     toast.info("Status do colaborador atualizado.");
   };
 
@@ -195,10 +289,10 @@ export function ColaboradoresTab() {
       salvarLista(listaAtualizada);
 
       try {
-        await supabase
-          .from("colaboradores")
-          .update({ pin: novoPin })
-          .eq("id", colabSelecionado.id);
+        const resPrimary = await supabase.from("colaboradores").update({ pin: novoPin }).eq("id", colabSelecionado.id);
+        if (resPrimary.error) {
+          await supabase.from("colaboradores").update({ codigo_pin: novoPin, pin_code: novoPin }).eq("id", colabSelecionado.id);
+        }
       } catch (err) {
         console.warn("Aviso ao atualizar PIN no Supabase:", err);
       }
@@ -220,14 +314,31 @@ export function ColaboradoresTab() {
             Equipe &amp; Colaboradores <Users className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Cadastre colaboradores com Acesso PDV (Código da Loja + PIN) e defina permissões.
+            Cadastre o colaborador da sua loja com Acesso PDV (Código da Loja + PIN de segurança).
           </p>
         </div>
-        <Button onClick={() => setModalNovo(true)} className="font-semibold shadow-md">
+        <Button 
+          onClick={() => setModalNovo(true)} 
+          disabled={temLimiteAtingido}
+          title={temLimiteAtingido ? "Limite de 1 colaborador atingido para este estabelecimento" : "Adicionar Novo Colaborador"}
+          className="font-semibold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Plus className="w-4 h-4 mr-1.5" />
           Novo Colaborador
         </Button>
       </div>
+
+      {temLimiteAtingido && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-900 dark:text-amber-300 font-medium flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+            <span><strong>Limite de Colaborador Atingido:</strong> O plano atual permite no máximo <strong>1 colaborador cadastrado por loja</strong>. Caso precise cadastrar um novo atendente, remova o colaborador atual.</span>
+          </div>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 font-bold shrink-0">
+            1/1 Atendido
+          </Badge>
+        </div>
+      )}
 
       <Card className="border-border shadow-sm overflow-hidden">
         <Table>

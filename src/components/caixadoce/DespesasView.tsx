@@ -52,12 +52,18 @@ import {
   Clock,
   FileText,
   MapPin,
+  Sparkles,
+  UtensilsCrossed,
+  Calendar,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  consolidarReceitasEncomendas,
+  type InsumoConsolidado,
+} from "@/lib/ficha-tecnica-service";
 import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
-  obterNotinhasVinculadasPorLista,
-  salvarNotinhasVinculadasPorLista,
   formatarMoeda,
   CATEGORIAS_DESPESA_CONFIG,
   type ItemListaCompra,
@@ -122,108 +128,7 @@ export function DespesasView({
     return listas.find((l) => l.status === "ativa")?.id || listas[0]?.id || null;
   });
 
-  // Notinhas Vinculadas especificamente por Lista { [shoppingListId]: string[] }
-  const [linkedMap, setLinkedMap] = useState<Record<string, string[]>>({});
-  const [buscaNotinhaMap, setBuscaNotinhaMap] = useState<Record<string, string>>({});
-  const [dropdownAbertoMap, setDropdownAbertoMap] = useState<Record<string, boolean>>({});
   const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
-
-  // Carregar vinculações do Supabase no mount por lista
-  useEffect(() => {
-    async function carregarNotinhasPorLista() {
-      try {
-        const { data, error } = await supabase
-          .from("shopping_list_receipts")
-          .select("shopping_list_id, receipt_id");
-
-        if (!error && data && data.length > 0) {
-          const map: Record<string, string[]> = {};
-          data.forEach((row: any) => {
-            const listId = row.shopping_list_id || "global";
-            const rId = String(row.receipt_id);
-            if (!map[listId]) map[listId] = [];
-            if (!map[listId].includes(rId)) map[listId].push(rId);
-          });
-          setLinkedMap(map);
-        } else {
-          // Carregar fallback do localStorage por lista existente
-          const map: Record<string, string[]> = {};
-          listas.forEach((l) => {
-            const localIds = obterNotinhasVinculadasPorLista(l.id, estabelecimentoCodigo);
-            if (localIds.length > 0) map[l.id] = localIds;
-          });
-          setLinkedMap(map);
-        }
-      } catch {}
-    }
-    carregarNotinhasPorLista();
-  }, [estabelecimentoCodigo, listas]);
-
-  // Handlers de vincular / desvincular notinha em lista específica
-  const handleVincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
-    const atuais = linkedMap[shoppingListId] || [];
-    if (atuais.includes(receiptId)) return;
-
-    const novosIds = [...atuais, receiptId];
-    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
-    setBuscaNotinhaMap((prev) => ({ ...prev, [shoppingListId]: "" }));
-    setDropdownAbertoMap((prev) => ({ ...prev, [shoppingListId]: false }));
-
-    try {
-      await supabase.from("shopping_list_receipts").insert([
-        {
-          shopping_list_id: shoppingListId,
-          receipt_id: receiptId,
-        },
-      ]);
-    } catch {}
-    toast.success("Notinha vinculada a esta lista de compras!");
-  };
-
-  const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
-    try {
-      let res = await supabase
-        .from("shopping_list_receipts")
-        .delete()
-        .eq("shopping_list_id", shoppingListId)
-        .eq("receipt_id", receiptId)
-        .select();
-
-      if (res.error) {
-        toast.error(`Falha ao desvincular notinha no banco: ${res.error.message}`);
-        return;
-      }
-
-      const atuais = linkedMap[shoppingListId] || [];
-      const novosIds = atuais.filter((id) => id !== receiptId);
-      setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-      salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
-      toast.info("Notinha desvinculada desta lista.");
-    } catch (e: any) {
-      toast.error(`Erro ao desvincular notinha: ${e?.message || e}`);
-    }
-  };
-
-  // Sugestões de Notinhas para uma Lista Específica
-  const obterSugestoesParaLista = (shoppingListId: string) => {
-    const termo = (buscaNotinhaMap[shoppingListId] || "").trim().toLowerCase();
-    const vinculadosDaLista = linkedMap[shoppingListId] || [];
-    return despesas.filter((d) => {
-      if (vinculadosDaLista.includes(d.id)) return false;
-      if (!termo) return true;
-      const fornecedorMatch = d.fornecedorNome.toLowerCase().includes(termo);
-      const dataMatch =
-        d.dataCompra.toLowerCase().includes(termo) ||
-        d.dataCompra.split("-").reverse().join("/").includes(termo);
-      const valorMatch =
-        String(d.valorTotal).includes(termo) ||
-        formatarMoeda(d.valorTotal).toLowerCase().includes(termo);
-      const notaMatch = (d.numeroNota || "").toLowerCase().includes(termo);
-      const pedidoMatch = (d.numeroPedido || "").toLowerCase().includes(termo);
-      return fornecedorMatch || dataMatch || valorMatch || notaMatch || pedidoMatch;
-    }).slice(0, 8);
-  };
 
   // Campo do Formulário para Criar Nova Lista
   const [nomeNovaListaInput, setNomeNovaListaInput] = useState("");
@@ -264,6 +169,113 @@ export function DespesasView({
 
   // Filtro de Busca
   const [busca, setBusca] = useState("");
+
+  // Modal de Consolidação de Encomendas na Lista de Compras
+  const [modalConsolidarOpen, setModalConsolidarOpen] = useState(false);
+  const [pedidosSelecionadosIds, setPedidosSelecionadosIds] = useState<string[]>([]);
+  const [insumosConsolidadosPreview, setInsumosConsolidadosPreview] = useState<InsumoConsolidado[]>([]);
+  const [carregandoConsolidacao, setCarregandoConsolidacao] = useState(false);
+
+  // Encomendas Ativas (que não foram canceladas nem entregues)
+  const encomendasAtivas = useMemo(() => {
+    return encomendas.filter((e) => {
+      const st = (e.status || "").toLowerCase();
+      return st !== "entregue" && st !== "cancelado";
+    });
+  }, [encomendas]);
+
+  // Recalcula o preview dos insumos consolidados quando a seleção de pedidos muda
+  useEffect(() => {
+    if (modalConsolidarOpen && pedidosSelecionadosIds.length > 0) {
+      setCarregandoConsolidacao(true);
+      const selecionadas = encomendas.filter((e) => pedidosSelecionadosIds.includes(e.id));
+      consolidarReceitasEncomendas(estabelecimentoCodigo || "CD-1001", selecionadas, produtos)
+        .then((res) => {
+          setInsumosConsolidadosPreview(res || []);
+        })
+        .catch((err) => {
+          console.warn("Erro ao consolidar receitas de encomendas:", err);
+          setInsumosConsolidadosPreview([]);
+        })
+        .finally(() => setCarregandoConsolidacao(false));
+    } else {
+      setInsumosConsolidadosPreview([]);
+    }
+  }, [modalConsolidarOpen, pedidosSelecionadosIds, encomendas, estabelecimentoCodigo, produtos]);
+
+  // Handler para alternar a seleção de um pedido
+  const handleTogglePedidoSelecao = (id: string) => {
+    setPedidosSelecionadosIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Handler para selecionar/deselecionar todos
+  const handleToggleSelecionarTodosPedidos = () => {
+    if (pedidosSelecionadosIds.length === encomendasAtivas.length) {
+      setPedidosSelecionadosIds([]);
+    } else {
+      setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
+    }
+  };
+
+  // Gerar a Lista de Compras Final Consolidada
+  const handleCriarListaConsolidada = async () => {
+    if (insumosConsolidadosPreview.length === 0) {
+      toast.error("Nenhum insumo ou ingrediente para consolidar.");
+      return;
+    }
+
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const numPedidos = pedidosSelecionadosIds.length;
+    const nomeLista = `Lista Encomendas (${numPedidos} Pedido${numPedidos > 1 ? "s" : ""}) - ${hoje}`;
+
+    const itensLista: ItemListaCompra[] = insumosConsolidadosPreview.map((ing) => ({
+      id: crypto.randomUUID(),
+      nome: ing.insumoNome,
+      quantidade: ing.quantidadeTotal,
+      unidade: ing.unidadeMedida,
+      comprado: false,
+    }));
+
+    const novaLista: ListaCompras = {
+      id: crypto.randomUUID(),
+      nome: nomeLista,
+      estabelecimentoCodigo,
+      status: "ativa",
+      itens: itensLista,
+      createdAt: new Date().toISOString(),
+    };
+
+    const novasListas = [novaLista, ...listas];
+    setListas(novasListas);
+    setExpandedListaId(novaLista.id);
+    setModalConsolidarOpen(false);
+
+    if (onAtualizarListasCompras) {
+      onAtualizarListasCompras(novasListas);
+    }
+
+    try {
+      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(novasListas));
+
+      await supabase.from("listas_compras" as any).upsert([
+        {
+          id: novaLista.id,
+          estabelecimento_codigo: estabelecimentoCodigo,
+          nome: novaLista.nome,
+          data: novaLista.createdAt,
+          status: novaLista.status,
+          itens: novaLista.itens,
+          valor_estimado: 0,
+        },
+      ]);
+    } catch (e) {
+      console.warn("Aviso ao salvar lista consolidada no Supabase:", e);
+    }
+
+    toast.success(`⚡ Lista de Insumos com ${itensLista.length} item(ns) criada e salva na Lista de Compras!`);
+  };
 
   // Sincronizar com props externas e localStorage
   useEffect(() => {
@@ -362,6 +374,35 @@ export function DespesasView({
         return { ...l, itens: novosItens };
       })
     );
+  };
+
+  // Excluir Item Individual da Lista de Compras
+  const handleExcluirItemLista = async (listaId: string, itemId: string) => {
+    const listaAlvo = listas.find((l) => l.id === listaId);
+    if (!listaAlvo) return;
+
+    const novosItens = listaAlvo.itens.filter((it) => it.id !== itemId);
+    const atualizadas = listas.map((l) => (l.id === listaId ? { ...l, itens: novosItens } : l));
+
+    setListas(atualizadas);
+
+    if (onAtualizarListasCompras) {
+      onAtualizarListasCompras(atualizadas);
+    }
+
+    try {
+      localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(atualizadas));
+
+      await supabase
+        .from("listas_compras" as any)
+        .update({ itens: novosItens })
+        .eq("id", listaId)
+        .eq("estabelecimento_codigo", estabelecimentoCodigo);
+    } catch (e) {
+      console.warn("Aviso ao excluir item da lista no Supabase:", e);
+    }
+
+    toast.success("Produto removido da lista de compras!");
   };
 
   // Concluir Lista de Compras
@@ -553,13 +594,28 @@ export function DespesasView({
             />
           </div>
 
-          <Button
-            type="button"
-            onClick={handleIniciarCriacaoLista}
-            className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
-          >
-            <Plus className="w-5 h-5 mr-2" /> Criar Lista de Compras
-          </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <Button
+              type="button"
+              onClick={handleIniciarCriacaoLista}
+              className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
+            >
+              <Plus className="w-5 h-5 mr-2" /> Criar Lista Manual
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => {
+                setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
+                setModalConsolidarOpen(true);
+              }}
+              variant="outline"
+              className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
+            >
+              <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+              <span>⚡ Ver Listas de Encomendas dos Clientes</span>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -578,12 +634,6 @@ export function DespesasView({
             const totalItens = lista.itens.length;
             const compradosCount = lista.itens.filter((i) => i.comprado).length;
             const percentual = totalItens > 0 ? Math.round((compradosCount / totalItens) * 100) : 0;
-
-            const idsDaLista = linkedMap[lista.id] || [];
-            const notinhasDaLista = despesas.filter((d) => idsDaLista.includes(d.id));
-            const totalGastoLista = notinhasDaLista.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
-            const sugestoes = obterSugestoesParaLista(lista.id);
-            const isDropdownOpen = !!dropdownAbertoMap[lista.id];
 
             return (
               <Card
@@ -614,12 +664,6 @@ export function DespesasView({
                         >
                           {lista.status === "ativa" ? "Ativa" : "Concluída"}
                         </Badge>
-
-                        {totalGastoLista > 0 && (
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">
-                            Total Notinhas: {formatarMoeda(totalGastoLista)}
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 font-medium">
                         {compradosCount} de {totalItens} itens comprados ({percentual}%) • Criada em {new Date(lista.createdAt).toLocaleDateString("pt-BR")}
@@ -718,15 +762,15 @@ export function DespesasView({
                             <div
                               key={it.id}
                               onClick={() => handleToggleItemComprado(lista.id, it.id)}
-                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none ${
+                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none group ${
                                 it.comprado
                                   ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 line-through opacity-80"
                                   : "bg-muted/30 text-foreground border-border hover:border-primary/40 shadow-2xs"
                               }`}
                             >
-                              <div className="flex items-center gap-2.5 truncate">
+                              <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
                                 <span
-                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] ${
+                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
                                     it.comprado ? "bg-emerald-600 text-white" : "border-2 border-primary"
                                   }`}
                                 >
@@ -736,110 +780,21 @@ export function DespesasView({
                                   {it.quantidade} {it.unidade || "un"} x {it.nome}
                                 </span>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ========================================================================= */}
-                    {/* VINCULAÇÃO DE NOTINHAS DENTRO DESTE CARD DA LISTA INDIVIDUAL */}
-                    {/* ========================================================================= */}
-                    <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-3 mt-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <Receipt className="w-4 h-4 text-amber-600" /> Notinhas Vinculadas a esta Lista ({notinhasDaLista.length})
-                        </h4>
-                        {totalGastoLista > 0 && (
-                          <span className="text-xs font-black text-amber-900 dark:text-amber-300 font-mono">
-                            Total Comprovado: {formatarMoeda(totalGastoLista)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* CHIPS DAS NOTINHAS VINCULADAS A ESTA LISTA */}
-                      {notinhasDaLista.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground italic">
-                          Nenhum comprovante fiscal vinculado a esta lista. Use a busca abaixo para atrelar notinhas fisicamente compradas a este pedido!
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {notinhasDaLista.map((notinha) => (
-                            <div
-                              key={notinha.id}
-                              onClick={() => setNotaDetalheSelecionada(notinha)}
-                              className="group cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card hover:bg-amber-500/15 text-foreground border border-amber-500/30 text-xs font-semibold shadow-2xs transition-all select-none"
-                              title="Clique para ver os detalhes da notinha"
-                            >
-                              <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <span>
-                                <strong>{notinha.fornecedorNome}</strong> • {notinha.dataCompra.split("-").reverse().join("/")} •{" "}
-                                <span className="font-mono font-bold text-amber-600">{formatarMoeda(notinha.valorTotal)}</span>
-                              </span>
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDesvincularNotinhaLista(lista.id, notinha.id);
+                                  handleExcluirItemLista(lista.id, it.id);
                                 }}
-                                className="ml-1 p-0.5 rounded-full hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors"
-                                title="Desvincular Notinha"
+                                className="p-1 rounded-lg hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors shrink-0 opacity-80 hover:opacity-100"
+                                title="Excluir este item da lista"
                               >
-                                <X className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ))}
                         </div>
                       )}
-
-                      {/* CAMPO DE BUSCA / SELEÇÃO INTEGRADO DENTRO DO CARD DA LISTA */}
-                      <div className="relative pt-1">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                          <Input
-                            placeholder="Vincular notinha salva a esta lista (por loja, data, valor, n° nota)..."
-                            value={buscaNotinhaMap[lista.id] || ""}
-                            onChange={(e) => {
-                              setBuscaNotinhaMap((prev) => ({ ...prev, [lista.id]: e.target.value }));
-                              setDropdownAbertoMap((prev) => ({ ...prev, [lista.id]: true }));
-                            }}
-                            onFocus={() => setDropdownAbertoMap((prev) => ({ ...prev, [lista.id]: true }))}
-                            className="h-8 pl-8 text-xs bg-background"
-                          />
-                        </div>
-
-                        {/* Dropdown Flutuante de Autocomplete de Notinhas */}
-                        {isDropdownOpen && (
-                          <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
-                            {sugestoes.length > 0 ? (
-                              sugestoes.map((n) => (
-                                <div
-                                  key={n.id}
-                                  onClick={() => handleVincularNotinhaLista(lista.id, n.id)}
-                                  className="p-2 hover:bg-amber-500/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                    <div>
-                                      <p className="font-bold text-foreground">{n.fornecedorNome}</p>
-                                      <p className="text-[10px] text-muted-foreground">
-                                        Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <span className="font-mono font-black text-foreground">{formatarMoeda(n.valorTotal)}</span>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="p-2.5 text-center text-xs text-muted-foreground">
-                                {despesas.length === 0
-                                  ? "Nenhuma notinha capturada no sistema."
-                                  : "Nenhuma notinha disponível para vinculação nesta lista."}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </CardContent>
                 )}
@@ -1279,6 +1234,153 @@ export function DespesasView({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* MODAL DE CONSOLIDAÇÃO AUTOMÁTICA DE ENCOMENDAS NA LISTA DE COMPRAS */}
+      <Dialog open={modalConsolidarOpen} onOpenChange={setModalConsolidarOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600" /> Criar Lista de Insumos das Encomendas
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecione as encomendas ativas/pendentes abaixo. O sistema cruzará os itens dos pedidos com a Ficha Técnica do Cardápio, somando a quantidade exata de cada insumo necessário!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* CABEÇALHO DE SELEÇÃO RÁPIDA */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="select-all-pedidos"
+                  checked={
+                    encomendasAtivas.length > 0 &&
+                    pedidosSelecionadosIds.length === encomendasAtivas.length
+                  }
+                  onCheckedChange={handleToggleSelecionarTodosPedidos}
+                />
+                <label
+                  htmlFor="select-all-pedidos"
+                  className="text-xs font-bold text-foreground cursor-pointer"
+                >
+                  Selecionar Todas as Encomendas ({encomendasAtivas.length})
+                </label>
+              </div>
+              <Badge className="bg-purple-600 text-white font-bold text-[10px]">
+                {pedidosSelecionadosIds.length} selecionada(s)
+              </Badge>
+            </div>
+
+            {/* LISTA DE ENCOMENDAS COM CHECKBOX */}
+            {encomendasAtivas.length > 0 ? (
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {encomendasAtivas.map((enc) => {
+                  const isSelected = pedidosSelecionadosIds.includes(enc.id);
+                  const resumoItens = enc.itens || (enc.itensDetalhes || []).map((i) => `${i.quantidade}x ${i.nome}`).join(", ");
+                  return (
+                    <div
+                      key={enc.id}
+                      onClick={() => handleTogglePedidoSelecao(enc.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? "bg-purple-500/15 border-purple-500/50 shadow-2xs"
+                          : "bg-card border-border hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleTogglePedidoSelecao(enc.id)}
+                          className="mt-0.5"
+                        />
+                        <div className="space-y-0.5 text-xs">
+                          <span className="font-extrabold text-foreground block">
+                            👤 {enc.clienteNome} <span className="font-mono text-muted-foreground font-normal">(#{enc.id.slice(0, 4)})</span>
+                          </span>
+                          <span className="text-[11px] text-muted-foreground block line-clamp-1">
+                            🎂 {resumoItens || "Itens da encomenda"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
+                        📅 {enc.dataEntrega.split("-").reverse().join("/")}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground border border-dashed rounded-xl">
+                Nenhuma encomenda pendente ou ativa encontrada no sistema.
+              </div>
+            )}
+
+            {/* PREVIEW DA CONSOLIDAÇÃO DE INGREDIENTES */}
+            <div className="space-y-2 pt-2 border-t border-border/70">
+              <h4 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                <UtensilsCrossed className="w-4 h-4 text-emerald-600" /> Insumos Totais Consolidados (Cálculo Automático)
+              </h4>
+
+              {carregandoConsolidacao ? (
+                <div className="p-4 text-center text-xs text-muted-foreground animate-pulse">
+                  Calculando insumos da receita...
+                </div>
+              ) : insumosConsolidadosPreview.length > 0 ? (
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="text-xs">Insumo / Ingrediente</TableHead>
+                        <TableHead className="text-xs text-right">Qtd Consolidada</TableHead>
+                        <TableHead className="text-xs">Pedidos de Origem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {insumosConsolidadosPreview.map((ing, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="text-xs font-bold text-foreground">
+                            {ing.insumoNome}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 text-right">
+                            {ing.quantidadeTotal} {ing.unidadeMedida}
+                          </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground">
+                            {ing.pedidosOrigem.join(", ")}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-muted-foreground italic border rounded-xl bg-muted/20">
+                  Selecione ao menos 1 encomenda acima para visualizar o total dos insumos da receita.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t flex items-center justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalConsolidarOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleCriarListaConsolidada}
+              disabled={insumosConsolidadosPreview.length === 0}
+              className="font-extrabold bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shadow-md"
+            >
+              <Sparkles className="w-4 h-4" /> Criar Lista de Compras ({insumosConsolidadosPreview.length} Insumos)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

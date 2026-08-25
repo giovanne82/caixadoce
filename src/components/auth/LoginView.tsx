@@ -47,7 +47,7 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function LoginView({ onSuccess }: LoginViewProps) {
-  const { loginWithEmail, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
+  const { loginWithEmail, loginComPin, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
@@ -164,32 +164,10 @@ export function LoginView({ onSuccess }: LoginViewProps) {
 
     setLoading(true);
     try {
-      let rawName = colabNome.trim();
-      let rawCode = colabCodigoLoja.trim();
-
-      if (rawCode.includes("@")) {
-        const parts = rawCode.split("@");
-        rawName = parts[0];
-        rawCode = parts[1];
-      }
-
-      const cleanName = (rawName || "colaborador").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-      const cleanCode = rawCode.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
-
-      await loginWithEmail(syntheticEmail, colabPin);
+      await loginComPin(colabCodigoLoja, colabPin);
       onSuccess?.();
     } catch (error: any) {
-      if (
-        error?.status === 429 ||
-        error?.message?.toLowerCase().includes("too_many_requests") ||
-        error?.message?.toLowerCase().includes("rate limit") ||
-        error?.message?.toLowerCase().includes("exceeded")
-      ) {
-        toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
-      } else {
-        toast.error("Credenciais inválidas. Verifique o Código da Loja e o PIN de Acesso.");
-      }
+      // loginComPin dispara mensagem toast apropriada ao falhar
     } finally {
       setLoading(false);
     }
@@ -208,7 +186,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
           <CardDescription>
             {activeTab === "login"
               ? "Gerencie suas finanças, vendas e equipe com facilidade"
-              : "Experimente 14 dias grátis com todos os recursos liberados"}
+              : "Experimente 7 dias grátis com todos os recursos liberados"}
           </CardDescription>
         </CardHeader>
 
@@ -477,7 +455,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs text-foreground flex items-center gap-2.5">
                   <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
                   <span>
-                    Inclui <strong>14 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
+                    Inclui <strong>7 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
                   </span>
                 </div>
 

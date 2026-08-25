@@ -78,6 +78,7 @@ export type StaffProfile = {
   menu_slogan?: string;
   contasPix?: ContaPix[];
   abasPermitidas?: string[];
+  ownerUserId?: string;
 };
 
 export type UserProfile = StaffProfile;
@@ -92,6 +93,7 @@ type AuthContextType = {
   isMounted: boolean;
   authLoading: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginComPin: (codigoLoja: string, pin: string) => Promise<{ success: boolean }>;
   registerWithEmail: (name: string, email: string, password: string) => Promise<{ requiresConfirmation: boolean }>;
   sendEmailOtpSignUp: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyEmailOtp: (email: string, token: string, name: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -168,7 +170,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
 
     let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
-    if (isColab && !abasPermitidas) {
+    if (isColab && !abasPermitidas && typeof window !== "undefined") {
       try {
         const rawColabs = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
         if (rawColabs) {
@@ -185,9 +187,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       } catch {}
     }
 
-    if (isColab && !abasPermitidas) {
-      abasPermitidas = ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
+    if (isColab) {
+      abasPermitidas = ["despesas", "produtos", "encomendas"];
     }
+
+    const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
 
     return {
       role: isColab ? "operador" : "admin",
@@ -197,6 +201,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
+      ownerUserId: isUserUuid ? authUser.id : undefined,
     };
   };
 
@@ -245,11 +250,16 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setProfile(baseProf);
           localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
 
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.id);
+          const filterStr = isUuid
+            ? `user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`
+            : `codigo.eq.${baseProf.establishmentCode}`;
+
           // Busca assíncrona dos dados persistidos da loja no Supabase
           supabase
             .from("estabelecimentos")
             .select("*")
-            .or(`user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`)
+            .or(filterStr)
             .maybeSingle()
             .then((res) => {
               if (res.data) {
@@ -281,6 +291,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
                   sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                   menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
+                  ownerUserId: data.user_id || baseProf.ownerUserId,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
@@ -379,11 +390,146 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     return estabelecimentos;
   }, [estabelecimentos]);
 
+  const loginComPin = async (codigoLoja: string, pin: string) => {
+    const rawCode = (codigoLoja || "").trim();
+    const rawPin = (pin || "").trim();
+
+    if (!rawCode || !rawPin) {
+      const err = new Error("Preencha o Código da Loja e o PIN de Acesso.");
+      toast.error(err.message);
+      throw err;
+    }
+
+    const formattedCode = rawCode.toUpperCase().startsWith("CD-")
+      ? rawCode.toUpperCase()
+      : rawCode.length === 4 && !isNaN(Number(rawCode))
+      ? `CD-${rawCode}`
+      : rawCode.toUpperCase();
+
+    // 1. Consulta OBRIGATÓRIA na tabela colaboradores (e fallback staff_members) no Supabase
+    let colabEncontrado: any = null;
+    try {
+      const { data: dbColabs, error: dbErr } = await supabase
+        .from("colaboradores")
+        .select("*")
+        .eq("estabelecimento_codigo", formattedCode);
+
+      if (!dbErr && dbColabs && dbColabs.length > 0) {
+        colabEncontrado = dbColabs.find((c: any) => {
+          const matchPin =
+            String(c.pin || c.codigo_pin || c.pin_code || c.senha || "") === String(rawPin);
+          const isAtivo = c.ativo !== false && c.is_active !== false;
+          return matchPin && isAtivo;
+        });
+      }
+
+      if (!colabEncontrado) {
+        const { data: staffColabs } = await supabase
+          .from("staff_members")
+          .select("*")
+          .eq("estabelecimento_codigo", formattedCode);
+
+        if (staffColabs && staffColabs.length > 0) {
+          colabEncontrado = staffColabs.find((c: any) => {
+            const matchPin =
+              String(c.pin || c.codigo_pin || c.pin_code || c.senha || "") === String(rawPin);
+            const isAtivo = c.ativo !== false && c.is_active !== false;
+            return matchPin && isAtivo;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Aviso ao consultar colaboradores no Supabase:", e);
+    }
+
+    // Fallback de cache local da loja se offline ou durante transição
+    if (!colabEncontrado && typeof window !== "undefined") {
+      try {
+        const rawLocal = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
+        if (rawLocal) {
+          const listLocal = JSON.parse(rawLocal);
+          colabEncontrado = listLocal.find(
+            (c: any) => String(c.pin) === String(rawPin) && c.ativo !== false
+          );
+        }
+      } catch {}
+    }
+
+    // 2. SE O PIN NÃO FOR VÁLIDO E ATIVO PARA ESSA LOJA ESPECÍFICA, BLOQUEIA O ACESSO
+    if (!colabEncontrado) {
+      const err = new Error("Código da Loja ou PIN de Acesso inválidos.");
+      toast.error("Código da Loja ou PIN inválidos.");
+      throw err;
+    }
+
+    // 3. Obter dados da loja se disponível
+    let estNome = `Confeitaria ${formattedCode}`;
+    let estEndereco = "";
+    const estLocal = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
+    if (estLocal) {
+      estNome = estLocal.nome;
+      estEndereco = estLocal.endereco || "";
+    } else {
+      try {
+        const { data: estData } = await supabase
+          .from("estabelecimentos")
+          .select("nome, name, endereco")
+          .eq("codigo", formattedCode)
+          .maybeSingle();
+
+        if (estData) {
+          estNome = estData.nome || estData.name || estNome;
+          estEndereco = estData.endereco || "";
+        }
+      } catch {}
+    }
+
+    // 4. COLABORADOR VÁLIDO: Concede acesso com perfil restrito
+    const colabName = colabEncontrado.nome || colabEncontrado.name || "Colaborador";
+    const cleanName = colabName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const syntheticEmail = colabEncontrado.email || `${cleanName}@${formattedCode.toLowerCase()}.caixadoce.app`;
+
+    const colabUser: User = {
+      id: colabEncontrado.id || `colab_${Date.now()}`,
+      name: colabName,
+      email: syntheticEmail,
+      provider: "email",
+    };
+
+    const colabProfile: UserProfile = {
+      role: "operador",
+      establishmentCode: formattedCode,
+      establishmentName: estNome,
+      establishmentAddress: estEndereco,
+      chavePix: estLocal?.chavePix || "",
+      tipoChavePix: estLocal?.tipoChavePix || "cpf",
+      abasPermitidas: colabEncontrado.abas_permitidas || colabEncontrado.allowed_tabs || colabEncontrado.abasPermitidas || ["despesas", "produtos", "encomendas"],
+    };
+
+    setUser(colabUser);
+    setProfile(colabProfile);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("caixadoce_user", JSON.stringify(colabUser));
+      localStorage.setItem("caixadoce_profile", JSON.stringify(colabProfile));
+    }
+
+    toast.success(`Acesso PDV liberado para ${colabName}!`);
+    return { success: true };
+  };
+
   const loginWithEmail = async (email: string, password: string) => {
+    const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
+    if (isCollaboratorSynthetic) {
+      const parts = email.split("@")[0];
+      const codePart = email.split("@")[1]?.replace(".caixadoce.app", "") || "";
+      await loginComPin(codePart, password);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        // Captura de limite de tentativas (Rate Limit / Too Many Requests)
         if (
           error.status === 429 ||
           error.message?.toLowerCase().includes("too_many_requests") ||
@@ -394,9 +540,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           throw error;
         }
 
-        // Fallback local caso offline ou cadastrado em memoria/localState
+        // Fallback local caso offline ou cadastrado localmente no navegador
         if (password.length >= 4) {
-          const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
           const nameFromEmail = email.split("@")[0];
 
           const fallbackUser: User = {
@@ -409,9 +554,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           const fallbackProfile = buildProfileForUser(null, email);
           setUser(fallbackUser);
           setProfile(fallbackProfile);
-          localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-          localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-          toast.success(`Login efetuado com sucesso${isCollaboratorSynthetic ? " (Acesso PDV Colaborador)" : ""}!`);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
+            localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
+          }
+          toast.success("Login efetuado com sucesso!");
           return;
         }
         throw error;
@@ -428,8 +575,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         const loggedProfile = buildProfileForUser(data.user, email);
         setUser(loggedUser);
         setProfile(loggedProfile);
-        localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
-        localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
+        if (typeof window !== "undefined") {
+          localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
+          localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
+        }
         toast.success("Bem-vindo ao CaixaDoce!");
       }
     } catch (err: any) {
@@ -628,8 +777,14 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     // Gravação REAL via UPDATE / INSERT no Supabase na tabela estabelecimentos
     try {
+<<<<<<< HEAD
       const payload: any = {
         user_id: user.id,
+=======
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+      const payload = {
+        user_id: isUuid ? user.id : null,
+>>>>>>> 7624c4539d6f54a93e4cd659bfe3b282a5c31879
         codigo: currentCode,
         nome: details.nome,
         responsavel: details.responsavel || user.name || "Administrador",
@@ -878,6 +1033,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         isMounted,
         authLoading,
         loginWithEmail,
+        loginComPin,
         registerWithEmail,
         sendEmailOtpSignUp,
         verifyEmailOtp,

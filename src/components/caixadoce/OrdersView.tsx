@@ -82,7 +82,13 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { obterFichaTecnicaProduto, type FichaTecnicaItem } from "@/lib/ficha-tecnica-service";
+import {
+  obterFichaTecnicaProduto,
+  consolidarReceitasEncomendas,
+  calcularCustoItemFichaTecnica,
+  type FichaTecnicaItem,
+  type InsumoConsolidado,
+} from "@/lib/ficha-tecnica-service";
 import {
   formatarMoeda,
   formatarWhatsappLink,
@@ -99,6 +105,7 @@ import {
   obterNotinhasVinculadasPorLista,
   salvarNotinhasVinculadasPorLista,
   calcularTotalPagoEncomenda,
+  isEncomendaTotalmentePaga,
   STATUS_ENCOMENDA_CONFIG,
   CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
@@ -227,6 +234,7 @@ export function OrdersView({
         {
           shopping_list_id: shoppingListId,
           receipt_id: receiptId,
+          estabelecimento_codigo: activeCode,
         },
       ]);
     } catch (e) {
@@ -236,27 +244,25 @@ export function OrdersView({
   };
 
   const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    const novosIds = atuais.filter((id) => id !== receiptId);
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
+
     try {
       const { error } = await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("shopping_list_id", shoppingListId)
-        .eq("receipt_id", receiptId)
-        .select();
+        .eq("receipt_id", receiptId);
 
       if (error) {
-        toast.error(`Falha ao desvincular notinha no banco: ${error.message}`);
-        return;
+        console.warn("Aviso ao desvincular notinha no Supabase:", error.message);
       }
-
-      const atuais = linkedMap[shoppingListId] || [];
-      const novosIds = atuais.filter((id) => id !== receiptId);
-      setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-      if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
-      toast.info("Notinha desvinculada deste pedido.");
-    } catch (e: any) {
-      toast.error(`Erro ao desvincular notinha: ${e?.message || e}`);
+    } catch (e) {
+      console.warn("Aviso ao desvincular no Supabase:", e);
     }
+    toast.info("Notinha desvinculada deste pedido.");
   };
 
   // Sugestões de Notinhas para uma Lista Específica
@@ -361,22 +367,34 @@ export function OrdersView({
           for (const fItem of itensFicha) {
             const key = `${fItem.insumoNome.toLowerCase()}_${fItem.unidadeMedida}`;
             const precoEmb = Number(fItem.precoEmbalagem ?? fItem.precoUnitarioAplicado ?? 0);
-            const qtdEmbOrig = Number(fItem.qtdEmbalagemOriginal) > 0 ? Number(fItem.qtdEmbalagemOriginal) : 1000;
-            const custoItem = (precoEmb / qtdEmbOrig) * fItem.quantidadeUsada * qtdEncomendada;
-            const qtdNecessaria = fItem.quantidadeUsada * qtdEncomendada;
+            const qtdEmbOrig = Number(fItem.qtdEmbalagemOriginal) > 0 ? Number(fItem.qtdEmbalagemOriginal) : 1;
+
+            // Usa o custoTotalItem já calculado da Ficha Técnica do Produto
+            const custoUnitarioInsumo = Number(fItem.custoTotalItem) > 0
+              ? Number(fItem.custoTotalItem)
+              : calcularCustoItemFichaTecnica(
+                  fItem.quantidadeUsada,
+                  fItem.unidadeMedida || "g",
+                  precoEmb,
+                  qtdEmbOrig,
+                  fItem.unidadeEmbalagem || fItem.unidadeMedida
+                );
+
+            const custoItemTotal = custoUnitarioInsumo * qtdEncomendada;
+            const qtdNecessaria = (Number(fItem.quantidadeUsada) || 0) * qtdEncomendada;
 
             if (!mapaInsumos[key]) {
               mapaInsumos[key] = {
                 insumoNome: fItem.insumoNome,
                 quantidadeTotal: 0,
-                unidadeMedida: fItem.unidadeMedida,
+                unidadeMedida: fItem.unidadeMedida || "un",
                 custoEstimadoTotal: 0,
                 produtos: new Set<string>(),
               };
             }
 
             mapaInsumos[key].quantidadeTotal += qtdNecessaria;
-            mapaInsumos[key].custoEstimadoTotal += custoItem;
+            mapaInsumos[key].custoEstimadoTotal += custoItemTotal;
             mapaInsumos[key].produtos.add(`${item.nome} (${qtdEncomendada}x)`);
           }
         } catch {}
@@ -429,10 +447,17 @@ export function OrdersView({
   // Modal de Detalhes do Pedido (Somente Leitura)
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
   const [encomendaDetalhes, setEncomendaDetalhes] = useState<Encomenda | null>(null);
+  const [receitaConsolidadaPedido, setReceitaConsolidadaPedido] = useState<InsumoConsolidado[]>([]);
 
-  const handleAbrirDetalhes = (ord: Encomenda) => {
+  const handleAbrirDetalhes = async (ord: Encomenda) => {
     setEncomendaDetalhes(ord);
     setModalDetalhesOpen(true);
+    try {
+      const res = await consolidarReceitasEncomendas(activeCode, [ord], produtos);
+      setReceitaConsolidadaPedido(res);
+    } catch {
+      setReceitaConsolidadaPedido([]);
+    }
   };
 
   // Histórico de Pagamentos Recebidos (Mini histórico)
@@ -960,13 +985,18 @@ export function OrdersView({
     return datasBloqueadas.find((b) => b.data === selectedDrawerDate) || null;
   }, [datasBloqueadas, selectedDrawerDate]);
 
-  // Lista Filtrada para a Tabela
+  // Lista Filtrada para a Tabela / Cards (Regra Matemática: valor_pago < valor_total -> Pendente)
   const encomendasFiltradas = useMemo(() => {
     return encomendas.filter((e) => {
-      const matchPagamento =
-        filtroPagamento === "pendente"
-          ? e.statusPagamento === "pendente" || e.statusPagamento === "cartao_pendente" || e.statusPagamento === "pix_pendente" || !e.statusPagamento
-          : (e.statusPagamento as string) === "pago" || e.statusPagamento === "pago_integral" || e.statusPagamento === "sinal_pago" || e.statusPagamento === "pago_na_entrega";
+      const totalmentePaga = isEncomendaTotalmentePaga(e);
+
+      let matchPagamento = true;
+      if (filtroPagamento === "pendente") {
+        matchPagamento = !totalmentePaga; // Possui qualquer saldo devedor em aberto (valor_pago < valor_total)
+      } else if (filtroPagamento === "pago") {
+        matchPagamento = totalmentePaga; // Totalmente quitada (valor_pago >= valor_total)
+      }
+
       const matchBusca =
         !busca ||
         e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -1192,12 +1222,13 @@ export function OrdersView({
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
             <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-32 font-semibold">
+              <SelectTrigger className="h-8 text-xs w-44 font-semibold">
                 <SelectValue placeholder="Pagamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="todos">Todos os Pagamentos</SelectItem>
+                <SelectItem value="pendente">Pendente (Com Saldo)</SelectItem>
+                <SelectItem value="pago">Pago (Quitado)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -2468,7 +2499,7 @@ export function OrdersView({
                       onClick={handleImportarSugestaoParaPedido}
                       className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 rounded-xl shadow-xs"
                     >
-                      <PlusCircle className="w-3.5 h-3.5" /> Importar para Insumos do Pedido
+                      <PlusCircle className="w-3.5 h-3.5" /> Colocar na Lista de Insumos Necessários
                     </Button>
                   </div>
 
@@ -2483,7 +2514,7 @@ export function OrdersView({
                           </p>
                         </div>
                         <Badge variant="outline" className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 border-emerald-500/30 shrink-0">
-                          ~{formatarMoeda(sug.custoEstimadoTotal)}
+                          ~{(Number(sug.custoEstimadoTotal) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </Badge>
                       </div>
                     ))}
@@ -2715,11 +2746,11 @@ export function OrdersView({
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
                         <input
-                          type="number"
-                          min="1"
+                          type="text"
+                          inputMode="decimal"
                           value={t.quantidade ?? 1}
-                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, Number(e.target.value) || 1)}
-                          className="w-10 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
+                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, parseFloat(e.target.value.replace(",", ".")) || 1)}
+                          className="w-12 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
                         />
                       </div>
                       <button
@@ -3189,6 +3220,38 @@ export function OrdersView({
                   <div className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground font-medium">
                     {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
                   </div>
+                )}
+              </div>
+
+              {/* BLOCO 2.5: RECEITA & INGREDIENTES CONSOLIDADOS DO PEDIDO */}
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                    <UtensilsCrossed className="w-4 h-4 text-purple-600" /> Receita Consolidada do Pedido
+                  </h4>
+                  <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                    Ficha Técnica &amp; Receita
+                  </Badge>
+                </div>
+
+                {receitaConsolidadaPedido.length > 0 ? (
+                  <div className="space-y-1 pt-1">
+                    {receitaConsolidadaPedido.map((ing, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-purple-200/50">
+                        <span className="font-semibold text-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                          {ing.insumoNome}
+                        </span>
+                        <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
+                          {ing.quantidadeTotal} {ing.unidadeMedida}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground italic px-1">
+                    Cadastre a receita dos produtos no Cardápio para ver os ingredientes consolidados aqui.
+                  </p>
                 )}
               </div>
 

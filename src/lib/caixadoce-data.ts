@@ -122,8 +122,10 @@ export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
   if (!estabelecimentoCodigo) return [];
   const code = estabelecimentoCodigo.toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_customers_${code}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_customers_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -222,8 +224,10 @@ export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
 export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
   const code = (codigoLoja || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -300,7 +304,92 @@ export const NOVOS_INSUMOS_SEED: string[] = [
   "Tâmara",
   "Passas",
   "Manga",
-  "Farinha",
+  // Bandejas de Isopor
+  "Bandeja isopor B1",
+  "Bandeja isopor B2",
+  "Bandeja isopor B3",
+  "Bandeja isopor B4",
+  "Bandeja isopor B5",
+
+  // Marmitex de Isopor
+  "Marmitex isopor 500ml",
+  "Marmitex isopor 750ml",
+
+  // Tapetinhos N7
+  "Tapetinho N7 Amarelo",
+  "Tapetinho N7 Azul",
+  "Tapetinho N7 Azul Claro",
+  "Tapetinho N7 Azul Escuro",
+  "Tapetinho N7 Branco",
+  "Tapetinho N7 Incolor",
+  "Tapetinho N7 Laranja",
+  "Tapetinho N7 Lilás",
+  "Tapetinho N7 Prata",
+  "Tapetinho N7 Preto",
+  "Tapetinho N7 Rosa",
+  "Tapetinho N7 Rosa Claro",
+  "Tapetinho N7 Rosa Escuro",
+  "Tapetinho N7 Verde",
+  "Tapetinho N7 Verde Claro",
+  "Tapetinho N7 Verde Escuro",
+  "Tapetinho N7 Vermelho",
+  "Tapetinho N7 Marrom",
+  "Tapetinho N7 Roxo",
+
+  // Tapetinhos N9
+  "Tapetinho N9 Amarelo",
+  "Tapetinho N9 Azul",
+  "Tapetinho N9 Azul Claro",
+  "Tapetinho N9 Azul Escuro",
+  "Tapetinho N9 Branco",
+  "Tapetinho N9 Incolor",
+  "Tapetinho N9 Laranja",
+  "Tapetinho N9 Lilás",
+  "Tapetinho N9 Prata",
+  "Tapetinho N9 Preto",
+  "Tapetinho N9 Rosa",
+  "Tapetinho N9 Rosa Claro",
+  "Tapetinho N9 Rosa Escuro",
+  "Tapetinho N9 Verde",
+  "Tapetinho N9 Verde Claro",
+  "Tapetinho N9 Verde Escuro",
+  "Tapetinho N9 Vermelho",
+  "Tapetinho N9 Marrom",
+  "Tapetinho N9 Roxo",
+
+  // Sacos e Cones
+  "Saco incolor 10x15cm",
+  "Saco incolor 15x30cm",
+  "Saco cone incolor 10x15cm",
+  "Saco cone incolor 14x22,5cm",
+  "Saco adesivado",
+
+  // Bandejas de Alumínio
+  "Bandeja de alumínio B1",
+  "Bandeja de alumínio B2",
+  "Bandeja de alumínio B3",
+  "Bandeja de alumínio B4",
+  "Bandeja de alumínio B5",
+  "Bandeja de alumínio B6",
+  "Bandeja de alumínio B7",
+  "Bandeja de alumínio B9",
+  "Bandeja de alumínio B12",
+
+  // Pratos de Alumínio
+  "Prato de alumínio P1",
+  "Prato de alumínio P2",
+  "Prato de alumínio P3",
+  "Prato de alumínio P4",
+  "Prato de alumínio P5",
+  "Prato de alumínio P6",
+  "Prato de alumínio P7",
+  "Prato de alumínio P8",
+  "Prato de alumínio P9",
+  "Prato de alumínio P12",
+
+  // Outros Insumos
+  "Recheio forneável",
+  "Papel para bem casado",
 
   // Base de Confeitaria e Insumos Frequentes
   "Cobertura Harald Confeiteiro Ao Leite",
@@ -720,22 +809,23 @@ export const CATALOGO_INSUMOS_ARTFESTA = CATALOGO_INSUMOS_PADRAO;
 export function obterCatalogoInsumos(estabelecimentoCodigo?: string): InsumoCatalogo[] {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
-    if (raw) {
-      const list: InsumoCatalogo[] = JSON.parse(raw);
-      if (Array.isArray(list) && list.length > 0) {
-        // Fusão automática sem duplicatas para garantir que novos itens da seed entrem no cache local
-        const nomesExistentes = new Set(list.map((i) => i.nome.toLowerCase().trim()));
-        const novosDoSeed = CATALOGO_INSUMOS_PADRAO.filter(
-          (item) => !nomesExistentes.has(item.nome.toLowerCase().trim())
-        );
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
+      if (raw) {
+        const list: InsumoCatalogo[] = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) {
+          const nomesExistentes = new Set(list.map((i) => i.nome.toLowerCase().trim()));
+          const novosDoSeed = CATALOGO_INSUMOS_PADRAO.filter(
+            (item) => !nomesExistentes.has(item.nome.toLowerCase().trim())
+          );
 
-        if (novosDoSeed.length > 0) {
-          const fundido = [...list, ...novosDoSeed];
-          localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(fundido));
-          return fundido;
+          if (novosDoSeed.length > 0) {
+            const fundido = [...list, ...novosDoSeed];
+            localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(fundido));
+            return fundido;
+          }
+          return list;
         }
-        return list;
       }
     }
   } catch {}
@@ -801,6 +891,16 @@ export function calcularTotalPagoEncomenda(encomenda: Partial<Encomenda>): numbe
     return (encomenda.paymentsHistory as any[]).reduce((sum, item) => sum + (Number(item.valor || item.amount) || 0), 0);
   }
   return Number(encomenda.valorEntrada) || 0;
+}
+
+export function isEncomendaTotalmentePaga(encomenda: Partial<Encomenda>): boolean {
+  if (!encomenda) return false;
+  const valorTotal = Number(encomenda.valorTotal) || 0;
+  const totalPago = calcularTotalPagoEncomenda(encomenda);
+  if (valorTotal > 0) {
+    return totalPago >= valorTotal - 0.01;
+  }
+  return (encomenda.statusPagamento as string) === "pago" || encomenda.statusPagamento === "pago_integral";
 }
 
 export interface Encomenda {
@@ -1180,8 +1280,10 @@ export function obterNotinhasVinculadasPorLista(
   if (!estabelecimentoCodigo) return [];
   const code = estabelecimentoCodigo.toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -1414,10 +1516,12 @@ export const REGRAS_AGENDAMENTO_PADRAO: RegrasAgendamento = {
 export function obterRegrasAgendamento(estabelecimentoCodigo?: string): RegrasAgendamento {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
+      }
     }
   } catch {}
   return REGRAS_AGENDAMENTO_PADRAO;

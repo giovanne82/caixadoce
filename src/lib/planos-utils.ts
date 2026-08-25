@@ -39,7 +39,7 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Cobrança via Pix ou Cartão com Mercado Pago",
+      "Consolidação automática de receitas na Lista de Compras",
       "Compartilhamento de conta com outro usuário",
     ],
   },
@@ -59,7 +59,7 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Cobrança via Pix ou Cartão com Mercado Pago",
+      "Consolidação automática de receitas na Lista de Compras",
       "Compartilhamento de conta com outro usuário",
     ],
     destaque: true,
@@ -90,7 +90,7 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Cobrança via Pix ou Cartão com Mercado Pago",
+      "Consolidação automática de receitas na Lista de Compras",
       "Compartilhamento de conta com outro usuário",
     ],
     destaque: true,
@@ -111,7 +111,7 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
       "Controlar pedidos de clientes (Calendário de Encomendas)",
       "Controle financeiro dos pedidos e fluxo de caixa",
       "Cardápio digital personalizado",
-      "Cobrança via Pix ou Cartão com Mercado Pago",
+      "Consolidação automática de receitas na Lista de Compras",
       "Compartilhamento de conta com outro usuário",
     ],
   },
@@ -143,46 +143,48 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     };
   }
   try {
-    const raw = localStorage.getItem(`caixadoce_plano_${code}`);
-    if (raw) {
-      const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
-      // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
-      if (parsed.status === "ativo") {
-        if (parsed.dataExpiracao) {
-          const expMs = new Date(parsed.dataExpiracao).getTime();
-          if (Date.now() > expMs) {
-            return {
-              ...parsed,
-              planoId: "basico",
-              status: "expirado",
-              diasRestantesTrial: 0,
-            };
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_plano_${code}`);
+      if (raw) {
+        const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
+        // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
+        if (parsed.status === "ativo") {
+          if (parsed.dataExpiracao) {
+            const expMs = new Date(parsed.dataExpiracao).getTime();
+            if (Date.now() > expMs) {
+              return {
+                ...parsed,
+                planoId: "basico",
+                status: "expirado",
+                diasRestantesTrial: 0,
+              };
+            }
           }
+          return parsed;
         }
-        return parsed;
-      }
 
-      // Cálculo dinâmico do trial de 14 dias com base no created_at do usuário
-      const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
-      const inicioMs = new Date(dataCriacaoStr).getTime();
-      const agoraMs = Date.now();
-      const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-      const diasRestantes = Math.max(0, 14 - diasDecorridos);
+        // Cálculo dinâmico do trial de 7 dias com base no created_at do usuário
+        const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
+        const inicioMs = new Date(dataCriacaoStr).getTime();
+        const agoraMs = Date.now();
+        const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
+        const diasRestantes = Math.max(0, 7 - diasDecorridos);
 
-      if (diasRestantes <= 0) {
+        if (diasRestantes <= 0) {
+          return {
+            ...parsed,
+            planoId: "basico",
+            status: "expirado",
+            diasRestantesTrial: 0,
+          };
+        }
         return {
           ...parsed,
-          planoId: "basico",
-          status: "expirado",
-          diasRestantesTrial: 0,
+          status: "trial",
+          diasRestantesTrial: diasRestantes,
+          dataInicio: dataCriacaoStr,
         };
       }
-      return {
-        ...parsed,
-        status: "trial",
-        diasRestantesTrial: diasRestantes,
-        dataInicio: dataCriacaoStr,
-      };
     }
   } catch {}
 
@@ -190,7 +192,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
   const inicioMs = new Date(dataCriacaoStr).getTime();
   const agoraMs = Date.now();
   const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-  const diasRestantes = Math.max(0, 14 - diasDecorridos);
+  const diasRestantes = Math.max(0, 7 - diasDecorridos);
 
   if (diasRestantes <= 0) {
     return {
@@ -216,7 +218,7 @@ export function verificarAcessoModulo(
   // 1. O plano gratuito permite EXCLUSIVAMENTE a Lista de Compras ('despesas')
   if (modulo === "despesas") return true;
 
-  // 2. No período de teste de 14 dias (trial), todos os módulos ficam liberados
+  // 2. No período de teste de 7 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
 
   // 3. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado
