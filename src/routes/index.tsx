@@ -752,8 +752,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     const temTopo = item.temTopoBolo || false;
     const temVela = item.temVela || false;
 
-    // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas com nomes de colunas padronizados)
-    const payloadInsert: Record<string, any> = {
+    // 1. Payload Padronizado com colunas oficiais do Supabase
+    const payloadStandard: Record<string, any> = {
       id: item.id,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
       estabelecimento_codigo: activeCode,
@@ -766,11 +766,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       itens_detalhes: item.itensDetalhes || [],
       insumos_necessarios: item.insumosNecessarios || [],
       valor_total: valTotal,
-      total_amount: valTotal,
-      total_price: valTotal,
       valor_entrada: valEntrada,
-      down_payment: valEntrada,
-      deposit_amount: valEntrada,
       historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
       status_pagamento: item.statusPagamento || "pendente",
       status: item.status || "pendente",
@@ -781,15 +777,15 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       detalhes_topo_bolo: detTopo,
       tem_vela: temVela,
       tipo_vela: detVela,
-      detalhes_vela: detVela,
     };
 
-    let { error } = await supabase.from("encomendas").insert([payloadInsert]);
+    let { error } = await supabase.from("encomendas").insert([payloadStandard]);
 
     if (error) {
-      console.warn("[Supabase Warning] Tentativa inicial com payload completo de colunas falhou, tentando salvar colunas base:", error.message);
-      // Tentativa de resgate com campos fundamentais para schemas simples
-      const payloadFallback = {
+      console.warn("[Supabase Warning] Tentativa com payload padronizado falhou, acionando fallback minimalista:", error.message);
+      
+      // Fallback Minimalista A: Colunas essenciais padrão sem campos estendidos de personalização
+      const payloadMinimal = {
         id: item.id,
         user_id: getValidUuid(user?.id, profile?.ownerUserId),
         estabelecimento_codigo: activeCode,
@@ -799,19 +795,25 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         horario_entrega: item.horarioEntrega || "14:00",
         itens: item.itens,
         valor_total: valTotal,
-        total_amount: valTotal,
-        total_price: valTotal,
         valor_entrada: valEntrada,
         status: item.status || "pendente",
         status_pagamento: item.statusPagamento || "pendente",
-        detalhes_vela: detVela,
-        tipo_vela: detVela,
-        tem_vela: temVela,
-        detalhes_topo_bolo: detTopo,
-        tem_topo_bolo: temTopo,
+        observacoes: item.observacoes || "",
       };
-      const resFallback = await supabase.from("encomendas").insert([payloadFallback]);
-      error = resFallback.error;
+
+      let resMin = await supabase.from("encomendas").insert([payloadMinimal]);
+      error = resMin.error;
+
+      // Fallback Minimalista B: Caso o banco utilize 'total_amount' em vez de 'valor_total'
+      if (error && (error.message?.includes("valor_total") || error.code === "PGRST204")) {
+        const payloadAlt = {
+          ...payloadMinimal,
+          total_amount: valTotal,
+        };
+        delete (payloadAlt as any).valor_total;
+        const resAlt = await supabase.from("encomendas").insert([payloadAlt]);
+        error = resAlt.error;
+      }
     }
 
     if (error) {
