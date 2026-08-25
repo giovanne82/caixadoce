@@ -278,8 +278,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [numeroEst, setNumeroEst] = useState("");
   const [complementoEst, setComplementoEst] = useState("");
   const [bairroEst, setBairroEst] = useState("");
-  const [cidadeEst, setCidadeEst] = useState("São Paulo");
-  const [ufEst, setUfEst] = useState("SP");
+  const [cidadeEst, setCidadeEst] = useState(() => profile?.cidade || "");
+  const [ufEst, setUfEst] = useState(() => profile?.estado || "");
 
   const buscarCepViaCep = async (cepInput: string) => {
     const cleanCep = cepInput.replace(/\D/g, "");
@@ -329,26 +329,21 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   };
 
+  // Hidratação Completa do Formulário no Carregamento (do Profile e do Supabase)
   useEffect(() => {
+    if (!activeCode) return;
+
+    const isUuid = user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+    const filterStr = isUuid ? `user_id.eq.${user.id},codigo.eq.${activeCode}` : `codigo.eq.${activeCode}`;
+
+    // 1. Aplica dados de profile imediatamente se disponíveis
     if (profile) {
       if (profile.establishmentName) setNomeEst(profile.establishmentName);
       if (profile.responsavel) setResponsavelEst(profile.responsavel);
       if (profile.telefone) setTelEst(profile.telefone);
       if (profile.chavePix) setChavePix(profile.chavePix);
       if (profile.tipoChavePix) setTipoChavePix(profile.tipoChavePix);
-      if (profile.contasPix && profile.contasPix.length > 0) {
-        setContasPix(profile.contasPix);
-      } else if (profile.chavePix) {
-        setContasPix([
-          {
-            id: "default_pix",
-            tipo: (profile.tipoChavePix as any) || "email",
-            chave: profile.chavePix,
-            favorecido: profile.establishmentName || profile.responsavel || "ArtFesta",
-            isDefault: true,
-          },
-        ]);
-      }
+      if (profile.contasPix && profile.contasPix.length > 0) setContasPix(profile.contasPix);
       if (profile.tipoDocumento) setTipoDoc(profile.tipoDocumento);
       if (profile.numeroDocumento) setNumDoc(profile.numeroDocumento);
       if (profile.cep) setCepEst(profile.cep);
@@ -362,7 +357,54 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.tituloCardapio || profile.menu_title) setTituloCardapio(profile.tituloCardapio || profile.menu_title || "");
       if (profile.sloganCardapio || profile.menu_slogan) setSloganCardapio(profile.sloganCardapio || profile.menu_slogan || "");
     }
-  }, [profile]);
+
+    // 2. Busca os dados mais recentes diretamente da tabela 'estabelecimentos' do Supabase para garantir amnésia zero no F5
+    supabase
+      .from("estabelecimentos")
+      .select("*")
+      .or(filterStr)
+      .maybeSingle()
+      .then((res) => {
+        if (res.data) {
+          const d = res.data;
+          if (d.nome) setNomeEst(d.nome);
+          if (d.responsavel) setResponsavelEst(d.responsavel);
+          if (d.telefone) setTelEst(d.telefone);
+          if (d.tipo_documento) setTipoDoc(d.tipo_documento);
+          if (d.numero_documento || d.cnpj) setNumDoc(d.numero_documento || d.cnpj);
+          if (d.cep !== null && d.cep !== undefined) setCepEst(d.cep);
+          if (d.logradouro !== null && d.logradouro !== undefined) setLogradouroEst(d.logradouro);
+          if (d.numero !== null && d.numero !== undefined) setNumeroEst(d.numero);
+          if (d.complemento !== null && d.complemento !== undefined) setComplementoEst(d.complemento);
+          if (d.bairro !== null && d.bairro !== undefined) setBairroEst(d.bairro);
+          if (d.cidade !== null && d.cidade !== undefined) setCidadeEst(d.cidade);
+          if (d.estado !== null && d.estado !== undefined) setUfEst(d.estado);
+          if (d.tipo_chave_pix) setTipoChavePix(d.tipo_chave_pix);
+          if (d.chave_pix) setChavePix(d.chave_pix);
+          if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
+          if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
+          if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
+
+          const pixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
+            ? d.pix_accounts
+            : (Array.isArray(d.pix_keys) && d.pix_keys.length > 0 ? d.pix_keys : []);
+
+          if (pixList.length > 0) {
+            setContasPix(pixList);
+          } else if (d.chave_pix) {
+            setContasPix([
+              {
+                id: "default_pix",
+                tipo: d.tipo_chave_pix || "email",
+                chave: d.chave_pix,
+                favorecido: d.nome || d.responsavel || "ArtFesta",
+                isDefault: true,
+              },
+            ]);
+          }
+        }
+      });
+  }, [activeCode, user?.id, profile]);
 
   const handleSalvarEstabelecimento = async (e: React.FormEvent) => {
     e.preventDefault();
