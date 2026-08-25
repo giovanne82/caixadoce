@@ -626,9 +626,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       )
     );
 
-    // Gravação REAL via UPSERT no Supabase na tabela estabelecimentos
+    // Gravação REAL via UPDATE / INSERT no Supabase na tabela estabelecimentos
     try {
-      const payload = {
+      const payload: any = {
         user_id: user.id,
         codigo: currentCode,
         nome: details.nome,
@@ -659,24 +659,58 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         updated_at: new Date().toISOString(),
       };
 
-      let { error } = await supabase
+      // 1. Tenta identificar se a loja já existe no banco por codigo ou user_id
+      const { data: existingRecords } = await supabase
         .from("estabelecimentos")
-        .upsert(payload, { onConflict: "user_id" });
+        .select("id, codigo, user_id")
+        .or(`codigo.eq.${currentCode},user_id.eq.${user.id}`)
+        .limit(1);
 
-      if (error) {
-        console.warn("[Supabase] Aviso no upsert por user_id, tentando por codigo:", error.message);
-        const resCodigo = await supabase
+      const targetId = existingRecords && existingRecords.length > 0 ? existingRecords[0].id : null;
+
+      let saveError: any = null;
+
+      if (targetId) {
+        // Se a loja já existe no banco, faz UPDATE usando o ID da chave primária (Sem erro de on_conflict)
+        const updateRes = await supabase
           .from("estabelecimentos")
-          .upsert(payload, { onConflict: "codigo" });
-        error = resCodigo.error;
+          .update(payload)
+          .eq("id", targetId);
+
+        saveError = updateRes.error;
+      } else {
+        // Tenta UPDATE por codigo ou user_id antes de inserir
+        let updateRes = await supabase
+          .from("estabelecimentos")
+          .update(payload)
+          .eq("codigo", currentCode);
+
+        if (updateRes.error) {
+          updateRes = await supabase
+            .from("estabelecimentos")
+            .update(payload)
+            .eq("user_id", user.id);
+        }
+
+        if (updateRes.error) {
+          // Se não existir nenhuma linha para atualizar, insere novo registro
+          const insertRes = await supabase
+            .from("estabelecimentos")
+            .insert([payload]);
+
+          saveError = insertRes.error;
+        } else {
+          saveError = updateRes.error;
+        }
       }
 
-      if (error) {
-        const msg = error.message || "";
-        const isColumnError = msg.includes("column") || msg.includes("does not exist") || error.code === "PGRST204";
+      // 2. Tratamento para colunas opcionais que possam não existir na tabela no Supabase (ex: PGRST204)
+      if (saveError) {
+        const msg = saveError.message || "";
+        const isColumnError = msg.includes("column") || msg.includes("does not exist") || saveError.code === "PGRST204";
 
         if (isColumnError) {
-          console.warn("[Supabase] Colunas pix_accounts/menu_title ausentes no Supabase. Executando fallback dos dados primários...");
+          console.warn("[Supabase] Removendo colunas estendidas não mapeadas e tentando fallback...");
           const fallbackPayload = { ...payload };
           delete (fallbackPayload as any).logo_url;
           delete (fallbackPayload as any).store_logo_url;
@@ -688,15 +722,19 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete (fallbackPayload as any).pix_keys;
           delete (fallbackPayload as any).cnpj;
 
-          let fallbackRes = await supabase
-            .from("estabelecimentos")
-            .upsert(fallbackPayload, { onConflict: "user_id" });
+          let fbRes = targetId
+            ? await supabase.from("estabelecimentos").update(fallbackPayload).eq("id", targetId)
+            : await supabase.from("estabelecimentos").update(fallbackPayload).eq("codigo", currentCode);
 
-          if (fallbackRes.error) {
-            await supabase.from("estabelecimentos").upsert(fallbackPayload, { onConflict: "codigo" });
+          if (fbRes.error) {
+            fbRes = await supabase.from("estabelecimentos").update(fallbackPayload).eq("user_id", user.id);
+          }
+
+          if (fbRes.error) {
+            await supabase.from("estabelecimentos").insert([fallbackPayload]);
           }
         } else {
-          throw error;
+          console.warn("[Supabase estabelecimentos update warning]:", saveError.message);
         }
       }
 
