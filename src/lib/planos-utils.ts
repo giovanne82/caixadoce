@@ -162,12 +162,12 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
         return parsed;
       }
 
-      // Cálculo dinâmico do trial de 14 dias com base no created_at do usuário
+      // Cálculo dinâmico do trial de 7 dias com base no created_at do usuário
       const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
       const inicioMs = new Date(dataCriacaoStr).getTime();
       const agoraMs = Date.now();
       const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-      const diasRestantes = Math.max(0, 14 - diasDecorridos);
+      const diasRestantes = Math.max(0, 7 - diasDecorridos);
 
       if (diasRestantes <= 0) {
         return {
@@ -190,7 +190,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
   const inicioMs = new Date(dataCriacaoStr).getTime();
   const agoraMs = Date.now();
   const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-  const diasRestantes = Math.max(0, 14 - diasDecorridos);
+  const diasRestantes = Math.max(0, 7 - diasDecorridos);
 
   if (diasRestantes <= 0) {
     return {
@@ -216,7 +216,7 @@ export function verificarAcessoModulo(
   // 1. O plano gratuito permite EXCLUSIVAMENTE a Lista de Compras ('despesas')
   if (modulo === "despesas") return true;
 
-  // 2. No período de teste de 14 dias (trial), todos os módulos ficam liberados
+  // 2. No período de teste de 7 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
 
   // 3. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado

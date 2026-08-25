@@ -132,7 +132,7 @@ export function MeuPlanoTab() {
             Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Aproveite 14 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo via Mercado Pago.
+            Aproveite 7 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo via Mercado Pago.
           </p>
         </div>
       </div>
@@ -162,7 +162,7 @@ export function MeuPlanoTab() {
         )}
       </div>
 
-      {/* BANNER DE STATUS DO PLANO E TRIAL DE 14 DIAS */}
+      {/* BANNER DE STATUS DO PLANO E TRIAL DE 7 DIAS */}
       <Card id="card-status-plano-ativo" className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -188,7 +188,7 @@ export function MeuPlanoTab() {
                     {infoPlano.status === "ativo"
                       ? "Assinatura Ativa (Ilimitado)"
                       : infoPlano.status === "trial"
-                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 14} dias grátis restantes`
+                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 7} dias grátis restantes`
                       : infoPlano.status === "expirado"
                       ? "⚠️ Trial Expirado (0 dias restantes)"
                       : "Plano Básico (Gratuito)"}

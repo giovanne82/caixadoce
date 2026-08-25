@@ -486,7 +486,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Assinatura &amp; Meu Plano</h4>
                     <Badge className="bg-purple-600 text-white text-[10px] font-bold">
                       {infoPlano.status === "trial"
-                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 14} dias restantes)`
+                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 7} dias restantes)`
                         : infoPlano.planoId === "basico"
                         ? "Plano Básico Gratuito"
                         : "Plano Pro Ativo"}

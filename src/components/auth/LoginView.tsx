@@ -208,7 +208,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
           <CardDescription>
             {activeTab === "login"
               ? "Gerencie suas finanças, vendas e equipe com facilidade"
-              : "Experimente 14 dias grátis com todos os recursos liberados"}
+              : "Experimente 7 dias grátis com todos os recursos liberados"}
           </CardDescription>
         </CardHeader>
 
@@ -477,7 +477,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs text-foreground flex items-center gap-2.5">
                   <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
                   <span>
-                    Inclui <strong>14 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
+                    Inclui <strong>7 dias de teste grátis</strong> com suporte e todos os recursos sem compromisso.
                   </span>
                 </div>
 
