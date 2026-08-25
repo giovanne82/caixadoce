@@ -191,27 +191,23 @@ export function DespesasView({
   };
 
   const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+    const atuais = linkedMap[shoppingListId] || [];
+    const novosIds = atuais.filter((id) => id !== receiptId);
+    setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
+    salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
+
     try {
-      let res = await supabase
+      const res = await supabase
         .from("shopping_list_receipts")
         .delete()
         .eq("shopping_list_id", shoppingListId)
-        .eq("receipt_id", receiptId)
-        .select();
+        .eq("receipt_id", receiptId);
 
       if (res.error) {
-        toast.error(`Falha ao desvincular notinha no banco: ${res.error.message}`);
-        return;
+        console.warn("Aviso ao desvincular notinha no Supabase:", res.error.message);
       }
-
-      const atuais = linkedMap[shoppingListId] || [];
-      const novosIds = atuais.filter((id) => id !== receiptId);
-      setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
-      salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, estabelecimentoCodigo);
-      toast.info("Notinha desvinculada desta lista.");
-    } catch (e: any) {
-      toast.error(`Erro ao desvincular notinha: ${e?.message || e}`);
-    }
+    } catch {}
+    toast.info("Notinha desvinculada desta lista.");
   };
 
   // Sugestões de Notinhas para uma Lista Específica
