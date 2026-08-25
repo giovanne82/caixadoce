@@ -745,6 +745,13 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       estabelecimentoCodigo: activeCode,
     };
 
+    const valTotal = Number(item.valorTotal) || 0;
+    const valEntrada = Number(item.valorEntrada) || 0;
+    const detVela = item.detalhesVela || (item as any).tipoVela || "";
+    const detTopo = item.detalhesTopoBolo || "";
+    const temTopo = item.temTopoBolo || false;
+    const temVela = item.temVela || false;
+
     // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas com nomes de colunas padronizados)
     const payloadInsert: Record<string, any> = {
       id: item.id,
@@ -758,19 +765,23 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       itens: item.itens,
       itens_detalhes: item.itensDetalhes || [],
       insumos_necessarios: item.insumosNecessarios || [],
-      valor_total: Number(item.valorTotal) || 0,
-      valor_entrada: Number(item.valorEntrada) || 0,
+      valor_total: valTotal,
+      total_amount: valTotal,
+      total_price: valTotal,
+      valor_entrada: valEntrada,
+      down_payment: valEntrada,
+      deposit_amount: valEntrada,
       historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
       status_pagamento: item.statusPagamento || "pendente",
       status: item.status || "pendente",
       tipo_entrega: item.tipoEntrega || "retirada",
       endereco_entrega: item.enderecoEntrega || "",
       observacoes: item.observacoes || "",
-      tem_topo_bolo: item.temTopoBolo || false,
-      detalhes_topo_bolo: item.detalhesTopoBolo || "",
-      tem_vela: item.temVela || false,
-      tipo_vela: item.detalhesVela || (item as any).tipoVela || "",
-      detalhes_vela: item.detalhesVela || (item as any).tipoVela || "",
+      tem_topo_bolo: temTopo,
+      detalhes_topo_bolo: detTopo,
+      tem_vela: temVela,
+      tipo_vela: detVela,
+      detalhes_vela: detVela,
     };
 
     let { error } = await supabase.from("encomendas").insert([payloadInsert]);
@@ -787,9 +798,17 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         data_entrega: item.dataEntrega,
         horario_entrega: item.horarioEntrega || "14:00",
         itens: item.itens,
-        valor_total: Number(item.valorTotal) || 0,
+        valor_total: valTotal,
+        total_amount: valTotal,
+        total_price: valTotal,
+        valor_entrada: valEntrada,
         status: item.status || "pendente",
         status_pagamento: item.statusPagamento || "pendente",
+        detalhes_vela: detVela,
+        tipo_vela: detVela,
+        tem_vela: temVela,
+        detalhes_topo_bolo: detTopo,
+        tem_topo_bolo: temTopo,
       };
       const resFallback = await supabase.from("encomendas").insert([payloadFallback]);
       error = resFallback.error;

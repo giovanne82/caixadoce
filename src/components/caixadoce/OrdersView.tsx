@@ -2741,11 +2741,11 @@ export function OrdersView({
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
                         <input
-                          type="number"
-                          min="1"
+                          type="text"
+                          inputMode="decimal"
                           value={t.quantidade ?? 1}
-                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, Number(e.target.value) || 1)}
-                          className="w-10 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
+                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, parseFloat(e.target.value.replace(",", ".")) || 1)}
+                          className="w-12 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
                         />
                       </div>
                       <button
