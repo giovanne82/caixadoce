@@ -664,12 +664,6 @@ export function DespesasView({
                         >
                           {lista.status === "ativa" ? "Ativa" : "Concluída"}
                         </Badge>
-
-                        {totalGastoLista > 0 && (
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">
-                            Total Notinhas: {formatarMoeda(totalGastoLista)}
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 font-medium">
                         {compradosCount} de {totalItens} itens comprados ({percentual}%) • Criada em {new Date(lista.createdAt).toLocaleDateString("pt-BR")}
