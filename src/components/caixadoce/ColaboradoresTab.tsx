@@ -68,7 +68,7 @@ export function ColaboradoresTab() {
   const [nome, setNome] = useState("");
   const [pin, setPin] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["scanner", "despesas", "produtos", "encomendas"]);
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["despesas", "produtos", "encomendas"]);
   const [salvando, setSalvando] = useState(false);
 
   const maxColaboradores = 1;

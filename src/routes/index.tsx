@@ -196,7 +196,7 @@ function Index() {
   const activeCode = profile?.establishmentCode || "CD-1001";
   const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
-  const ABAS_PERMITIDAS_COLABORADOR = ["scanner", "despesas", "produtos", "encomendas"];
+  const ABAS_PERMITIDAS_COLABORADOR = ["despesas", "produtos", "encomendas"];
 
   const podeAcessarAba = useCallback((abaId: string): boolean => {
     if (!profile || profile.role === "admin") return true;
@@ -208,8 +208,8 @@ function Index() {
 
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
-      toast.error("Acesso Negado: Colaboradores possuem acesso apenas a Escanear, Lista de Compras, Cardápio e Encomendas.");
-      setActiveTab("scanner");
+      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Lista de Compras, Cardápio e Encomendas.");
+      setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
 
