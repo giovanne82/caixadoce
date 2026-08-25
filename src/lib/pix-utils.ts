@@ -34,10 +34,12 @@ export interface DadosInstitucionais {
 
 export function salvarDadosInstitucionaisCache(codigoLoja: string, dados: Partial<DadosInstitucionais>): void {
   try {
-    const key = `caixadoce_store_profile_${codigoLoja}`;
-    const raw = localStorage.getItem(key);
-    const prev = raw ? JSON.parse(raw) : {};
-    localStorage.setItem(key, JSON.stringify({ ...prev, ...dados }));
+    if (typeof window !== "undefined") {
+      const key = `caixadoce_store_profile_${codigoLoja}`;
+      const raw = localStorage.getItem(key);
+      const prev = raw ? JSON.parse(raw) : {};
+      localStorage.setItem(key, JSON.stringify({ ...prev, ...dados }));
+    }
   } catch {}
 }
 

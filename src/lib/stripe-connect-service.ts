@@ -35,8 +35,10 @@ export interface CreateStripeSessionPayload {
 export function obterConfiguracoesStripeLoja(establishmentCode: string): StripeConnectAccount {
   const code = (establishmentCode || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_stripe_connect_${code}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_stripe_connect_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch (e) {
     console.warn("Erro ao ler configurações Stripe:", e);
   }
@@ -65,10 +67,12 @@ export function salvarConfiguracoesStripeLoja(
   };
 
   try {
-    localStorage.setItem(
-      `caixadoce_stripe_connect_${atualizado.establishmentCode}`,
-      JSON.stringify(atualizado)
-    );
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        `caixadoce_stripe_connect_${atualizado.establishmentCode}`,
+        JSON.stringify(atualizado)
+      );
+    }
   } catch (e) {
     console.warn("Erro ao salvar configurações Stripe:", e);
   }

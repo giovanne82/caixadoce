@@ -122,8 +122,10 @@ export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
   if (!estabelecimentoCodigo) return [];
   const code = estabelecimentoCodigo.toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_customers_${code}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_customers_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -222,8 +224,10 @@ export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
 export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
   const code = (codigoLoja || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -805,22 +809,23 @@ export const CATALOGO_INSUMOS_ARTFESTA = CATALOGO_INSUMOS_PADRAO;
 export function obterCatalogoInsumos(estabelecimentoCodigo?: string): InsumoCatalogo[] {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
-    if (raw) {
-      const list: InsumoCatalogo[] = JSON.parse(raw);
-      if (Array.isArray(list) && list.length > 0) {
-        // Fusão automática sem duplicatas para garantir que novos itens da seed entrem no cache local
-        const nomesExistentes = new Set(list.map((i) => i.nome.toLowerCase().trim()));
-        const novosDoSeed = CATALOGO_INSUMOS_PADRAO.filter(
-          (item) => !nomesExistentes.has(item.nome.toLowerCase().trim())
-        );
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_supplies_${code}`);
+      if (raw) {
+        const list: InsumoCatalogo[] = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) {
+          const nomesExistentes = new Set(list.map((i) => i.nome.toLowerCase().trim()));
+          const novosDoSeed = CATALOGO_INSUMOS_PADRAO.filter(
+            (item) => !nomesExistentes.has(item.nome.toLowerCase().trim())
+          );
 
-        if (novosDoSeed.length > 0) {
-          const fundido = [...list, ...novosDoSeed];
-          localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(fundido));
-          return fundido;
+          if (novosDoSeed.length > 0) {
+            const fundido = [...list, ...novosDoSeed];
+            localStorage.setItem(`caixadoce_supplies_${code}`, JSON.stringify(fundido));
+            return fundido;
+          }
+          return list;
         }
-        return list;
       }
     }
   } catch {}
@@ -1265,8 +1270,10 @@ export function obterNotinhasVinculadasPorLista(
   if (!estabelecimentoCodigo) return [];
   const code = estabelecimentoCodigo.toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
-    if (raw) return JSON.parse(raw);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_linked_receipts_${code}_${shoppingListId}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch {}
   return [];
 }
@@ -1499,10 +1506,12 @@ export const REGRAS_AGENDAMENTO_PADRAO: RegrasAgendamento = {
 export function obterRegrasAgendamento(estabelecimentoCodigo?: string): RegrasAgendamento {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
   try {
-    const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
+      }
     }
   } catch {}
   return REGRAS_AGENDAMENTO_PADRAO;

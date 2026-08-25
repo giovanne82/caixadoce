@@ -54,11 +54,14 @@ export function ColaboradoresTab() {
 
   const [colaboradores, setColaboradores] = useState<Colaborador[]>(() => {
     try {
-      const raw = localStorage.getItem(`caixadoce_colaboradores_${activeCode}`);
-      return raw ? JSON.parse(raw) : [];
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem(`caixadoce_colaboradores_${activeCode}`);
+        return raw ? JSON.parse(raw) : [];
+      }
     } catch {
       return [];
     }
+    return [];
   });
 
   const [modalNovo, setModalNovo] = useState(false);

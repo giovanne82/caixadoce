@@ -143,46 +143,48 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     };
   }
   try {
-    const raw = localStorage.getItem(`caixadoce_plano_${code}`);
-    if (raw) {
-      const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
-      // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
-      if (parsed.status === "ativo") {
-        if (parsed.dataExpiracao) {
-          const expMs = new Date(parsed.dataExpiracao).getTime();
-          if (Date.now() > expMs) {
-            return {
-              ...parsed,
-              planoId: "basico",
-              status: "expirado",
-              diasRestantesTrial: 0,
-            };
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_plano_${code}`);
+      if (raw) {
+        const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
+        // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
+        if (parsed.status === "ativo") {
+          if (parsed.dataExpiracao) {
+            const expMs = new Date(parsed.dataExpiracao).getTime();
+            if (Date.now() > expMs) {
+              return {
+                ...parsed,
+                planoId: "basico",
+                status: "expirado",
+                diasRestantesTrial: 0,
+              };
+            }
           }
+          return parsed;
         }
-        return parsed;
-      }
 
-      // Cálculo dinâmico do trial de 7 dias com base no created_at do usuário
-      const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
-      const inicioMs = new Date(dataCriacaoStr).getTime();
-      const agoraMs = Date.now();
-      const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-      const diasRestantes = Math.max(0, 7 - diasDecorridos);
+        // Cálculo dinâmico do trial de 7 dias com base no created_at do usuário
+        const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
+        const inicioMs = new Date(dataCriacaoStr).getTime();
+        const agoraMs = Date.now();
+        const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
+        const diasRestantes = Math.max(0, 7 - diasDecorridos);
 
-      if (diasRestantes <= 0) {
+        if (diasRestantes <= 0) {
+          return {
+            ...parsed,
+            planoId: "basico",
+            status: "expirado",
+            diasRestantesTrial: 0,
+          };
+        }
         return {
           ...parsed,
-          planoId: "basico",
-          status: "expirado",
-          diasRestantesTrial: 0,
+          status: "trial",
+          diasRestantesTrial: diasRestantes,
+          dataInicio: dataCriacaoStr,
         };
       }
-      return {
-        ...parsed,
-        status: "trial",
-        diasRestantesTrial: diasRestantes,
-        dataInicio: dataCriacaoStr,
-      };
     }
   } catch {}
 

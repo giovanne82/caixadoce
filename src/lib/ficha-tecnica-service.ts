@@ -173,60 +173,62 @@ export async function calcularPrecoMedioInsumo(
 
   // 2. Fallback no Cache Local (Notinhas & Histórico ordenados pelo registro mais recente)
   try {
-    const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
-    const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
-    
-    let itensLocal: { nome: string; valorTotal: number; timestamp: number }[] = [];
+    if (typeof window !== "undefined") {
+      const rawHistorico = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
+      const rawDespesas = localStorage.getItem(`caixadoce_despesas_${code}`);
+      
+      let itensLocal: { nome: string; valorTotal: number; timestamp: number }[] = [];
 
-    if (rawHistorico) {
-      const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
-      parsed.forEach((h) => {
-        itensLocal.push({
-          nome: h.nomeInsumo,
-          valorTotal: h.valorPagoTotal,
-          timestamp: new Date(h.createdAt || h.dataCompra || 0).getTime(),
-        });
-      });
-    }
-
-    if (rawDespesas) {
-      const parsedDespesas: any[] = JSON.parse(rawDespesas);
-      parsedDespesas.forEach((d) => {
-        const t = new Date(d.dataCompra || d.createdAt || 0).getTime();
-        if (Array.isArray(d.itens)) {
-          d.itens.forEach((it: any) => {
-            itensLocal.push({
-              nome: it.nome || "Insumo",
-              valorTotal: Number(it.valorTotal) || 0,
-              timestamp: t,
-            });
+      if (rawHistorico) {
+        const parsed: HistoricoCompraInsumo[] = JSON.parse(rawHistorico);
+        parsed.forEach((h) => {
+          itensLocal.push({
+            nome: h.nomeInsumo,
+            valorTotal: h.valorPagoTotal,
+            timestamp: new Date(h.createdAt || h.dataCompra || 0).getTime(),
           });
-        }
-      });
-    }
+        });
+      }
 
-    if (itensLocal.length > 0) {
-      // Ordena do registro mais recente para o mais antigo
-      itensLocal.sort((a, b) => b.timestamp - a.timestamp);
+      if (rawDespesas) {
+        const parsedDespesas: any[] = JSON.parse(rawDespesas);
+        parsedDespesas.forEach((d) => {
+          const t = new Date(d.dataCompra || d.createdAt || 0).getTime();
+          if (Array.isArray(d.itens)) {
+            d.itens.forEach((it: any) => {
+              itensLocal.push({
+                nome: it.nome || "Insumo",
+                valorTotal: Number(it.valorTotal) || 0,
+                timestamp: t,
+              });
+            });
+          }
+        });
+      }
 
-      const matches = itensLocal.filter((it) => {
-        const itemNome = (it.nome || "").toLowerCase();
-        if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
-        if (tokens.length > 0) {
-          const acertos = tokens.filter((tok) => itemNome.includes(tok));
-          return acertos.length >= Math.ceil(tokens.length * 0.6);
-        }
-        return false;
-      });
+      if (itensLocal.length > 0) {
+        // Ordena do registro mais recente para o mais antigo
+        itensLocal.sort((a, b) => b.timestamp - a.timestamp);
 
-      if (matches.length > 0) {
-        const ultimoItem = matches[0];
-        if (ultimoItem.valorTotal > 0) {
-          return {
-            precoMedioUnitario: parseFloat(ultimoItem.valorTotal.toFixed(2)),
-            totalComprasRegistradas: matches.length,
-            deNotaFiscal: true,
-          };
+        const matches = itensLocal.filter((it) => {
+          const itemNome = (it.nome || "").toLowerCase();
+          if (itemNome.includes(nomeLimpo) || nomeLimpo.includes(itemNome)) return true;
+          if (tokens.length > 0) {
+            const acertos = tokens.filter((tok) => itemNome.includes(tok));
+            return acertos.length >= Math.ceil(tokens.length * 0.6);
+          }
+          return false;
+        });
+
+        if (matches.length > 0) {
+          const ultimoItem = matches[0];
+          if (ultimoItem.valorTotal > 0) {
+            return {
+              precoMedioUnitario: parseFloat(ultimoItem.valorTotal.toFixed(2)),
+              totalComprasRegistradas: matches.length,
+              deNotaFiscal: true,
+            };
+          }
         }
       }
     }
@@ -321,10 +323,12 @@ export async function registrarCompraInsumo(
 
   // 2. Salvar no Cache Local
   try {
-    const raw = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
-    const lista: HistoricoCompraInsumo[] = raw ? JSON.parse(raw) : [];
-    lista.unshift(novaCompra);
-    localStorage.setItem(`caixadoce_historico_insumos_${code}`, JSON.stringify(lista));
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_historico_insumos_${code}`);
+      const lista: HistoricoCompraInsumo[] = raw ? JSON.parse(raw) : [];
+      lista.unshift(novaCompra);
+      localStorage.setItem(`caixadoce_historico_insumos_${code}`, JSON.stringify(lista));
+    }
   } catch {}
 }
 
@@ -378,7 +382,9 @@ export async function salvarFichaTecnicaProduto(
 
   // 2. Salvar no Cache Local
   try {
-    localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(itensFormatados));
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(itensFormatados));
+    }
   } catch {}
 
   return itensFormatados;
@@ -428,42 +434,46 @@ export async function obterFichaTecnicaProduto(
           createdAt: d.created_at,
         };
       });
-      localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
+      }
       return mapeados;
     }
   } catch {}
 
   // 2. Cache Local
   try {
-    const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
-    if (raw) {
-      const parsed: any[] = JSON.parse(raw);
-      return parsed.map((d) => {
-        const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
-        const unid = d.unidadeMedida || "g";
-        const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
-        const qtdEmb = Number(
-          d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
-        );
-        const qtdUsada = Number(d.quantidadeUsada ?? 0);
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        return parsed.map((d) => {
+          const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
+          const unid = d.unidadeMedida || "g";
+          const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
+          const qtdEmb = Number(
+            d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
+          );
+          const qtdUsada = Number(d.quantidadeUsada ?? 0);
 
-        return {
-          id: String(d.id),
-          estabelecimentoCodigo: d.estabelecimentoCodigo,
-          produtoId: d.produtoId,
-          insumoNome: d.insumoNome,
-          precoEmbalagem: precoEmb,
-          qtdEmbalagemOriginal: qtdEmb,
-          quantidadeUsada: qtdUsada,
-          unidadeMedida: unid,
-          unidadeEmbalagem: unidEmb,
-          precoUnitarioAplicado: precoEmb,
-          custoTotalItem:
-            Number(d.custoTotalItem) ||
-            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
-          createdAt: d.createdAt,
-        };
-      });
+          return {
+            id: String(d.id),
+            estabelecimentoCodigo: d.estabelecimentoCodigo || code,
+            produtoId: String(d.produtoId || produtoId),
+            insumoNome: d.insumoNome || d.nome,
+            precoEmbalagem: precoEmb,
+            qtdEmbalagemOriginal: qtdEmb,
+            quantidadeUsada: qtdUsada,
+            unidadeMedida: unid,
+            unidadeEmbalagem: unidEmb,
+            precoUnitarioAplicado: precoEmb,
+            custoTotalItem:
+              Number(d.custoTotalItem) ||
+              calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
+            createdAt: d.createdAt,
+          };
+        });
+      }
     }
   } catch {}
 
