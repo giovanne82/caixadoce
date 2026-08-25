@@ -495,7 +495,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   <p className="text-xs text-slate-600">
                     {infoPlano.planoId === "basico"
                       ? "Você está usando o Plano Básico. Faça upgrade para o Plano Pro e libere o scanner por IA ilimitado."
-                      : "Acesso ilimitado liberado para leitura por IA, pagamentos online e agendamento de encomendas."}
+                      : "Acesso ilimitado liberado para leitura por IA, ficha técnica e agendamento de encomendas."}
                   </p>
                 </div>
               </div>

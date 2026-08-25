@@ -346,7 +346,7 @@ export function MeuPlanoTab() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cobrança via Pix ou Cartão de Crédito (Mercado Pago)</span>
+                <span>Consolidação automática de receitas na Lista de Compras</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />

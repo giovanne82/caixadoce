@@ -289,7 +289,7 @@ export function LandingPageContent() {
                   <Calculator className="w-5 h-5 text-amber-600" />
                   <span className="text-sm font-bold text-amber-950">📊 3. Ficha Técnica &amp; Precificação</span>
                 </div>
-                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Mercado Pago &amp; Pix</Badge>
+                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Precificação Sem Prejuízo</Badge>
               </div>
 
               <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
@@ -560,14 +560,6 @@ export function LandingPageContent() {
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Cardápio digital personalizado</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Emissão de link de pagamento</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Cobrança via Pix ou Cartão com Mercado Pago</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
@@ -858,7 +850,7 @@ export function LandingPageContent() {
             </div>
 
             <div className="p-3.5 bg-slate-100 rounded-xl text-xs text-slate-600 leading-relaxed">
-              💡 <strong>Vendas pelo WhatsApp:</strong> Seu cliente faz o pedido no cardápio e recebe a confirmação direta no WhatsApp com link de pagamento seguro Mercado Pago.
+              💡 <strong>Vendas pelo WhatsApp:</strong> Seu cliente faz o pedido no cardápio e você recebe a confirmação organizada diretamente no seu WhatsApp.
             </div>
           </div>
         </DialogContent>
