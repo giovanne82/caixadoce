@@ -412,22 +412,30 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       const { data: dbColabs, error: dbErr } = await supabase
         .from("colaboradores")
         .select("*")
-        .eq("estabelecimento_codigo", formattedCode)
-        .eq("pin", rawPin);
+        .eq("estabelecimento_codigo", formattedCode);
 
       if (!dbErr && dbColabs && dbColabs.length > 0) {
-        colabEncontrado = dbColabs.find((c: any) => c.ativo !== false && c.is_active !== false);
+        colabEncontrado = dbColabs.find((c: any) => {
+          const matchPin =
+            String(c.pin || c.codigo_pin || c.pin_code || c.senha || "") === String(rawPin);
+          const isAtivo = c.ativo !== false && c.is_active !== false;
+          return matchPin && isAtivo;
+        });
       }
 
       if (!colabEncontrado) {
         const { data: staffColabs } = await supabase
           .from("staff_members")
           .select("*")
-          .eq("estabelecimento_codigo", formattedCode)
-          .eq("pin", rawPin);
+          .eq("estabelecimento_codigo", formattedCode);
 
         if (staffColabs && staffColabs.length > 0) {
-          colabEncontrado = staffColabs.find((c: any) => c.ativo !== false && c.is_active !== false);
+          colabEncontrado = staffColabs.find((c: any) => {
+            const matchPin =
+              String(c.pin || c.codigo_pin || c.pin_code || c.senha || "") === String(rawPin);
+            const isAtivo = c.ativo !== false && c.is_active !== false;
+            return matchPin && isAtivo;
+          });
         }
       }
     } catch (e) {

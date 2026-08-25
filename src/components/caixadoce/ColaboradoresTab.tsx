@@ -162,7 +162,7 @@ export function ColaboradoresTab() {
         abasPermitidas,
       };
 
-      const payload = {
+      const payloadPrimary = {
         id: novo.id,
         estabelecimento_codigo: activeCode,
         nome: novo.nome,
@@ -174,9 +174,25 @@ export function ColaboradoresTab() {
       };
 
       try {
-        const { error } = await supabase.from("colaboradores").upsert([payload], { onConflict: "id" });
+        const { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
         if (error) {
-          console.warn("Aviso ao salvar no Supabase colaboradores:", error.message);
+          console.warn("Aviso ao salvar com coluna 'pin':", error.message);
+          // Fallback para o caso da tabela colaboradores usar codigo_pin ou pin_code
+          const payloadFallback = {
+            id: novo.id,
+            estabelecimento_codigo: activeCode,
+            nome: novo.nome,
+            email: syntheticEmail,
+            codigo_pin: pin,
+            pin_code: pin,
+            telefone: novo.telefone,
+            abas_permitidas: abasPermitidas,
+            ativo: true,
+          };
+          const resFallback = await supabase.from("colaboradores").upsert([payloadFallback], { onConflict: "id" });
+          if (resFallback.error) {
+            console.warn("Aviso no fallback de colaborador:", resFallback.error.message);
+          }
         }
       } catch (err) {
         console.warn("Aviso ao salvar no Supabase colaboradores:", err);
@@ -245,7 +261,10 @@ export function ColaboradoresTab() {
       salvarLista(listaAtualizada);
 
       try {
-        await supabase.from("colaboradores").update({ pin: novoPin }).eq("id", colabSelecionado.id);
+        const resPrimary = await supabase.from("colaboradores").update({ pin: novoPin }).eq("id", colabSelecionado.id);
+        if (resPrimary.error) {
+          await supabase.from("colaboradores").update({ codigo_pin: novoPin, pin_code: novoPin }).eq("id", colabSelecionado.id);
+        }
       } catch (err) {
         console.warn("Aviso ao atualizar PIN no Supabase:", err);
       }
