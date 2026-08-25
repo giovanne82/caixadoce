@@ -85,6 +85,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   obterFichaTecnicaProduto,
   consolidarReceitasEncomendas,
+  calcularCustoItemFichaTecnica,
   type FichaTecnicaItem,
   type InsumoConsolidado,
 } from "@/lib/ficha-tecnica-service";
@@ -366,22 +367,34 @@ export function OrdersView({
           for (const fItem of itensFicha) {
             const key = `${fItem.insumoNome.toLowerCase()}_${fItem.unidadeMedida}`;
             const precoEmb = Number(fItem.precoEmbalagem ?? fItem.precoUnitarioAplicado ?? 0);
-            const qtdEmbOrig = Number(fItem.qtdEmbalagemOriginal) > 0 ? Number(fItem.qtdEmbalagemOriginal) : 1000;
-            const custoItem = (precoEmb / qtdEmbOrig) * fItem.quantidadeUsada * qtdEncomendada;
-            const qtdNecessaria = fItem.quantidadeUsada * qtdEncomendada;
+            const qtdEmbOrig = Number(fItem.qtdEmbalagemOriginal) > 0 ? Number(fItem.qtdEmbalagemOriginal) : 1;
+
+            // Usa o custoTotalItem já calculado da Ficha Técnica do Produto
+            const custoUnitarioInsumo = Number(fItem.custoTotalItem) > 0
+              ? Number(fItem.custoTotalItem)
+              : calcularCustoItemFichaTecnica(
+                  fItem.quantidadeUsada,
+                  fItem.unidadeMedida || "g",
+                  precoEmb,
+                  qtdEmbOrig,
+                  fItem.unidadeEmbalagem || fItem.unidadeMedida
+                );
+
+            const custoItemTotal = custoUnitarioInsumo * qtdEncomendada;
+            const qtdNecessaria = (Number(fItem.quantidadeUsada) || 0) * qtdEncomendada;
 
             if (!mapaInsumos[key]) {
               mapaInsumos[key] = {
                 insumoNome: fItem.insumoNome,
                 quantidadeTotal: 0,
-                unidadeMedida: fItem.unidadeMedida,
+                unidadeMedida: fItem.unidadeMedida || "un",
                 custoEstimadoTotal: 0,
                 produtos: new Set<string>(),
               };
             }
 
             mapaInsumos[key].quantidadeTotal += qtdNecessaria;
-            mapaInsumos[key].custoEstimadoTotal += custoItem;
+            mapaInsumos[key].custoEstimadoTotal += custoItemTotal;
             mapaInsumos[key].produtos.add(`${item.nome} (${qtdEncomendada}x)`);
           }
         } catch {}
@@ -2495,7 +2508,7 @@ export function OrdersView({
                           </p>
                         </div>
                         <Badge variant="outline" className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 border-emerald-500/30 shrink-0">
-                          ~{formatarMoeda(sug.custoEstimadoTotal)}
+                          ~{(Number(sug.custoEstimadoTotal) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </Badge>
                       </div>
                     ))}
