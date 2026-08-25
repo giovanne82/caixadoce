@@ -647,7 +647,13 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   };
 
   // Handlers de Produtos
-  const criarProduto = async (novo: ProdutoCardapio) => {
+  const criarProduto = async (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    const novo: ProdutoCardapio = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+      createdAt: new Date().toISOString(),
+    };
     const atualizados = [novo, ...produtos];
     setProdutos(atualizados);
     try {
@@ -687,9 +693,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     if (dados.categoria !== undefined) payload.categoria = dados.categoria;
     if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
     if (dados.descricao !== undefined) payload.descricao = dados.descricao;
-    if (dados.imagem !== undefined) payload.imagem = dados.imagem;
-    if (dados.insumos !== undefined) payload.insumos = dados.insumos;
-    if (dados.disponivel !== undefined) payload.disponivel = dados.disponivel;
+    if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
+    if (dados.ativo !== undefined) payload.ativo = dados.ativo;
 
     const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
     if (error) {

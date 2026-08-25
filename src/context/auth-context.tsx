@@ -756,7 +756,6 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     const updatedProfile: UserProfile = {
       ...profile,
       ...details,
-      establishmentName: details.nome,
       establishmentName: details.nome || profile.establishmentName,
       establishmentAddress: details.endereco || profile.establishmentAddress,
     };
