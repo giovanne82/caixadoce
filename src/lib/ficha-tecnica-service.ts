@@ -592,33 +592,85 @@ export async function consolidarReceitasEncomendas(
   for (const enc of encomendasSelecionadas) {
     const numPedido = enc.clienteNome ? `${enc.clienteNome} (#${(enc.id || "").slice(0, 4)})` : `#${(enc.id || "").slice(0, 4)}`;
     
-    // Obter itens detalhados do pedido
-    const itens = enc.itensDetalhes && enc.itensDetalhes.length > 0
-      ? enc.itensDetalhes
-      : [];
+    // 1. Extrair os itens do pedido (suporta itensDetalhes ou itens string/array)
+    let itensDaEncomenda: Array<{ nome: string; quantidade: number; produtoId?: string }> = [];
 
-    for (const item of itens) {
-      const qtdProduto = Number(item.quantidade) || 1;
+    if (Array.isArray(enc.itensDetalhes) && enc.itensDetalhes.length > 0) {
+      itensDaEncomenda = enc.itensDetalhes.map((it: any) => ({
+        nome: it.nome || it.name || "Item sem nome",
+        quantidade: Number(it.quantidade) || 1,
+        produtoId: it.produtoId || it.produto_id,
+      }));
+    } else if (Array.isArray(enc.itens) && enc.itens.length > 0) {
+      itensDaEncomenda = enc.itens.map((it: any) => ({
+        nome: typeof it === "string" ? it : (it.nome || it.name || "Item sem nome"),
+        quantidade: typeof it === "string" ? 1 : (Number(it.quantidade) || 1),
+        produtoId: typeof it === "object" ? (it.produtoId || it.produto_id) : undefined,
+      }));
+    } else if (typeof enc.itens === "string" && enc.itens.trim()) {
+      // Faz o parse da string de itens (ex: "1x Bolo vulcão chocolate com morango, 2x Trufas")
+      const partes = enc.itens.split(/[,;\n]+/);
+      for (const p of partes) {
+        const str = p.trim();
+        if (!str) continue;
+        const match = str.match(/^(?:(\d+)\s*x\s*)?(.+)$/i);
+        if (match) {
+          const qtd = Number(match[1]) || 1;
+          const nome = match[2].trim();
+          itensDaEncomenda.push({ nome, quantidade: qtd });
+        } else {
+          itensDaEncomenda.push({ nome: str, quantidade: 1 });
+        }
+      }
+    }
+
+    let insumosProcessadosParaPedido = false;
+
+    // 2. Para cada item da encomenda, busca a receita do produto no cardápio
+    for (const item of itensDaEncomenda) {
+      const qtdProduto = Math.max(1, Number(item.quantidade) || 1);
+      const nomeItemLimpo = (item.nome || "").trim().toLowerCase();
       
-      // Tentar encontrar o produto no cardápio pelo ID ou Nome
-      const prodCardapio = produtosCardapio.find(
-        (p) => p.id === item.produtoId || p.nome.toLowerCase() === (item.nome || "").toLowerCase()
-      );
+      // Tentar encontrar o produto no cardápio pelo ID ou por nome (fuzzy match)
+      const prodCardapio = produtosCardapio.find((p: any) => {
+        if (item.produtoId && p.id === item.produtoId) return true;
+        const pNome = (p.nome || "").trim().toLowerCase();
+        return pNome === nomeItemLimpo || pNome.includes(nomeItemLimpo) || nomeItemLimpo.includes(pNome);
+      });
 
       let receitaItens: FichaTecnicaItem[] = [];
 
       if (prodCardapio) {
+        // Tentar obter via Supabase
         receitaItens = await obterFichaTecnicaProduto(code, prodCardapio.id);
+        
+        // Se vazia, tentar obter de prodCardapio.insumos (propriedade local do produto)
+        if ((!receitaItens || receitaItens.length === 0) && Array.isArray(prodCardapio.insumos) && prodCardapio.insumos.length > 0) {
+          receitaItens = prodCardapio.insumos.map((ins: any) => ({
+            id: ins.id || crypto.randomUUID(),
+            estabelecimentoCodigo: code,
+            produtoId: prodCardapio.id,
+            insumoNome: ins.nome || ins.insumoNome || "Insumo",
+            quantidadeUsada: Number(ins.quantidade || ins.quantidadeUsada || 1),
+            unidadeMedida: ins.unidade || ins.unidadeMedida || "un",
+            precoEmbalagem: Number(ins.preco || ins.precoEmbalagem || 0),
+            qtdEmbalagemOriginal: Number(ins.qtdEmbalagem || ins.qtdEmbalagemOriginal || 1),
+            unidadeEmbalagem: ins.unidadeEmbalagem || ins.unidade || "un",
+            precoUnitarioAplicado: 0,
+            custoTotalItem: 0,
+          }));
+        }
       }
 
       if (receitaItens.length > 0) {
-        // Para cada ingrediente da receita do produto, multiplica pela quantidade pedida no pedido
+        insumosProcessadosParaPedido = true;
         for (const ing of receitaItens) {
-          const nomeChave = ing.insumoNome.trim().toLowerCase();
-          const unid = ing.unidadeMedida || "g";
+          const nomeChave = (ing.insumoNome || "").trim().toLowerCase();
+          if (!nomeChave) continue;
+          const unid = ing.unidadeMedida || "un";
           const chaveUnica = `${nomeChave}_${unid}`;
-          const qtdIngredienteCalculada = (ing.quantidadeUsada || 0) * qtdProduto;
-          const custoCalculado = (ing.custoTotalItem || 0) * qtdProduto;
+          const qtdIngredienteCalculada = (Number(ing.quantidadeUsada) || 0) * qtdProduto;
+          const custoCalculado = (Number(ing.custoTotalItem) || 0) * qtdProduto;
 
           if (!mapaConsolidado[chaveUnica]) {
             mapaConsolidado[chaveUnica] = {
@@ -636,29 +688,59 @@ export async function consolidarReceitasEncomendas(
             mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
           }
         }
-      } else if (enc.insumosNecessarios && enc.insumosNecessarios.length > 0) {
-        // Fallback: se o produto não tiver receita cadastrada, usa os insumosNecessarios vinculados à encomenda
-        for (const ins of enc.insumosNecessarios) {
-          const nomeChave = (ins.nome || "").trim().toLowerCase();
-          if (!nomeChave) continue;
-          const unid = "un";
-          const chaveUnica = `${nomeChave}_${unid}`;
-          const qtd = Number(ins.quantidade) || 1;
+      }
+    }
 
-          if (!mapaConsolidado[chaveUnica]) {
-            mapaConsolidado[chaveUnica] = {
-              insumoNome: ins.nome.trim(),
-              quantidadeTotal: 0,
-              unidadeMedida: unid,
-              custoEstimadoTotal: 0,
-              pedidosOrigem: [],
-            };
-          }
+    // 3. Fallback: Se não encontrou receita em nenhum produto, processa os insumosNecessarios vinculados à encomenda
+    if (!insumosProcessadosParaPedido && Array.isArray(enc.insumosNecessarios) && enc.insumosNecessarios.length > 0) {
+      for (const ins of enc.insumosNecessarios) {
+        const nomeInsumo = typeof ins === "string" ? ins : (ins.nome || ins.insumoNome || "");
+        const nomeChave = nomeInsumo.trim().toLowerCase();
+        if (!nomeChave) continue;
+        const unid = typeof ins === "object" ? (ins.unidade || ins.unidadeMedida || "un") : "un";
+        const chaveUnica = `${nomeChave}_${unid}`;
+        const qtd = typeof ins === "object" ? (Number(ins.quantidade || ins.qtd) || 1) : 1;
 
-          mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
-          if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
-            mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
-          }
+        if (!mapaConsolidado[chaveUnica]) {
+          mapaConsolidado[chaveUnica] = {
+            insumoNome: nomeInsumo.trim(),
+            quantidadeTotal: 0,
+            unidadeMedida: unid,
+            custoEstimadoTotal: 0,
+            pedidosOrigem: [],
+          };
+        }
+
+        mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
+        if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+          mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+        }
+      }
+      insumosProcessadosParaPedido = true;
+    }
+
+    // 4. Último Fallback: Se não encontrou receitas nem insumosNecessarios, usa os próprios nomes dos itens do pedido
+    if (!insumosProcessadosParaPedido && itensDaEncomenda.length > 0) {
+      for (const item of itensDaEncomenda) {
+        const nomeChave = (item.nome || "").trim().toLowerCase();
+        if (!nomeChave) continue;
+        const unid = "un";
+        const chaveUnica = `${nomeChave}_${unid}`;
+        const qtd = Math.max(1, Number(item.quantidade) || 1);
+
+        if (!mapaConsolidado[chaveUnica]) {
+          mapaConsolidado[chaveUnica] = {
+            insumoNome: item.nome.trim(),
+            quantidadeTotal: 0,
+            unidadeMedida: unid,
+            custoEstimadoTotal: 0,
+            pedidosOrigem: [],
+          };
+        }
+
+        mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
+        if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+          mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
         }
       }
     }

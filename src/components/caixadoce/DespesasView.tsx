@@ -282,23 +282,30 @@ export function DespesasView({
 
   // Encomendas Ativas (que não foram canceladas nem entregues)
   const encomendasAtivas = useMemo(() => {
-    return encomendas.filter((e) => e.status !== "entregue" && e.status !== "cancelado");
+    return encomendas.filter((e) => {
+      const st = (e.status || "").toLowerCase();
+      return st !== "entregue" && st !== "cancelado";
+    });
   }, [encomendas]);
 
   // Recalcula o preview dos insumos consolidados quando a seleção de pedidos muda
   useEffect(() => {
     if (modalConsolidarOpen && pedidosSelecionadosIds.length > 0) {
       setCarregandoConsolidacao(true);
-      const selecionadas = encomendasAtivas.filter((e) => pedidosSelecionadosIds.includes(e.id));
+      const selecionadas = encomendas.filter((e) => pedidosSelecionadosIds.includes(e.id));
       consolidarReceitasEncomendas(estabelecimentoCodigo || "CD-1001", selecionadas, produtos)
         .then((res) => {
-          setInsumosConsolidadosPreview(res);
+          setInsumosConsolidadosPreview(res || []);
+        })
+        .catch((err) => {
+          console.warn("Erro ao consolidar receitas de encomendas:", err);
+          setInsumosConsolidadosPreview([]);
         })
         .finally(() => setCarregandoConsolidacao(false));
     } else {
       setInsumosConsolidadosPreview([]);
     }
-  }, [modalConsolidarOpen, pedidosSelecionadosIds, encomendasAtivas, estabelecimentoCodigo, produtos]);
+  }, [modalConsolidarOpen, pedidosSelecionadosIds, encomendas, estabelecimentoCodigo, produtos]);
 
   // Handler para alternar a seleção de um pedido
   const handleTogglePedidoSelecao = (id: string) => {
