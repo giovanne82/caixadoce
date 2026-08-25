@@ -1370,7 +1370,7 @@ function Index() {
       <ScannerProgressBanner activeTab={activeTab} onNavigateTab={setActiveTab} />
 
       {/* Conteúdo Principal / Tabs */}
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
@@ -1384,14 +1384,14 @@ function Index() {
                   <Layers className="w-4 h-4" /> Lista de Compras
                 </TabsTrigger>
               )}
-              {podeAcessarAba("encomendas") && (
-                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Package className="w-4 h-4" /> Encomendas
-                </TabsTrigger>
-              )}
               {podeAcessarAba("produtos") && (
                 <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                   <Cake className="w-4 h-4" /> Cardápio
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("encomendas") && (
+                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Package className="w-4 h-4" /> Encomendas
                 </TabsTrigger>
               )}
               {podeAcessarAba("financeiro") && (
@@ -1514,78 +1514,92 @@ function Index() {
         </Tabs>
       </main>
 
-      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Compacta) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-purple-900/40 text-white md:hidden py-1 px-1 shadow-2xl">
-        <div className="grid grid-cols-6 w-full items-center text-center">
+      {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Alta Visibilidade & Ergonomia) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#160B29]/95 backdrop-blur-lg border-t-2 border-[#7C3AED]/40 text-white md:hidden px-1 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.4)]">
+        <div className="grid grid-cols-6 w-full items-center text-center gap-1">
           {podeAcessarAba("scanner") && (
             <button
               onClick={() => setActiveTab("scanner")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "scanner" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "scanner"
+                  ? "bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Camera className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Escanear</span>
+              <Camera className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "scanner" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Escanear</span>
             </button>
           )}
 
           {podeAcessarAba("despesas") && (
             <button
               onClick={() => setActiveTab("despesas")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "despesas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "despesas"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Layers className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Compras</span>
+              <Layers className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "despesas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Compras</span>
             </button>
           )}
 
-          {podeAcessarAba("encomendas") && (
-            <button
-              onClick={() => setActiveTab("encomendas")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "encomendas" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
-              }`}
-            >
-              <Package className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Encomendas</span>
-            </button>
-          )}
-
+          {/* CARDÁPIO COLOCADO ANTES DE ENCOMENDAS */}
           {podeAcessarAba("produtos") && (
             <button
               onClick={() => setActiveTab("produtos")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "produtos" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "produtos"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Cake className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Cardápio</span>
+              <Cake className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "produtos" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Cardápio</span>
+            </button>
+          )}
+
+          {/* ENCOMENDAS COLOCADO APÓS CARDÁPIO */}
+          {podeAcessarAba("encomendas") && (
+            <button
+              onClick={() => setActiveTab("encomendas")}
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "encomendas"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
+              }`}
+            >
+              <Package className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "encomendas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Encomendas</span>
             </button>
           )}
 
           {podeAcessarAba("financeiro") && (
             <button
               onClick={() => setActiveTab("financeiro")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "financeiro" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "financeiro"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <DollarSign className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Financeiro</span>
+              <DollarSign className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "financeiro" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Financeiro</span>
             </button>
           )}
 
           {(podeAcessarAba("config") || podeAcessarAba("plano")) && (
             <button
               onClick={() => setActiveTab("config")}
-              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
-                activeTab === "config" || activeTab === "plano" ? "text-amber-400 bg-amber-500/15 font-bold" : "text-stone-400 hover:text-stone-200"
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "config" || activeTab === "plano"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Settings className="w-5 h-5 mb-0.5 shrink-0" />
-              <span className="text-[9px] leading-none truncate w-full">Ajustes</span>
+              <Settings className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "config" || activeTab === "plano" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Ajustes</span>
             </button>
           )}
         </div>
