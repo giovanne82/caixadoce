@@ -25,6 +25,8 @@ export type User = {
 export type StaffRole = "admin" | "gerente" | "operador";
 
 export type UpdateEstablishmentDetailsInput = {
+  estabelecimentoId?: string;
+  codigo?: string;
   nome?: string;
   endereco?: string;
   logradouro?: string;
@@ -832,22 +834,47 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         updatePayload.menu_slogan = slogan || null;
       }
 
-      // 1. Tenta identificar se a loja já existe no banco por codigo ou user_id
-      const { data: existingRecords } = await supabase
-        .from("estabelecimentos")
-        .select("id, codigo, user_id")
-        .or(`codigo.eq.${currentCode},user_id.eq.${user.id}`)
-        .limit(1);
+      const activeStoreCode = details.codigo || currentCode;
 
-      const targetId = existingRecords && existingRecords.length > 0 ? existingRecords[0].id : null;
+      // 1. Busca o ID do estabelecimento ativo estritamente pelo código da loja atual (ex: CD-5411) ou pelo ID fornecido
+      let targetId: string | null = details.estabelecimentoId || null;
+
+      if (!targetId && activeStoreCode) {
+        const { data: estByCode } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo, user_id")
+          .eq("codigo", activeStoreCode)
+          .maybeSingle();
+
+        if (estByCode?.id) {
+          targetId = estByCode.id;
+        }
+      }
+
+      if (!targetId && user?.id) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+        if (isUuid) {
+          const { data: estByUser } = await supabase
+            .from("estabelecimentos")
+            .select("id, codigo, user_id")
+            .eq("user_id", user.id)
+            .limit(1);
+
+          if (estByUser && estByUser.length > 0) {
+            targetId = estByUser[0].id;
+          }
+        }
+      }
 
       let saveError: any = null;
 
-      // Garantia extrema: Remove completamente 'codigo', 'user_id' e 'id' do payload de update
+      // Garantia extrema: Remove completamente 'codigo', 'user_id', 'id' e 'estabelecimentoId' do payload de update
       delete (updatePayload as any).codigo;
       delete (updatePayload as any).user_id;
       delete (updatePayload as any).id;
+      delete (updatePayload as any).estabelecimentoId;
 
+      console.log("ACTIVE CODE PARA UPDATE:", activeStoreCode);
       console.log("TARGET ID PARA UPDATE:", targetId);
       console.log("PAYLOAD ENVIADO (UPDATE por id):", updatePayload);
 

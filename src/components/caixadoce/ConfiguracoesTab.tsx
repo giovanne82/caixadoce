@@ -417,6 +417,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       const contaPadrao = contasPix.find((c) => c.isDefault) || contasPix[0];
 
       await updateEstablishmentDetails({
+        codigo: activeCode,
         nome: nomeEst,
         endereco: enderecoFinal,
         logradouro: logradouroEst,
