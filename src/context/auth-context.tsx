@@ -785,10 +785,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       };
 
       if (details.nome !== undefined) updatePayload.nome = details.nome;
-      else if (profile.establishmentName) updatePayload.nome = profile.establishmentName;
-
       if (details.responsavel !== undefined) updatePayload.responsavel = details.responsavel;
-      else if (user.name) updatePayload.responsavel = user.name;
 
       if (details.tipoDocumento !== undefined) updatePayload.tipo_documento = details.tipoDocumento;
 

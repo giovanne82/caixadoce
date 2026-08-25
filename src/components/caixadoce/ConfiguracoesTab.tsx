@@ -115,7 +115,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
     try {
       await updateEstablishmentDetails({
-        nome: nomeEst || profile?.establishmentName || "CaixaDoce",
+        nome: nomeEst,
         responsavel: responsavelEst,
         chavePix: contaPadrao ? contaPadrao.chave : chavePix,
         tipoChavePix: contaPadrao ? contaPadrao.tipo : tipoChavePix,
