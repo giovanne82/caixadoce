@@ -25,7 +25,7 @@ export type User = {
 export type StaffRole = "admin" | "gerente" | "operador";
 
 export type UpdateEstablishmentDetailsInput = {
-  nome: string;
+  nome?: string;
   endereco?: string;
   logradouro?: string;
   numero?: string;
@@ -757,6 +757,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       ...profile,
       ...details,
       establishmentName: details.nome,
+      establishmentName: details.nome || profile.establishmentName,
       establishmentAddress: details.endereco || profile.establishmentAddress,
     };
     setProfile(updatedProfile);
@@ -768,7 +769,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           ? {
               ...e,
               ...details,
-              nome: details.nome,
+              nome: details.nome || e.nome,
               endereco: details.endereco || e.endereco,
             }
           : e
@@ -777,16 +778,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     // Gravação REAL via UPDATE / INSERT no Supabase na tabela estabelecimentos
     try {
-<<<<<<< HEAD
-      const payload: any = {
-        user_id: user.id,
-=======
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-      const payload = {
+      const payload: any = {
         user_id: isUuid ? user.id : null,
->>>>>>> 7624c4539d6f54a93e4cd659bfe3b282a5c31879
         codigo: currentCode,
-        nome: details.nome,
+        nome: details.nome || profile.establishmentName || "Confeitaria",
         responsavel: details.responsavel || user.name || "Administrador",
         tipo_documento: details.tipoDocumento || "CNPJ",
         numero_documento: details.numeroDocumento || details.cnpj || null,

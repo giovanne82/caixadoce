@@ -647,7 +647,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   };
 
   // Handlers de Produtos
-  const criarProduto = async (novo: Produto) => {
+  const criarProduto = async (novo: ProdutoCardapio) => {
     const atualizados = [novo, ...produtos];
     setProdutos(atualizados);
     try {
@@ -665,9 +665,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         categoria: novo.categoria,
         preco: Number(novo.preco) || 0,
         descricao: novo.descricao || "",
-        imagem: novo.imagem || "",
-        insumos: novo.insumos || [],
-        disponivel: novo.disponivel !== false,
+        foto_url: novo.fotoUrl || "",
+        ativo: novo.ativo !== false,
       },
     ]);
 
@@ -676,7 +675,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     }
   };
 
-  const editarProduto = async (id: string, dados: Partial<Produto>) => {
+  const editarProduto = async (id: string, dados: Partial<ProdutoCardapio>) => {
     const atualizados = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p));
     setProdutos(atualizados);
     try {
