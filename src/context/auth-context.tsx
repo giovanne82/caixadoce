@@ -93,6 +93,7 @@ type AuthContextType = {
   isMounted: boolean;
   authLoading: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginComPin: (codigoLoja: string, pin: string) => Promise<{ success: boolean }>;
   registerWithEmail: (name: string, email: string, password: string) => Promise<{ requiresConfirmation: boolean }>;
   sendEmailOtpSignUp: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyEmailOtp: (email: string, token: string, name: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -385,15 +386,129 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     };
   }, [user, profile?.role]);
 
-  const userEstabelecimentos = useMemo(() => {
-    return estabelecimentos;
-  }, [estabelecimentos]);
+  const loginComPin = async (codigoLoja: string, pin: string) => {
+    const rawCode = (codigoLoja || "").trim();
+    const rawPin = (pin || "").trim();
+
+    if (!rawCode || !rawPin) {
+      const err = new Error("Preencha o Código da Loja e o PIN de Acesso.");
+      toast.error(err.message);
+      throw err;
+    }
+
+    const formattedCode = rawCode.toUpperCase().startsWith("CD-")
+      ? rawCode.toUpperCase()
+      : rawCode.length === 4 && !isNaN(Number(rawCode))
+      ? `CD-${rawCode}`
+      : rawCode.toUpperCase();
+
+    // 1. Validar se a loja existe (Supabase ou localState)
+    let estValido = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
+    if (!estValido) {
+      try {
+        const { data: estData } = await supabase
+          .from("estabelecimentos")
+          .select("*")
+          .eq("codigo", formattedCode)
+          .maybeSingle();
+
+        if (estData) {
+          estValido = {
+            id: estData.id,
+            codigo: estData.codigo,
+            nome: estData.nome,
+            endereco: estData.endereco || "",
+            responsavel: estData.responsavel || "Administrador",
+          };
+        }
+      } catch {}
+    }
+
+    if (!estValido) {
+      const err = new Error("Código da Loja ou PIN de Acesso inválidos.");
+      toast.error("Código da Loja ou PIN inválidos.");
+      throw err;
+    }
+
+    // 2. Consulta OBRIGATÓRIA na tabela colaboradores do Supabase
+    let colabEncontrado: any = null;
+    try {
+      const { data: dbColabs, error: dbErr } = await supabase
+        .from("colaboradores")
+        .select("*")
+        .eq("estabelecimento_codigo", formattedCode)
+        .eq("pin", rawPin);
+
+      if (!dbErr && dbColabs && dbColabs.length > 0) {
+        colabEncontrado = dbColabs.find((c: any) => c.ativo !== false && c.is_active !== false);
+      }
+    } catch (e) {
+      console.warn("Aviso ao consultar colaboradores no Supabase:", e);
+    }
+
+    // Fallback de cache local da loja se offline ou durante transição
+    if (!colabEncontrado) {
+      try {
+        const rawLocal = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
+        if (rawLocal) {
+          const listLocal = JSON.parse(rawLocal);
+          colabEncontrado = listLocal.find(
+            (c: any) => String(c.pin) === String(rawPin) && c.ativo !== false
+          );
+        }
+      } catch {}
+    }
+
+    // 3. SE O PIN NÃO FOR VÁLIDO E ATIVO PARA ESSA LOJA ESPECÍFICA, BLOQUEIA O ACESSO
+    if (!colabEncontrado) {
+      const err = new Error("Código da Loja ou PIN de Acesso inválidos.");
+      toast.error("Código da Loja ou PIN inválidos.");
+      throw err;
+    }
+
+    // 4. COLABORADOR VÁLIDO: Concede acesso com perfil restrito
+    const colabName = colabEncontrado.nome || colabEncontrado.name || "Colaborador";
+    const cleanName = colabName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const syntheticEmail = colabEncontrado.email || `${cleanName}@${formattedCode.toLowerCase()}.caixadoce.app`;
+
+    const colabUser: User = {
+      id: colabEncontrado.id || `colab_${Date.now()}`,
+      name: colabName,
+      email: syntheticEmail,
+      provider: "email",
+    };
+
+    const colabProfile: UserProfile = {
+      role: "operador",
+      establishmentCode: formattedCode,
+      establishmentName: estValido.nome || `Confeitaria ${formattedCode}`,
+      establishmentAddress: estValido.endereco || "",
+      chavePix: estValido.chavePix || "",
+      tipoChavePix: estValido.tipoChavePix || "cpf",
+      abasPermitidas: colabEncontrado.abas_permitidas || colabEncontrado.abasPermitidas || ["scanner", "despesas", "produtos", "encomendas"],
+    };
+
+    setUser(colabUser);
+    setProfile(colabProfile);
+    localStorage.setItem("caixadoce_user", JSON.stringify(colabUser));
+    localStorage.setItem("caixadoce_profile", JSON.stringify(colabProfile));
+
+    toast.success(`Acesso PDV liberado para ${colabName}!`);
+    return { success: true };
+  };
 
   const loginWithEmail = async (email: string, password: string) => {
+    const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
+    if (isCollaboratorSynthetic) {
+      const parts = email.split("@")[0];
+      const codePart = email.split("@")[1]?.replace(".caixadoce.app", "") || "";
+      await loginComPin(codePart, password);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        // Captura de limite de tentativas (Rate Limit / Too Many Requests)
         if (
           error.status === 429 ||
           error.message?.toLowerCase().includes("too_many_requests") ||
@@ -401,28 +516,6 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           error.message?.toLowerCase().includes("exceeded")
         ) {
           toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
-          throw error;
-        }
-
-        // Fallback local caso offline ou cadastrado em memoria/localState
-        if (password.length >= 4) {
-          const isCollaboratorSynthetic = email.includes("@") && email.endsWith(".caixadoce.app");
-          const nameFromEmail = email.split("@")[0];
-
-          const fallbackUser: User = {
-            id: `usr_${Date.now()}`,
-            name: nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1),
-            email,
-            provider: "email",
-          };
-
-          const fallbackProfile = buildProfileForUser(null, email);
-          setUser(fallbackUser);
-          setProfile(fallbackProfile);
-          localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-          localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-          toast.success(`Login efetuado com sucesso${isCollaboratorSynthetic ? " (Acesso PDV Colaborador)" : ""}!`);
-          return;
         }
         throw error;
       }
@@ -843,6 +936,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         isMounted,
         authLoading,
         loginWithEmail,
+        loginComPin,
         registerWithEmail,
         sendEmailOtpSignUp,
         verifyEmailOtp,

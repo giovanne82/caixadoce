@@ -47,7 +47,7 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function LoginView({ onSuccess }: LoginViewProps) {
-  const { loginWithEmail, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
+  const { loginWithEmail, loginComPin, registerWithEmail, loginWithGoogle, resetPassword } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
@@ -164,32 +164,10 @@ export function LoginView({ onSuccess }: LoginViewProps) {
 
     setLoading(true);
     try {
-      let rawName = colabNome.trim();
-      let rawCode = colabCodigoLoja.trim();
-
-      if (rawCode.includes("@")) {
-        const parts = rawCode.split("@");
-        rawName = parts[0];
-        rawCode = parts[1];
-      }
-
-      const cleanName = (rawName || "colaborador").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-      const cleanCode = rawCode.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const syntheticEmail = `${cleanName}@${cleanCode}.caixadoce.app`;
-
-      await loginWithEmail(syntheticEmail, colabPin);
+      await loginComPin(colabCodigoLoja, colabPin);
       onSuccess?.();
     } catch (error: any) {
-      if (
-        error?.status === 429 ||
-        error?.message?.toLowerCase().includes("too_many_requests") ||
-        error?.message?.toLowerCase().includes("rate limit") ||
-        error?.message?.toLowerCase().includes("exceeded")
-      ) {
-        toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
-      } else {
-        toast.error("Credenciais inválidas. Verifique o Código da Loja e o PIN de Acesso.");
-      }
+      // loginComPin dispara mensagem toast apropriada ao falhar
     } finally {
       setLoading(false);
     }
