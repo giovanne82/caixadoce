@@ -162,7 +162,30 @@ export function ColaboradoresTab() {
         abasPermitidas,
       };
 
-      const payloadPrimary = {
+      // Assegura que o registro do estabelecimento mestre existe na tabela 'estabelecimentos' para satisfazer a chave estrangeira
+      let storeUuid: string | null = null;
+      try {
+        const { data: estData } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo")
+          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`);
+
+        if (estData && estData.length > 0) {
+          storeUuid = estData[0].id;
+        } else {
+          // Cria o estabelecimento mestre se ainda nao existir
+          const { data: newEst } = await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Confeitaria ${activeCode}` }], { onConflict: "codigo" })
+            .select("id")
+            .single();
+          if (newEst) storeUuid = newEst.id;
+        }
+      } catch (e) {
+        console.warn("Aviso ao verificar estabelecimento mestre:", e);
+      }
+
+      const payloadPrimary: any = {
         id: novo.id,
         estabelecimento_codigo: activeCode,
         nome: novo.nome,
@@ -172,27 +195,32 @@ export function ColaboradoresTab() {
         abas_permitidas: abasPermitidas,
         ativo: true,
       };
+      if (storeUuid) {
+        payloadPrimary.estabelecimento_id = storeUuid;
+      }
 
       try {
-        const { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
-        if (error) {
-          console.warn("Aviso ao salvar com coluna 'pin':", error.message);
-          // Fallback para o caso da tabela colaboradores usar codigo_pin ou pin_code
+        let { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+
+        if (error && (error.code === "23503" || error.message?.includes("foreign key"))) {
+          console.warn("[Supabase] Chave estrangeira violada. Tentando assegurar o estabelecimento mestre...");
+          await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+
+          let retryRes = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+          if (retryRes.error && storeUuid) {
+            const payloadAlt = { ...payloadPrimary, estabelecimento_codigo: storeUuid };
+            await supabase.from("colaboradores").upsert([payloadAlt], { onConflict: "id" });
+          }
+        } else if (error && (error.message?.includes("pin") || error.code === "PGRST204")) {
           const payloadFallback = {
-            id: novo.id,
-            estabelecimento_codigo: activeCode,
-            nome: novo.nome,
-            email: syntheticEmail,
+            ...payloadPrimary,
             codigo_pin: pin,
             pin_code: pin,
-            telefone: novo.telefone,
-            abas_permitidas: abasPermitidas,
-            ativo: true,
           };
-          const resFallback = await supabase.from("colaboradores").upsert([payloadFallback], { onConflict: "id" });
-          if (resFallback.error) {
-            console.warn("Aviso no fallback de colaborador:", resFallback.error.message);
-          }
+          delete payloadFallback.pin;
+          await supabase.from("colaboradores").upsert([payloadFallback], { onConflict: "id" });
         }
       } catch (err) {
         console.warn("Aviso ao salvar no Supabase colaboradores:", err);
