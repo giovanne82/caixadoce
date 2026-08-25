@@ -509,17 +509,25 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
     };
 
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
-
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleFocus);
     };
   }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
-
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    const cleanWhatsapp = dados.whatsapp?.replace(/\D/g, "") || "";
+    const clienteExistente = clientes.find((c) => {
+      const cPhone = c.whatsapp?.replace(/\D/g, "") || "";
+      if (cleanWhatsapp && cPhone && cleanWhatsapp === cPhone) return true;
+      return c.nome.trim().toLowerCase() === dados.nome.trim().toLowerCase();
+    });
+
+    if (clienteExistente) {
+      await editarCliente(clienteExistente.id, dados);
+      return clienteExistente;
+    }
+
     const novo: Cliente = {
       ...dados,
       id: crypto.randomUUID(),
@@ -531,19 +539,24 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     setClientes(atualizados);
     try {
       localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-      await supabase.from("customers").insert([
-        {
-          id: novo.id,
-          estabelecimento_codigo: activeCode,
-          name: novo.nome,
-          whatsapp: novo.whatsapp,
-          address: novo.endereco,
-          notes: novo.observacoes,
-        },
-      ]);
+      await supabase.from("customers").upsert(
+        [
+          {
+            id: novo.id,
+            user_id: getValidUuid(user?.id, profile?.ownerUserId),
+            estabelecimento_codigo: activeCode,
+            name: novo.nome,
+            whatsapp: novo.whatsapp,
+            address: novo.endereco || "",
+            notes: novo.observacoes || "",
+          },
+        ],
+        { onConflict: "id" }
+      );
     } catch (e) {
       console.warn("Aviso ao salvar cliente:", e);
     }
+    return novo;
   };
 
   const editarCliente = async (id: string, dados: Partial<Cliente>) => {
@@ -589,17 +602,9 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         return;
       }
 
-      if (!res.data || res.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para cliente id:", id);
-        toast.error("Não foi possível excluir o cliente no banco de dados. Verifique a permissão (RLS) no Supabase.");
-        return;
-      }
-
       const atualizados = clientes.filter((c) => c.id !== id);
       setClientes(atualizados);
-      try {
-        localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
-      } catch {}
+      localStorage.setItem(`caixadoce_customers_${activeCode}`, JSON.stringify(atualizados));
       toast.success("Cliente removido com sucesso.");
     } catch (e: any) {
       toast.error(`Erro ao excluir cliente: ${e?.message || e}`);
@@ -613,16 +618,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     }
   };
 
-  // Handlers de Produtos (Tabela Oficial produtos)
-  const criarProduto = async (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => {
-    const novo: ProdutoCardapio = {
-      ...dados,
-      id: crypto.randomUUID(),
-      estabelecimentoCodigo: activeCode,
-      createdAt: new Date().toISOString(),
-    };
+  // Handlers de Produtos
+  const criarProduto = async (novo: Produto) => {
+    const atualizados = [novo, ...produtos];
+    setProdutos(atualizados);
+    try {
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
+    } catch {}
 
-    // 1. Enviar para o Supabase PRIMEIRO
     const { error } = await supabase.from("produtos").insert([
       {
         id: novo.id,
@@ -631,107 +634,58 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         codigo: activeCode,
         store_id: activeCode,
         nome: novo.nome,
-        name: novo.nome,
-        descricao: novo.descricao,
-        description: novo.descricao,
-        preco: novo.preco,
-        price: novo.preco,
-        foto_url: novo.fotoUrl,
-        image_url: novo.fotoUrl,
         categoria: novo.categoria,
-        category: novo.categoria,
-        ativo: novo.ativo !== false,
-        is_active: novo.ativo !== false,
-        tempo_preparo_horas: novo.tempoPreparoHoras || 24,
-        prep_time_hours: novo.tempoPreparoHoras || 24,
+        preco: Number(novo.preco) || 0,
+        descricao: novo.descricao || "",
+        imagem: novo.imagem || "",
+        insumos: novo.insumos || [],
+        disponivel: novo.disponivel !== false,
       },
     ]);
 
     if (error) {
-      console.error("[Supabase Error] Falha ao criar produto:", error);
-      toast.error(`Falha ao salvar produto no banco: ${error.message || "Erro de conexão"}`);
-      throw error; // Interrompe a submissão para não fechar o formulário nem atualizar o estado local
+      console.warn("[Supabase Error] Falha ao criar produto no banco:", error.message);
     }
-
-    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
-    const atualizados = [novo, ...produtos];
-    setProdutos(atualizados);
-    try {
-      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-    } catch {}
   };
 
-  const editarProduto = async (id: string, dados: Partial<ProdutoCardapio>) => {
-    // 1. Atualizar no Supabase PRIMEIRO
-    const { error } = await supabase
-      .from("produtos")
-      .update({
-        nome: dados.nome,
-        name: dados.nome,
-        descricao: dados.descricao,
-        description: dados.descricao,
-        preco: dados.preco,
-        price: dados.preco,
-        foto_url: dados.fotoUrl,
-        image_url: dados.fotoUrl,
-        categoria: dados.categoria,
-        category: dados.categoria,
-        ativo: dados.ativo,
-        is_active: dados.ativo,
-        tempo_preparo_horas: dados.tempoPreparoHoras,
-        prep_time_hours: dados.tempoPreparoHoras,
-      })
-      .eq("id", id)
-      .eq("estabelecimento_codigo", activeCode);
-
-    if (error) {
-      console.error("[Supabase Error] Falha ao editar produto:", error);
-      toast.error(`Falha ao atualizar produto no banco: ${error.message || "Erro de conexão"}`);
-      throw error; // Interrompe a submissão
-    }
-
-    // 2. Atualizar estado visual (React) SOMENTE após sucesso no Supabase
+  const editarProduto = async (id: string, dados: Partial<Produto>) => {
     const atualizados = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p));
     setProdutos(atualizados);
     try {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
+
+    const payload: Record<string, any> = {};
+    if (dados.nome !== undefined) payload.nome = dados.nome;
+    if (dados.categoria !== undefined) payload.categoria = dados.categoria;
+    if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
+    if (dados.descricao !== undefined) payload.descricao = dados.descricao;
+    if (dados.imagem !== undefined) payload.imagem = dados.imagem;
+    if (dados.insumos !== undefined) payload.insumos = dados.insumos;
+    if (dados.disponivel !== undefined) payload.disponivel = dados.disponivel;
+
+    const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
+    if (error) {
+      console.warn("[Supabase Error] Falha ao editar produto no banco:", error.message);
+    }
   };
 
   const excluirProduto = async (id: string) => {
     try {
-      let res = await supabase
-        .from("produtos")
-        .delete()
-        .eq("id", id)
-        .eq("estabelecimento_codigo", activeCode)
-        .select();
-
+      let res = await supabase.from("produtos").delete().eq("id", id).eq("estabelecimento_codigo", activeCode).select();
       if (!res.error && (!res.data || res.data.length === 0)) {
-        res = await supabase
-          .from("produtos")
-          .delete()
-          .eq("id", id)
-          .select();
+        res = await supabase.from("produtos").delete().eq("id", id).select();
       }
 
       if (res.error) {
-        console.error("[Supabase Error] Falha ao excluir produto:", res.error);
-        toast.error(`Falha ao remover produto do banco: ${res.error.message}`);
-        return;
-      }
-
-      if (!res.data || res.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para produto id:", id);
-        toast.error("Não foi possível excluir o produto no banco de dados. Verifique a permissão (RLS) no Supabase.");
+        console.error("[Supabase Delete Error] Produtos:", res.error);
+        toast.error(`Falha ao excluir produto no banco: ${res.error.message}`);
         return;
       }
 
       const atualizados = produtos.filter((p) => p.id !== id);
       setProdutos(atualizados);
-      try {
-        localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      } catch {}
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
       toast.success("Produto removido do cardápio.");
     } catch (e: any) {
       toast.error(`Erro ao excluir produto: ${e?.message || e}`);
@@ -758,7 +712,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     const temTopo = item.temTopoBolo || false;
     const temVela = item.temVela || false;
 
-    // 1. Payload Padronizado com colunas oficiais do Supabase (incluindo total_amount obrigatoriamente)
+    // 1. Payload Padronizado sem colunas fantasmas
     const payloadStandard: Record<string, any> = {
       id: item.id,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
@@ -773,10 +727,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       insumos_necessarios: item.insumosNecessarios || [],
       valor_total: valTotal,
       total_amount: valTotal,
-      total_price: valTotal,
       valor_entrada: valEntrada,
-      down_payment: valEntrada,
-      deposit_amount: valEntrada,
       historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
       status_pagamento: item.statusPagamento || "pendente",
       status: item.status || "pendente",

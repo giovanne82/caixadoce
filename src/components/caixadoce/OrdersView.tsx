@@ -2494,7 +2494,7 @@ export function OrdersView({
                       onClick={handleImportarSugestaoParaPedido}
                       className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 rounded-xl shadow-xs"
                     >
-                      <PlusCircle className="w-3.5 h-3.5" /> Importar para Insumos do Pedido
+                      <PlusCircle className="w-3.5 h-3.5" /> Colocar na Lista de Insumos Necessários
                     </Button>
                   </div>
 

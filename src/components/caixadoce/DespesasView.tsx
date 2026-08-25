@@ -657,7 +657,7 @@ export function DespesasView({
               className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
             >
               <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
-              <span>⚡ Consolidar Receitas de Encomendas</span>
+              <span>⚡ Ver Listas de Encomendas dos Clientes</span>
             </Button>
           </div>
         </CardContent>
@@ -1385,7 +1385,7 @@ export function DespesasView({
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-extrabold flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" /> Consolidar Receitas de Encomendas
+              <Sparkles className="w-5 h-5 text-purple-600" /> Ver Listas de Encomendas dos Clientes
             </DialogTitle>
             <DialogDescription className="text-xs">
               Selecione as encomendas ativas/pendentes abaixo. O sistema cruzará os itens dos pedidos com a Ficha Técnica do Cardápio, somando a quantidade exata de cada insumo necessário!
