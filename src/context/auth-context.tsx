@@ -778,36 +778,62 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     // Gravação REAL via UPDATE / INSERT no Supabase na tabela estabelecimentos
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-      const payload: any = {
-        user_id: isUuid ? user.id : null,
-        codigo: currentCode,
-        nome: details.nome || profile.establishmentName || "Confeitaria",
-        responsavel: details.responsavel || user.name || "Administrador",
-        tipo_documento: details.tipoDocumento || "CNPJ",
-        numero_documento: details.numeroDocumento || details.cnpj || null,
-        cnpj: details.numeroDocumento || details.cnpj || null,
-        tipo_chave_pix: details.tipoChavePix || "email",
-        chave_pix: details.chavePix || null,
-        pix_accounts: details.contasPix || null,
-        pix_keys: details.contasPix || null,
-        cep: details.cep || null,
-        endereco: details.endereco || null,
-        logradouro: details.logradouro || null,
-        numero: details.numero || null,
-        complemento: details.complemento || null,
-        bairro: details.bairro || null,
-        cidade: details.cidade || null,
-        estado: details.estado || null,
-        telefone: details.telefone || null,
-        whatsapp: details.whatsapp || null,
-        logo_url: details.logoUrl || details.store_logo_url || null,
-        store_logo_url: details.store_logo_url || details.logoUrl || null,
-        titulo_cardapio: details.tituloCardapio || details.menu_title || null,
-        menu_title: details.menu_title || details.tituloCardapio || null,
-        slogan_cardapio: details.sloganCardapio || details.menu_slogan || null,
-        menu_slogan: details.menu_slogan || details.sloganCardapio || null,
+
+      // Objeto de dados para UPDATE contendo estritamente os campos modificados (NUNCA envia 'codigo', 'user_id' ou 'id')
+      const updatePayload: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
+
+      if (details.nome !== undefined) updatePayload.nome = details.nome;
+      else if (profile.establishmentName) updatePayload.nome = profile.establishmentName;
+
+      if (details.responsavel !== undefined) updatePayload.responsavel = details.responsavel;
+      else if (user.name) updatePayload.responsavel = user.name;
+
+      if (details.tipoDocumento !== undefined) updatePayload.tipo_documento = details.tipoDocumento;
+
+      const docNum = details.numeroDocumento || details.cnpj;
+      if (docNum !== undefined) {
+        updatePayload.numero_documento = docNum || null;
+        updatePayload.cnpj = docNum || null;
+      }
+
+      if (details.tipoChavePix !== undefined) updatePayload.tipo_chave_pix = details.tipoChavePix;
+      if (details.chavePix !== undefined) updatePayload.chave_pix = details.chavePix || null;
+
+      if (details.contasPix !== undefined) {
+        updatePayload.pix_accounts = details.contasPix || null;
+        updatePayload.pix_keys = details.contasPix || null;
+      }
+
+      if (details.cep !== undefined) updatePayload.cep = details.cep || null;
+      if (details.endereco !== undefined) updatePayload.endereco = details.endereco || null;
+      if (details.logradouro !== undefined) updatePayload.logradouro = details.logradouro || null;
+      if (details.numero !== undefined) updatePayload.numero = details.numero || null;
+      if (details.complemento !== undefined) updatePayload.complemento = details.complemento || null;
+      if (details.bairro !== undefined) updatePayload.bairro = details.bairro || null;
+      if (details.cidade !== undefined) updatePayload.cidade = details.cidade || null;
+      if (details.estado !== undefined) updatePayload.estado = details.estado || null;
+      if (details.telefone !== undefined) updatePayload.telefone = details.telefone || null;
+      if (details.whatsapp !== undefined) updatePayload.whatsapp = details.whatsapp || null;
+
+      const logo = details.logoUrl || details.store_logo_url;
+      if (logo !== undefined) {
+        updatePayload.logo_url = logo || null;
+        updatePayload.store_logo_url = logo || null;
+      }
+
+      const titulo = details.tituloCardapio || details.menu_title;
+      if (titulo !== undefined) {
+        updatePayload.titulo_cardapio = titulo || null;
+        updatePayload.menu_title = titulo || null;
+      }
+
+      const slogan = details.sloganCardapio || details.menu_slogan;
+      if (slogan !== undefined) {
+        updatePayload.slogan_cardapio = slogan || null;
+        updatePayload.menu_slogan = slogan || null;
+      }
 
       // 1. Tenta identificar se a loja já existe no banco por codigo ou user_id
       const { data: existingRecords } = await supabase
@@ -820,68 +846,76 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
       let saveError: any = null;
 
+      // Garantia extrema: Remove completamente 'codigo', 'user_id' e 'id' do payload de update
+      delete (updatePayload as any).codigo;
+      delete (updatePayload as any).user_id;
+      delete (updatePayload as any).id;
+
+      console.log("PAYLOAD ENVIADO (UPDATE por id):", updatePayload);
+
       if (targetId) {
-        // Se a loja já existe no banco, faz UPDATE usando o ID da chave primária (Sem erro de on_conflict)
+        // Se a loja já existe no banco, faz UPDATE direcionado exclusivamente pelo id da chave primária
         const updateRes = await supabase
           .from("estabelecimentos")
-          .update(payload)
+          .update(updatePayload)
           .eq("id", targetId);
 
         saveError = updateRes.error;
       } else {
-        // Tenta UPDATE por codigo ou user_id antes de inserir
-        let updateRes = await supabase
+        // Se o registro ainda não existir no banco, cria a nova linha via INSERT com os identificadores
+        const insertPayload = {
+          ...updatePayload,
+          codigo: currentCode,
+          user_id: isUuid ? user.id : null,
+        };
+        const insertRes = await supabase
           .from("estabelecimentos")
-          .update(payload)
-          .eq("codigo", currentCode);
+          .insert([insertPayload]);
 
-        if (updateRes.error) {
-          updateRes = await supabase
-            .from("estabelecimentos")
-            .update(payload)
-            .eq("user_id", user.id);
-        }
-
-        if (updateRes.error) {
-          // Se não existir nenhuma linha para atualizar, insere novo registro
-          const insertRes = await supabase
-            .from("estabelecimentos")
-            .insert([payload]);
-
-          saveError = insertRes.error;
-        } else {
-          saveError = updateRes.error;
-        }
+        saveError = insertRes.error;
       }
 
       // 2. Tratamento para colunas opcionais que possam não existir na tabela no Supabase (ex: PGRST204)
       if (saveError) {
+        console.error(
+          "[Supabase UPDATE estabelecimentos Error]:",
+          `Code: ${saveError.code}`,
+          `Message: ${saveError.message}`,
+          `Details: ${saveError.details}`,
+          `Hint: ${saveError.hint}`,
+          saveError
+        );
+
         const msg = saveError.message || "";
         const isColumnError = msg.includes("column") || msg.includes("does not exist") || saveError.code === "PGRST204";
 
         if (isColumnError) {
           console.warn("[Supabase] Removendo colunas estendidas não mapeadas e tentando fallback...");
-          const fallbackPayload = { ...payload };
-          delete (fallbackPayload as any).logo_url;
-          delete (fallbackPayload as any).store_logo_url;
-          delete (fallbackPayload as any).titulo_cardapio;
-          delete (fallbackPayload as any).menu_title;
-          delete (fallbackPayload as any).slogan_cardapio;
-          delete (fallbackPayload as any).menu_slogan;
-          delete (fallbackPayload as any).pix_accounts;
-          delete (fallbackPayload as any).pix_keys;
-          delete (fallbackPayload as any).cnpj;
+          const fallbackUpdatePayload = { ...updatePayload };
+          delete fallbackUpdatePayload.logo_url;
+          delete fallbackUpdatePayload.store_logo_url;
+          delete fallbackUpdatePayload.titulo_cardapio;
+          delete fallbackUpdatePayload.menu_title;
+          delete fallbackUpdatePayload.slogan_cardapio;
+          delete fallbackUpdatePayload.menu_slogan;
+          delete fallbackUpdatePayload.pix_accounts;
+          delete fallbackUpdatePayload.pix_keys;
+          delete fallbackUpdatePayload.cnpj;
+          delete (fallbackUpdatePayload as any).codigo;
+          delete (fallbackUpdatePayload as any).user_id;
 
-          let fbRes = targetId
-            ? await supabase.from("estabelecimentos").update(fallbackPayload).eq("id", targetId)
-            : await supabase.from("estabelecimentos").update(fallbackPayload).eq("codigo", currentCode);
-
-          if (fbRes.error) {
-            fbRes = await supabase.from("estabelecimentos").update(fallbackPayload).eq("user_id", user.id);
-          }
-
-          if (fbRes.error) {
-            await supabase.from("estabelecimentos").insert([fallbackPayload]);
+          if (targetId) {
+            const fbRes = await supabase.from("estabelecimentos").update(fallbackUpdatePayload).eq("id", targetId);
+            if (fbRes.error) {
+              console.warn("[Supabase Fallback Update Error]:", fbRes.error.message);
+            }
+          } else {
+            const fallbackInsertPayload = {
+              ...fallbackUpdatePayload,
+              codigo: currentCode,
+              user_id: isUuid ? user.id : null,
+            };
+            await supabase.from("estabelecimentos").insert([fallbackInsertPayload]);
           }
         } else {
           console.warn("[Supabase estabelecimentos update warning]:", saveError.message);

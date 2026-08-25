@@ -168,51 +168,53 @@ export function ColaboradoresTab() {
         const { data: estData } = await supabase
           .from("estabelecimentos")
           .select("id, codigo")
-          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`);
+          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`)
+          .limit(1);
 
-        if (estData && estData.length > 0) {
-          storeUuid = estData[0].id;
-        } else {
-          // Cria o estabelecimento mestre se ainda nao existir
-          const { data: newEst } = await supabase
-            .from("estabelecimentos")
-            .upsert([{ codigo: activeCode, nome: `Confeitaria ${activeCode}` }], { onConflict: "codigo" })
-            .select("id")
-            .single();
-          if (newEst) storeUuid = newEst.id;
-        }
-      } catch (e) {
-        console.warn("Aviso ao verificar estabelecimento mestre:", e);
-      }
-
-      const payloadPrimary: any = {
-        id: novo.id,
-        estabelecimento_codigo: activeCode,
-        nome: novo.nome,
-        email: syntheticEmail,
-        pin,
-        telefone: novo.telefone,
-        abas_permitidas: abasPermitidas,
-        ativo: true,
-      };
-      if (storeUuid) {
-        payloadPrimary.estabelecimento_id = storeUuid;
-      }
-
-      try {
-        let { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
-
-        if (error && (error.code === "23503" || error.message?.includes("foreign key"))) {
-          console.warn("[Supabase] Chave estrangeira violada. Tentando assegurar o estabelecimento mestre...");
-          await supabase
-            .from("estabelecimentos")
-            .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
-
-          let retryRes = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
-          if (retryRes.error && storeUuid) {
-            const payloadAlt = { ...payloadPrimary, estabelecimento_codigo: storeUuid };
-            await supabase.from("colaboradores").upsert([payloadAlt], { onConflict: "id" });
+          if (estData && estData.length > 0) {
+            storeUuid = estData[0].id;
+          } else {
+            // Cria o estabelecimento mestre via insert limpo se ainda não existir
+            const { data: newEst } = await supabase
+              .from("estabelecimentos")
+              .insert([{ codigo: activeCode, nome: `Confeitaria ${activeCode}` }])
+              .select("id")
+              .maybeSingle();
+            if (newEst) storeUuid = newEst.id;
           }
+        } catch (e) {
+          console.warn("Aviso ao verificar estabelecimento mestre:", e);
+        }
+
+        const payloadPrimary: any = {
+          id: novo.id,
+          estabelecimento_codigo: activeCode,
+          nome: novo.nome,
+          email: syntheticEmail,
+          pin,
+          telefone: novo.telefone,
+          abas_permitidas: abasPermitidas,
+          ativo: true,
+        };
+        if (storeUuid) {
+          payloadPrimary.estabelecimento_id = storeUuid;
+        }
+
+        try {
+          let { error } = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+
+          if (error && (error.code === "23503" || error.message?.includes("foreign key"))) {
+            console.warn("[Supabase] Chave estrangeira violada. Assegurando o estabelecimento mestre via insert limpo...");
+            const { data: checkEst } = await supabase.from("estabelecimentos").select("id").eq("codigo", activeCode).limit(1);
+            if (!checkEst || checkEst.length === 0) {
+              await supabase.from("estabelecimentos").insert([{ codigo: activeCode, nome: `Loja ${activeCode}` }]);
+            }
+
+            let retryRes = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
+            if (retryRes.error && storeUuid) {
+              const payloadAlt = { ...payloadPrimary, estabelecimento_codigo: storeUuid };
+              await supabase.from("colaboradores").upsert([payloadAlt], { onConflict: "id" });
+            }
         } else if (error && (error.message?.includes("pin") || error.code === "PGRST204")) {
           const payloadFallback = {
             ...payloadPrimary,
