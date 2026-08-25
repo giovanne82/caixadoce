@@ -568,3 +568,101 @@ export function calcularTotaisFichaTecnica(
     precoVendaSugeridoLote,
   };
 }
+
+export interface InsumoConsolidado {
+  insumoNome: string;
+  quantidadeTotal: number;
+  unidadeMedida: string;
+  custoEstimadoTotal: number;
+  pedidosOrigem: string[];
+}
+
+/**
+ * Consolida as receitas dos produtos pertencentes a uma lista de encomendas ativas/pendentes.
+ * Soma as quantidades dos insumos idênticos (mesmo nome e mesma unidade ou conversão).
+ */
+export async function consolidarReceitasEncomendas(
+  estabelecimentoCodigo: string,
+  encomendasSelecionadas: any[],
+  produtosCardapio: any[] = []
+): Promise<InsumoConsolidado[]> {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  const mapaConsolidado: Record<string, InsumoConsolidado> = {};
+
+  for (const enc of encomendasSelecionadas) {
+    const numPedido = enc.clienteNome ? `${enc.clienteNome} (#${(enc.id || "").slice(0, 4)})` : `#${(enc.id || "").slice(0, 4)}`;
+    
+    // Obter itens detalhados do pedido
+    const itens = enc.itensDetalhes && enc.itensDetalhes.length > 0
+      ? enc.itensDetalhes
+      : [];
+
+    for (const item of itens) {
+      const qtdProduto = Number(item.quantidade) || 1;
+      
+      // Tentar encontrar o produto no cardápio pelo ID ou Nome
+      const prodCardapio = produtosCardapio.find(
+        (p) => p.id === item.produtoId || p.nome.toLowerCase() === (item.nome || "").toLowerCase()
+      );
+
+      let receitaItens: FichaTecnicaItem[] = [];
+
+      if (prodCardapio) {
+        receitaItens = await obterFichaTecnicaProduto(code, prodCardapio.id);
+      }
+
+      if (receitaItens.length > 0) {
+        // Para cada ingrediente da receita do produto, multiplica pela quantidade pedida no pedido
+        for (const ing of receitaItens) {
+          const nomeChave = ing.insumoNome.trim().toLowerCase();
+          const unid = ing.unidadeMedida || "g";
+          const chaveUnica = `${nomeChave}_${unid}`;
+          const qtdIngredienteCalculada = (ing.quantidadeUsada || 0) * qtdProduto;
+          const custoCalculado = (ing.custoTotalItem || 0) * qtdProduto;
+
+          if (!mapaConsolidado[chaveUnica]) {
+            mapaConsolidado[chaveUnica] = {
+              insumoNome: ing.insumoNome.trim(),
+              quantidadeTotal: 0,
+              unidadeMedida: unid,
+              custoEstimadoTotal: 0,
+              pedidosOrigem: [],
+            };
+          }
+
+          mapaConsolidado[chaveUnica].quantidadeTotal += qtdIngredienteCalculada;
+          mapaConsolidado[chaveUnica].custoEstimadoTotal += custoCalculado;
+          if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+            mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+          }
+        }
+      } else if (enc.insumosNecessarios && enc.insumosNecessarios.length > 0) {
+        // Fallback: se o produto não tiver receita cadastrada, usa os insumosNecessarios vinculados à encomenda
+        for (const ins of enc.insumosNecessarios) {
+          const nomeChave = (ins.nome || "").trim().toLowerCase();
+          if (!nomeChave) continue;
+          const unid = "un";
+          const chaveUnica = `${nomeChave}_${unid}`;
+          const qtd = Number(ins.quantidade) || 1;
+
+          if (!mapaConsolidado[chaveUnica]) {
+            mapaConsolidado[chaveUnica] = {
+              insumoNome: ins.nome.trim(),
+              quantidadeTotal: 0,
+              unidadeMedida: unid,
+              custoEstimadoTotal: 0,
+              pedidosOrigem: [],
+            };
+          }
+
+          mapaConsolidado[chaveUnica].quantidadeTotal += qtd;
+          if (!mapaConsolidado[chaveUnica].pedidosOrigem.includes(numPedido)) {
+            mapaConsolidado[chaveUnica].pedidosOrigem.push(numPedido);
+          }
+        }
+      }
+    }
+  }
+
+  return Object.values(mapaConsolidado);
+}

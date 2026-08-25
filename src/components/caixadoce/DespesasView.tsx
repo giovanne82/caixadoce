@@ -52,7 +52,15 @@ import {
   Clock,
   FileText,
   MapPin,
+  Sparkles,
+  UtensilsCrossed,
+  Calendar,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  consolidarReceitasEncomendas,
+  type InsumoConsolidado,
+} from "@/lib/ficha-tecnica-service";
 import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
@@ -264,6 +272,82 @@ export function DespesasView({
 
   // Filtro de Busca
   const [busca, setBusca] = useState("");
+
+  // Modal de Consolidação de Encomendas na Lista de Compras
+  const [modalConsolidarOpen, setModalConsolidarOpen] = useState(false);
+  const [pedidosSelecionadosIds, setPedidosSelecionadosIds] = useState<string[]>([]);
+  const [insumosConsolidadosPreview, setInsumosConsolidadosPreview] = useState<InsumoConsolidado[]>([]);
+  const [carregandoConsolidacao, setCarregandoConsolidacao] = useState(false);
+
+  // Encomendas Ativas (que não foram canceladas nem entregues)
+  const encomendasAtivas = useMemo(() => {
+    return encomendas.filter((e) => e.status !== "entregue" && e.status !== "cancelado");
+  }, [encomendas]);
+
+  // Recalcula o preview dos insumos consolidados quando a seleção de pedidos muda
+  useEffect(() => {
+    if (modalConsolidarOpen && pedidosSelecionadosIds.length > 0) {
+      setCarregandoConsolidacao(true);
+      const selecionadas = encomendasAtivas.filter((e) => pedidosSelecionadosIds.includes(e.id));
+      consolidarReceitasEncomendas(estabelecimentoCodigo || "CD-1001", selecionadas, produtos)
+        .then((res) => {
+          setInsumosConsolidadosPreview(res);
+        })
+        .finally(() => setCarregandoConsolidacao(false));
+    } else {
+      setInsumosConsolidadosPreview([]);
+    }
+  }, [modalConsolidarOpen, pedidosSelecionadosIds, encomendasAtivas, estabelecimentoCodigo, produtos]);
+
+  // Handler para alternar a seleção de um pedido
+  const handleTogglePedidoSelecao = (id: string) => {
+    setPedidosSelecionadosIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Handler para selecionar/deselecionar todos
+  const handleToggleSelecionarTodosPedidos = () => {
+    if (pedidosSelecionadosIds.length === encomendasAtivas.length) {
+      setPedidosSelecionadosIds([]);
+    } else {
+      setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
+    }
+  };
+
+  // Gerar a Lista de Compras Final Consolidada
+  const handleCriarListaConsolidada = () => {
+    if (insumosConsolidadosPreview.length === 0) {
+      toast.error("Nenhum insumo ou ingrediente para consolidar.");
+      return;
+    }
+
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const numPedidos = pedidosSelecionadosIds.length;
+    const nomeLista = `Lista Encomendas (${numPedidos} Pedido${numPedidos > 1 ? "s" : ""}) - ${hoje}`;
+
+    const itensLista: ItemListaCompra[] = insumosConsolidadosPreview.map((ing) => ({
+      id: crypto.randomUUID(),
+      nome: ing.insumoNome,
+      quantidade: ing.quantidadeTotal,
+      unidade: ing.unidadeMedida,
+      comprado: false,
+    }));
+
+    const novaLista: ListaCompras = {
+      id: crypto.randomUUID(),
+      nome: nomeLista,
+      estabelecimentoCodigo,
+      status: "ativa",
+      itens: itensLista,
+      createdAt: new Date().toISOString(),
+    };
+
+    setListas((prev) => [novaLista, ...prev]);
+    setExpandedListaId(novaLista.id);
+    setModalConsolidarOpen(false);
+    toast.success(`⚡ Lista Consolidada com ${itensLista.length} insumos criada com sucesso!`);
+  };
 
   // Sincronizar com props externas e localStorage
   useEffect(() => {
@@ -553,13 +637,28 @@ export function DespesasView({
             />
           </div>
 
-          <Button
-            type="button"
-            onClick={handleIniciarCriacaoLista}
-            className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
-          >
-            <Plus className="w-5 h-5 mr-2" /> Criar Lista de Compras
-          </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <Button
+              type="button"
+              onClick={handleIniciarCriacaoLista}
+              className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
+            >
+              <Plus className="w-5 h-5 mr-2" /> Criar Lista Manual
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => {
+                setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
+                setModalConsolidarOpen(true);
+              }}
+              variant="outline"
+              className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
+            >
+              <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+              <span>⚡ Consolidar Receitas de Encomendas</span>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -1279,6 +1378,153 @@ export function DespesasView({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* MODAL DE CONSOLIDAÇÃO AUTOMÁTICA DE ENCOMENDAS NA LISTA DE COMPRAS */}
+      <Dialog open={modalConsolidarOpen} onOpenChange={setModalConsolidarOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600" /> Consolidar Receitas de Encomendas
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecione as encomendas ativas/pendentes abaixo. O sistema cruzará os itens dos pedidos com a Ficha Técnica do Cardápio, somando a quantidade exata de cada insumo necessário!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* CABEÇALHO DE SELEÇÃO RÁPIDA */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="select-all-pedidos"
+                  checked={
+                    encomendasAtivas.length > 0 &&
+                    pedidosSelecionadosIds.length === encomendasAtivas.length
+                  }
+                  onCheckedChange={handleToggleSelecionarTodosPedidos}
+                />
+                <label
+                  htmlFor="select-all-pedidos"
+                  className="text-xs font-bold text-foreground cursor-pointer"
+                >
+                  Selecionar Todas as Encomendas ({encomendasAtivas.length})
+                </label>
+              </div>
+              <Badge className="bg-purple-600 text-white font-bold text-[10px]">
+                {pedidosSelecionadosIds.length} selecionada(s)
+              </Badge>
+            </div>
+
+            {/* LISTA DE ENCOMENDAS COM CHECKBOX */}
+            {encomendasAtivas.length > 0 ? (
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {encomendasAtivas.map((enc) => {
+                  const isSelected = pedidosSelecionadosIds.includes(enc.id);
+                  const resumoItens = enc.itens || (enc.itensDetalhes || []).map((i) => `${i.quantidade}x ${i.nome}`).join(", ");
+                  return (
+                    <div
+                      key={enc.id}
+                      onClick={() => handleTogglePedidoSelecao(enc.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? "bg-purple-500/15 border-purple-500/50 shadow-2xs"
+                          : "bg-card border-border hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleTogglePedidoSelecao(enc.id)}
+                          className="mt-0.5"
+                        />
+                        <div className="space-y-0.5 text-xs">
+                          <span className="font-extrabold text-foreground block">
+                            👤 {enc.clienteNome} <span className="font-mono text-muted-foreground font-normal">(#{enc.id.slice(0, 4)})</span>
+                          </span>
+                          <span className="text-[11px] text-muted-foreground block line-clamp-1">
+                            🎂 {resumoItens || "Itens da encomenda"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
+                        📅 {enc.dataEntrega.split("-").reverse().join("/")}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground border border-dashed rounded-xl">
+                Nenhuma encomenda pendente ou ativa encontrada no sistema.
+              </div>
+            )}
+
+            {/* PREVIEW DA CONSOLIDAÇÃO DE INGREDIENTES */}
+            <div className="space-y-2 pt-2 border-t border-border/70">
+              <h4 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                <UtensilsCrossed className="w-4 h-4 text-emerald-600" /> Insumos Totais Consolidados (Cálculo Automático)
+              </h4>
+
+              {carregandoConsolidacao ? (
+                <div className="p-4 text-center text-xs text-muted-foreground animate-pulse">
+                  Calculando insumos da receita...
+                </div>
+              ) : insumosConsolidadosPreview.length > 0 ? (
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="text-xs">Insumo / Ingrediente</TableHead>
+                        <TableHead className="text-xs text-right">Qtd Consolidada</TableHead>
+                        <TableHead className="text-xs">Pedidos de Origem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {insumosConsolidadosPreview.map((ing, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="text-xs font-bold text-foreground">
+                            {ing.insumoNome}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 text-right">
+                            {ing.quantidadeTotal} {ing.unidadeMedida}
+                          </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground">
+                            {ing.pedidosOrigem.join(", ")}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-muted-foreground italic border rounded-xl bg-muted/20">
+                  Selecione ao menos 1 encomenda acima para visualizar o total dos insumos da receita.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t flex items-center justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalConsolidarOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleCriarListaConsolidada}
+              disabled={insumosConsolidadosPreview.length === 0}
+              className="font-extrabold bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shadow-md"
+            >
+              <Sparkles className="w-4 h-4" /> Criar Lista de Compras ({insumosConsolidadosPreview.length} Insumos)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

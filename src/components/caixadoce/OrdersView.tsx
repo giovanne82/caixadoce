@@ -82,7 +82,12 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { obterFichaTecnicaProduto, type FichaTecnicaItem } from "@/lib/ficha-tecnica-service";
+import {
+  obterFichaTecnicaProduto,
+  consolidarReceitasEncomendas,
+  type FichaTecnicaItem,
+  type InsumoConsolidado,
+} from "@/lib/ficha-tecnica-service";
 import {
   formatarMoeda,
   formatarWhatsappLink,
@@ -429,10 +434,17 @@ export function OrdersView({
   // Modal de Detalhes do Pedido (Somente Leitura)
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
   const [encomendaDetalhes, setEncomendaDetalhes] = useState<Encomenda | null>(null);
+  const [receitaConsolidadaPedido, setReceitaConsolidadaPedido] = useState<InsumoConsolidado[]>([]);
 
-  const handleAbrirDetalhes = (ord: Encomenda) => {
+  const handleAbrirDetalhes = async (ord: Encomenda) => {
     setEncomendaDetalhes(ord);
     setModalDetalhesOpen(true);
+    try {
+      const res = await consolidarReceitasEncomendas(activeCode, [ord], produtos);
+      setReceitaConsolidadaPedido(res);
+    } catch {
+      setReceitaConsolidadaPedido([]);
+    }
   };
 
   // Histórico de Pagamentos Recebidos (Mini histórico)
@@ -3189,6 +3201,38 @@ export function OrdersView({
                   <div className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground font-medium">
                     {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
                   </div>
+                )}
+              </div>
+
+              {/* BLOCO 2.5: RECEITA & INGREDIENTES CONSOLIDADOS DO PEDIDO */}
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                    <UtensilsCrossed className="w-4 h-4 text-purple-600" /> Receita Consolidada do Pedido
+                  </h4>
+                  <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                    Ficha Técnica &amp; Receita
+                  </Badge>
+                </div>
+
+                {receitaConsolidadaPedido.length > 0 ? (
+                  <div className="space-y-1 pt-1">
+                    {receitaConsolidadaPedido.map((ing, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-purple-200/50">
+                        <span className="font-semibold text-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                          {ing.insumoNome}
+                        </span>
+                        <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
+                          {ing.quantidadeTotal} {ing.unidadeMedida}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground italic px-1">
+                    Cadastre a receita dos produtos no Cardápio para ver os ingredientes consolidados aqui.
+                  </p>
                 )}
               </div>
 
