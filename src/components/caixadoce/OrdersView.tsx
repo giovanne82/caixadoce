@@ -105,6 +105,7 @@ import {
   obterNotinhasVinculadasPorLista,
   salvarNotinhasVinculadasPorLista,
   calcularTotalPagoEncomenda,
+  isEncomendaTotalmentePaga,
   STATUS_ENCOMENDA_CONFIG,
   CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
@@ -984,13 +985,18 @@ export function OrdersView({
     return datasBloqueadas.find((b) => b.data === selectedDrawerDate) || null;
   }, [datasBloqueadas, selectedDrawerDate]);
 
-  // Lista Filtrada para a Tabela
+  // Lista Filtrada para a Tabela / Cards (Regra Matemática: valor_pago < valor_total -> Pendente)
   const encomendasFiltradas = useMemo(() => {
     return encomendas.filter((e) => {
-      const matchPagamento =
-        filtroPagamento === "pendente"
-          ? e.statusPagamento === "pendente" || e.statusPagamento === "cartao_pendente" || e.statusPagamento === "pix_pendente" || !e.statusPagamento
-          : (e.statusPagamento as string) === "pago" || e.statusPagamento === "pago_integral" || e.statusPagamento === "sinal_pago" || e.statusPagamento === "pago_na_entrega";
+      const totalmentePaga = isEncomendaTotalmentePaga(e);
+
+      let matchPagamento = true;
+      if (filtroPagamento === "pendente") {
+        matchPagamento = !totalmentePaga; // Possui qualquer saldo devedor em aberto (valor_pago < valor_total)
+      } else if (filtroPagamento === "pago") {
+        matchPagamento = totalmentePaga; // Totalmente quitada (valor_pago >= valor_total)
+      }
+
       const matchBusca =
         !busca ||
         e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -1216,12 +1222,13 @@ export function OrdersView({
         {viewMode === "lista" && (
           <div className="flex flex-wrap items-center gap-2">
             <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-32 font-semibold">
+              <SelectTrigger className="h-8 text-xs w-44 font-semibold">
                 <SelectValue placeholder="Pagamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="todos">Todos os Pagamentos</SelectItem>
+                <SelectItem value="pendente">Pendente (Com Saldo)</SelectItem>
+                <SelectItem value="pago">Pago (Quitado)</SelectItem>
               </SelectContent>
             </Select>
           </div>

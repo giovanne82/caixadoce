@@ -893,6 +893,16 @@ export function calcularTotalPagoEncomenda(encomenda: Partial<Encomenda>): numbe
   return Number(encomenda.valorEntrada) || 0;
 }
 
+export function isEncomendaTotalmentePaga(encomenda: Partial<Encomenda>): boolean {
+  if (!encomenda) return false;
+  const valorTotal = Number(encomenda.valorTotal) || 0;
+  const totalPago = calcularTotalPagoEncomenda(encomenda);
+  if (valorTotal > 0) {
+    return totalPago >= valorTotal - 0.01;
+  }
+  return (encomenda.statusPagamento as string) === "pago" || encomenda.statusPagamento === "pago_integral";
+}
+
 export interface Encomenda {
   id: string;
   estabelecimentoCodigo: string;
