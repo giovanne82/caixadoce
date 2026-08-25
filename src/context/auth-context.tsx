@@ -190,7 +190,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       abasPermitidas = ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
     }
 
-    const isUserUuid = userObj?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userObj.id);
+    const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
 
     return {
       role: isColab ? "operador" : "admin",
@@ -200,7 +200,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
-      ownerUserId: isUserUuid ? userObj.id : undefined,
+      ownerUserId: isUserUuid ? authUser.id : undefined,
     };
   };
 

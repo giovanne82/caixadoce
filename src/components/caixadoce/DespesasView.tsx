@@ -183,6 +183,7 @@ export function DespesasView({
         {
           shopping_list_id: shoppingListId,
           receipt_id: receiptId,
+          estabelecimento_codigo: estabelecimentoCodigo,
         },
       ]);
     } catch {}
