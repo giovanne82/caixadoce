@@ -34,11 +34,10 @@ import { type Colaborador } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 const ABAS_DISPONIVEIS = [
-  { id: "dashboard", label: "Dashboard (Visão Geral)" },
-  { id: "financeiro", label: "Financeiro & Vendas" },
-  { id: "colaboradores", label: "Controle de Equipe" },
-  { id: "config", label: "Configurações" },
-  { id: "plano", label: "Meu Plano & Stripe" },
+  { id: "scanner", label: "Escanear (Leitor de Notinhas)" },
+  { id: "despesas", label: "Lista de Compras & Notinhas" },
+  { id: "produtos", label: "Cardápio Digital" },
+  { id: "encomendas", label: "Gestão de Encomendas" },
 ];
 
 function formatarTelefoneBR(val: string): string {
@@ -66,8 +65,11 @@ export function ColaboradoresTab() {
   const [nome, setNome] = useState("");
   const [pin, setPin] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["dashboard", "financeiro"]);
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(["scanner", "despesas", "produtos", "encomendas"]);
   const [salvando, setSalvando] = useState(false);
+
+  const maxColaboradores = 1;
+  const temLimiteAtingido = colaboradores.length >= maxColaboradores;
 
   const salvarLista = (novaLista: Colaborador[]) => {
     setColaboradores(novaLista);
@@ -86,6 +88,10 @@ export function ColaboradoresTab() {
 
   const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (colaboradores.length >= maxColaboradores) {
+      toast.error("O limite do seu plano é de no máximo 1 colaborador por loja.");
+      return;
+    }
     if (!nome || !pin) {
       toast.error("Preencha o nome e o PIN de acesso do colaborador.");
       return;
@@ -220,14 +226,31 @@ export function ColaboradoresTab() {
             Equipe &amp; Colaboradores <Users className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Cadastre colaboradores com Acesso PDV (Código da Loja + PIN) e defina permissões.
+            Cadastre o colaborador da sua loja com Acesso PDV (Código da Loja + PIN de segurança).
           </p>
         </div>
-        <Button onClick={() => setModalNovo(true)} className="font-semibold shadow-md">
+        <Button 
+          onClick={() => setModalNovo(true)} 
+          disabled={temLimiteAtingido}
+          title={temLimiteAtingido ? "Limite de 1 colaborador atingido para este estabelecimento" : "Adicionar Novo Colaborador"}
+          className="font-semibold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Plus className="w-4 h-4 mr-1.5" />
           Novo Colaborador
         </Button>
       </div>
+
+      {temLimiteAtingido && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-900 dark:text-amber-300 font-medium flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+            <span><strong>Limite de Colaborador Atingido:</strong> O plano atual permite no máximo <strong>1 colaborador cadastrado por loja</strong>. Caso precise cadastrar um novo atendente, remova o colaborador atual.</span>
+          </div>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 font-bold shrink-0">
+            1/1 Atendido
+          </Badge>
+        </div>
+      )}
 
       <Card className="border-border shadow-sm overflow-hidden">
         <Table>

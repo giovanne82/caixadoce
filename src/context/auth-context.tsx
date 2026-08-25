@@ -186,8 +186,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       } catch {}
     }
 
-    if (isColab && !abasPermitidas) {
-      abasPermitidas = ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
+    if (isColab) {
+      abasPermitidas = ["scanner", "despesas", "produtos", "encomendas"];
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);

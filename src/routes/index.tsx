@@ -145,19 +145,20 @@ function Index() {
   const activeCode = profile?.establishmentCode || "CD-1001";
   const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
+  const ABAS_PERMITIDAS_COLABORADOR = ["scanner", "despesas", "produtos", "encomendas"];
+
   const podeAcessarAba = useCallback((abaId: string): boolean => {
     if (!profile || profile.role === "admin") return true;
-    const permitidas = profile.abasPermitidas || ["dashboard", "scanner", "despesas", "encomendas", "produtos", "financeiro"];
-    if (abaId === "scanner") return permitidas.includes("scanner") || permitidas.includes("dashboard");
-    return permitidas.includes(abaId);
+    if (profile.role === "operador") {
+      return ABAS_PERMITIDAS_COLABORADOR.includes(abaId);
+    }
+    return true;
   }, [profile]);
 
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
-      const permitidas = profile.abasPermitidas || ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
-      const primeira = permitidas.find((a) => podeAcessarAba(a)) || "despesas";
-      toast.error("Acesso Negado: Você não possui permissão para acessar este módulo.");
-      setActiveTab(primeira);
+      toast.error("Acesso Negado: Colaboradores possuem acesso apenas a Escanear, Lista de Compras, Cardápio e Encomendas.");
+      setActiveTab("scanner");
     }
   }, [activeTab, profile, podeAcessarAba]);
 
