@@ -163,10 +163,14 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
-function getValidUuid(val?: string | null): string | null {
-  if (!val) return null;
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-  return isUuid ? val : null;
+function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return userId;
+  }
+  if (ownerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerUserId)) {
+    return ownerUserId;
+  }
+  return "00000000-0000-0000-0000-000000000000";
 }
 
   // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a nomes de tabela (404)
@@ -621,7 +625,7 @@ function getValidUuid(val?: string | null): string | null {
     const { error } = await supabase.from("produtos").insert([
       {
         id: novo.id,
-        user_id: getValidUuid(user?.id),
+        user_id: getValidUuid(user?.id, profile?.ownerUserId),
         estabelecimento_codigo: activeCode,
         codigo: activeCode,
         store_id: activeCode,
@@ -744,7 +748,7 @@ function getValidUuid(val?: string | null): string | null {
     // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas com nomes de colunas padronizados)
     const payloadInsert: Record<string, any> = {
       id: item.id,
-      user_id: getValidUuid(user?.id),
+      user_id: getValidUuid(user?.id, profile?.ownerUserId),
       estabelecimento_codigo: activeCode,
       cliente_id: item.clienteId || null,
       cliente_nome: item.clienteNome,
@@ -776,6 +780,7 @@ function getValidUuid(val?: string | null): string | null {
       // Tentativa de resgate com campos fundamentais para schemas simples
       const payloadFallback = {
         id: item.id,
+        user_id: getValidUuid(user?.id, profile?.ownerUserId),
         estabelecimento_codigo: activeCode,
         cliente_nome: item.clienteNome,
         cliente_whatsapp: item.clienteWhatsapp,
@@ -939,7 +944,7 @@ function getValidUuid(val?: string | null): string | null {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: getValidUuid(user?.id),
+          user_id: getValidUuid(user?.id, profile?.ownerUserId),
           data: item.data,
           motivo: item.motivo,
         },
@@ -1231,7 +1236,7 @@ function getValidUuid(val?: string | null): string | null {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: getValidUuid(user?.id),
+          user_id: getValidUuid(user?.id, profile?.ownerUserId),
           descricao: item.descricao,
           valor: item.valor,
           tipo: item.tipo,

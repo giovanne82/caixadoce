@@ -78,6 +78,7 @@ export type StaffProfile = {
   menu_slogan?: string;
   contasPix?: ContaPix[];
   abasPermitidas?: string[];
+  ownerUserId?: string;
 };
 
 export type UserProfile = StaffProfile;
@@ -189,6 +190,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       abasPermitidas = ["scanner", "despesas", "encomendas", "produtos", "financeiro"];
     }
 
+    const isUserUuid = userObj?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userObj.id);
+
     return {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
@@ -197,6 +200,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
+      ownerUserId: isUserUuid ? userObj.id : undefined,
     };
   };
 
@@ -286,6 +290,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
                   sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                   menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
+                  ownerUserId: data.user_id || baseProf.ownerUserId,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
