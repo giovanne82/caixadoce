@@ -386,6 +386,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     };
   }, [user, profile?.role]);
 
+  const userEstabelecimentos = useMemo(() => {
+    return estabelecimentos;
+  }, [estabelecimentos]);
+
   const loginComPin = async (codigoLoja: string, pin: string) => {
     const rawCode = (codigoLoja || "").trim();
     const rawPin = (pin || "").trim();
