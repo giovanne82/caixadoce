@@ -851,16 +851,33 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       delete (updatePayload as any).user_id;
       delete (updatePayload as any).id;
 
+      console.log("TARGET ID PARA UPDATE:", targetId);
       console.log("PAYLOAD ENVIADO (UPDATE por id):", updatePayload);
 
       if (targetId) {
         // Se a loja já existe no banco, faz UPDATE direcionado exclusivamente pelo id da chave primária
-        const updateRes = await supabase
+        const { data, error } = await supabase
           .from("estabelecimentos")
           .update(updatePayload)
-          .eq("id", targetId);
+          .eq("id", targetId)
+          .select();
 
-        saveError = updateRes.error;
+        console.log("RESPOSTA SUPABASE UPDATE:", { data, error });
+
+        saveError = error;
+
+        // Se o Supabase retornou 0 linhas atualizadas, tenta o update por codigo
+        if (!error && (!data || data.length === 0)) {
+          console.warn("[Supabase] 0 linhas atualizadas por ID. Tentando UPDATE por codigo:", currentCode);
+          const resCodigo = await supabase
+            .from("estabelecimentos")
+            .update(updatePayload)
+            .eq("codigo", currentCode)
+            .select();
+
+          console.log("RESPOSTA SUPABASE UPDATE POR CODIGO:", resCodigo);
+          if (resCodigo.error) saveError = resCodigo.error;
+        }
       } else {
         // Se o registro ainda não existir no banco, cria a nova linha via INSERT com os identificadores
         const insertPayload = {
@@ -870,8 +887,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         };
         const insertRes = await supabase
           .from("estabelecimentos")
-          .insert([insertPayload]);
+          .insert([insertPayload])
+          .select();
 
+        console.log("RESPOSTA SUPABASE INSERT:", insertRes);
         saveError = insertRes.error;
       }
 
@@ -905,7 +924,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete (fallbackUpdatePayload as any).user_id;
 
           if (targetId) {
-            const fbRes = await supabase.from("estabelecimentos").update(fallbackUpdatePayload).eq("id", targetId);
+            const fbRes = await supabase.from("estabelecimentos").update(fallbackUpdatePayload).eq("id", targetId).select();
+            console.log("RESPOSTA SUPABASE FALLBACK UPDATE:", fbRes);
             if (fbRes.error) {
               console.warn("[Supabase Fallback Update Error]:", fbRes.error.message);
             }
@@ -915,7 +935,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
               codigo: currentCode,
               user_id: isUuid ? user.id : null,
             };
-            await supabase.from("estabelecimentos").insert([fallbackInsertPayload]);
+            await supabase.from("estabelecimentos").insert([fallbackInsertPayload]).select();
           }
         } else {
           console.warn("[Supabase estabelecimentos update warning]:", saveError.message);
