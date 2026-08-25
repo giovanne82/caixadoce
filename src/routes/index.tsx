@@ -745,14 +745,19 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       estabelecimentoCodigo: activeCode,
     };
 
-    const valTotal = Number(item.valorTotal) || 0;
-    const valEntrada = Number(item.valorEntrada) || 0;
+    let valTotal = Number(item.valorTotal) || Number((item as any).totalAmount) || Number((item as any).total_amount) || 0;
+    if (valTotal <= 0 && Array.isArray(item.itensDetalhes) && item.itensDetalhes.length > 0) {
+      valTotal = item.itensDetalhes.reduce((acc, it: any) => acc + (Number(it.subtotal || it.precoUnitario) || 0), 0);
+    }
+    valTotal = Math.max(0, valTotal);
+    const valEntrada = Math.max(0, Number(item.valorEntrada) || Number((item as any).downPayment) || Number((item as any).valor_entrada) || 0);
+
     const detVela = item.detalhesVela || (item as any).tipoVela || "";
     const detTopo = item.detalhesTopoBolo || "";
     const temTopo = item.temTopoBolo || false;
     const temVela = item.temVela || false;
 
-    // 1. Payload Padronizado com colunas oficiais do Supabase
+    // 1. Payload Padronizado com colunas oficiais do Supabase (incluindo total_amount obrigatoriamente)
     const payloadStandard: Record<string, any> = {
       id: item.id,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
@@ -766,7 +771,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       itens_detalhes: item.itensDetalhes || [],
       insumos_necessarios: item.insumosNecessarios || [],
       valor_total: valTotal,
+      total_amount: valTotal,
+      total_price: valTotal,
       valor_entrada: valEntrada,
+      down_payment: valEntrada,
+      deposit_amount: valEntrada,
       historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
       status_pagamento: item.statusPagamento || "pendente",
       status: item.status || "pendente",
@@ -784,7 +793,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     if (error) {
       console.warn("[Supabase Warning] Tentativa com payload padronizado falhou, acionando fallback minimalista:", error.message);
       
-      // Fallback Minimalista A: Colunas essenciais padrão sem campos estendidos de personalização
+      // Fallback Minimalista: Colunas essenciais garantindo total_amount preenchido
       const payloadMinimal = {
         id: item.id,
         user_id: getValidUuid(user?.id, profile?.ownerUserId),
@@ -795,6 +804,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         horario_entrega: item.horarioEntrega || "14:00",
         itens: item.itens,
         valor_total: valTotal,
+        total_amount: valTotal,
         valor_entrada: valEntrada,
         status: item.status || "pendente",
         status_pagamento: item.statusPagamento || "pendente",
@@ -803,17 +813,6 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
       let resMin = await supabase.from("encomendas").insert([payloadMinimal]);
       error = resMin.error;
-
-      // Fallback Minimalista B: Caso o banco utilize 'total_amount' em vez de 'valor_total'
-      if (error && (error.message?.includes("valor_total") || error.code === "PGRST204")) {
-        const payloadAlt = {
-          ...payloadMinimal,
-          total_amount: valTotal,
-        };
-        delete (payloadAlt as any).valor_total;
-        const resAlt = await supabase.from("encomendas").insert([payloadAlt]);
-        error = resAlt.error;
-      }
     }
 
     if (error) {

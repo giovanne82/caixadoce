@@ -335,6 +335,8 @@ function CardapioLojaView() {
       subtotal: item.produto.preco * item.quantidade,
     }));
 
+    const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
+
     const payloadInsert: Record<string, any> = {
       id: pedidoId,
       estabelecimento_codigo: code,
@@ -349,7 +351,9 @@ function CardapioLojaView() {
       status: "pendente",
       itens: resumoItensTexto,
       itens_detalhes: itensDetalhesJson,
-      valor_total: Number(totalCarrinho) || 0,
+      valor_total: valTotalCarrinho,
+      total_amount: valTotalCarrinho,
+      total_price: valTotalCarrinho,
       observacoes: observacoes || "",
     };
 

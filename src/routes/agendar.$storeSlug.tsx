@@ -381,6 +381,9 @@ function PublicStoreView() {
         observacoes,
       };
 
+      const valTotalAgenda = Math.max(0, Number(novaEncomenda.valorTotal) || 0);
+      const valEntradaAgenda = Math.max(0, Number(novaEncomenda.valorEntrada) || 0);
+
       const payloadInsert: Record<string, any> = {
         id: novaEncomenda.id,
         estabelecimento_codigo: cleanCode,
@@ -390,8 +393,12 @@ function PublicStoreView() {
         data_entrega: novaEncomenda.dataEntrega,
         horario_entrega: novaEncomenda.horarioEntrega,
         itens: novaEncomenda.itens,
-        valor_total: Number(novaEncomenda.valorTotal) || 0,
-        valor_entrada: Number(novaEncomenda.valorEntrada) || 0,
+        valor_total: valTotalAgenda,
+        total_amount: valTotalAgenda,
+        total_price: valTotalAgenda,
+        valor_entrada: valEntradaAgenda,
+        down_payment: valEntradaAgenda,
+        deposit_amount: valEntradaAgenda,
         status_pagamento: novaEncomenda.statusPagamento,
         status: novaEncomenda.status,
         tipo_entrega: novaEncomenda.tipoEntrega,
