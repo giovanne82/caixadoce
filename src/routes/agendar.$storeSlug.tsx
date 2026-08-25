@@ -384,7 +384,7 @@ function PublicStoreView() {
       const payloadInsert: Record<string, any> = {
         id: novaEncomenda.id,
         estabelecimento_codigo: cleanCode,
-        user_id: (storeInfo as any).user_id || null,
+        user_id: (storeInfo as any)?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((storeInfo as any).user_id) ? (storeInfo as any).user_id : null,
         cliente_nome: novaEncomenda.clienteNome,
         cliente_whatsapp: novaEncomenda.clienteWhatsapp,
         data_entrega: novaEncomenda.dataEntrega,

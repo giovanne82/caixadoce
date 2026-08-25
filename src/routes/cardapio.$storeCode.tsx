@@ -338,7 +338,7 @@ function CardapioLojaView() {
     const payloadInsert: Record<string, any> = {
       id: pedidoId,
       estabelecimento_codigo: code,
-      user_id: lojaInfo?.user_id || null,
+      user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
       cliente_nome: clienteNome,
       cliente_whatsapp: clienteWhatsapp,
       data_entrega: dataEntrega,

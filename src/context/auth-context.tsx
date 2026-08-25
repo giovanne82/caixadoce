@@ -245,11 +245,16 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setProfile(baseProf);
           localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
 
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.id);
+          const filterStr = isUuid
+            ? `user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`
+            : `codigo.eq.${baseProf.establishmentCode}`;
+
           // Busca assíncrona dos dados persistidos da loja no Supabase
           supabase
             .from("estabelecimentos")
             .select("*")
-            .or(`user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`)
+            .or(filterStr)
             .maybeSingle()
             .then((res) => {
               if (res.data) {
@@ -628,8 +633,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     // Gravação REAL via UPSERT no Supabase na tabela estabelecimentos
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
       const payload = {
-        user_id: user.id,
+        user_id: isUuid ? user.id : null,
         codigo: currentCode,
         nome: details.nome,
         responsavel: details.responsavel || user.name || "Administrador",
@@ -661,15 +667,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
       let { error } = await supabase
         .from("estabelecimentos")
-        .upsert(payload, { onConflict: "user_id" });
-
-      if (error) {
-        console.warn("[Supabase] Aviso no upsert por user_id, tentando por codigo:", error.message);
-        const resCodigo = await supabase
-          .from("estabelecimentos")
-          .upsert(payload, { onConflict: "codigo" });
-        error = resCodigo.error;
-      }
+        .upsert(payload, { onConflict: "codigo" });
 
       if (error) {
         const msg = error.message || "";

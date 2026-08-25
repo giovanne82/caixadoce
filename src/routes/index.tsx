@@ -163,11 +163,17 @@ function Index() {
 
   const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
 
+function getValidUuid(val?: string | null): string | null {
+  if (!val) return null;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  return isUuid ? val : null;
+}
+
   // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a nomes de tabela (404)
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
-      // ISOLAMENTO DE DADOS: Nunca buscar registros sem um código de estabelecimento ou usuário autenticado
-      if (!activeCode || !user?.id) return [];
+      // ISOLAMENTO DE DADOS POR ESTABELECIMENTO
+      if (!activeCode) return [];
 
       // Mapeamento de sinonimos / nomes alternativos de tabelas para prevencao de Erro 404
       const TABLE_ALIASES: Record<string, string[]> = {
@@ -188,7 +194,7 @@ function Index() {
           let query = supabase
             .from(tableCandidate as any)
             .select("*")
-            .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode},user_id.eq.${user.id}`);
+            .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
 
           if (orderColumn) {
             query = query.order(orderColumn, { ascending });
@@ -615,7 +621,7 @@ function Index() {
     const { error } = await supabase.from("produtos").insert([
       {
         id: novo.id,
-        user_id: user?.id || null,
+        user_id: getValidUuid(user?.id),
         estabelecimento_codigo: activeCode,
         codigo: activeCode,
         store_id: activeCode,
@@ -738,7 +744,7 @@ function Index() {
     // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas com nomes de colunas padronizados)
     const payloadInsert: Record<string, any> = {
       id: item.id,
-      user_id: user?.id || null,
+      user_id: getValidUuid(user?.id),
       estabelecimento_codigo: activeCode,
       cliente_id: item.clienteId || null,
       cliente_nome: item.clienteNome,
@@ -933,7 +939,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: user?.id || null,
+          user_id: getValidUuid(user?.id),
           data: item.data,
           motivo: item.motivo,
         },
@@ -991,7 +997,7 @@ function Index() {
     const payload = {
       id: item.id,
       estabelecimento_codigo: activeCode,
-      user_id: user?.id || null,
+      user_id: getValidUuid(user?.id),
       fornecedor_nome: item.fornecedorNome,
       fornecedor_endereco: item.fornecedorEndereco || null,
       numero_nota: item.numeroNota || null,
@@ -1225,7 +1231,7 @@ function Index() {
         {
           id: item.id,
           estabelecimento_codigo: activeCode,
-          user_id: user?.id || null,
+          user_id: getValidUuid(user?.id),
           descricao: item.descricao,
           valor: item.valor,
           tipo: item.tipo,
