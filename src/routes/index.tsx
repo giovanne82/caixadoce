@@ -180,62 +180,39 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       // ISOLAMENTO DE DADOS POR ESTABELECIMENTO
       if (!activeCode) return [];
 
-      // Mapeamento de sinonimos / nomes alternativos de tabelas para prevencao de Erro 404
-      const TABLE_ALIASES: Record<string, string[]> = {
-        despesas: ["expenses", "notinhas"],
-        listas_compras: ["shopping_lists", "listas"],
-        transacoes_financeiras: ["financial_transactions", "transacoes"],
-        produtos: ["products", "cardapio"],
-        encomendas: ["orders", "pedidos"],
-        datas_bloqueadas: ["blocked_dates"],
-        customers: ["clientes"],
-        historico_compras_insumos: ["historico_compras"],
-      };
+      try {
+        let query = supabase
+          .from(tableName as any)
+          .select("*")
+          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
 
-      const candidateTables = [tableName, ...(TABLE_ALIASES[tableName] || [])];
-
-      for (const tableCandidate of candidateTables) {
-        try {
-          let query = supabase
-            .from(tableCandidate as any)
-            .select("*")
-            .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
-
-          if (orderColumn) {
-            query = query.order(orderColumn, { ascending });
-          }
-          const res = await query;
-
-          if (!res.error && res.data) return res.data;
-
-          if (res.error) {
-            // Se for erro de tabela inexistente (404 / 42P01), pula para o proximo candidato silenciosamente
-            const is404 = res.status === 404 || res.error.code === "42P01" || res.error.message?.includes("does not exist");
-            if (is404) {
-              console.warn(`[Supabase 404] Tabela "${tableCandidate}" não existe. Tentando alternativa...`);
-              continue;
-            }
-
-            console.warn(
-              `[Supabase Filter Warning] Tabela "${tableCandidate}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
-            );
-
-            try {
-              let fallbackQuery = supabase
-                .from(tableCandidate as any)
-                .select("*")
-                .eq("estabelecimento_codigo", activeCode);
-
-              if (orderColumn) {
-                fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
-              }
-              const rawRes = await fallbackQuery;
-              if (!rawRes.error && rawRes.data) return rawRes.data;
-            } catch {}
-          }
-        } catch (err: any) {
-          console.error(`[Supabase Exception] Tabela "${tableCandidate}":`, err?.message || err);
+        if (orderColumn) {
+          query = query.order(orderColumn, { ascending });
         }
+        const res = await query;
+
+        if (!res.error && res.data) return res.data;
+
+        if (res.error) {
+          console.warn(
+            `[Supabase Filter Warning] Tabela "${tableName}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
+          );
+
+          try {
+            let fallbackQuery = supabase
+              .from(tableName as any)
+              .select("*")
+              .eq("estabelecimento_codigo", activeCode);
+
+            if (orderColumn) {
+              fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
+            }
+            const rawRes = await fallbackQuery;
+            if (!rawRes.error && rawRes.data) return rawRes.data;
+          } catch {}
+        }
+      } catch (err: any) {
+        console.error(`[Supabase Exception] Tabela "${tableName}":`, err?.message || err);
       }
       return [];
     },

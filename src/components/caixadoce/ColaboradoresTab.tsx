@@ -83,21 +83,10 @@ export function ColaboradoresTab() {
   const fetchColaboradores = useCallback(async () => {
     if (!activeCode) return;
     try {
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from("colaboradores")
         .select("*")
         .eq("estabelecimento_codigo", activeCode);
-
-      if (error || !data || data.length === 0) {
-        const resStaff = await supabase
-          .from("staff_members")
-          .select("*")
-          .eq("estabelecimento_codigo", activeCode);
-        if (!resStaff.error && resStaff.data && resStaff.data.length > 0) {
-          data = resStaff.data;
-          error = null;
-        }
-      }
 
       if (!error && data) {
         const mapeados: Colaborador[] = data.map((d: any) => ({
@@ -125,7 +114,6 @@ export function ColaboradoresTab() {
     const channel = supabase
       .channel(`realtime_colaboradores_${activeCode}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "colaboradores" }, () => fetchColaboradores())
-      .on("postgres_changes", { event: "*", schema: "public", table: "staff_members" }, () => fetchColaboradores())
       .subscribe();
 
     return () => {
@@ -194,20 +182,15 @@ export function ColaboradoresTab() {
         id: novo.id,
         estabelecimento_codigo: activeCode,
         nome: novo.nome,
-        name: novo.nome,
         email: syntheticEmail,
         pin,
         telefone: novo.telefone,
-        phone: novo.telefone,
         abas_permitidas: abasPermitidas,
-        allowed_tabs: abasPermitidas,
         ativo: true,
-        is_active: true,
       };
 
       try {
         await supabase.from("colaboradores").upsert([payload], { onConflict: "id" });
-        await supabase.from("staff_members").upsert([payload], { onConflict: "id" });
       } catch (err) {
         console.warn("Aviso ao salvar no Supabase colaboradores:", err);
       }
@@ -226,7 +209,6 @@ export function ColaboradoresTab() {
     salvarLista(colaboradores.filter((c) => c.id !== id));
     try {
       await supabase.from("colaboradores").delete().eq("id", id);
-      await supabase.from("staff_members").delete().eq("id", id);
     } catch {}
     toast.success("Colaborador removido da equipe.");
   };
@@ -241,8 +223,7 @@ export function ColaboradoresTab() {
     );
 
     try {
-      await supabase.from("colaboradores").update({ ativo: novoStatus, is_active: novoStatus }).eq("id", id);
-      await supabase.from("staff_members").update({ ativo: novoStatus, is_active: novoStatus }).eq("id", id);
+      await supabase.from("colaboradores").update({ ativo: novoStatus }).eq("id", id);
     } catch {}
 
     toast.info("Status do colaborador atualizado.");
@@ -276,7 +257,6 @@ export function ColaboradoresTab() {
 
       try {
         await supabase.from("colaboradores").update({ pin: novoPin }).eq("id", colabSelecionado.id);
-        await supabase.from("staff_members").update({ pin: novoPin }).eq("id", colabSelecionado.id);
       } catch (err) {
         console.warn("Aviso ao atualizar PIN no Supabase:", err);
       }
