@@ -29,7 +29,7 @@ export function NotificationBell({
   const handleIrParaPlanos = () => {
     setOpen(false);
     if (onNavigateTab) {
-      onNavigateTab("configuracoes");
+      onNavigateTab("plano");
     }
   };
 
@@ -66,7 +66,12 @@ export function NotificationBell({
 
       <PopoverContent align="end" className="w-80 sm:w-96 p-0 shadow-2xl border-border rounded-2xl overflow-hidden bg-card font-sans">
         {/* Cabeçalho */}
-        <div className={`p-4 border-b ${isAssinaturaAtiva ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"} flex items-center justify-between`}>
+        <div
+          onClick={handleIrParaPlanos}
+          className={`p-4 border-b cursor-pointer hover:opacity-90 transition-opacity ${
+            isAssinaturaAtiva ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"
+          } flex items-center justify-between`}
+        >
           <div className="flex items-center gap-2">
             {isAssinaturaAtiva ? (
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
@@ -83,8 +88,11 @@ export function NotificationBell({
           </Badge>
         </div>
 
-        {/* Corpo Informativo */}
-        <div className="p-4 space-y-3">
+        {/* Corpo Informativo Clicável */}
+        <div
+          onClick={handleIrParaPlanos}
+          className="p-4 space-y-3 cursor-pointer hover:bg-muted/30 transition-colors"
+        >
           {isAssinaturaAtiva ? (
             <div className="space-y-2 text-left">
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
@@ -123,7 +131,10 @@ export function NotificationBell({
           {/* Botão de Ação */}
           <div className="pt-2">
             <Button
-              onClick={handleIrParaPlanos}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleIrParaPlanos();
+              }}
               className={`w-full text-xs font-extrabold shadow-md flex items-center justify-center gap-2 ${
                 isAssinaturaAtiva
                   ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
