@@ -735,50 +735,54 @@ function Index() {
       estabelecimentoCodigo: activeCode,
     };
 
-    // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas)
-    const { error } = await supabase.from("encomendas").insert([
-      {
+    // 1. Tentar salvar no Supabase PRIMEIRO (Tabela Oficial encomendas com nomes de colunas padronizados)
+    const payloadInsert: Record<string, any> = {
+      id: item.id,
+      user_id: user?.id || null,
+      estabelecimento_codigo: activeCode,
+      cliente_id: item.clienteId || null,
+      cliente_nome: item.clienteNome,
+      cliente_whatsapp: item.clienteWhatsapp,
+      data_entrega: item.dataEntrega,
+      horario_entrega: item.horarioEntrega || "14:00",
+      itens: item.itens,
+      itens_detalhes: item.itensDetalhes || [],
+      insumos_necessarios: item.insumosNecessarios || [],
+      valor_total: Number(item.valorTotal) || 0,
+      valor_entrada: Number(item.valorEntrada) || 0,
+      historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
+      status_pagamento: item.statusPagamento || "pendente",
+      status: item.status || "pendente",
+      tipo_entrega: item.tipoEntrega || "retirada",
+      endereco_entrega: item.enderecoEntrega || "",
+      observacoes: item.observacoes || "",
+      tem_topo_bolo: item.temTopoBolo || false,
+      detalhes_topo_bolo: item.detalhesTopoBolo || "",
+      tem_vela: item.temVela || false,
+      tipo_vela: item.detalhesVela || (item as any).tipoVela || "",
+      detalhes_vela: item.detalhesVela || (item as any).tipoVela || "",
+    };
+
+    let { error } = await supabase.from("encomendas").insert([payloadInsert]);
+
+    if (error) {
+      console.warn("[Supabase Warning] Tentativa inicial com payload completo de colunas falhou, tentando salvar colunas base:", error.message);
+      // Tentativa de resgate com campos fundamentais para schemas simples
+      const payloadFallback = {
         id: item.id,
-        user_id: user?.id || null,
         estabelecimento_codigo: activeCode,
-        codigo: activeCode,
-        store_id: activeCode,
-        cliente_id: item.clienteId,
         cliente_nome: item.clienteNome,
-        customer_name: item.clienteNome,
-        client_name: item.clienteNome,
         cliente_whatsapp: item.clienteWhatsapp,
-        customer_phone: item.clienteWhatsapp,
-        client_phone: item.clienteWhatsapp,
         data_entrega: item.dataEntrega,
-        delivery_date: item.dataEntrega,
-        horario_entrega: item.horarioEntrega,
-        delivery_time: item.horarioEntrega,
+        horario_entrega: item.horarioEntrega || "14:00",
         itens: item.itens,
-        itens_detalhes: item.itensDetalhes || [],
-        insumos_necessarios: item.insumosNecessarios || [],
         valor_total: Number(item.valorTotal) || 0,
-        total_price: Number(item.valorTotal) || 0,
-        total_amount: Number(item.valorTotal) || 0,
-        amount: Number(item.valorTotal) || 0,
-        valor_entrada: Number(item.valorEntrada) || 0,
-        down_payment: Number(item.valorEntrada) || 0,
-        historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
-        payments_history: item.paymentsHistory || item.historicoPagamentos || [],
-        status_pagamento: item.statusPagamento,
-        payment_status: item.statusPagamento,
-        status: item.status,
-        tipo_entrega: item.tipoEntrega,
-        delivery_type: item.tipoEntrega,
-        endereco_entrega: item.enderecoEntrega,
-        delivery_address: item.enderecoEntrega,
-        observacoes: item.observacoes,
-        tem_topo_bolo: item.temTopoBolo || false,
-        detalhes_topo_bolo: item.detalhesTopoBolo || "",
-        tem_vela: item.temVela || false,
-        detalhes_vela: item.detalhesVela || "",
-      },
-    ]);
+        status: item.status || "pendente",
+        status_pagamento: item.statusPagamento || "pendente",
+      };
+      const resFallback = await supabase.from("encomendas").insert([payloadFallback]);
+      error = resFallback.error;
+    }
 
     if (error) {
       console.error("[Supabase Error] Falha ao criar encomenda:", error);
@@ -796,45 +800,34 @@ function Index() {
 
   const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
     // 1. Atualizar no Supabase PRIMEIRO
+    const payloadUpdate: Record<string, any> = {
+      cliente_id: dados.clienteId,
+      cliente_nome: dados.clienteNome,
+      cliente_whatsapp: dados.clienteWhatsapp,
+      data_entrega: dados.dataEntrega,
+      horario_entrega: dados.horarioEntrega,
+      itens: dados.itens,
+      itens_detalhes: dados.itensDetalhes,
+      insumos_necessarios: dados.insumosNecessarios,
+      valor_total: Number(dados.valorTotal) || 0,
+      valor_entrada: Number(dados.valorEntrada) || 0,
+      historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+      status_pagamento: dados.statusPagamento,
+      status: dados.status,
+      tipo_entrega: dados.tipoEntrega,
+      endereco_entrega: dados.enderecoEntrega,
+      observacoes: dados.observacoes,
+      tem_topo_bolo: dados.temTopoBolo,
+      detalhes_topo_bolo: dados.detalhesTopoBolo,
+      tem_vela: dados.temVela,
+      tipo_vela: dados.detalhesVela || (dados as any).tipoVela,
+      detalhes_vela: dados.detalhesVela,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from("encomendas")
-      .update({
-        cliente_id: dados.clienteId,
-        cliente_nome: dados.clienteNome,
-        customer_name: dados.clienteNome,
-        client_name: dados.clienteNome,
-        cliente_whatsapp: dados.clienteWhatsapp,
-        customer_phone: dados.clienteWhatsapp,
-        client_phone: dados.clienteWhatsapp,
-        data_entrega: dados.dataEntrega,
-        delivery_date: dados.dataEntrega,
-        horario_entrega: dados.horarioEntrega,
-        delivery_time: dados.horarioEntrega,
-        itens: dados.itens,
-        itens_detalhes: dados.itensDetalhes,
-        insumos_necessarios: dados.insumosNecessarios,
-        valor_total: Number(dados.valorTotal) || 0,
-        total_price: Number(dados.valorTotal) || 0,
-        total_amount: Number(dados.valorTotal) || 0,
-        amount: Number(dados.valorTotal) || 0,
-        valor_entrada: Number(dados.valorEntrada) || 0,
-        down_payment: Number(dados.valorEntrada) || 0,
-        historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
-        payments_history: dados.paymentsHistory || dados.historicoPagamentos || [],
-        status_pagamento: dados.statusPagamento,
-        payment_status: dados.statusPagamento,
-        status: dados.status,
-        tipo_entrega: dados.tipoEntrega,
-        delivery_type: dados.tipoEntrega,
-        endereco_entrega: dados.enderecoEntrega,
-        delivery_address: dados.enderecoEntrega,
-        observacoes: dados.observacoes,
-        tem_topo_bolo: dados.temTopoBolo,
-        detalhes_topo_bolo: dados.detalhesTopoBolo,
-        tem_vela: dados.temVela,
-        detalhes_vela: dados.detalhesVela,
-        updated_at: new Date().toISOString(),
-      })
+      .update(payloadUpdate)
       .eq("id", id)
       .eq("estabelecimento_codigo", activeCode);
 

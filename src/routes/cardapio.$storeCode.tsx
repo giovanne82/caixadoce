@@ -335,39 +335,25 @@ function CardapioLojaView() {
       subtotal: item.produto.preco * item.quantidade,
     }));
 
-    // 1. SALVAR O PEDIDO NA TABELA ENCOMENDAS DO SUPABASE
-    const { error: insertError } = await supabase.from("encomendas").insert([
-      {
-        id: pedidoId,
-        estabelecimento_codigo: code,
-        codigo: code,
-        store_id: code,
-        user_id: lojaInfo?.user_id || null,
-        cliente_nome: clienteNome,
-        customer_name: clienteNome,
-        cliente_whatsapp: clienteWhatsapp,
-        customer_phone: clienteWhatsapp,
-        data_entrega: dataEntrega,
-        delivery_date: dataEntrega,
-        horario_entrega: horarioEntrega || "15:00",
-        delivery_time: horarioEntrega || "15:00",
-        tipo_entrega: tipoEntrega,
-        delivery_type: tipoEntrega,
-        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
-        delivery_address: tipoEntrega === "delivery" ? enderecoEntrega : "",
-        status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-        payment_status: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-        status: "pendente",
-        itens: resumoItensTexto,
-        itens_detalhes: itensDetalhesJson,
-        valor_total: Number(totalCarrinho) || 0,
-        total_price: Number(totalCarrinho) || 0,
-        total_amount: Number(totalCarrinho) || 0,
-        amount: Number(totalCarrinho) || 0,
-        observacoes: observacoes || "",
-        notes: observacoes || "",
-      },
-    ]);
+    const payloadInsert: Record<string, any> = {
+      id: pedidoId,
+      estabelecimento_codigo: code,
+      user_id: lojaInfo?.user_id || null,
+      cliente_nome: clienteNome,
+      cliente_whatsapp: clienteWhatsapp,
+      data_entrega: dataEntrega,
+      horario_entrega: horarioEntrega || "15:00",
+      tipo_entrega: tipoEntrega,
+      endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+      status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+      status: "pendente",
+      itens: resumoItensTexto,
+      itens_detalhes: itensDetalhesJson,
+      valor_total: Number(totalCarrinho) || 0,
+      observacoes: observacoes || "",
+    };
+
+    let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
 
     if (insertError) {
       console.error("Erro ao registrar encomenda no Supabase:", insertError);
