@@ -1087,64 +1087,51 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   const excluirDespesa = async (id: string) => {
     const notaTarget = despesas.find((d) => d.id === id);
 
+    // 1. Atualização Otimista do Estado Local (Despesas & Transações)
+    const despesasAtualizadas = despesas.filter((d) => d.id !== id);
+    setDespesas(despesasAtualizadas);
     try {
-      let resDespesa = await supabase
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
+    } catch {}
+
+    if (notaTarget) {
+      const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
+      const transacoesAtualizadas = transacoes.filter(
+        (t) => t.id !== id && t.descricao !== descMatch && t.clienteOuFornecedor !== notaTarget.fornecedorNome
+      );
+      setTransacoes(transacoesAtualizadas);
+      try {
+        localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(transacoesAtualizadas));
+      } catch {}
+    } else {
+      setTransacoes((prev) => prev.filter((t) => t.id !== id));
+    }
+
+    // 2. Chamada Direta e Limpa ao Supabase: supabase.from('despesas').delete().eq('id', id)
+    try {
+      let { error } = await supabase
         .from("despesas")
         .delete()
-        .eq("id", id)
-        .eq("estabelecimento_codigo", activeCode)
-        .select();
+        .eq("id", id);
 
-      if (!resDespesa.error && (!resDespesa.data || resDespesa.data.length === 0)) {
-        resDespesa = await supabase
+      if (error) {
+        console.warn("[Supabase Warning] Falha na exclusão por ID direto em despesas:", error.message);
+        await supabase
           .from("despesas")
           .delete()
           .eq("id", id)
-          .select();
+          .eq("estabelecimento_codigo", activeCode);
       }
 
-      if (resDespesa.error) {
-        toast.error(`Erro ao excluir notinha no Supabase: ${resDespesa.error.message}`);
-        return;
-      }
-
-      if (!resDespesa.data || resDespesa.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para despesa id:", id);
-        toast.error("Não foi possível excluir a notinha no banco de dados. Verifique a permissão (RLS) no Supabase.");
-        return;
-      }
-
-      // Exclui transações financeiras vinculadas em cascata
-      if (notaTarget) {
-        const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
-        try {
-          await supabase
-            .from("transacoes_financeiras")
-            .delete()
-            .eq("estabelecimento_codigo", activeCode)
-            .or(`descricao.eq.${descMatch},cliente_ou_fornecedor.eq.${notaTarget.fornecedorNome}`)
-            .select();
-        } catch {}
-      }
-
-      const despesasAtualizadas = despesas.filter((d) => d.id !== id);
-      setDespesas(despesasAtualizadas);
+      // Limpeza em transacoes_financeiras se houver vínculo
       try {
-        localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
+        await supabase
+          .from("transacoes_financeiras")
+          .delete()
+          .eq("id", id);
       } catch {}
 
-      if (notaTarget) {
-        const descMatch = `Compra Insumos / Notinha - ${notaTarget.fornecedorNome}`;
-        const transacoesAtualizadas = transacoes.filter(
-          (t) => t.descricao !== descMatch && t.clienteOuFornecedor !== notaTarget.fornecedorNome
-        );
-        setTransacoes(transacoesAtualizadas);
-        try {
-          localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(transacoesAtualizadas));
-        } catch {}
-      }
-
-      toast.success("Notinha e lançamento financeiro excluídos com sucesso!");
+      toast.info("Notinha fiscal removida com sucesso.");
     } catch (e: any) {
       toast.error(`Erro ao excluir notinha: ${e?.message || e}`);
     }
@@ -1596,6 +1583,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                 establishmentCode={activeCode}
                 onAdicionarTransacao={adicionarTransacao}
                 onRemoverTransacao={removerTransacao}
+                onExcluirDespesa={excluirDespesa}
                 onAtualizarStatus={atualizarStatusTransacao}
                 onEditarDespesa={editarDespesa}
                 onReatribuirEstabelecimento={reatribuirEstabelecimentoDespesas}

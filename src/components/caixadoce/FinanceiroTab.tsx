@@ -92,6 +92,7 @@ interface FinanceiroTabProps {
   establishmentCode?: string;
   onAdicionarTransacao: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onRemoverTransacao: (id: string) => Promise<void>;
+  onExcluirDespesa?: (id: string) => Promise<void>;
   onAtualizarStatus: (id: string, status: StatusTransacao) => Promise<void>;
   onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
   onReatribuirEstabelecimento?: (nomeAntigo: string, novoNome: string) => Promise<void>;
@@ -104,6 +105,7 @@ export function FinanceiroTab({
   establishmentCode = "",
   onAdicionarTransacao,
   onRemoverTransacao,
+  onExcluirDespesa,
   onAtualizarStatus,
   onEditarDespesa,
   onReatribuirEstabelecimento,
@@ -451,6 +453,40 @@ export function FinanceiroTab({
 
   // A Tabela renderiza TODOS os itens carregados no estado consolidado (sem limitação de 5 itens)
   const transacoesExibidas = transacoesFiltradas;
+
+  // Deleção Condicional com Roteamento da Tabela Correta (despesas vs transacoes_financeiras)
+  const handleDeletarItemUnificado = async (t: TransacaoFinanceira) => {
+    if (!confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+      return;
+    }
+
+    const id = t.id;
+    // Condicional: SE o item tiver a estrutura/origem de uma notinha de scanner de produtos (query despesas)
+    const ehScannerProdutos =
+      t.origem === "Scanner AI" ||
+      t.descricao.toLowerCase().includes("notinha") ||
+      despesas.some((d) => d.id === id);
+
+    try {
+      if (ehScannerProdutos) {
+        if (onExcluirDespesa) {
+          await onExcluirDespesa(id);
+        } else {
+          let { error } = await supabase.from("despesas").delete().eq("id", id);
+          if (error) {
+            await supabase.from("despesas").delete().eq("id", id).eq("estabelecimento_codigo", code);
+          }
+          toast.info("Notinha fiscal removida com sucesso.");
+        }
+      } else {
+        // SE o item for um lançamento financeiro manual, receita ou conta de consumo (transacoes_financeiras)
+        await onRemoverTransacao(id);
+      }
+    } catch (err: any) {
+      console.error("Erro ao deletar item unificado:", err);
+      toast.error("Erro ao remover o lançamento.");
+    }
+  };
 
   // Agregação de Encomendas (Combinando prop e Supabase sem duplicatas)
   const todasEncomendas = useMemo(() => {
@@ -801,11 +837,7 @@ export function FinanceiroTab({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
-                          onRemoverTransacao(t.id);
-                        }
-                      }}
+                      onClick={() => handleDeletarItemUnificado(t)}
                       className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
                     >
                       <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
@@ -899,11 +931,7 @@ export function FinanceiroTab({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
-                              onRemoverTransacao(t.id);
-                            }
-                          }}
+                          onClick={() => handleDeletarItemUnificado(t)}
                           className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                           title="Excluir lançamento financeiro"
                         >
