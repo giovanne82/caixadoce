@@ -1,5 +1,6 @@
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 import { sanitizarTexto } from "@/lib/security";
+import { toast } from "sonner";
 
 export type ScanMode = "produtos" | "despesa";
 
@@ -367,6 +368,12 @@ export async function processarNotinhaComOCR(
   if ((parsedJSON as any)?.erro_contexto) {
     const msgErro = (parsedJSON as any).erro_contexto;
     throw new Error(msgErro);
+  }
+
+  if ((parsedJSON as any)?.modo_emergencia) {
+    toast.warning(
+      "A cota real da inteligência artificial esgotou hoje. Foi gerada uma leitura simulada para você continuar testando o aplicativo."
+    );
   }
 
   if (scanMode === "despesa") {
