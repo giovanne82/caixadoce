@@ -1053,7 +1053,10 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       metodo_pagamento: item.metodoPagamento || "dinheiro",
     };
 
-    const { error } = await supabase.from("despesas").insert([payload]);
+    const { data: insertedData, error } = await supabase
+      .from("despesas")
+      .insert([payload])
+      .select();
 
     if (error) {
       console.error("[Supabase Erro Despesa]:", error.message);
@@ -1061,11 +1064,37 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       return;
     }
 
-    const atualizadas = [item, ...despesas];
-    setDespesas(atualizadas);
-    try {
-      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
-    } catch {}
+    const novoItemSalvo: DespesaNotaFiscal =
+      insertedData && insertedData.length > 0
+        ? {
+            id: insertedData[0].id,
+            estabelecimentoCodigo: insertedData[0].estabelecimento_codigo || activeCode,
+            fornecedorNome: insertedData[0].fornecedor_nome || item.fornecedorNome,
+            fornecedorEndereco: insertedData[0].fornecedor_endereco || item.fornecedorEndereco,
+            numeroNota: insertedData[0].numero_nota || item.numeroNota,
+            numeroPedido: insertedData[0].numero_pedido || item.numeroPedido,
+            dataCompra: insertedData[0].data_compra || item.dataCompra,
+            horaCompra: insertedData[0].hora_compra || item.horaCompra,
+            valorTotal: Number(insertedData[0].valor_total) || item.valorTotal,
+            valorProducao: Number(insertedData[0].valor_producao) || item.valorProducao,
+            valorUtensilios: Number(insertedData[0].valor_utensilios) || item.valorUtensilios,
+            valorConsumoProprio: Number(insertedData[0].valor_consumo_proprio) || item.valorConsumoProprio,
+            valorOutros: Number(insertedData[0].valor_outros) || item.valorOutros,
+            itens: Array.isArray(insertedData[0].itens) ? insertedData[0].itens : item.itens,
+            comprovanteUrl: insertedData[0].comprovante_url || item.comprovanteUrl,
+            metodoPagamento: insertedData[0].metodo_pagamento || item.metodoPagamento,
+          }
+        : item;
+
+    // Atualização reativa em tempo real: injeta a notinha salva no topo das despesas locais imediatamente
+    setDespesas((prev) => {
+      const semDuplicados = prev.filter((d) => d.id !== novoItemSalvo.id);
+      const atualizadas = [novoItemSalvo, ...semDuplicados];
+      try {
+        localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(atualizadas));
+      } catch {}
+      return atualizadas;
+    });
 
     toast.success("Notinha salva no banco de dados com sucesso!");
 
