@@ -292,6 +292,7 @@ export function ExpensesScannerView({
   const activeCode = profile?.establishmentCode || "";
 
   const handleSalvarDespesaConfirmada = async () => {
+    if (salvando) return;
     if (!fornecedorNome || itensExtraidos.length === 0) {
       toast.error("Informe o estabelecimento e certifique-se de que há itens na nota.");
       return;

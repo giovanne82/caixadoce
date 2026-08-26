@@ -1126,20 +1126,6 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     });
 
     toast.success("Notinha salva no banco de dados com sucesso!");
-
-    const custoEmpresa = item.valorProducao + item.valorUtensilios + item.valorOutros;
-    if (custoEmpresa > 0) {
-      await adicionarTransacao({
-        descricao: `Compra Insumos / Notinha - ${item.fornecedorNome}`,
-        valor: custoEmpresa,
-        tipo: "despesa",
-        categoria: "Insumos & Ingredientes (Produção)",
-        data: item.dataCompra.split("-").reverse().join("/"),
-        metodoPagamento: "pix",
-        status: "concluida",
-        clienteOuFornecedor: item.fornecedorNome,
-      });
-    }
   };
 
   const handleSaveSuccessNotinha = useCallback(() => {

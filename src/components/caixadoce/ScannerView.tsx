@@ -416,6 +416,7 @@ export function ScannerView({
 
   // Salvar Despesa Confirmada
   const handleSalvarDespesaConfirmada = async () => {
+    if (salvando) return;
     if (itensExtraidos.length === 0) {
       toast.error("Por favor, adicione pelo menos 1 item na notinha.");
       return;
