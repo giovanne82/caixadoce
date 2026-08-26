@@ -382,9 +382,42 @@ export function FinanceiroTab({
     return st === "concluida" || st === "pago" || st === "paga";
   };
 
-  // Filtro Unificado e Ordenação Decrescente por Data
+  // Consolidação Efetiva de Lançamentos Manuais/Contas (transacoes_financeiras) + Notinhas Escaneadas (despesas)
+  const transacoesConsolidadas = useMemo(() => {
+    const lista: TransacaoFinanceira[] = [...transacoes];
+    const idsExistentes = new Set(transacoes.map((t) => t.id));
+
+    if (Array.isArray(despesas)) {
+      for (const d of despesas) {
+        if (!d || !d.id || idsExistentes.has(d.id)) continue;
+
+        let dataExibivel = d.dataCompra || new Date().toISOString().split("T")[0];
+        if (dataExibivel.includes("-")) {
+          const [yyyy, mm, dd] = dataExibivel.split("-");
+          if (yyyy && mm && dd) dataExibivel = `${dd}/${mm}/${yyyy}`;
+        }
+
+        lista.push({
+          id: d.id,
+          descricao: d.fornecedorNome ? `Notinha - ${d.fornecedorNome}` : "Notinha Fiscal Escaneada",
+          valor: Number(d.valorTotal) || 0,
+          tipo: "despesa",
+          categoria: d.categoria || "Insumos & Ingredientes",
+          data: dataExibivel,
+          metodoPagamento: (d as any).formaPagamento || "pix",
+          status: "concluida",
+          origem: "Scanner AI",
+          clienteOuFornecedor: d.fornecedorNome || "Scanner AI",
+        });
+      }
+    }
+
+    return lista;
+  }, [transacoes, despesas]);
+
+  // Filtro Unificado sobre a Lista Consolidada e Ordenação Decrescente por Data
   const transacoesFiltradas = useMemo(() => {
-    const ordenadas = [...transacoes].sort((a, b) => {
+    const ordenadas = [...transacoesConsolidadas].sort((a, b) => {
       const parseDate = (dStr: string) => {
         if (!dStr) return 0;
         const [dd, mm, yyyy] = dStr.split("/");
@@ -414,13 +447,10 @@ export function FinanceiroTab({
 
       return matchBusca && matchCategoria && matchTipo;
     });
-  }, [transacoes, busca, filtroCategoria, filtroTipo]);
+  }, [transacoesConsolidadas, busca, filtroCategoria, filtroTipo]);
 
-  // Lista com Limitação de 5 Registros Recentes (com expansão opcional)
-  const transacoesExibidas = useMemo(() => {
-    if (expandirHistoricoCompleto) return transacoesFiltradas;
-    return transacoesFiltradas.slice(0, 5);
-  }, [transacoesFiltradas, expandirHistoricoCompleto]);
+  // A Tabela renderiza TODOS os itens carregados no estado consolidado (sem limitação de 5 itens)
+  const transacoesExibidas = transacoesFiltradas;
 
   // Agregação de Encomendas (Combinando prop e Supabase sem duplicatas)
   const todasEncomendas = useMemo(() => {
@@ -639,71 +669,6 @@ export function FinanceiroTab({
               <p className="text-[11px] text-muted-foreground mt-1">{despesas.length} notas digitalizadas</p>
             </CardContent>
           </Card>
-        </div>
-
-        {/* DESPESAS AGRUPADAS POR ESTABELECIMENTO */}
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-primary" /> Despesas Agrupadas por Estabelecimento
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              Volume total de compras em cada fornecedor/mercado.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agrupamentoEstabelecimentos.length === 0 ? (
-              <div className="col-span-full py-6 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-border/50">
-                Nenhum fornecedor ou notinha registrada até o momento.
-              </div>
-            ) : (
-              agrupamentoEstabelecimentos.map((loja) => {
-                const isSelected = lojaSelecionadaCard === loja.nome;
-                return (
-                  <Card
-                    key={loja.nome}
-                    onClick={() => setLojaSelecionadaCard(isSelected ? null : loja.nome)}
-                    className={`cursor-pointer transition-all border ${
-                      isSelected
-                        ? "border-primary ring-2 ring-primary/20 shadow-md bg-primary/5"
-                        : "border-border shadow-xs hover:border-primary/50"
-                    }`}
-                  >
-                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="text-sm font-bold text-foreground">{loja.nome}</CardTitle>
-                        <CardDescription className="text-[11px]">{loja.qtdNotas} nota(s) fiscais</CardDescription>
-                      </div>
-                      <Badge variant={isSelected ? "default" : "secondary"} className="text-[10px] font-bold">
-                        {loja.percentual}% do total
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="text-xl font-extrabold text-foreground">{formatarMoeda(loja.total)}</div>
-                      <div className="text-[11px] text-amber-600 font-semibold flex items-center gap-1">
-                        <Cookie className="w-3 h-3" /> Produção: {formatarMoeda(loja.producao)}
-                      </div>
-                      <div className="pt-2 border-t border-border/40">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAbrirReatribuir(loja.nome);
-                          }}
-                          className="h-7 px-2 text-[11px] font-bold text-primary hover:bg-primary/10 border-primary/30 w-full justify-center"
-                          title="Reatribuir ou mesclar compras para outro estabelecimento"
-                        >
-                          <Edit2 className="w-3 h-3 mr-1" /> Reatribuir / Mesclar
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
         </div>
       </div>
 
@@ -952,24 +917,6 @@ export function FinanceiroTab({
             </Table>
           </div>
         </Card>
-
-        {/* BOTÃO EXPANDIR / VER HISTÓRICO COMPLETO */}
-        {transacoesFiltradas.length > 5 && (
-          <div className="flex justify-center pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setExpandirHistoricoCompleto(!expandirHistoricoCompleto)}
-              className="text-xs font-bold border-primary/40 text-primary hover:bg-primary/10 gap-2"
-            >
-              {expandirHistoricoCompleto ? (
-                <>Recolher (mostrar apenas os 5 mais recentes)</>
-              ) : (
-                <>Ver histórico completo ({transacoesFiltradas.length} lançamentos)</>
-              )}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Modal Novo Lançamento */}
