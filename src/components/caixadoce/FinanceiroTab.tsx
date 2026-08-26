@@ -453,6 +453,7 @@ export function FinanceiroTab({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (salvando) return;
     const valNum = converterMoedaInputParaNumero(valor);
     if (!descricao || isNaN(valNum) || valNum <= 0) {
       toast.error("Preencha a descrição e um valor válido maior que zero.");

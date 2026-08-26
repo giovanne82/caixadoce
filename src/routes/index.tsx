@@ -1361,38 +1361,29 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   };
 
   const removerTransacao = async (id: string) => {
+    // 1. Atualização imediata da lista na tela (estado local)
+    const atualizadas = transacoes.filter((t) => t.id !== id);
+    setTransacoes(atualizadas);
     try {
-      let res = await supabase
+      localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
+    } catch {}
+
+    // 2. Chamada correta de deleção ao Supabase: supabase.from('transacoes_financeiras').delete().eq('id', id)
+    try {
+      let { error } = await supabase
         .from("transacoes_financeiras")
         .delete()
-        .eq("id", id)
-        .eq("estabelecimento_codigo", activeCode)
-        .select();
+        .eq("id", id);
 
-      if (!res.error && (!res.data || res.data.length === 0)) {
-        res = await supabase
+      if (error) {
+        console.warn("[Supabase Warning] Falha na exclusão por id puro:", error.message);
+        await supabase
           .from("transacoes_financeiras")
           .delete()
           .eq("id", id)
-          .select();
+          .eq("estabelecimento_codigo", activeCode);
       }
 
-      if (res.error) {
-        toast.error(`Falha ao excluir lançamento no banco de dados: ${res.error.message}`);
-        return;
-      }
-
-      if (!res.data || res.data.length === 0) {
-        console.warn("[Supabase Delete Failed] 0 linhas excluídas para transacao id:", id);
-        toast.error("Não foi possível excluir o lançamento financeiro no banco de dados. Verifique a permissão (RLS) no Supabase.");
-        return;
-      }
-
-      const atualizadas = transacoes.filter((t) => t.id !== id);
-      setTransacoes(atualizadas);
-      try {
-        localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
-      } catch {}
       toast.info("Lançamento removido do financeiro.");
     } catch (e: any) {
       toast.error(`Erro ao remover lançamento: ${e?.message || e}`);

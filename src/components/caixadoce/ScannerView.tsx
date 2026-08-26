@@ -218,6 +218,7 @@ export function ScannerView({
 
   // Salvar Conta de Consumo / Despesa Direto no Caixa
   const handleSalvarContaDespesa = async () => {
+    if (salvando) return;
     const valNum = converterMoedaInputParaNumero(despesaValorStr);
     const fornNome = fornecedorNome.trim() || extractedData?.fornecedorNome || "Fornecedor / Emissor";
 
