@@ -9,13 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  DollarSign,
   TrendingUp,
   TrendingDown,
   CreditCard,
@@ -30,6 +23,8 @@ import {
   Check,
   Calendar,
   Building2,
+  ChevronDown,
+  DollarSign,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -70,44 +65,53 @@ export function DashboardTab({
 }: DashboardTabProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [periodoGrafico, setPeriodoGrafico] = useState<"mes" | "semana">("mes");
+  const [showDetails, setShowDetails] = useState(false);
 
   // 1. Total Faturado (Entrada): Receitas financeiras concluídas + Encomendas confirmadas
   const totalReceitasFinanceiro = transacoes
     .filter((t) => t.tipo === "receita" && t.status === "concluida")
-    .reduce((acc, t) => acc + t.valor, 0);
+    .reduce((acc, t) => acc + (t.valor || 0), 0);
 
   const totalEncomendasPagas = encomendas
     .filter((e) => e.status !== "cancelada")
     .reduce((acc, e) => {
-      if (e.statusPagamento === "pago_integral") return acc + e.valorTotal;
-      if (e.statusPagamento === "sinal_pago") return acc + (e.valorEntrada || e.valorTotal * 0.5);
+      if (e.statusPagamento === "pago_integral") return acc + (e.valorTotal || 0);
+      if (e.statusPagamento === "sinal_pago") return acc + (e.valorEntrada || (e.valorTotal || 0) * 0.5);
       return acc;
     }, 0);
 
   const totalFaturado = Math.max(totalReceitasFinanceiro, totalEncomendasPagas);
 
   // 2. Custos de Produção (Insumos dos doces)
-  const custoProducao = despesas.reduce((acc, d) => acc + (d.valorProducao || 0), 0);
+  const custoProducao = despesas.reduce((acc, d) => acc + (Number(d.valorProducao) || 0), 0);
 
   // 3. Gastos Operacionais / Utensílios / Outros
   const gastosOperacionais = despesas.reduce(
-    (acc, d) => acc + (d.valorUtensilios || 0) + (d.valorOutros || 0),
+    (acc, d) => acc + (Number(d.valorUtensilios) || 0) + (Number(d.valorOutros) || 0),
     0
   );
 
-  // 4. Saída Global (Gastos Totais / Despesas)
+  // 4. Saída Global (Gastos Totais / Despesas / Compras)
   const totalSaidasFinanceiro = transacoes
-    .filter((t) => t.tipo === "despesa" && t.status === "concluida")
-    .reduce((acc, t) => acc + t.valor, 0);
+    .filter((t) => t.tipo === "despesa" && (t.status === "concluida" || !t.status))
+    .reduce((acc, t) => acc + (t.valor || 0), 0);
 
-  const totalSaidasDespesas = despesas.reduce((acc, d) => acc + (d.valorTotal || 0), 0);
+  const totalSaidasDespesas = despesas.reduce((acc, d) => {
+    const val =
+      Number(d.valorTotal) ||
+      Number((d as any).valor_total) ||
+      (Number(d.valorProducao) || 0) +
+        (Number(d.valorUtensilios) || 0) +
+        (Number(d.valorConsumoProprio) || 0) +
+        (Number(d.valorOutros) || 0);
+    return acc + val;
+  }, 0);
 
-  // Soma e unificação resiliente de Saída (Gastos) contemplando despesas e transações
-  const totalSaidasGlobal = Math.max(
-    totalSaidasFinanceiro,
-    totalSaidasDespesas,
-    custoProducao + gastosOperacionais
-  );
+  // Consolidação matemática direta: soma as despesas financeiras + compras de notinhas para alimentar o card de Saídas
+  const totalSaidasGlobal =
+    totalSaidasFinanceiro + totalSaidasDespesas > 0
+      ? totalSaidasFinanceiro + totalSaidasDespesas
+      : Math.max(totalSaidasFinanceiro, totalSaidasDespesas, custoProducao + gastosOperacionais);
 
   // 5. Saldo Líquido Real = Total Faturado - Saídas
   const lucroLiquidoReal = totalFaturado - totalSaidasGlobal;
@@ -165,8 +169,8 @@ export function DashboardTab({
     for (const d of despesas) {
       const nome = d.fornecedorNome || "Outros Fornecedores";
       if (!mapa[nome]) mapa[nome] = { total: 0, producao: 0, count: 0 };
-      mapa[nome].total += d.valorTotal;
-      mapa[nome].producao += d.valorProducao || 0;
+      mapa[nome].total += Number(d.valorTotal) || 0;
+      mapa[nome].producao += Number(d.valorProducao) || 0;
       mapa[nome].count += 1;
     }
     const array = Object.entries(mapa).map(([nome, d]) => ({
@@ -238,7 +242,7 @@ export function DashboardTab({
           </CardContent>
         </Card>
 
-        {/* Saída (Gastos Globais / Despesas) */}
+        {/* Saída (Gastos Globais / Despesas + Compras) */}
         <Card className="border-border shadow-sm bg-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
@@ -253,7 +257,7 @@ export function DashboardTab({
               {formatarMoeda(totalSaidasGlobal)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Insumos, contas e despesas operacionais
+              Insumos, contas e compras operacionais
             </p>
           </CardContent>
         </Card>
@@ -283,178 +287,182 @@ export function DashboardTab({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. ACCORDION NATIVO: ANÁLISE DETALHADA DE DESPESAS & MÉTRICAS (OCULTO POR PADRÃO) */}
+      {/* BOTÃO CENTRALIZADO PARA TOGGLE DE EXIBIÇÃO DOS DETALHES DE DESPESAS */}
       {/* ========================================================================= */}
-      <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="analise-detalhada" className="border border-border/80 rounded-2xl bg-card px-4 shadow-xs">
-          <AccordionTrigger className="hover:no-underline font-bold text-sm text-foreground py-4">
-            <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-foreground">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>Ver Análise Detalhada &amp; Gastos por Categoria</span>
-              <Badge variant="outline" className="ml-2 text-[10px] bg-muted/50 font-normal">
-                Clique para expandir
-              </Badge>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 space-y-6">
-            {/* Cards secundários de custos */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              <Card className="border-border shadow-xs bg-muted/20">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
-                    Custo de Produção (Insumos)
-                  </CardTitle>
-                  <Cookie className="w-4 h-4 text-amber-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-amber-600">{formatarMoeda(custoProducao)}</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Leite cond., chocolate, farinha, morangos</p>
-                </CardContent>
-              </Card>
+      <div className="flex justify-center pt-2 pb-1">
+        <Button
+          variant="outline"
+          onClick={() => setShowDetails(!showDetails)}
+          className="px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-xs border-primary/30 hover:bg-primary/5 hover:text-primary transition-all flex items-center gap-2"
+        >
+          <Sparkles className="w-4 h-4 text-amber-500" />
+          {showDetails ? "Ocultar Detalhes de Despesas" : "Ver Detalhes de Despesas"}
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showDetails ? "rotate-180" : ""}`} />
+        </Button>
+      </div>
 
-              <Card className="border-border shadow-xs bg-muted/20">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
-                    Gastos Operacionais / Utensílios
-                  </CardTitle>
-                  <UtensilsCrossed className="w-4 h-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-blue-600">{formatarMoeda(gastosOperacionais)}</div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Formas, bicos, embalagens e bicos</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border shadow-xs bg-muted/20">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
-                    Consumo Pessoal / Outros
-                  </CardTitle>
-                  <PiggyBank className="w-4 h-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-purple-600">
-                    {formatarMoeda(despesas.reduce((a, b) => a + (b.valorConsumoProprio || 0), 0))}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Gastos pessoais/casa passados no cartão</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Gráfico Comparativo */}
-            <Card className="border-border shadow-xs bg-card">
+      {/* ========================================================================= */}
+      {/* 2. SEÇÃO DE ANÁLISE DE DESPESAS & MÉTRICAS (RENDERIZAÇÃO CONDICIONAL COM ESTADO ESTÁTICO NATIVO) */}
+      {/* ========================================================================= */}
+      {showDetails && (
+        <div className="space-y-6 animate-in fade-in-50 duration-200">
+          {/* Cards secundários de custos */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="border-border shadow-xs bg-muted/20">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div>
-                  <CardTitle className="text-base font-bold text-foreground">
-                    Faturamento vs. Custos &amp; Lucro
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Acompanhamento da evolução de faturamento e lucro líquido
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/50">
-                  <Button
-                    variant={periodoGrafico === "mes" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setPeriodoGrafico("mes")}
-                    className="h-7 text-[11px] px-2"
-                  >
-                    Mensal
-                  </Button>
-                  <Button
-                    variant={periodoGrafico === "semana" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setPeriodoGrafico("semana")}
-                    className="h-7 text-[11px] px-2"
-                  >
-                    Semanal
-                  </Button>
-                </div>
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
+                  Custo de Produção (Insumos)
+                </CardTitle>
+                <Cookie className="w-4 h-4 text-amber-600" />
               </CardHeader>
-
-              <CardContent className="pt-4">
-                <div className="h-[260px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dadosGrafico} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                      <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(val) => `R$${val}`} />
-                      <Tooltip
-                        formatter={(val: any) => formatarMoeda(Number(val))}
-                        contentStyle={{
-                          backgroundColor: "rgba(255, 255, 255, 0.95)",
-                          borderRadius: "10px",
-                          border: "1px solid #e2e8f0",
-                          fontSize: "12px",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
-                      <Bar dataKey="Faturamento" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Producao" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Custo Produção" />
-                      <Bar dataKey="Operacional" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Gastos Operacionais" />
-                      <Bar dataKey="Lucro" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Lucro Líquido" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <CardContent>
+                <div className="text-xl font-extrabold text-amber-600">{formatarMoeda(custoProducao)}</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Leite cond., chocolate, farinha, morangos</p>
               </CardContent>
             </Card>
 
-            {/* Tabela Agrupada por Loja */}
-            <Card className="border-border shadow-xs bg-card overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-primary" /> Despesas Agrupadas por Estabelecimento
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Resumo consolidado das compras feitas em atacados, lojas de confeitaria e mercados
-                  </CardDescription>
-                </div>
+            <Card className="border-border shadow-xs bg-muted/20">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
+                  Gastos Operacionais / Utensílios
+                </CardTitle>
+                <UtensilsCrossed className="w-4 h-4 text-blue-600" />
               </CardHeader>
-              <CardContent className="p-0">
-                {gastosPorLoja.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-muted-foreground">
-                    Nenhuma despesa de compras lançada.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-muted/40 text-muted-foreground border-y border-border/60">
-                        <tr>
-                          <th className="p-3 font-semibold">Estabelecimento</th>
-                          <th className="p-3 font-semibold text-center">Notas</th>
-                          <th className="p-3 font-semibold">Custo de Produção</th>
-                          <th className="p-3 font-semibold">Gasto Total</th>
-                          <th className="p-3 font-semibold text-right">% do Total</th>
+              <CardContent>
+                <div className="text-xl font-extrabold text-blue-600">{formatarMoeda(gastosOperacionais)}</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Formas, bicos, embalagens e utensílios</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-xs bg-muted/20">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">
+                  Consumo Pessoal / Outros
+                </CardTitle>
+                <PiggyBank className="w-4 h-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-extrabold text-purple-600">
+                  {formatarMoeda(despesas.reduce((a, b) => a + (b.valorConsumoProprio || 0), 0))}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Gastos pessoais/casa passados no cartão</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Gráfico Comparativo */}
+          <Card className="border-border shadow-xs bg-card">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-base font-bold text-foreground">
+                  Faturamento vs. Custos &amp; Lucro
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Acompanhamento da evolução de faturamento e lucro líquido
+                </CardDescription>
+              </div>
+
+              <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/50">
+                <Button
+                  variant={periodoGrafico === "mes" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPeriodoGrafico("mes")}
+                  className="h-7 text-[11px] px-2"
+                >
+                  Mensal
+                </Button>
+                <Button
+                  variant={periodoGrafico === "semana" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPeriodoGrafico("semana")}
+                  className="h-7 text-[11px] px-2"
+                >
+                  Semanal
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-4">
+              <div className="h-[260px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dadosGrafico} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(val) => `R$${val}`} />
+                    <Tooltip
+                      formatter={(val: any) => formatarMoeda(Number(val))}
+                      contentStyle={{
+                        backgroundColor: "rgba(255, 255, 255, 0.95)",
+                        borderRadius: "10px",
+                        border: "1px solid #e2e8f0",
+                        fontSize: "12px",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
+                    <Bar dataKey="Faturamento" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Producao" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Custo Produção" />
+                    <Bar dataKey="Operacional" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Gastos Operacionais" />
+                    <Bar dataKey="Lucro" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Lucro Líquido" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabela Agrupada por Loja */}
+          <Card className="border-border shadow-xs bg-card overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-primary" /> Despesas Agrupadas por Estabelecimento
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Resumo consolidado das compras feitas em atacados, lojas de confeitaria e mercados
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {gastosPorLoja.length === 0 ? (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  Nenhuma despesa de compras lançada.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/40 text-muted-foreground border-y border-border/60">
+                      <tr>
+                        <th className="p-3 font-semibold">Estabelecimento</th>
+                        <th className="p-3 font-semibold text-center">Notas</th>
+                        <th className="p-3 font-semibold">Custo de Produção</th>
+                        <th className="p-3 font-semibold">Gasto Total</th>
+                        <th className="p-3 font-semibold text-right">% do Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {gastosPorLoja.map((loja) => (
+                        <tr key={loja.nome} className="hover:bg-muted/20">
+                          <td className="p-3 font-semibold text-foreground flex items-center gap-2">
+                            <Building2 className="w-3.5 h-3.5 text-primary" /> {loja.nome}
+                          </td>
+                          <td className="p-3 text-center font-mono">{loja.count}</td>
+                          <td className="p-3 font-bold text-amber-600">{formatarMoeda(loja.producao)}</td>
+                          <td className="p-3 font-extrabold text-foreground">{formatarMoeda(loja.total)}</td>
+                          <td className="p-3 text-right">
+                            <Badge variant="secondary" className="text-[10px] font-bold">
+                              {loja.percentual}%
+                            </Badge>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/60">
-                        {gastosPorLoja.map((loja) => (
-                          <tr key={loja.nome} className="hover:bg-muted/20">
-                            <td className="p-3 font-semibold text-foreground flex items-center gap-2">
-                              <Building2 className="w-3.5 h-3.5 text-primary" /> {loja.nome}
-                            </td>
-                            <td className="p-3 text-center font-mono">{loja.count}</td>
-                            <td className="p-3 font-bold text-amber-600">{formatarMoeda(loja.producao)}</td>
-                            <td className="p-3 font-extrabold text-foreground">{formatarMoeda(loja.total)}</td>
-                            <td className="p-3 text-right">
-                              <Badge variant="secondary" className="text-[10px] font-bold">
-                                {loja.percentual}%
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. AÇÕES RÁPIDAS DE NAVEGAÇÃO */}
