@@ -622,11 +622,11 @@ export default {
       if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {
         try {
           const bodyPayload = await request.json();
-          const { imageBase64 } = bodyPayload;
+          const { imageBase64, scanMode = "produtos" } = bodyPayload;
 
           if (!imageBase64) {
             return new Response(
-              JSON.stringify({ error: "Imagem base64 da notinha é obrigatória." }),
+              JSON.stringify({ error: "Imagem base64 do documento é obrigatória." }),
               { status: 400, headers: { "content-type": "application/json" } }
             );
           }
@@ -659,12 +659,18 @@ export default {
 
           const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
 
-          const geminiBody = {
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
+          const promptText =
+            scanMode === "despesa"
+              ? `Você é um leitor e classificador especialista em contas de consumo, faturas e boletos bancários (água, luz, energia, internet, aluguel, impostos).
+Analise a imagem da conta/fatura e extraia os dados estritamente em JSON puro no formato abaixo sem buscar itens individuais:
+{
+  "fornecedor": "Nome do emissor ou concessionária (ex: Sabesp, Enel, Cemig, Claro, Vivo, Prefeitura, Imobiliária)",
+  "data_emissao": "YYYY-MM-DD",
+  "valor_total": 150.00,
+  "categoria_sugerida": "Energia | Água | Internet | Aluguel | Impostos | Telefone | Outros"
+}
+Responda apenas com o JSON puro sem formatação markdown.`
+              : `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
 Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
 {
   "establishment": "Nome do estabelecimento ou supermercado",
@@ -693,14 +699,14 @@ Regras Específicas de Confeitaria:
 2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
 3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
 4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
-Responda apenas com o JSON puro sem formatação markdown.`,
-                  },
-                  {
-                    inline_data: {
-                      mime_type: "image/jpeg",
-                      data: cleanBase64,
-                    },
-                  },
+Responda apenas com o JSON puro sem formatação markdown.`;
+
+          const geminiBody = {
+            contents: [
+              {
+                parts: [
+                  { text: promptText },
+                  { inline_data: { mime_type: "image/jpeg", data: cleanBase64 } },
                 ],
               },
             ],

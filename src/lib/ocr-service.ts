@@ -1,6 +1,9 @@
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 
+export type ScanMode = "produtos" | "despesa";
+
 export interface ResultadoOCRNotinha {
+  scanMode?: ScanMode;
   fornecedorNome: string;
   fornecedorEndereco: string;
   numeroNota: string;
@@ -9,9 +12,14 @@ export interface ResultadoOCRNotinha {
   horaCompra: string;
   itens: ItemNotaFiscal[];
   valorTotalNota: number;
+  categoriaSugerida?: string;
 }
 
 export interface GeminiReceiptResponse {
+  fornecedor?: string;
+  data_emissao?: string;
+  valor_total?: number;
+  categoria_sugerida?: string;
   establishment?: string;
   date?: string;
   time?: string;
@@ -140,15 +148,20 @@ export function obterChavesGeminiApi(): { key: string; label: string }[] {
  */
 export async function extractReceiptDataWithGemini(
   imageBase64: string,
+  scanMode: ScanMode = "produtos",
   onProgress?: (step: string) => void
 ): Promise<GeminiReceiptResponse> {
   // 1. Tenta processar via rota de backend com fallback de chaves no servidor (/api/gemini/ocr)
   try {
-    onProgress?.("Processando notinha com IA no servidor...");
+    onProgress?.(
+      scanMode === "despesa"
+        ? "Lendo conta/fatura de consumo com IA no servidor..."
+        : "Processando notinha com IA no servidor..."
+    );
     const resServer = await fetch("/api/gemini/ocr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageBase64 }),
+      body: JSON.stringify({ imageBase64, scanMode }),
     });
 
     if (resServer.ok) {
@@ -171,12 +184,18 @@ export async function extractReceiptDataWithGemini(
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
 
-  const body = {
-    contents: [
-      {
-        parts: [
-          {
-            text: `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
+  const promptText =
+    scanMode === "despesa"
+      ? `Você é um leitor e classificador especialista em contas de consumo, faturas e boletos bancários (água, luz, energia, internet, aluguel, impostos).
+Analise a imagem da conta/fatura e extraia os dados estritamente em JSON puro no formato abaixo sem buscar itens individuais:
+{
+  "fornecedor": "Nome do emissor ou concessionária (ex: Sabesp, Enel, Cemig, Claro, Vivo, Prefeitura, Imobiliária)",
+  "data_emissao": "YYYY-MM-DD",
+  "valor_total": 150.00,
+  "categoria_sugerida": "Energia | Água | Internet | Aluguel | Impostos | Telefone | Outros"
+}
+Responda apenas com o JSON puro sem formatação markdown.`
+      : `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
 Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
 {
   "establishment": "Nome do estabelecimento ou supermercado",
@@ -205,20 +224,20 @@ Regras Específicas de Confeitaria:
 2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
 3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
 4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
-Responda apenas com o JSON puro sem formatação markdown.`
-          },
-          {
-            inline_data: {
-              mime_type: "image/jpeg",
-              data: cleanBase64,
-            },
-          },
+Responda apenas com o JSON puro sem formatação markdown.`;
+
+  const body = {
+    contents: [
+      {
+        parts: [
+          { text: promptText },
+          { inline_data: { mime_type: "image/jpeg", data: cleanBase64 } },
         ],
       },
     ],
     generationConfig: {
-      response_mime_type: "application/json"
-    }
+      response_mime_type: "application/json",
+    },
   };
 
   const MAX_TENTATIVAS_POR_CHAVE = 3;
@@ -228,7 +247,6 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
   let ultimoErro: any = null;
 
-  // Itera entre a chave Principal (GEMINI_API_KEY) e a de Contingência (GEMINI_API_KEY_FALLBACK)
   for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
     const keyInfo = apiKeys[keyIdx];
     const isFallbackKey = keyIdx > 0;
@@ -239,7 +257,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
       const labelBase = isFallbackKey
         ? `Alternado para Chave de Contingência (${modelName})...`
-        : `Processando notinha com IA (${modelName})...`;
+        : `Lendo documento com IA (${modelName})...`;
 
       onProgress?.(tentativa > 1 ? `${labelBase} (tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CHAVE})` : labelBase);
 
@@ -263,18 +281,17 @@ Responda apenas com o JSON puro sem formatação markdown.`
             errText
           );
 
-          // Cota esgotada (429), Bloqueio (403) ou Falha de Chave -> Alterna imediatamente para a chave de fallback!
           if (response.status === 429 || response.status === 403 || response.status === 401) {
             console.warn(
               `[Gemini API Fallback] Chave ${keyInfo.label} retornou HTTP ${response.status} (Cota Esgotada/Bloqueio). Alternando para chave de contingência...`
             );
             ultimoErro = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${response.status}).`);
-            break; // Interrompe as tentativas da chave atual e passa para a próxima chave no loop externo
+            break;
           }
 
           if (response.status === 413 || response.status === 400) {
             if (errText.toLowerCase().includes("payload") || errText.toLowerCase().includes("size") || errText.toLowerCase().includes("too large")) {
-              throw new Error("A imagem da notinha é muito grande. O aplicativo a comprimiu automaticamente, por favor tente novamente.");
+              throw new Error("A imagem do documento é muito grande. O aplicativo a comprimiu automaticamente, por favor tente novamente.");
             }
           }
 
@@ -298,7 +315,7 @@ Responda apenas com o JSON puro sem formatação markdown.`
         console.error(`[Gemini API Error] Chave: ${keyInfo.label} | Modelo: ${modelName} | Erro na tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CHAVE}:`, err.message || err);
         ultimoErro = err;
 
-        if (err.message?.includes("imagem da notinha é muito grande") || err.name === "AbortError") {
+        if (err.message?.includes("imagem do documento é muito grande") || err.name === "AbortError") {
           throw err;
         }
 
@@ -313,20 +330,37 @@ Responda apenas com o JSON puro sem formatação markdown.`
 
   throw new Error(
     ultimoErro?.name === "AbortError"
-      ? "A leitura da notinha demorou mais que o esperado (Timeout de rede). Por favor, tente enviar novamente."
+      ? "A leitura do documento demorou mais que o esperado (Timeout de rede). Por favor, tente enviar novamente."
       : ultimoErro?.message || MENSAGEM_ERRO_ALTO_VOLUME
   );
 }
 
 export async function processarNotinhaComOCR(
   file: File,
+  scanMode: ScanMode = "produtos",
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
-  onStepProgress?.("Otimizando e comprimindo imagem da notinha...");
+  onStepProgress?.("Otimizando e comprimindo imagem do documento...");
 
-  // Otimização e compressão automática da imagem de câmera de celular
   const imageBase64 = await comprimirImagemParaBase64(file);
-  const parsedJSON = await extractReceiptDataWithGemini(imageBase64, onStepProgress);
+  const parsedJSON = await extractReceiptDataWithGemini(imageBase64, scanMode, onStepProgress);
+
+  if (scanMode === "despesa") {
+    onStepProgress?.("Extraindo dados da conta de consumo...");
+    const valTotal = Number(parsedJSON.valor_total || parsedJSON.total_amount) || 0;
+    return {
+      scanMode: "despesa",
+      fornecedorNome: parsedJSON.fornecedor || parsedJSON.establishment || "Emissor Não Identificado",
+      fornecedorEndereco: "Conta de Consumo / Fatura",
+      numeroNota: parsedJSON.sale_number ? String(parsedJSON.sale_number) : "",
+      numeroPedido: String(Math.floor(1000 + Math.random() * 9000)),
+      dataCompra: parsedJSON.data_emissao || parsedJSON.date || new Date().toISOString().split("T")[0],
+      horaCompra: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      itens: [],
+      valorTotalNota: valTotal,
+      categoriaSugerida: parsedJSON.categoria_sugerida || parsedJSON.category || "Outras Despesas",
+    };
+  }
 
   onStepProgress?.("Organizando itens e populando o modal de revisão...");
 
@@ -356,6 +390,7 @@ export async function processarNotinhaComOCR(
       : parseFloat(totalCalculado.toFixed(2));
 
   return {
+    scanMode: "produtos",
     fornecedorNome: parsedJSON.establishment || "Estabelecimento Não Identificado",
     fornecedorEndereco: "Endereço extraído do comprovante",
     numeroNota: parsedJSON.sale_number ? String(parsedJSON.sale_number) : "",

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
-import { processarNotinhaComOCR } from "@/lib/ocr-service";
+import { processarNotinhaComOCR, type ScanMode } from "@/lib/ocr-service";
 import { ItemNotaFiscal } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 export interface ExtractedReceiptData {
+  scanMode?: ScanMode;
   fornecedorNome: string;
   fornecedorEndereco: string;
   numeroNota: string;
@@ -11,6 +12,8 @@ export interface ExtractedReceiptData {
   dataCompra: string;
   horaCompra: string;
   itens: ItemNotaFiscal[];
+  valorTotalNota?: number;
+  categoriaSugerida?: string;
 }
 
 interface ScannerContextType {
@@ -23,7 +26,7 @@ interface ScannerContextType {
   error: string | null;
   setModalRevisaoOpen: (open: boolean) => void;
   setExtractedData: React.Dispatch<React.SetStateAction<ExtractedReceiptData | null>>;
-  processarArquivoOCR: (file: File) => Promise<void>;
+  processarArquivoOCR: (file: File, scanMode?: ScanMode) => Promise<void>;
   limparScanner: () => void;
 }
 
@@ -38,9 +41,9 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
   const [modalRevisaoOpen, setModalRevisaoOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const processarArquivoOCR = useCallback(async (file: File) => {
+  const processarArquivoOCR = useCallback(async (file: File, scanMode: ScanMode = "produtos") => {
     if (isScanning) {
-      toast.warning("Já existe um escaneamento de notinha em andamento. Aguarde a conclusão.");
+      toast.warning("Já existe um escaneamento de documento em andamento. Aguarde a conclusão.");
       return;
     }
 
@@ -56,11 +59,11 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
     }
 
     setIsScanning(true);
-    setScanStepMessage("⚡ Conectando ao Gemini 2.5 Flash AI...");
+    setScanStepMessage("⚡ Conectando ao Gemini 3.6 Flash AI...");
     setExtractedData(null);
 
     try {
-      const res = await processarNotinhaComOCR(file, (msg) => {
+      const res = await processarNotinhaComOCR(file, scanMode, (msg) => {
         setScanStepMessage(msg);
       });
 
@@ -68,7 +71,9 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
       setExtractedData(res);
       setModalRevisaoOpen(true);
 
-      if (res.itens.length === 0) {
+      if (scanMode === "despesa") {
+        toast.success(`Leitura da conta de consumo concluída! Emissor: ${res.fornecedorNome}. 🎉`);
+      } else if (res.itens.length === 0) {
         toast.info("Não foi possível identificar os produtos automaticamente. Adicione os itens no modal de revisão.");
       } else {
         toast.success(`Leitura de notinha concluída em segundo plano! ${res.itens.length} item(ns) identificado(s). 🎉`);
@@ -81,7 +86,7 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
       setError(msg);
       toast.error(msg);
     }
-  }, []);
+  }, [isScanning]);
 
   const limparScanner = useCallback(() => {
     setSelectedFile(null);

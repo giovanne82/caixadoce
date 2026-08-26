@@ -17,6 +17,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,17 +43,27 @@ import {
   MessageCircle,
   Eye,
   RefreshCw,
+  ShoppingBag,
+  Receipt,
+  Zap,
 } from "lucide-react";
 import {
   formatarMoeda,
   categorizarItemAutomatico,
+  aplicarMascaraMoedaInput,
+  converterMoedaInputParaNumero,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
   type Encomenda,
   type ListaCompras,
+  type TransacaoFinanceira,
+  type MetodoPagamento,
+  type StatusTransacao,
 } from "@/lib/caixadoce-data";
 import { useScanner } from "@/context/scanner-context";
 import { useAuth } from "@/context/auth-context";
+import { type ScanMode } from "@/lib/ocr-service";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface ScannerViewProps {
@@ -54,6 +71,7 @@ interface ScannerViewProps {
   encomendas?: Encomenda[];
   listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
+  onSalvarTransacaoFinanceira?: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
   onExcluirDespesa?: (id: string) => Promise<void>;
   onReenviarFinanceiro?: (despesa: DespesaNotaFiscal) => Promise<void>;
@@ -64,11 +82,21 @@ interface ScannerViewProps {
 export function ScannerView({
   despesas,
   onSalvarDespesa,
+  onSalvarTransacaoFinanceira,
   onEditarDespesa,
   onExcluirDespesa,
   onReenviarFinanceiro,
 }: ScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Contexto da Leitura (produtos vs despesa)
+  const [scanMode, setScanMode] = useState<ScanMode>("produtos");
+
+  // Estado Local do Modal de Confirmar Despesa / Conta de Consumo
+  const [despesaCategoria, setDespesaCategoria] = useState<string>("Energia");
+  const [despesaMetodoPagamento, setDespesaMetodoPagamento] = useState<MetodoPagamento>("pix");
+  const [despesaStatus, setDespesaStatus] = useState<StatusTransacao>("concluida");
+  const [despesaValorStr, setDespesaValorStr] = useState<string>("");
 
   // Contexto Global de Leitura OCR em Background
   const {
@@ -166,6 +194,14 @@ export function ScannerView({
       setDataCompra(extractedData.dataCompra || new Date().toISOString().split("T")[0]);
       setHoraCompra(extractedData.horaCompra || "14:35:10");
       setItensExtraidos(extractedData.itens || []);
+
+      if (extractedData.scanMode === "despesa") {
+        if (extractedData.categoriaSugerida) {
+          setDespesaCategoria(extractedData.categoriaSugerida);
+        }
+        const val = extractedData.valorTotalNota || 0;
+        setDespesaValorStr(val > 0 ? `R$ ${val.toFixed(2).replace(".", ",")}` : "");
+      }
     }
   }, [extractedData]);
 
@@ -173,10 +209,64 @@ export function ScannerView({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && !isScanning) {
-      processarArquivoOCR(file);
+      processarArquivoOCR(file, scanMode);
     }
     if (e.target) {
       e.target.value = "";
+    }
+  };
+
+  // Salvar Conta de Consumo / Despesa Direto no Caixa
+  const handleSalvarContaDespesa = async () => {
+    const valNum = converterMoedaInputParaNumero(despesaValorStr);
+    if (!fornecedorNome.trim() || isNaN(valNum) || valNum <= 0) {
+      toast.error("Preencha o nome do fornecedor/emissor e um valor válido maior que zero.");
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      const [yyyy, mm, dd] = dataCompra.split("-");
+      const dataFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : new Date().toLocaleDateString("pt-BR");
+
+      const transacaoPayload = {
+        descricao: `Conta/Fatura - ${fornecedorNome.trim()}`,
+        valor: valNum,
+        tipo: "despesa" as const,
+        categoria: despesaCategoria || "Outras Despesas",
+        data: dataFormatada,
+        metodoPagamento: despesaMetodoPagamento,
+        status: despesaStatus,
+        clienteOuFornecedor: fornecedorNome.trim(),
+        origem: "Scanner AI (Conta/Fatura)",
+      };
+
+      if (onSalvarTransacaoFinanceira) {
+        await onSalvarTransacaoFinanceira(transacaoPayload);
+      } else {
+        await supabase.from("transacoes_financeiras").insert([
+          {
+            id: crypto.randomUUID(),
+            estabelecimento_codigo: activeCode,
+            descricao: transacaoPayload.descricao,
+            valor: valNum,
+            tipo: "despesa",
+            categoria: despesaCategoria,
+            metodo_pagamento: despesaMetodoPagamento,
+            status: despesaStatus,
+            cliente_ou_fornecedor: fornecedorNome.trim(),
+            data: dataFormatada,
+            origem: "Scanner AI (Conta/Fatura)",
+          },
+        ]);
+      }
+
+      setModalRevisaoOpen(false);
+      toast.success(`Conta de ${fornecedorNome.trim()} (${formatarMoeda(valNum)}) registrada com sucesso no caixa! 🎉`);
+    } catch (e: any) {
+      toast.error(`Erro ao salvar conta: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -306,15 +396,66 @@ export function ScannerView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Escanear Notinha <Camera className="w-6 h-6 text-primary" />
+            Escanear Documento <Camera className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Envie a foto ou PDF do cupom fiscal para ler itens e extrair metadados automaticamente.
+            Escolha o tipo de documento e envie a foto ou PDF para leitura automática com IA.
           </p>
         </div>
       </div>
 
-      {/* 1. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
+      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS GRANDES) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div
+          onClick={() => setScanMode("produtos")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-4 ${
+            scanMode === "produtos"
+              ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-md"
+              : "border border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
+          }`}
+        >
+          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            <ShoppingBag className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm text-foreground">Escanear Nota de Insumos/Produtos</h3>
+              {scanMode === "produtos" && (
+                <Badge className="bg-primary text-white text-[10px] font-bold">Selecionado</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Cupons de supermercado, compras de chocolates, hortifrúti, embalagens e ingredientes para atualização de estoque e preços.
+            </p>
+          </div>
+        </div>
+
+        <div
+          onClick={() => setScanMode("despesa")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-4 ${
+            scanMode === "despesa"
+              ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-md"
+              : "border border-border/70 bg-card hover:border-amber-500/40 hover:bg-muted/30"
+          }`}
+        >
+          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
+            <Receipt className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm text-foreground">Escanear Conta/Despesa (Água, Luz, Boletos)</h3>
+              {scanMode === "despesa" && (
+                <Badge className="bg-amber-600 text-white text-[10px] font-bold">Selecionado</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Contas de Água, Energia (Luz), Internet, Aluguel, Impostos e despesas para salvar diretamente no caixa financeiro.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
       <Card className="border-2 border-dashed border-primary/40 bg-card/80 shadow-md">
         <CardContent className="p-8">
           <input
@@ -614,165 +755,304 @@ export function ScannerView({
       {/* ========================================================================= */}
       <Dialog open={modalRevisaoOpen} onOpenChange={setModalRevisaoOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <FileText className="w-5 h-5 text-primary" /> Revisar Dados da Notinha Lida
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Confira os dados extraídos pelo OCR e edite os itens da notinha antes de salvar.
-            </DialogDescription>
-          </DialogHeader>
+          {extractedData?.scanMode === "despesa" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                  <Receipt className="w-5 h-5 text-amber-600" /> Confirmar Conta / Despesa de Consumo
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Confira os dados extraídos da fatura pela IA e altere a categoria se necessário antes de salvar direto nas Transações Financeiras.
+                </DialogDescription>
+              </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Metadados Fiscais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="sc-forn" className="text-xs font-semibold">
-                  Estabelecimento / Mercado
-                </Label>
-                <Input
-                  id="sc-forn"
-                  value={fornecedorNome}
-                  onChange={(e) => setFornecedorNome(e.target.value)}
-                  className="h-8 text-xs font-bold"
-                  required
-                />
-              </div>
+              <div className="space-y-4 py-2">
+                <div className="space-y-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="space-y-1">
+                    <Label htmlFor="desp-forn" className="text-xs font-bold text-foreground">
+                      Emissor / Concessionária / Fornecedor *
+                    </Label>
+                    <Input
+                      id="desp-forn"
+                      value={fornecedorNome}
+                      placeholder="ex: Sabesp, Enel, Cemig, Claro, Imobiliária..."
+                      onChange={(e) => setFornecedorNome(e.target.value)}
+                      className="h-9 text-xs font-bold bg-background"
+                      required
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="sc-doc" className="text-xs font-semibold">
-                  Nº do Documento (NF / Pedido / Cupom)
-                </Label>
-                <Input
-                  id="sc-doc"
-                  value={numeroNota}
-                  placeholder="ex: NF 000379"
-                  onChange={(e) => setNumeroNota(e.target.value)}
-                  className="h-8 text-xs font-medium font-mono"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="desp-data" className="text-xs font-bold text-foreground">
+                        Data Emissão / Vencimento
+                      </Label>
+                      <Input
+                        id="desp-data"
+                        type="date"
+                        value={dataCompra}
+                        onChange={(e) => setDataCompra(e.target.value)}
+                        className="h-9 text-xs bg-background"
+                        required
+                      />
+                    </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">
-                  Data e Hora da Compra
-                </Label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Input
-                    id="sc-data"
-                    type="date"
-                    value={dataCompra}
-                    onChange={(e) => setDataCompra(e.target.value)}
-                    className="h-8 text-xs px-2"
-                  />
-                  <Input
-                    id="sc-hora"
-                    type="text"
-                    placeholder="HH:mm"
-                    value={horaCompra}
-                    onChange={(e) => setHoraCompra(e.target.value)}
-                    className="h-8 text-xs px-2 font-mono"
-                  />
+                    <div className="space-y-1">
+                      <Label htmlFor="desp-val" className="text-xs font-bold text-foreground">
+                        Valor Total (R$) *
+                      </Label>
+                      <Input
+                        id="desp-val"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="R$ 0,00"
+                        value={despesaValorStr}
+                        onChange={(e) => setDespesaValorStr(aplicarMascaraMoedaInput(e.target.value))}
+                        className="h-9 text-xs font-bold font-mono text-amber-700 dark:text-amber-400 bg-background"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="desp-cat" className="text-xs font-bold text-foreground">
+                        Categoria Sugerida
+                      </Label>
+                      <Select value={despesaCategoria} onValueChange={setDespesaCategoria}>
+                        <SelectTrigger id="desp-cat" className="h-9 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Energia">Energia (Luz)</SelectItem>
+                          <SelectItem value="Água">Água & Saneamento</SelectItem>
+                          <SelectItem value="Internet">Internet & Telefone</SelectItem>
+                          <SelectItem value="Aluguel">Aluguel & Condomínio</SelectItem>
+                          <SelectItem value="Impostos">Impostos & Taxas</SelectItem>
+                          <SelectItem value="Serviços">Serviços & Manutenção</SelectItem>
+                          <SelectItem value="Outras Despesas">Outras Despesas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="desp-metodo" className="text-xs font-bold text-foreground">
+                        Forma de Pagamento
+                      </Label>
+                      <Select value={despesaMetodoPagamento} onValueChange={(v: MetodoPagamento) => setDespesaMetodoPagamento(v)}>
+                        <SelectTrigger id="desp-metodo" className="h-9 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pix">PIX</SelectItem>
+                          <SelectItem value="boleto">Boleto Bancário</SelectItem>
+                          <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                          <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                          <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="desp-status" className="text-xs font-bold text-foreground">
+                      Status do Pagamento
+                    </Label>
+                    <Select value={despesaStatus} onValueChange={(v: StatusTransacao) => setDespesaStatus(v)}>
+                      <SelectTrigger id="desp-status" className="h-9 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="concluida">Concluída / Já Paga</SelectItem>
+                        <SelectItem value="pendente">Pendente / A Pagar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* TABELA SIMPLIFICADA DE ITENS IDENTIFICADOS (NOME, QUANTIDADE E VALOR TOTAL) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground">
-                  Itens Identificados na Notinha ({itensExtraidos.length}):
-                </Label>
-              </div>
-
-              <div className="rounded-xl border border-border overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-muted/40">
-                    <TableRow>
-                      <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
-                      <TableHead className="text-xs w-20 text-center">Qtd</TableHead>
-                      <TableHead className="text-xs w-28 text-right">Valor Total</TableHead>
-                      <TableHead className="text-xs text-right w-8"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itensExtraidos.map((item) => (
-                      <TableRow key={item.id} className="hover:bg-muted/20">
-                        <TableCell>
-                          <Input
-                            value={item.nome}
-                            onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
-                            className="h-7 text-xs font-medium"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            value={item.quantidade}
-                            onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
-                            className="h-7 text-xs text-center"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={item.valorTotal}
-                            onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
-                            className="h-7 text-xs text-right font-bold"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoverItem(item.id)}
-                            className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="pt-1">
-                <Button variant="outline" size="sm" onClick={handleAdicionarItemManual} className="text-xs h-7">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Item
+              <DialogFooter className="pt-3 border-t flex justify-between gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalRevisaoOpen(false)}
+                  className="text-xs font-semibold"
+                >
+                  Cancelar
                 </Button>
+                <Button
+                  onClick={handleSalvarContaDespesa}
+                  disabled={salvando}
+                  className="font-bold shadow-md bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {salvando ? "Salvando..." : "Confirmar e Salvar no Caixa"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                  <FileText className="w-5 h-5 text-primary" /> Revisar Dados da Notinha Lida
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Confira os dados extraídos pelo OCR e edite os itens da notinha antes de salvar.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                {/* Metadados Fiscais */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label htmlFor="sc-forn" className="text-xs font-semibold">
+                      Estabelecimento / Mercado
+                    </Label>
+                    <Input
+                      id="sc-forn"
+                      value={fornecedorNome}
+                      onChange={(e) => setFornecedorNome(e.target.value)}
+                      className="h-8 text-xs font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="sc-doc" className="text-xs font-semibold">
+                      Nº do Documento (NF / Pedido / Cupom)
+                    </Label>
+                    <Input
+                      id="sc-doc"
+                      value={numeroNota}
+                      placeholder="ex: NF 000379"
+                      onChange={(e) => setNumeroNota(e.target.value)}
+                      className="h-8 text-xs font-medium font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">
+                      Data e Hora da Compra
+                    </Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Input
+                        id="sc-data"
+                        type="date"
+                        value={dataCompra}
+                        onChange={(e) => setDataCompra(e.target.value)}
+                        className="h-8 text-xs px-2"
+                      />
+                      <Input
+                        id="sc-hora"
+                        type="text"
+                        placeholder="HH:mm"
+                        value={horaCompra}
+                        onChange={(e) => setHoraCompra(e.target.value)}
+                        className="h-8 text-xs px-2 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* TABELA SIMPLIFICADA DE ITENS IDENTIFICADOS (NOME, QUANTIDADE E VALOR TOTAL) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-foreground">
+                      Itens Identificados na Notinha ({itensExtraidos.length}):
+                    </Label>
+                  </div>
+
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/40">
+                        <TableRow>
+                          <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
+                          <TableHead className="text-xs w-20 text-center">Qtd</TableHead>
+                          <TableHead className="text-xs w-28 text-right">Valor Total</TableHead>
+                          <TableHead className="text-xs text-right w-8"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {itensExtraidos.map((item) => (
+                          <TableRow key={item.id} className="hover:bg-muted/20">
+                            <TableCell>
+                              <Input
+                                value={item.nome}
+                                onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
+                                className="h-7 text-xs font-medium"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                value={item.quantidade}
+                                onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
+                                className="h-7 text-xs text-center"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={item.valorTotal}
+                                onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
+                                className="h-7 text-xs text-right font-bold"
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoverItem(item.id)}
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="pt-1">
+                    <Button variant="outline" size="sm" onClick={handleAdicionarItemManual} className="text-xs h-7">
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Item
+                    </Button>
+                  </div>
+                </div>
+
+                {/* TOTAL DA NOTINHA EM DESTAQUE NO RODAPÉ */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F3EEF9] border border-[#8E7CC3]/30">
+                  <span className="text-xs font-extrabold text-[#5B478E] uppercase tracking-wider">
+                    Total da Notinha:
+                  </span>
+                  <span className="text-xl font-black text-[#2E1A47]">
+                    {formatarMoeda(totaisNota.total)}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* TOTAL DA NOTINHA EM DESTAQUE NO RODAPÉ */}
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F3EEF9] border border-[#8E7CC3]/30">
-              <span className="text-xs font-extrabold text-[#5B478E] uppercase tracking-wider">
-                Total da Notinha:
-              </span>
-              <span className="text-xl font-black text-[#2E1A47]">
-                {formatarMoeda(totaisNota.total)}
-              </span>
-            </div>
-          </div>
-
-          <DialogFooter className="pt-3 border-t flex justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setModalRevisaoOpen(false)}
-              className="text-xs font-semibold"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSalvarDespesaConfirmada}
-              disabled={salvando}
-              className="font-bold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              {salvando ? "Salvando..." : "Salvar Notinha"}
-            </Button>
-          </DialogFooter>
+              <DialogFooter className="pt-3 border-t flex justify-between gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalRevisaoOpen(false)}
+                  className="text-xs font-semibold"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSalvarDespesaConfirmada}
+                  disabled={salvando}
+                  className="font-bold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                  {salvando ? "Salvando..." : "Salvar Notinha"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
