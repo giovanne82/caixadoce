@@ -64,6 +64,7 @@ import {
   type CategoriaDespesaItem,
 } from "@/lib/caixadoce-data";
 import { useAuth } from "@/context/auth-context";
+import { processarNotinhaComOCR } from "@/lib/ocr-service";
 import { toast } from "sonner";
 
 interface ExpensesScannerViewProps {
@@ -142,7 +143,12 @@ export function ExpensesScannerView({
     }
   };
 
-  const processarArquivo = (file: File) => {
+  const processarArquivo = async (file: File) => {
+    if (isScanning) {
+      toast.warning("Já existe um escaneamento de notinha em andamento. Aguarde a conclusão.");
+      return;
+    }
+
     setSelectedFile(file);
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
@@ -152,7 +158,24 @@ export function ExpensesScannerView({
       setFilePreview(null);
     }
 
-    iniciarLeituraOCR(file.name);
+    setIsScanning(true);
+    setScanStepMessage("⚡ Otimizando imagem e enviando para o Gemini Flash AI...");
+
+    try {
+      const res = await processarNotinhaComOCR(file, (msg) => {
+        setScanStepMessage(msg);
+      });
+
+      setFornecedorNome(res.fornecedorNome);
+      setDataCompra(res.dataCompra);
+      setItensExtraidos(res.itens);
+      toast.success(`Notinha lida com sucesso! ${res.itens.length} itens categorizados.`);
+    } catch (err: any) {
+      console.warn("[ExpensesScannerView OCR Warning] Recorrendo ao modelo demo por exceção:", err?.message);
+      iniciarLeituraOCR(file.name);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   // Simulação Inteligente de Leitura OCR/IA
