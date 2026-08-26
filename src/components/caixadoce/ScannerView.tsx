@@ -255,6 +255,8 @@ export function ScannerView({
         origem: "Scanner AI (Conta/Fatura)",
       };
 
+      delete payloadDespesaDirect.id;
+
       try {
         const { data: estData } = await supabase
           .from("estabelecimentos")
@@ -264,6 +266,8 @@ export function ScannerView({
           payloadDespesaDirect.estabelecimento_id = estData[0].id;
         }
       } catch {}
+
+      delete payloadDespesaDirect.id;
 
       let { data: insertedRows, error } = await supabase
         .from("transacoes_financeiras")
@@ -276,6 +280,7 @@ export function ScannerView({
           await supabase
             .from("estabelecimentos")
             .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+          delete payloadDespesaDirect.id;
           const retryRes = await supabase
             .from("transacoes_financeiras")
             .insert([payloadDespesaDirect])
@@ -285,7 +290,7 @@ export function ScannerView({
         }
 
         if (error) {
-          const payloadMinimal = {
+          const payloadMinimal: any = {
             estabelecimento_codigo: activeCode,
             descricao: fornNome,
             valor: Number(valNum),
@@ -294,6 +299,7 @@ export function ScannerView({
             tipo: "SAIDA",
             status: "PAGO",
           };
+          delete payloadMinimal.id;
           const resMin = await supabase
             .from("transacoes_financeiras")
             .insert([payloadMinimal])

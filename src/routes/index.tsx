@@ -1278,7 +1278,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
     } catch {}
 
-    // REMOÇÃO DA CHAVE 'id' DO PAYLOAD: permite que o PostgreSQL no Supabase gere o UUID automático via gen_random_uuid()
+    // REMOÇÃO E DESTRUIÇÃO DE QUALQUER CHAVE 'id': permite que o PostgreSQL no Supabase gere o UUID automático via gen_random_uuid()
     const payload: any = {
       estabelecimento_codigo: activeCode,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
@@ -1292,6 +1292,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       data: item.data,
       origem: item.origem || "Manual",
     };
+
+    delete payload.id;
 
     if (storeUuid) {
       payload.estabelecimento_id = storeUuid;
@@ -1318,6 +1320,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
           await supabase
             .from("estabelecimentos")
             .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+          delete payload.id;
           let retryRes = await supabase.from("transacoes_financeiras").insert([payload]).select();
           error = retryRes.error;
           if (retryRes.data && retryRes.data.length > 0 && retryRes.data[0].id) {
@@ -1330,7 +1333,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
         if (error) {
           // Fallback minimalista sem campos opcionais nem id para esquemas legados
-          const payloadMinimal = {
+          const payloadMinimal: any = {
             estabelecimento_codigo: activeCode,
             user_id: getValidUuid(user?.id, profile?.ownerUserId),
             descricao: item.descricao,
@@ -1340,6 +1343,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
             status: item.status,
             data: item.data,
           };
+          delete payloadMinimal.id;
           const resMin = await supabase.from("transacoes_financeiras").insert([payloadMinimal]).select();
           if (resMin.error) {
             console.warn("Aviso no fallback minimalista de transação:", resMin.error.message);
