@@ -558,15 +558,24 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       })()}
 
       <Tabs defaultValue="empresa" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3">
-          <TabsTrigger value="empresa" className="flex items-center gap-1.5 font-bold">
-            <Building2 className="w-4 h-4" /> Perfil &amp; Estabelecimento
+        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3 bg-muted/80 p-1">
+          <TabsTrigger
+            value="empresa"
+            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Building2 className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Perfil &amp; Estabelecimento
           </TabsTrigger>
-          <TabsTrigger value="colaboradores" className="flex items-center gap-1.5 font-bold">
-            <Users className="w-4 h-4" /> Colaboradores &amp; Equipe
+          <TabsTrigger
+            value="colaboradores"
+            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Users className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Colaboradores &amp; Equipe
           </TabsTrigger>
-          <TabsTrigger value="seguranca" className="flex items-center gap-1.5 font-bold">
-            <Lock className="w-4 h-4" /> Segurança
+          <TabsTrigger
+            value="seguranca"
+            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Lock className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Segurança
           </TabsTrigger>
         </TabsList>
 
