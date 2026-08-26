@@ -233,13 +233,13 @@ export function ScannerView({
       const [yyyy, mm, dd] = rawData.split("-");
       const dataEmissaoFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : rawData;
 
-      // 2. Mapeamento exato do payload para as colunas do Supabase:
+      // 2. Mapeamento exato do payload para as colunas do Supabase espelhando o formulário manual:
       // - descricao: Mapear para o fornecedor
       // - valor: Mapear para o valor_total (Number / Float)
       // - data: Mapear para a data_emissao
       // - categoria: Mapear para a categoria_sugerida
-      // - tipo: Setar rigidamente como 'SAIDA'
-      // - status: Setar rigidamente como 'PAGO'
+      // - tipo: Setar como 'despesa' (mesma grafia do formulário manual de lançamentos)
+      // - status: Setar como 'concluida' (mesma grafia do formulário manual de lançamentos)
       // - estabelecimento_codigo: Puxar do contexto global (activeCode)
       // - IMPORTANTE: NÃO enviar NENHUMA propriedade 'id'. Deixar o banco gerar o UUID sozinho!
       const payloadDespesaDirect: any = {
@@ -247,8 +247,8 @@ export function ScannerView({
         valor: Number(valNum),
         data: dataEmissaoFormatada,
         categoria: despesaCategoria || extractedData?.categoriaSugerida || "Outras Despesas",
-        tipo: "SAIDA",
-        status: "PAGO",
+        tipo: "despesa",
+        status: "concluida",
         estabelecimento_codigo: activeCode,
         metodo_pagamento: despesaMetodoPagamento || "pix",
         cliente_ou_fornecedor: fornNome,
@@ -296,8 +296,8 @@ export function ScannerView({
             valor: Number(valNum),
             data: dataEmissaoFormatada,
             categoria: despesaCategoria || "Outras Despesas",
-            tipo: "SAIDA",
-            status: "PAGO",
+            tipo: "despesa",
+            status: "concluida",
           };
           delete payloadMinimal.id;
           const resMin = await supabase
@@ -315,11 +315,11 @@ export function ScannerView({
         await onSalvarTransacaoFinanceira({
           descricao: fornNome,
           valor: Number(valNum),
-          tipo: "SAIDA" as any,
+          tipo: "despesa",
           categoria: despesaCategoria || "Outras Despesas",
           data: dataEmissaoFormatada,
           metodoPagamento: despesaMetodoPagamento,
-          status: "PAGO" as any,
+          status: "concluida",
           clienteOuFornecedor: fornNome,
           origem: "Scanner AI (Conta/Fatura)",
         });
