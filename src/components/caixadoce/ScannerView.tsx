@@ -219,52 +219,110 @@ export function ScannerView({
   // Salvar Conta de Consumo / Despesa Direto no Caixa
   const handleSalvarContaDespesa = async () => {
     const valNum = converterMoedaInputParaNumero(despesaValorStr);
-    if (!fornecedorNome.trim() || isNaN(valNum) || valNum <= 0) {
-      toast.error("Preencha o nome do fornecedor/emissor e um valor válido maior que zero.");
+    const fornNome = fornecedorNome.trim() || extractedData?.fornecedorNome || "Fornecedor / Emissor";
+
+    if (isNaN(valNum) || valNum <= 0) {
+      toast.error("Informe um valor válido maior que zero para a despesa.");
       return;
     }
 
     setSalvando(true);
     try {
-      const [yyyy, mm, dd] = dataCompra.split("-");
-      const dataFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : new Date().toLocaleDateString("pt-BR");
+      // 1. Mapeamento da Data de Emissão / Vencimento
+      const rawData = dataCompra || extractedData?.dataCompra || new Date().toISOString().split("T")[0];
+      const [yyyy, mm, dd] = rawData.split("-");
+      const dataEmissaoFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : rawData;
 
-      const transacaoPayload = {
-        descricao: `Conta/Fatura - ${fornecedorNome.trim()}`,
-        valor: valNum,
-        tipo: "despesa" as const,
-        categoria: despesaCategoria || "Outras Despesas",
-        data: dataFormatada,
-        metodoPagamento: despesaMetodoPagamento,
-        status: despesaStatus,
-        clienteOuFornecedor: fornecedorNome.trim(),
+      // 2. Mapeamento exato do payload para as colunas do Supabase:
+      // - descricao: Mapear para o fornecedor
+      // - valor: Mapear para o valor_total (Number / Float)
+      // - data: Mapear para a data_emissao
+      // - categoria: Mapear para a categoria_sugerida
+      // - tipo: Setar rigidamente como 'SAIDA'
+      // - status: Setar rigidamente como 'PAGO'
+      // - estabelecimento_codigo: Puxar do contexto global (activeCode)
+      // - IMPORTANTE: NÃO enviar NENHUMA propriedade 'id'. Deixar o banco gerar o UUID sozinho!
+      const payloadDespesaDirect: any = {
+        descricao: fornNome,
+        valor: Number(valNum),
+        data: dataEmissaoFormatada,
+        categoria: despesaCategoria || extractedData?.categoriaSugerida || "Outras Despesas",
+        tipo: "SAIDA",
+        status: "PAGO",
+        estabelecimento_codigo: activeCode,
+        metodo_pagamento: despesaMetodoPagamento || "pix",
+        cliente_ou_fornecedor: fornNome,
         origem: "Scanner AI (Conta/Fatura)",
       };
 
-      if (onSalvarTransacaoFinanceira) {
-        await onSalvarTransacaoFinanceira(transacaoPayload);
-      } else {
-        await supabase.from("transacoes_financeiras").insert([
-          {
-            id: crypto.randomUUID(),
+      try {
+        const { data: estData } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo")
+          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`);
+        if (estData && estData.length > 0) {
+          payloadDespesaDirect.estabelecimento_id = estData[0].id;
+        }
+      } catch {}
+
+      let { data: insertedRows, error } = await supabase
+        .from("transacoes_financeiras")
+        .insert([payloadDespesaDirect])
+        .select();
+
+      if (error) {
+        console.warn("[Scanner Supabase Warning] Erro na inserção de despesa escaneada:", error.message);
+        if (error.code === "23503" || error.message?.includes("foreign key")) {
+          await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+          const retryRes = await supabase
+            .from("transacoes_financeiras")
+            .insert([payloadDespesaDirect])
+            .select();
+          error = retryRes.error;
+          insertedRows = retryRes.data;
+        }
+
+        if (error) {
+          const payloadMinimal = {
             estabelecimento_codigo: activeCode,
-            descricao: transacaoPayload.descricao,
-            valor: valNum,
-            tipo: "despesa",
-            categoria: despesaCategoria,
-            metodo_pagamento: despesaMetodoPagamento,
-            status: despesaStatus,
-            cliente_ou_fornecedor: fornecedorNome.trim(),
-            data: dataFormatada,
-            origem: "Scanner AI (Conta/Fatura)",
-          },
-        ]);
+            descricao: fornNome,
+            valor: Number(valNum),
+            data: dataEmissaoFormatada,
+            categoria: despesaCategoria || "Outras Despesas",
+            tipo: "SAIDA",
+            status: "PAGO",
+          };
+          const resMin = await supabase
+            .from("transacoes_financeiras")
+            .insert([payloadMinimal])
+            .select();
+          if (resMin.error) {
+            throw new Error(resMin.error.message);
+          }
+          insertedRows = resMin.data;
+        }
+      }
+
+      if (onSalvarTransacaoFinanceira) {
+        await onSalvarTransacaoFinanceira({
+          descricao: fornNome,
+          valor: Number(valNum),
+          tipo: "SAIDA" as any,
+          categoria: despesaCategoria || "Outras Despesas",
+          data: dataEmissaoFormatada,
+          metodoPagamento: despesaMetodoPagamento,
+          status: "PAGO" as any,
+          clienteOuFornecedor: fornNome,
+          origem: "Scanner AI (Conta/Fatura)",
+        });
       }
 
       setModalRevisaoOpen(false);
-      toast.success(`Conta de ${fornecedorNome.trim()} (${formatarMoeda(valNum)}) registrada com sucesso no caixa! 🎉`);
+      toast.success(`Despesa de ${fornNome} (${formatarMoeda(valNum)}) gravada com sucesso no Supabase! 🎉`);
     } catch (e: any) {
-      toast.error(`Erro ao salvar conta: ${e.message || "Erro desconhecido"}`);
+      toast.error(`Erro ao gravar despesa no banco: ${e.message || "Erro desconhecido"}`);
     } finally {
       setSalvando(false);
     }
