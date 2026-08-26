@@ -468,11 +468,11 @@ export function ScannerView({
         </div>
       </div>
 
-      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS GRANDES) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (BOTÕES LADO A LADO - FLEX ROW) */}
+      <div className="flex flex-row gap-3">
         <div
           onClick={() => setScanMode("produtos")}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-4 ${
+          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
             scanMode === "produtos"
               ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-md"
               : "border border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
@@ -481,22 +481,17 @@ export function ScannerView({
           <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
             <ShoppingBag className="w-6 h-6" />
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-sm text-foreground">Escanear Nota de Insumos/Produtos</h3>
-              {scanMode === "produtos" && (
-                <Badge className="bg-primary text-white text-[10px] font-bold">Selecionado</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Cupons de supermercado, compras de chocolates, hortifrúti, embalagens e ingredientes para atualização de estoque e preços.
-            </p>
-          </div>
+          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
+            Escanear Nota de Insumos/Produtos
+          </h3>
+          {scanMode === "produtos" && (
+            <Badge className="bg-primary text-white text-[10px] font-bold">Selecionado</Badge>
+          )}
         </div>
 
         <div
           onClick={() => setScanMode("despesa")}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-4 ${
+          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
             scanMode === "despesa"
               ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-md"
               : "border border-border/70 bg-card hover:border-amber-500/40 hover:bg-muted/30"
@@ -505,17 +500,12 @@ export function ScannerView({
           <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
             <Receipt className="w-6 h-6" />
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-sm text-foreground">Escanear Conta/Despesa (Água, Luz, Boletos)</h3>
-              {scanMode === "despesa" && (
-                <Badge className="bg-amber-600 text-white text-[10px] font-bold">Selecionado</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Contas de Água, Energia (Luz), Internet, Aluguel, Impostos e despesas para salvar diretamente no caixa financeiro.
-            </p>
-          </div>
+          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
+            Escanear Conta/Despesa (Água, Luz, Boletos)
+          </h3>
+          {scanMode === "despesa" && (
+            <Badge className="bg-amber-600 text-white text-[10px] font-bold">Selecionado</Badge>
+          )}
         </div>
       </div>
 
