@@ -62,6 +62,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Edit2,
+  Receipt,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -308,7 +309,8 @@ export function FinanceiroTab({
 
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "receita" | "despesa">("todos");
-  const [filtroStatus, setFiltroStatus] = useState<"todos" | StatusTransacao>("todos");
+  const [filtroCategoria, setFiltroCategoria] = useState<string>("todos");
+  const [expandirHistoricoCompleto, setExpandirHistoricoCompleto] = useState<boolean>(false);
   const [lojaSelecionadaCard, setLojaSelecionadaCard] = useState<string | null>(null);
 
   // Form State Lançamento
@@ -364,18 +366,61 @@ export function FinanceiroTab({
     })).sort((a, b) => b.total - a.total);
   }, [despesas, metricasDespesas.total]);
 
-  const transacoesFiltradas = transacoes.filter((t) => {
-    const matchBusca =
-      !busca ||
-      t.descricao.toLowerCase().includes(busca.toLowerCase()) ||
-      t.categoria.toLowerCase().includes(busca.toLowerCase()) ||
-      (t.clienteOuFornecedor && t.clienteOuFornecedor.toLowerCase().includes(busca.toLowerCase()));
+  // Helpers de Tipo e Status
+  const isDespesa = (t: TransacaoFinanceira) => {
+    const tp = String(t.tipo || "").toLowerCase();
+    return tp === "despesa" || tp === "saida";
+  };
 
-    const matchTipo = filtroTipo === "todos" || t.tipo === filtroTipo;
-    const matchStatus = filtroStatus === "todos" || t.status === filtroStatus;
+  const isReceita = (t: TransacaoFinanceira) => {
+    const tp = String(t.tipo || "").toLowerCase();
+    return tp === "receita" || tp === "entrada";
+  };
 
-    return matchBusca && matchTipo && matchStatus;
-  });
+  const isPago = (t: TransacaoFinanceira) => {
+    const st = String(t.status || "").toLowerCase();
+    return st === "concluida" || st === "pago" || st === "paga";
+  };
+
+  // Filtro Unificado e Ordenação Decrescente por Data
+  const transacoesFiltradas = useMemo(() => {
+    const ordenadas = [...transacoes].sort((a, b) => {
+      const parseDate = (dStr: string) => {
+        if (!dStr) return 0;
+        const [dd, mm, yyyy] = dStr.split("/");
+        if (dd && mm && yyyy) return new Date(`${yyyy}-${mm}-${dd}`).getTime();
+        return new Date(dStr).getTime() || 0;
+      };
+      return parseDate(b.data) - parseDate(a.data);
+    });
+
+    return ordenadas.filter((t) => {
+      const matchBusca =
+        !busca.trim() ||
+        t.descricao.toLowerCase().includes(busca.toLowerCase()) ||
+        t.categoria.toLowerCase().includes(busca.toLowerCase()) ||
+        (t.clienteOuFornecedor && t.clienteOuFornecedor.toLowerCase().includes(busca.toLowerCase()));
+
+      const matchCategoria =
+        filtroCategoria === "todos" ||
+        t.categoria.toLowerCase().includes(filtroCategoria.toLowerCase()) ||
+        t.descricao.toLowerCase().includes(filtroCategoria.toLowerCase()) ||
+        (filtroCategoria === "Vendas" && isReceita(t));
+
+      const matchTipo =
+        filtroTipo === "todos" ||
+        (filtroTipo === "despesa" && isDespesa(t)) ||
+        (filtroTipo === "receita" && isReceita(t));
+
+      return matchBusca && matchCategoria && matchTipo;
+    });
+  }, [transacoes, busca, filtroCategoria, filtroTipo]);
+
+  // Lista com Limitação de 5 Registros Recentes (com expansão opcional)
+  const transacoesExibidas = useMemo(() => {
+    if (expandirHistoricoCompleto) return transacoesFiltradas;
+    return transacoesFiltradas.slice(0, 5);
+  }, [transacoesFiltradas, expandirHistoricoCompleto]);
 
   // Agregação de Encomendas (Combinando prop e Supabase sem duplicatas)
   const todasEncomendas = useMemo(() => {
@@ -441,15 +486,19 @@ export function FinanceiroTab({
     return soma;
   }, [todasEncomendas]);
 
-  const totalReceitasAvulsas = transacoesFiltradas
-    .filter((t) => t.tipo === "receita" && t.status === "concluida")
-    .reduce((acc, t) => acc + t.valor, 0);
+  const totalReceitasAvulsas = useMemo(() => {
+    return transacoes
+      .filter((t) => isReceita(t) && isPago(t))
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+  }, [transacoes]);
 
   const totalReceitas = totalReceitasAvulsas + totalReceitasEncomendas;
 
-  const totalDespesas = transacoesFiltradas
-    .filter((t) => t.tipo === "despesa" && t.status === "concluida")
-    .reduce((acc, t) => acc + t.valor, 0);
+  const totalDespesas = useMemo(() => {
+    return transacoes
+      .filter((t) => isDespesa(t) && isPago(t))
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+  }, [transacoes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -524,187 +573,8 @@ export function FinanceiroTab({
         </div>
       </div>
 
-      {/* Transactions Table & Mobile Cards */}
-      <div className="space-y-3 sm:hidden">
-        {transacoesFiltradas.length === 0 ? (
-          <Card className="p-6 text-center text-xs text-muted-foreground italic border-border shadow-sm">
-            Nenhuma transação encontrada.
-          </Card>
-        ) : (
-          transacoesFiltradas.map((t) => (
-            <Card key={t.id} className="p-4 border border-border/80 shadow-sm bg-card rounded-xl">
-              <div className="flex flex-col space-y-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-0.5 min-w-0 flex-1">
-                    <p className="font-extrabold text-sm text-foreground break-words">{t.descricao}</p>
-                    {t.clienteOuFornecedor && (
-                      <p className="text-xs text-muted-foreground break-words">{t.clienteOuFornecedor}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {t.data}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-normal">
-                        {t.categoria}
-                      </Badge>
-                      {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
-                        <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-bold">
-                          Stripe
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          Manual
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className={`font-black text-sm ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
-                      {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
-                    </p>
-                    <button
-                      onClick={() =>
-                        onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
-                      }
-                      className="mt-1 inline-flex items-center"
-                    >
-                      <Badge
-                        variant={t.status === "concluida" ? "default" : "secondary"}
-                        className={`text-[10px] ${
-                          t.status === "concluida"
-                            ? "bg-emerald-600 text-white"
-                            : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
-                        }`}
-                      >
-                        {t.status === "concluida" ? "Concluído" : "Pendente"}
-                      </Badge>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
-                  <span className="uppercase text-[10px] font-semibold text-muted-foreground">
-                    Forma: {t.metodoPagamento.replace("_", " ")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
-                        onRemoverTransacao(t.id);
-                      }
-                    }}
-                    className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
-
-      <Card className="hidden sm:block border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto select-none [scrollbar-width:thin] w-full max-w-full">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="whitespace-nowrap">Data</TableHead>
-                <TableHead className="whitespace-nowrap">Descrição</TableHead>
-                <TableHead className="whitespace-nowrap">Origem</TableHead>
-                <TableHead className="whitespace-nowrap">Categoria</TableHead>
-                <TableHead className="whitespace-nowrap">Método</TableHead>
-                <TableHead className="whitespace-nowrap">Valor</TableHead>
-                <TableHead className="whitespace-nowrap">Status</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transacoesFiltradas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground whitespace-nowrap">
-                    Nenhuma transação encontrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transacoesFiltradas.map((t) => (
-                  <TableRow key={t.id} className="hover:bg-muted/20">
-                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{t.data}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
-                      {t.clienteOuFornecedor && (
-                        <p className="text-[11px] text-muted-foreground">{t.clienteOuFornecedor}</p>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
-                        <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
-                          <CreditCard className="w-3 h-3 text-purple-600 dark:text-purple-400" /> Stripe (Auto)
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground border-border font-semibold flex items-center gap-1 w-fit">
-                          <Sparkles className="w-3 h-3 text-amber-500" /> Manual
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {t.categoria}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs uppercase font-medium text-muted-foreground whitespace-nowrap">
-                      {t.metodoPagamento.replace("_", " ")}
-                    </TableCell>
-                    <TableCell className={`font-bold text-sm whitespace-nowrap ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
-                      {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <button
-                        onClick={() =>
-                          onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
-                        }
-                        title="Clique para alternar status"
-                        className="cursor-pointer min-h-[36px] min-w-[36px] inline-flex items-center justify-center"
-                      >
-                        <Badge
-                          variant={t.status === "concluida" ? "default" : "secondary"}
-                          className={`text-[11px] ${
-                            t.status === "concluida"
-                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                              : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
-                          }`}
-                        >
-                          {t.status === "concluida" ? "Concluído" : "Pendente"}
-                        </Badge>
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
-                            onRemoverTransacao(t.id);
-                          }
-                        }}
-                        className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
-                        title="Excluir lançamento financeiro"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-
       {/* ========================================================================= */}
-      {/* BLOCO: GESTÃO DE DESPESAS & COMPRAS (MÉTRICAS E AGRUPAMENTO POR LOJA) */}
+      {/* 2º BLOCO: ANÁLISE DE DESPESAS & COMPRAS (SUBIDO PARA IMEDIATAMENTE ABAIXO DOS CARDS DE CAIXA) */}
       {/* ========================================================================= */}
       <div className="space-y-6 pt-6 border-t border-border/80">
         <div>
@@ -835,6 +705,271 @@ export function FinanceiroTab({
             )}
           </div>
         </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3º BLOCO: TABELA UNIFICADA DE LANÇAMENTOS E NOTINHAS (NA PARTE INFERIOR) */}
+      {/* ========================================================================= */}
+      <div className="space-y-4 pt-6 border-t border-border/80">
+        <div>
+          <h3 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+            Tabela Unificada de Lançamentos &amp; Notinhas <Receipt className="w-5 h-5 text-primary" />
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Consolidação de todas as notinhas escaneadas e lançamentos manuais de caixa.
+          </p>
+        </div>
+
+        {/* CABEÇALHO COM CAMPO DE BUSCA E FILTRO DE CATEGORIA/TIPO */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Pesquisar por fornecedor, mercado, descrição ou cliente..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="pl-9 h-9 text-xs bg-background"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
+              <SelectTrigger className="w-full sm:w-52 h-9 text-xs bg-background">
+                <SelectValue placeholder="Filtrar por Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as Categorias</SelectItem>
+                <SelectItem value="Insumos">Insumos &amp; Ingredientes</SelectItem>
+                <SelectItem value="Energia">Energia / Luz</SelectItem>
+                <SelectItem value="Água">Água</SelectItem>
+                <SelectItem value="Internet">Internet / Telefone</SelectItem>
+                <SelectItem value="Aluguel">Aluguel</SelectItem>
+                <SelectItem value="Impostos">Impostos &amp; Taxas</SelectItem>
+                <SelectItem value="Utensílios">Utensílios &amp; Materiais</SelectItem>
+                <SelectItem value="Consumo">Consumo Pessoal</SelectItem>
+                <SelectItem value="Boleto">Boletos &amp; Faturas</SelectItem>
+                <SelectItem value="Vendas">Vendas / Entradas</SelectItem>
+                <SelectItem value="Outras">Outras Despesas</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filtroTipo} onValueChange={(v: any) => setFiltroTipo(v)}>
+              <SelectTrigger className="w-full sm:w-36 h-9 text-xs bg-background">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos Tipos</SelectItem>
+                <SelectItem value="receita">Receitas (+)</SelectItem>
+                <SelectItem value="despesa">Despesas (-)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Transactions Table & Mobile Cards */}
+        <div className="space-y-3 sm:hidden">
+          {transacoesExibidas.length === 0 ? (
+            <Card className="p-6 text-center text-xs text-muted-foreground italic border-border shadow-sm">
+              Nenhum lançamento ou notinha encontrada com os filtros atuais.
+            </Card>
+          ) : (
+            transacoesExibidas.map((t) => (
+              <Card key={t.id} className="p-4 border border-border/80 shadow-sm bg-card rounded-xl">
+                <div className="flex flex-col space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <p className="font-extrabold text-sm text-foreground break-words">{t.descricao}</p>
+                      {t.clienteOuFornecedor && (
+                        <p className="text-xs text-muted-foreground break-words">{t.clienteOuFornecedor}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {t.data}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] font-normal">
+                          {t.categoria}
+                        </Badge>
+                        {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
+                          <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-bold">
+                            Stripe
+                          </Badge>
+                        ) : t.origem?.includes("Scanner") ? (
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">
+                            Scanner AI
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            Manual
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className={`font-black text-sm ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
+                        {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
+                      </p>
+                      <button
+                        onClick={() =>
+                          onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
+                        }
+                        className="mt-1 inline-flex items-center"
+                      >
+                        <Badge
+                          variant={t.status === "concluida" ? "default" : "secondary"}
+                          className={`text-[10px] ${
+                            t.status === "concluida"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                          }`}
+                        >
+                          {t.status === "concluida" ? "Concluído" : "Pendente"}
+                        </Badge>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                    <span className="uppercase text-[10px] font-semibold text-muted-foreground">
+                      Forma: {t.metodoPagamento.replace("_", " ")}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+                          onRemoverTransacao(t.id);
+                        }
+                      }}
+                      className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        <Card className="hidden sm:block border-border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto select-none [scrollbar-width:thin] w-full max-w-full">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="whitespace-nowrap">Data</TableHead>
+                  <TableHead className="whitespace-nowrap">Descrição / Fornecedor</TableHead>
+                  <TableHead className="whitespace-nowrap">Origem</TableHead>
+                  <TableHead className="whitespace-nowrap">Categoria</TableHead>
+                  <TableHead className="whitespace-nowrap">Método</TableHead>
+                  <TableHead className="whitespace-nowrap">Valor</TableHead>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transacoesExibidas.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground whitespace-nowrap">
+                      Nenhum lançamento ou notinha encontrada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  transacoesExibidas.map((t) => (
+                    <TableRow key={t.id} className="hover:bg-muted/20">
+                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{t.data}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
+                        {t.clienteOuFornecedor && (
+                          <p className="text-[11px] text-muted-foreground">{t.clienteOuFornecedor}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
+                          <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
+                            <CreditCard className="w-3 h-3 text-purple-600 dark:text-purple-400" /> Stripe (Auto)
+                          </Badge>
+                        ) : t.origem?.includes("Scanner") ? (
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-extrabold flex items-center gap-1 w-fit">
+                            <Receipt className="w-3 h-3 text-amber-600" /> Scanner AI
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground border-border font-semibold flex items-center gap-1 w-fit">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Manual
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {t.categoria}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs uppercase font-medium text-muted-foreground whitespace-nowrap">
+                        {t.metodoPagamento.replace("_", " ")}
+                      </TableCell>
+                      <TableCell className={`font-bold text-sm whitespace-nowrap ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
+                        {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <button
+                          onClick={() =>
+                            onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
+                          }
+                          title="Clique para alternar status"
+                          className="cursor-pointer min-h-[36px] min-w-[36px] inline-flex items-center justify-center"
+                        >
+                          <Badge
+                            variant={t.status === "concluida" ? "default" : "secondary"}
+                            className={`text-[11px] ${
+                              t.status === "concluida"
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                            }`}
+                          >
+                            {t.status === "concluida" ? "Concluído" : "Pendente"}
+                          </Badge>
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+                              onRemoverTransacao(t.id);
+                            }
+                          }}
+                          className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                          title="Excluir lançamento financeiro"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        {/* BOTÃO EXPANDIR / VER HISTÓRICO COMPLETO */}
+        {transacoesFiltradas.length > 5 && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExpandirHistoricoCompleto(!expandirHistoricoCompleto)}
+              className="text-xs font-bold border-primary/40 text-primary hover:bg-primary/10 gap-2"
+            >
+              {expandirHistoricoCompleto ? (
+                <>Recolher (mostrar apenas os 5 mais recentes)</>
+              ) : (
+                <>Ver histórico completo ({transacoesFiltradas.length} lançamentos)</>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Modal Novo Lançamento */}
