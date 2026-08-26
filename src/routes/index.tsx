@@ -1252,9 +1252,10 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
   // Handlers de Transações Financeiras
   const adicionarTransacao = async (nova: Omit<TransacaoFinanceira, "id">) => {
+    const localId = crypto.randomUUID();
     const item: TransacaoFinanceira = {
       ...nova,
-      id: `tr_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id: localId,
       estabelecimentoCodigo: activeCode,
       origem: nova.origem || "Manual",
     };
@@ -1277,8 +1278,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
     } catch {}
 
+    // REMOÇÃO DA CHAVE 'id' DO PAYLOAD: permite que o PostgreSQL no Supabase gere o UUID automático via gen_random_uuid()
     const payload: any = {
-      id: item.id,
       estabelecimento_codigo: activeCode,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
       descricao: item.descricao,
@@ -1297,7 +1298,17 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     }
 
     try {
-      let { error } = await supabase.from("transacoes_financeiras").insert([payload]);
+      let { data: insertedData, error } = await supabase
+        .from("transacoes_financeiras")
+        .insert([payload])
+        .select();
+
+      if (insertedData && insertedData.length > 0 && insertedData[0].id) {
+        const serverUuid = insertedData[0].id;
+        setTransacoes((prev) =>
+          prev.map((t) => (t.id === localId ? { ...t, id: serverUuid } : t))
+        );
+      }
 
       if (error) {
         console.warn("[Supabase Warning] Falha na inserção padrão de transação:", error.message);
@@ -1307,14 +1318,19 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
           await supabase
             .from("estabelecimentos")
             .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
-          let retryRes = await supabase.from("transacoes_financeiras").insert([payload]);
+          let retryRes = await supabase.from("transacoes_financeiras").insert([payload]).select();
           error = retryRes.error;
+          if (retryRes.data && retryRes.data.length > 0 && retryRes.data[0].id) {
+            const serverUuid = retryRes.data[0].id;
+            setTransacoes((prev) =>
+              prev.map((t) => (t.id === localId ? { ...t, id: serverUuid } : t))
+            );
+          }
         }
 
         if (error) {
-          // Fallback minimalista sem campos opcionais para esquemas legados
+          // Fallback minimalista sem campos opcionais nem id para esquemas legados
           const payloadMinimal = {
-            id: item.id,
             estabelecimento_codigo: activeCode,
             user_id: getValidUuid(user?.id, profile?.ownerUserId),
             descricao: item.descricao,
@@ -1324,9 +1340,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
             status: item.status,
             data: item.data,
           };
-          const resMin = await supabase.from("transacoes_financeiras").insert([payloadMinimal]);
+          const resMin = await supabase.from("transacoes_financeiras").insert([payloadMinimal]).select();
           if (resMin.error) {
             console.warn("Aviso no fallback minimalista de transação:", resMin.error.message);
+          } else if (resMin.data && resMin.data.length > 0 && resMin.data[0].id) {
+            const serverUuid = resMin.data[0].id;
+            setTransacoes((prev) =>
+              prev.map((t) => (t.id === localId ? { ...t, id: serverUuid } : t))
+            );
           }
         }
       }

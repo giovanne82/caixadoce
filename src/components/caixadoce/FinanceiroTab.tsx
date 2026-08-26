@@ -523,9 +523,90 @@ export function FinanceiroTab({
         </div>
       </div>
 
-      {/* Transactions Table */}
-      <Card className="border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto select-none [scrollbar-width:thin]">
+      {/* Transactions Table & Mobile Cards */}
+      <div className="space-y-3 sm:hidden">
+        {transacoesFiltradas.length === 0 ? (
+          <Card className="p-6 text-center text-xs text-muted-foreground italic border-border shadow-sm">
+            Nenhuma transação encontrada.
+          </Card>
+        ) : (
+          transacoesFiltradas.map((t) => (
+            <Card key={t.id} className="p-4 border border-border/80 shadow-sm bg-card rounded-xl">
+              <div className="flex flex-col space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-extrabold text-sm text-foreground break-words">{t.descricao}</p>
+                    {t.clienteOuFornecedor && (
+                      <p className="text-xs text-muted-foreground break-words">{t.clienteOuFornecedor}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {t.data}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        {t.categoria}
+                      </Badge>
+                      {t.origem === "Stripe" || t.categoria.includes("Stripe") || t.descricao.includes("Stripe") ? (
+                        <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-bold">
+                          Stripe
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Manual
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className={`font-black text-sm ${t.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
+                      {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
+                    </p>
+                    <button
+                      onClick={() =>
+                        onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
+                      }
+                      className="mt-1 inline-flex items-center"
+                    >
+                      <Badge
+                        variant={t.status === "concluida" ? "default" : "secondary"}
+                        className={`text-[10px] ${
+                          t.status === "concluida"
+                            ? "bg-emerald-600 text-white"
+                            : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                        }`}
+                      >
+                        {t.status === "concluida" ? "Concluído" : "Pendente"}
+                      </Badge>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                  <span className="uppercase text-[10px] font-semibold text-muted-foreground">
+                    Forma: {t.metodoPagamento.replace("_", " ")}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(`Deseja realmente excluir o lançamento "${t.descricao}" (${formatarMoeda(t.valor)})?`)) {
+                        onRemoverTransacao(t.id);
+                      }
+                    }}
+                    className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      <Card className="hidden sm:block border-border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto select-none [scrollbar-width:thin] w-full max-w-full">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
