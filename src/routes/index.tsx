@@ -1142,6 +1142,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     }
   };
 
+  const handleSaveSuccessNotinha = useCallback(() => {
+    fetchDespesas();
+    fetchTransacoes();
+  }, [fetchDespesas, fetchTransacoes]);
+
   const excluirDespesa = async (id: string) => {
     const notaTarget = despesas.find((d) => d.id === id);
 
@@ -1598,10 +1603,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                 encomendas={encomendas}
                 listasCompras={listasCompras}
                 onSalvarDespesa={salvarDespesa}
-                onSaveSuccess={() => {
-                  fetchDespesas();
-                  fetchTransacoes();
-                }}
+                onSaveSuccess={handleSaveSuccessNotinha}
                 onSalvarTransacaoFinanceira={adicionarTransacao}
                 onEditarDespesa={editarDespesa}
                 onExcluirDespesa={excluirDespesa}

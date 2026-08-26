@@ -737,19 +737,18 @@ Responda apenas com o JSON puro sem formatação markdown.`;
 
           let lastError: any = null;
           const modelsToTry = ["gemini-3.6-flash"];
-          const MAX_RETRIES = 5;
+          const MAX_ROUNDS = 5;
 
-          for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
-            const keyInfo = apiKeys[keyIdx];
-            let keySuccess = false;
+          for (let round = 1; round <= MAX_ROUNDS; round++) {
+            for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
+              const keyInfo = apiKeys[keyIdx];
 
-            for (const modelName of modelsToTry) {
-              const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
+              for (const modelName of modelsToTry) {
+                const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
 
-              for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                   console.log(
-                    `[Server Gemini OCR] Tentativa ${attempt}/${MAX_RETRIES} | Chave: ${keyInfo.label} | Modelo: ${modelName}...`
+                    `[Server Gemini OCR] Rodada ${round}/${MAX_ROUNDS} | Testando ${keyInfo.label} (${modelName})...`
                   );
 
                   const resGemini = await fetch(urlGemini, {
@@ -761,32 +760,19 @@ Responda apenas com o JSON puro sem formatação markdown.`;
                   if (!resGemini.ok) {
                     const errText = await resGemini.text();
                     console.error(
-                      `[Server Gemini OCR Log] Tentativa ${attempt}/${MAX_RETRIES} | Chave ${keyInfo.label} | Status: ${resGemini.status} | Detalhe:`,
+                      `[Server Gemini OCR Log] Rodada ${round}/${MAX_ROUNDS} | ${keyInfo.label} | Status: ${resGemini.status} | Detalhe:`,
                       errText
                     );
 
                     lastError = new Error(
-                      `Chave ${keyInfo.label} (${modelName}) indisponível (HTTP ${resGemini.status}).`
+                      `HTTP ${resGemini.status}: ${keyInfo.label} (${modelName})`
                     );
 
-                    // Tratamento de Exponential Backoff para erro 429 (Too Many Requests / Quota Exhausted)
-                    if (resGemini.status === 429) {
-                      if (attempt < MAX_RETRIES) {
-                        const delayMs = Math.pow(2, attempt) * 1000; // 2000ms, 4000ms, 8000ms, 16000ms
-                        console.warn(
-                          `[Exponential Backoff] Cota de requisições excedida (HTTP 429) na tentativa ${attempt}/${MAX_RETRIES}. Aguardando ${delayMs}ms antes de tentar novamente...`
-                        );
-                        await new Promise((resolve) => setTimeout(resolve, delayMs));
-                        continue;
-                      } else if (keyIdx < apiKeys.length - 1) {
-                        console.warn(
-                          `[Server Gemini Fallback] Cota esgotada após ${MAX_RETRIES} tentativas na chave ${keyInfo.label}. Alternando para a chave de contingência...`
-                        );
-                        break;
-                      }
-                    }
-
-                    if (resGemini.status === 403 || resGemini.status === 401) {
+                    // Se for erro 429 (Rate Limit / Quota) ou 403/401, troca de chave imediatamente nesta mesma rodada!
+                    if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
+                      console.warn(
+                        `[Server Gemini Key Switch] HTTP ${resGemini.status} na ${keyInfo.label}. Trocando de chave imediatamente...`
+                      );
                       break;
                     }
 
@@ -798,25 +784,25 @@ Responda apenas com o JSON puro sem formatação markdown.`;
                   const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
                   const parsedJSON = JSON.parse(jsonClean);
 
-                  keySuccess = true;
                   return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
                     status: 200,
                     headers: { "content-type": "application/json" },
                   });
                 } catch (err: any) {
-                  console.error(`[Server Gemini Exception] Tentativa ${attempt}/${MAX_RETRIES} | Chave ${keyInfo.label}:`, err?.message || err);
+                  console.error(`[Server Gemini Exception] Rodada ${round}/${MAX_ROUNDS} | ${keyInfo.label}:`, err?.message || err);
                   lastError = err;
-                  if (attempt < MAX_RETRIES) {
-                    const delayMs = Math.pow(2, attempt) * 1000;
-                    await new Promise((resolve) => setTimeout(resolve, delayMs));
-                  }
                 }
               }
-
-              if (keySuccess) break;
             }
 
-            if (keySuccess) break;
+            // Se todas as chaves falharam na rodada atual com 429, aguarda Exponential Backoff antes de re-tentar todas as chaves novamente
+            if (round < MAX_ROUNDS) {
+              const delayMs = Math.pow(2, round) * 1000; // 2s, 4s, 8s, 16s
+              console.warn(
+                `[Exponential Backoff] Cota/Instabilidade em todas as chaves na Rodada ${round}/${MAX_ROUNDS}. Aguardando ${delayMs}ms para iniciar nova rodada...`
+              );
+              await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
           }
 
           const is429 = lastError?.message?.includes("429") || lastError?.message?.includes("RATE_LIMIT");
