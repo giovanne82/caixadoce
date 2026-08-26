@@ -8,6 +8,7 @@ type ServerEntry = {
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
+let globalKeyRotationCounter = 0;
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
@@ -637,25 +638,39 @@ export default {
             return (envObj[key] || procObj[key] || "").trim();
           };
 
-          const mainKey =
-            getEnv("VITE_GEMINI_API_KEY") ||
-            getEnv("GEMINI_API_KEY") ||
-            getEnv("VITE_GEMINI_KEY") ||
-            "";
+          const rawKeys: string[] = [];
 
-          const fallbackKey =
-            getEnv("GEMINI_API_KEY_FALLBACK") ||
-            getEnv("VITE_GEMINI_API_KEY_FALLBACK") ||
-            getEnv("GEMINI_FALLBACK_KEY") ||
-            "";
+          // 1. Chaves de rotação explícitas
+          if (getEnv("GEMINI_API_KEY_1")) rawKeys.push(getEnv("GEMINI_API_KEY_1"));
+          if (getEnv("GEMINI_API_KEY_2")) rawKeys.push(getEnv("GEMINI_API_KEY_2"));
+          if (getEnv("VITE_GEMINI_API_KEY_1")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_1"));
+          if (getEnv("VITE_GEMINI_API_KEY_2")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_2"));
 
-          const apiKeys = [];
-          if (mainKey) {
-            apiKeys.push({ key: mainKey, label: "Principal (VITE_GEMINI_API_KEY)" });
+          // 2. Chave Principal e Fallback padrão
+          if (getEnv("VITE_GEMINI_API_KEY")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY"));
+          if (getEnv("GEMINI_API_KEY")) rawKeys.push(getEnv("GEMINI_API_KEY"));
+          if (getEnv("GEMINI_API_KEY_FALLBACK")) rawKeys.push(getEnv("GEMINI_API_KEY_FALLBACK"));
+          if (getEnv("VITE_GEMINI_API_KEY_FALLBACK")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_FALLBACK"));
+
+          // 3. Lista de chaves separada por vírgula em GEMINI_API_KEYS
+          const commaList = getEnv("GEMINI_API_KEYS");
+          if (commaList) {
+            commaList.split(",").forEach((k) => rawKeys.push(k.trim()));
           }
-          if (fallbackKey && fallbackKey !== mainKey) {
-            apiKeys.push({ key: fallbackKey, label: "Contingência (GEMINI_API_KEY_FALLBACK)" });
-          }
+
+          // Remove duplicatas e strings vazias
+          const uniqueKeys = Array.from(new Set(rawKeys.filter(Boolean)));
+          const apiKeysPool = uniqueKeys.map((k, idx) => ({
+            key: k,
+            label: `Chave ${idx + 1} (${k.substring(0, 6)}...)`,
+          }));
+
+          // Rotação Round-Robin entre requisições concorrentes
+          const startIndex = (globalKeyRotationCounter++) % apiKeysPool.length;
+          const apiKeys = [
+            ...apiKeysPool.slice(startIndex),
+            ...apiKeysPool.slice(0, startIndex),
+          ];
 
           const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
 
