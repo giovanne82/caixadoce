@@ -1265,25 +1265,73 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
     } catch {}
 
+    // 1. Assegura que o estabelecimento mestre existe na tabela estabelecimentos
+    let storeUuid: string | null = null;
     try {
-      await supabase.from("transacoes_financeiras").insert([
-        {
-          id: item.id,
-          estabelecimento_codigo: activeCode,
-          user_id: getValidUuid(user?.id, profile?.ownerUserId),
-          descricao: item.descricao,
-          valor: item.valor,
-          tipo: item.tipo,
-          categoria: item.categoria,
-          metodo_pagamento: item.metodoPagamento,
-          status: item.status,
-          cliente_ou_fornecedor: item.clienteOuFornecedor,
-          data: item.data,
-          origem: item.origem,
-        },
-      ]);
+      const { data: estData } = await supabase
+        .from("estabelecimentos")
+        .select("id, codigo")
+        .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`);
+      if (estData && estData.length > 0) {
+        storeUuid = estData[0].id;
+      }
+    } catch {}
+
+    const payload: any = {
+      id: item.id,
+      estabelecimento_codigo: activeCode,
+      user_id: getValidUuid(user?.id, profile?.ownerUserId),
+      descricao: item.descricao,
+      valor: Number(item.valor) || 0,
+      tipo: item.tipo,
+      categoria: item.categoria,
+      metodo_pagamento: item.metodoPagamento,
+      status: item.status,
+      cliente_ou_fornecedor: item.clienteOuFornecedor || "",
+      data: item.data,
+      origem: item.origem || "Manual",
+    };
+
+    if (storeUuid) {
+      payload.estabelecimento_id = storeUuid;
+    }
+
+    try {
+      let { error } = await supabase.from("transacoes_financeiras").insert([payload]);
+
+      if (error) {
+        console.warn("[Supabase Warning] Falha na inserção padrão de transação:", error.message);
+
+        if (error.code === "23503" || error.message?.includes("foreign key")) {
+          // Assegura a inserção da loja mestre e tenta novamente
+          await supabase
+            .from("estabelecimentos")
+            .upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
+          let retryRes = await supabase.from("transacoes_financeiras").insert([payload]);
+          error = retryRes.error;
+        }
+
+        if (error) {
+          // Fallback minimalista sem campos opcionais para esquemas legados
+          const payloadMinimal = {
+            id: item.id,
+            estabelecimento_codigo: activeCode,
+            user_id: getValidUuid(user?.id, profile?.ownerUserId),
+            descricao: item.descricao,
+            valor: Number(item.valor) || 0,
+            tipo: item.tipo,
+            categoria: item.categoria,
+            status: item.status,
+            data: item.data,
+          };
+          const resMin = await supabase.from("transacoes_financeiras").insert([payloadMinimal]);
+          if (resMin.error) {
+            console.warn("Aviso no fallback minimalista de transação:", resMin.error.message);
+          }
+        }
+      }
     } catch (err) {
-      console.warn("Aviso ao salvar no Supabase:", err);
+      console.warn("Aviso ao salvar no Supabase transações:", err);
     }
   };
 

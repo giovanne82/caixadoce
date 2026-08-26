@@ -65,6 +65,8 @@ import {
 } from "lucide-react";
 import {
   formatarMoeda,
+  aplicarMascaraMoedaInput,
+  converterMoedaInputParaNumero,
   CATEGORIAS_PADRAO,
   type TransacaoFinanceira,
   type TransacaoTipo,
@@ -312,6 +314,7 @@ export function FinanceiroTab({
   // Form State Lançamento
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
+  const [dataLancamento, setDataLancamento] = useState(() => new Date().toISOString().split("T")[0]);
   const [tipo, setTipo] = useState<TransacaoTipo>("receita");
   const [categoria, setCategoria] = useState(CATEGORIAS_PADRAO.receitas[0]);
   const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>("pix");
@@ -450,11 +453,14 @@ export function FinanceiroTab({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const valNum = parseFloat(valor.replace(",", "."));
+    const valNum = converterMoedaInputParaNumero(valor);
     if (!descricao || isNaN(valNum) || valNum <= 0) {
-      toast.error("Preencha descrição e um valor válido.");
+      toast.error("Preencha a descrição e um valor válido maior que zero.");
       return;
     }
+
+    const [yyyy, mm, dd] = dataLancamento.split("-");
+    const dataFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : new Date().toLocaleDateString("pt-BR");
 
     setSalvando(true);
     try {
@@ -463,7 +469,7 @@ export function FinanceiroTab({
         valor: valNum,
         tipo,
         categoria,
-        data: new Date().toLocaleDateString("pt-BR"),
+        data: dataFormatada,
         metodoPagamento,
         status,
         clienteOuFornecedor,
@@ -474,6 +480,7 @@ export function FinanceiroTab({
       setDescricao("");
       setValor("");
       setClienteOuFornecedor("");
+      setDataLancamento(new Date().toISOString().split("T")[0]);
       toast.success("Lançamento adicionado com sucesso!");
     } finally {
       setSalvando(false);
@@ -759,7 +766,7 @@ export function FinanceiroTab({
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="t-tipo">Tipo</Label>
                 <Select
@@ -780,14 +787,27 @@ export function FinanceiroTab({
               </div>
 
               <div className="space-y-1">
+                <Label htmlFor="t-data">Data</Label>
+                <Input
+                  id="t-data"
+                  type="date"
+                  value={dataLancamento}
+                  onChange={(e) => setDataLancamento(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
                 <Label htmlFor="t-valor">Valor (R$)</Label>
                 <Input
                   id="t-valor"
                   type="text"
-                  placeholder="0,00"
+                  inputMode="decimal"
+                  placeholder="R$ 0,00"
                   value={valor}
-                  onChange={(e) => setValor(e.target.value)}
-                  className="h-9 text-xs font-bold"
+                  onChange={(e) => setValor(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-9 text-xs font-bold font-mono"
                   required
                 />
               </div>
