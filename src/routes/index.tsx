@@ -1033,6 +1033,35 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       estabelecimentoCodigo: activeCode,
     };
 
+    // 1. Validação Anti-Duplicidade Bloqueante (Evita Race Condition e Inserção Duplicada)
+    if (item.numeroNota && item.numeroNota.trim()) {
+      const { data: dupCheck } = await supabase
+        .from("despesas")
+        .select("id, numero_nota")
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("numero_nota", item.numeroNota.trim())
+        .limit(1);
+
+      if (dupCheck && dupCheck.length > 0) {
+        toast.error(`Documento Nº ${item.numeroNota} já foi capturado anteriormente neste estabelecimento.`);
+        return; // ABORTA IMEDIATAMENTE e impede a chamada de insert!
+      }
+    } else if (item.fornecedorNome && item.valorTotal > 0 && item.dataCompra) {
+      const { data: dupCheck } = await supabase
+        .from("despesas")
+        .select("id, fornecedor_nome, valor_total, data_compra")
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("fornecedor_nome", item.fornecedorNome)
+        .eq("valor_total", item.valorTotal)
+        .eq("data_compra", item.dataCompra)
+        .limit(1);
+
+      if (dupCheck && dupCheck.length > 0) {
+        toast.error(`Comprovante de ${item.fornecedorNome} no valor de R$ ${item.valorTotal.toFixed(2)} já foi registrado nesta data.`);
+        return; // ABORTA IMEDIATAMENTE e impede a chamada de insert!
+      }
+    }
+
     const payload = {
       id: item.id,
       estabelecimento_codigo: activeCode,

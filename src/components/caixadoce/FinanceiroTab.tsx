@@ -614,6 +614,37 @@ export function FinanceiroTab({
     }
   };
 
+  const handleAtualizarMetodoPagamento = async (itemId: string, novoMetodo: MetodoPagamento) => {
+    const isDespesa = despesas.some((d) => d.id === itemId);
+
+    if (itemDetalhesSelecionado && itemDetalhesSelecionado.id === itemId) {
+      setItemDetalhesSelecionado((prev) => (prev ? { ...prev, metodoPagamento: novoMetodo } : null));
+    }
+
+    try {
+      if (isDespesa) {
+        const { error } = await supabase
+          .from("despesas")
+          .update({ metodo_pagamento: novoMetodo })
+          .eq("id", itemId);
+        if (error) throw error;
+        if (onEditarDespesa) {
+          await onEditarDespesa(itemId, { metodoPagamento: novoMetodo });
+        }
+      } else {
+        const { error } = await supabase
+          .from("transacoes_financeiras")
+          .update({ metodo_pagamento: novoMetodo, forma_pagamento: novoMetodo })
+          .eq("id", itemId);
+        if (error) throw error;
+      }
+      toast.success("Método de pagamento atualizado no banco de dados com sucesso!");
+    } catch (err: any) {
+      console.error("[MetodoPagamento Update Erro]:", err?.message || err);
+      toast.error("Erro ao atualizar método de pagamento no banco de dados.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Actions */}
@@ -1345,7 +1376,21 @@ export function FinanceiroTab({
 
                   <div>
                     <Label className="text-xs text-muted-foreground uppercase">Método de Pagamento</Label>
-                    <p className="text-sm font-semibold text-foreground uppercase">{itemDetalhesSelecionado.metodoPagamento.replace("_", " ")}</p>
+                    <Select
+                      value={itemDetalhesSelecionado.metodoPagamento || "pix"}
+                      onValueChange={(val: MetodoPagamento) => handleAtualizarMetodoPagamento(itemDetalhesSelecionado.id, val)}
+                    >
+                      <SelectTrigger className="h-8 text-xs font-semibold mt-1">
+                        <SelectValue placeholder="Selecione o método" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                        <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                        <SelectItem value="boleto">Boleto</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
