@@ -699,13 +699,13 @@ export function OrdersView({
     setInsumosTags((prev) => prev.filter((t) => t.id !== tagId));
   };
 
-  // Abrir Modal de Criação
-  const handleAbrirNovaEncomenda = (dataPredefinida?: string) => {
+  // Reset Limpo e Completo de Todos os Estados do Formulário de Encomenda (Evita State Leak)
+  const resetFormularioEncomenda = () => {
     setEditingId(null);
     setClienteId(undefined);
     setClienteNome("");
     setClienteWhatsapp("");
-    setDataEntrega(dataPredefinida || new Date().toISOString().split("T")[0]);
+    setDataEntrega(new Date().toISOString().split("T")[0]);
     setHorarioEntrega("14:00");
     setItensTags([]);
     setValorTotalFormatado("");
@@ -727,6 +727,14 @@ export function OrdersView({
     setDetalhesTopoBolo("");
     setTemVela(false);
     setDetalhesVela("");
+  };
+
+  // Abrir Modal de Criação (Garante Reset de Estado Completo)
+  const handleAbrirNovaEncomenda = (dataPredefinida?: string) => {
+    resetFormularioEncomenda();
+    if (dataPredefinida) {
+      setDataEntrega(dataPredefinida);
+    }
     setModalEncomendaOpen(true);
   };
 
@@ -851,6 +859,7 @@ export function OrdersView({
         onCriarClienteRapido(clienteNome, clienteWhatsapp, enderecoEntrega);
       }
 
+      resetFormularioEncomenda();
       setModalEncomendaOpen(false);
     } catch {
       toast.error("Erro ao salvar encomenda.");
@@ -1140,16 +1149,7 @@ export function OrdersView({
           </Button>
 
           <Button
-            onClick={() => {
-              setEditingId(null);
-              setClienteNome("");
-              setClienteWhatsapp("");
-              setItensTags([]);
-              setInsumosTags([]);
-              setValorTotalFormatado("");
-              setValorEntradaFormatado("");
-              setModalEncomendaOpen(true);
-            }}
+            onClick={() => handleAbrirNovaEncomenda()}
             size="sm"
             className="font-bold shadow-md text-xs"
           >
@@ -2219,7 +2219,15 @@ export function OrdersView({
       {/* ========================================================================= */}
       {/* 6. MODAL: CADASTRAR OU EDITAR ENCOMENDA */}
       {/* ========================================================================= */}
-      <Dialog open={modalEncomendaOpen} onOpenChange={setModalEncomendaOpen}>
+      <Dialog
+        open={modalEncomendaOpen}
+        onOpenChange={(open) => {
+          setModalEncomendaOpen(open);
+          if (!open) {
+            resetFormularioEncomenda();
+          }
+        }}
+      >
         <DialogContent className="w-[95vw] max-w-2xl sm:w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-3 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-base sm:text-lg">
