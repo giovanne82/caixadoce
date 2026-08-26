@@ -1,4 +1,5 @@
 import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
+import { sanitizarTexto } from "@/lib/security";
 
 export type ScanMode = "produtos" | "despesa";
 
@@ -373,15 +374,15 @@ export async function processarNotinhaComOCR(
     const valTotal = Number(parsedJSON.valor_total || parsedJSON.total_amount) || 0;
     return {
       scanMode: "despesa",
-      fornecedorNome: parsedJSON.fornecedor || parsedJSON.establishment || "Emissor Não Identificado",
+      fornecedorNome: sanitizarTexto(parsedJSON.fornecedor || parsedJSON.establishment || "Emissor Não Identificado"),
       fornecedorEndereco: "Conta de Consumo / Fatura",
-      numeroNota: parsedJSON.sale_number ? String(parsedJSON.sale_number) : "",
+      numeroNota: parsedJSON.sale_number ? sanitizarTexto(String(parsedJSON.sale_number)) : "",
       numeroPedido: String(Math.floor(1000 + Math.random() * 9000)),
       dataCompra: parsedJSON.data_emissao || parsedJSON.date || new Date().toISOString().split("T")[0],
       horaCompra: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       itens: [],
       valorTotalNota: valTotal,
-      categoriaSugerida: parsedJSON.categoria_sugerida || parsedJSON.category || "Outras Despesas",
+      categoriaSugerida: sanitizarTexto(parsedJSON.categoria_sugerida || (parsedJSON as any).category || "Outras Despesas"),
     };
   }
 
@@ -394,7 +395,7 @@ export async function processarNotinhaComOCR(
       ? Number(it.unit_price_calculated)
       : qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
     const nomeOriginal = String(it.name || "Insumo").trim();
-    const nomePadronizado = it.standard_name ? String(it.standard_name).trim() : nomeOriginal;
+    const nomePadronizado = sanitizarTexto(it.standard_name ? String(it.standard_name).trim() : nomeOriginal);
 
     return {
       id: crypto.randomUUID(),
@@ -414,9 +415,9 @@ export async function processarNotinhaComOCR(
 
   return {
     scanMode: "produtos",
-    fornecedorNome: parsedJSON.establishment || "Estabelecimento Não Identificado",
+    fornecedorNome: sanitizarTexto(parsedJSON.establishment || "Estabelecimento Não Identificado"),
     fornecedorEndereco: "Endereço extraído do comprovante",
-    numeroNota: parsedJSON.sale_number ? String(parsedJSON.sale_number) : "",
+    numeroNota: parsedJSON.sale_number ? sanitizarTexto(String(parsedJSON.sale_number)) : "",
     numeroPedido: String(Math.floor(1000 + Math.random() * 9000)),
     dataCompra: parsedJSON.date || new Date().toISOString().split("T")[0],
     horaCompra: parsedJSON.time ? String(parsedJSON.time) : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
