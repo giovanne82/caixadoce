@@ -162,7 +162,7 @@ export function ExpensesScannerView({
     setScanStepMessage("⚡ Otimizando imagem e enviando para o Gemini Flash AI...");
 
     try {
-      const res = await processarNotinhaComOCR(file, (msg) => {
+      const res = await processarNotinhaComOCR(file, "despesa", (msg) => {
         setScanStepMessage(msg);
       });
 
