@@ -84,8 +84,7 @@ export function FichaTecnicaModal({
   const [custosOperacionaisPerc, setCustosOperacionaisPerc] = useState<number>(15);
   const [margemLucroPerc, setMargemLucroPerc] = useState<number>(100);
 
-  // Preço de Venda Personalizado & Escolha de Opção
-  const [opcaoPrecoUsar, setOpcaoPrecoUsar] = useState<"sugerido" | "personalizado">("sugerido");
+  // Preço de Venda Final
   const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
 
   // Helper para leitura limpa de números em campos de texto livre (aceita "100", "0,5", "0.5")
@@ -321,8 +320,8 @@ export function FichaTecnicaModal({
 
   // Preço Final Escolhido para Salvar no Cardápio
   const precoFinalSalvar = useMemo(() => {
-    return opcaoPrecoUsar === "sugerido" ? precoSugeridoEfetivo : precoPersonalizadoNum;
-  }, [opcaoPrecoUsar, precoSugeridoEfetivo, precoPersonalizadoNum]);
+    return precoPersonalizadoNum;
+  }, [precoPersonalizadoNum]);
 
   // Aplicar Preço de Venda Selecionado ao Produto do Cardápio
   const handleSalvarEAplicarPreco = async () => {
@@ -887,107 +886,49 @@ export function FichaTecnicaModal({
             </CardContent>
           </Card>
 
-          {/* SEÇÃO: PREÇO PERSONALIZADO E COMPARATIVO DE LUCRO */}
-          <Card className="border-purple-500/30 bg-purple-500/5 shadow-xs">
+          {/* SEÇÃO: PREÇO E CÁLCULO DE LUCRO */}
+          <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-xs">
             <CardContent className="p-3.5 sm:p-4 space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-purple-600" /> Escolha de Preço &amp; Lucro
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Escolha entre o preço sugerido ou digite seu valor personalizado.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1 bg-background p-1 rounded-xl border border-border w-full sm:w-auto justify-between">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={opcaoPrecoUsar === "sugerido" ? "default" : "ghost"}
-                    onClick={() => setOpcaoPrecoUsar("sugerido")}
-                    className="h-7 text-[11px] sm:text-xs font-bold flex-1 sm:flex-initial"
-                  >
-                    Usar Sugerido ({formatarMoeda(precoSugeridoEfetivo)})
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={opcaoPrecoUsar === "personalizado" ? "default" : "ghost"}
-                    onClick={() => setOpcaoPrecoUsar("personalizado")}
-                    className="h-7 text-[11px] sm:text-xs font-bold flex-1 sm:flex-initial"
-                  >
-                    Usar Personalizado
-                  </Button>
-                </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-600" /> Escolha de Preço &amp; Lucro
+                </h4>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Digite o valor de venda desejado para ver o lucro e margem estimados em tempo real.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                {/* CARD DO PREÇO SUGERIDO */}
-                <div
-                  onClick={() => setOpcaoPrecoUsar("sugerido")}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                    opcaoPrecoUsar === "sugerido"
-                      ? "bg-purple-600/10 border-purple-500 ring-2 ring-purple-500/30"
-                      : "bg-card border-border hover:border-purple-500/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-muted-foreground">Preço Sugerido (IA)</span>
-                    <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-600 border-purple-500/30 font-bold">
-                      Margem {margemLucroPerc}%
-                    </Badge>
-                  </div>
-                  <p className="text-xl font-black font-mono text-purple-700 dark:text-purple-300 mt-1">
-                    {formatarMoeda(precoSugeridoEfetivo)}
-                    {rendimentoQtd > 1 && <span className="text-xs text-muted-foreground font-normal"> /un</span>}
-                  </p>
-                  <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground font-medium">Lucro Estimado:</span>
-                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                      +{formatarMoeda(comparativoLucro.lucroSugeridoVal)} ({comparativoLucro.percSugerido}%)
-                    </span>
-                  </div>
+              {/* CARD DE DEFINIÇÃO DE PREÇO */}
+              <div className="p-4 rounded-xl border border-emerald-500/40 bg-card shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-extrabold text-foreground">Preço *</Label>
+                  <span className="text-[10px] text-muted-foreground">Digite o valor de venda</span>
                 </div>
 
-                {/* CARD DO PREÇO PERSONALIZADO */}
-                <div
-                  onClick={() => setOpcaoPrecoUsar("personalizado")}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                    opcaoPrecoUsar === "personalizado"
-                      ? "bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/30"
-                      : "bg-card border-border hover:border-emerald-500/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs font-bold text-foreground">Preço Personalizado *</Label>
-                    <span className="text-[10px] text-muted-foreground">Digite seu valor</span>
-                  </div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="R$ 0,00"
+                  value={precoPersonalizadoFormatado}
+                  onChange={(e) => {
+                    const masked = aplicarMascaraMoedaInput(e.target.value);
+                    setPrecoPersonalizadoFormatado(masked);
+                  }}
+                  className="h-10 text-lg font-black font-mono text-foreground bg-background border-emerald-500/40 focus:border-emerald-600"
+                />
 
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="R$ 0,00"
-                    value={precoPersonalizadoFormatado}
-                    onChange={(e) => {
-                      const masked = aplicarMascaraMoedaInput(e.target.value);
-                      setPrecoPersonalizadoFormatado(masked);
-                      setOpcaoPrecoUsar("personalizado");
-                    }}
-                    className="h-9 text-base font-black font-mono text-foreground bg-background border-emerald-500/40 focus:border-emerald-600"
-                  />
-
-                  <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground font-medium">Lucro Estimado:</span>
-                    <span className={`font-extrabold font-mono ${
+                <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-medium">Lucro Estimado:</span>
+                  <span
+                    className={`font-extrabold font-mono ${
                       comparativoLucro.lucroPersonalizadoVal <= 0
                         ? "text-rose-600 dark:text-rose-400"
                         : "text-emerald-600 dark:text-emerald-400"
-                    }`}>
-                      {comparativoLucro.lucroPersonalizadoVal >= 0 ? "+" : ""}
-                      {formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} ({comparativoLucro.percPersonalizado}%)
-                    </span>
-                  </div>
+                    }`}
+                  >
+                    {comparativoLucro.lucroPersonalizadoVal >= 0 ? "+" : ""}
+                    {formatarMoeda(comparativoLucro.lucroPersonalizadoVal)} ({comparativoLucro.percPersonalizado}%)
+                  </span>
                 </div>
               </div>
 
@@ -996,7 +937,7 @@ export function FichaTecnicaModal({
                 <div className="p-3 bg-rose-500/15 border border-rose-500/40 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 font-semibold">
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                   <span>
-                    <strong>Atenção (Prejuízo Detectado):</strong> O preço personalizado de {formatarMoeda(precoPersonalizadoNum)} resulta em prejuízo de {formatarMoeda(Math.abs(comparativoLucro.lucroPersonalizadoVal))} ({comparativoLucro.percPersonalizado}%).
+                    <strong>Atenção (Prejuízo Detectado):</strong> O preço informado de {formatarMoeda(precoPersonalizadoNum)} resulta em prejuízo de {formatarMoeda(Math.abs(comparativoLucro.lucroPersonalizadoVal))} ({comparativoLucro.percPersonalizado}%).
                   </span>
                 </div>
               )}
@@ -1041,12 +982,10 @@ export function FichaTecnicaModal({
             <Card className="bg-emerald-500/15 border-emerald-500/40 shadow-2xs">
               <CardContent className="p-2 sm:p-2.5">
                 <span className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Preço Sugerido
+                  <Sparkles className="w-3 h-3" /> Preço Final
                 </span>
                 <p className="text-sm sm:text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  {rendimentoQtd > 1
-                    ? `${formatarMoeda(totaisCalculados.precoVendaSugeridoUnitario)}/un`
-                    : formatarMoeda(totaisCalculados.precoVendaSugeridoLote)}
+                  {formatarMoeda(precoFinalSalvar)}
                 </p>
               </CardContent>
             </Card>
