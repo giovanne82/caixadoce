@@ -72,6 +72,7 @@ interface ScannerViewProps {
   encomendas?: Encomenda[];
   listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
+  onSaveSuccess?: () => void;
   onSalvarTransacaoFinanceira?: (transacao: Omit<TransacaoFinanceira, "id">) => Promise<void>;
   onEditarDespesa?: (id: string, dados: Partial<DespesaNotaFiscal>) => Promise<void>;
   onExcluirDespesa?: (id: string) => Promise<void>;
@@ -84,6 +85,7 @@ export function ScannerView({
   despesas,
   transacoes = [],
   onSalvarDespesa,
+  onSaveSuccess,
   onSalvarTransacaoFinanceira,
   onEditarDespesa,
   onExcluirDespesa,
@@ -476,6 +478,10 @@ export function ScannerView({
             unidadeMedida: "un",
           });
         } catch {}
+      }
+
+      if (onSaveSuccess) {
+        onSaveSuccess();
       }
 
       setModalRevisaoOpen(false);

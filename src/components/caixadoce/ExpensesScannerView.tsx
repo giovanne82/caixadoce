@@ -70,6 +70,7 @@ import { toast } from "sonner";
 interface ExpensesScannerViewProps {
   despesas: DespesaNotaFiscal[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
+  onSaveSuccess?: () => void;
   onExcluirDespesa: (id: string) => Promise<void>;
 }
 
@@ -112,6 +113,7 @@ const MODELOS_NOTAS_DEMO: { nomeLoja: string; itens: { nome: string; qtd: number
 export function ExpensesScannerView({
   despesas,
   onSalvarDespesa,
+  onSaveSuccess,
   onExcluirDespesa,
 }: ExpensesScannerViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -308,6 +310,10 @@ export function ExpensesScannerView({
         valorOutros: totaisNota.outros,
         itens: itensExtraidos,
       });
+
+      if (onSaveSuccess) {
+        onSaveSuccess();
+      }
 
       // Limpar formulário de scanner
       setSelectedFile(null);

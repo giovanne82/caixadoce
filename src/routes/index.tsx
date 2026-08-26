@@ -1598,6 +1598,10 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                 encomendas={encomendas}
                 listasCompras={listasCompras}
                 onSalvarDespesa={salvarDespesa}
+                onSaveSuccess={() => {
+                  fetchDespesas();
+                  fetchTransacoes();
+                }}
                 onSalvarTransacaoFinanceira={adicionarTransacao}
                 onEditarDespesa={editarDespesa}
                 onExcluirDespesa={excluirDespesa}
