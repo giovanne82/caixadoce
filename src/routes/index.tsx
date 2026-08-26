@@ -1364,11 +1364,17 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   };
 
   const removerTransacao = async (id: string) => {
-    // 1. Atualização imediata da lista na tela (estado local)
-    const atualizadas = transacoes.filter((t) => t.id !== id);
-    setTransacoes(atualizadas);
+    // 1. Atualização imediata de ambas as listas na tela (estado local e localStorage)
+    const atualizadasTransacoes = transacoes.filter((t) => t.id !== id);
+    setTransacoes(atualizadasTransacoes);
     try {
-      localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadas));
+      localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(atualizadasTransacoes));
+    } catch {}
+
+    const despesasAtualizadas = despesas.filter((d) => d.id !== id);
+    setDespesas(despesasAtualizadas);
+    try {
+      localStorage.setItem(`caixadoce_expenses_${activeCode}`, JSON.stringify(despesasAtualizadas));
     } catch {}
 
     // 2. Chamada correta de deleção ao Supabase: supabase.from('transacoes_financeiras').delete().eq('id', id)
@@ -1386,6 +1392,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
           .eq("id", id)
           .eq("estabelecimento_codigo", activeCode);
       }
+
+      // Também remove de despesas se o id coincidir
+      try {
+        await supabase
+          .from("despesas")
+          .delete()
+          .eq("id", id);
+      } catch {}
 
       toast.info("Lançamento removido do financeiro.");
     } catch (e: any) {

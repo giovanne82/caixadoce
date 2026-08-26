@@ -164,13 +164,20 @@ export async function extractReceiptDataWithGemini(
       body: JSON.stringify({ imageBase64, scanMode }),
     });
 
+    if (resServer.status === 429) {
+      throw new Error("RATE_LIMIT_429");
+    }
+
     if (resServer.ok) {
       const dataServer = await resServer.json();
       if (dataServer.success && dataServer.data) {
         return dataServer.data;
       }
     }
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message === "RATE_LIMIT_429") {
+      throw err;
+    }
     console.warn("[OCR Backend Call Warning] Falha na rota do servidor, utilizando fallback do cliente:", err);
   }
 
@@ -286,9 +293,15 @@ Responda apenas com o JSON puro sem formatação markdown.`;
             errText
           );
 
-          if (response.status === 429 || response.status === 403 || response.status === 401) {
+          if (response.status === 429) {
+            console.warn(`[Gemini API Rate Limit] HTTP 429 em ${keyInfo.label}.`);
+            ultimoErro = new Error("RATE_LIMIT_429");
+            break;
+          }
+
+          if (response.status === 403 || response.status === 401) {
             console.warn(
-              `[Gemini API Fallback] Chave ${keyInfo.label} retornou HTTP ${response.status} (Cota Esgotada/Bloqueio). Alternando para chave de contingência...`
+              `[Gemini API Fallback] Chave ${keyInfo.label} retornou HTTP ${response.status} (Bloqueio/Permissão). Alternando para chave de contingência...`
             );
             ultimoErro = new Error(`Chave ${keyInfo.label} indisponível (HTTP ${response.status}).`);
             break;

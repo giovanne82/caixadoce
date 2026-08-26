@@ -80,9 +80,22 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
       }
     } catch (err: any) {
       setIsScanning(false);
-      const msg =
-        err?.message ||
-        "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
+      const rawMsg = String(err?.message || err || "");
+      let msg = rawMsg;
+
+      if (
+        rawMsg.includes("RATE_LIMIT_429") ||
+        rawMsg.includes("429") ||
+        rawMsg.includes("RESOURCE_EXHAUSTED") ||
+        rawMsg.includes("Quota exceeded") ||
+        rawMsg.includes("Too Many Requests") ||
+        rawMsg.includes("indisponível (HTTP 429)")
+      ) {
+        msg = "Limite de leituras por minuto atingido. Aguarde 1 minuto e tente novamente.";
+      } else if (!rawMsg || rawMsg.includes("[object Object]")) {
+        msg = "Nossa Inteligência Artificial está com alto volume de processamento no momento. Por favor, tente enviar novamente em instantes ou mais tarde.";
+      }
+
       setError(msg);
       toast.error(msg);
     }

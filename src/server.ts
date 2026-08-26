@@ -780,9 +780,10 @@ Responda apenas com o JSON puro sem formatação markdown.`;
             if (keySuccess) break;
           }
 
+          const is429 = lastError?.message?.includes("429") || lastError?.message?.includes("RATE_LIMIT");
           return new Response(
-            JSON.stringify({ error: lastError?.message || "Serviço de escaneamento indisponível no momento." }),
-            { status: 500, headers: { "content-type": "application/json" } }
+            JSON.stringify({ error: is429 ? "RATE_LIMIT_429" : (lastError?.message || "Serviço de escaneamento indisponível no momento.") }),
+            { status: is429 ? 429 : 500, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
           return new Response(
