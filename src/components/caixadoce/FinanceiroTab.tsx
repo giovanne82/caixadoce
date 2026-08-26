@@ -63,6 +63,8 @@ import {
   ShieldCheck,
   Edit2,
   Receipt,
+  Eye,
+  FileText,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -175,6 +177,15 @@ export function FinanceiroTab({
   const [cobrancaLinkGerado, setCobrancaLinkGerado] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
+
+  // Modal de Detalhes da Tabela Unificada
+  const [modalDetalhesItemOpen, setModalDetalhesItemOpen] = useState(false);
+  const [itemDetalhesSelecionado, setItemDetalhesSelecionado] = useState<TransacaoFinanceira | null>(null);
+
+  const abrirDetalhesItem = (t: TransacaoFinanceira) => {
+    setItemDetalhesSelecionado(t);
+    setModalDetalhesItemOpen(true);
+  };
 
   const handleAbrirModalCobranca = () => {
     if (stripeConfig.status !== "connected") {
@@ -775,7 +786,11 @@ export function FinanceiroTab({
             </Card>
           ) : (
             transacoesExibidas.map((t) => (
-              <Card key={t.id} className="p-4 border border-border/80 shadow-sm bg-card rounded-xl">
+              <Card
+                key={t.id}
+                onClick={() => abrirDetalhesItem(t)}
+                className="p-4 border border-border/80 shadow-sm bg-card rounded-xl cursor-pointer hover:border-primary/50 transition-all"
+              >
                 <div className="flex flex-col space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 min-w-0 flex-1">
@@ -811,9 +826,10 @@ export function FinanceiroTab({
                         {t.tipo === "receita" ? "+" : "-"} {formatarMoeda(t.valor)}
                       </p>
                       <button
-                        onClick={() =>
-                          onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida");
+                        }}
                         className="mt-1 inline-flex items-center"
                       >
                         <Badge
@@ -834,14 +850,30 @@ export function FinanceiroTab({
                     <span className="uppercase text-[10px] font-semibold text-muted-foreground">
                       Forma: {t.metodoPagamento.replace("_", " ")}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeletarItemUnificado(t)}
-                      className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          abrirDetalhesItem(t);
+                        }}
+                        className="h-8 px-2 text-primary border-primary/30 hover:bg-primary/10 font-semibold text-xs gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Detalhes
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletarItemUnificado(t);
+                        }}
+                        className="h-8 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -873,7 +905,11 @@ export function FinanceiroTab({
                   </TableRow>
                 ) : (
                   transacoesExibidas.map((t) => (
-                    <TableRow key={t.id} className="hover:bg-muted/20">
+                    <TableRow
+                      key={t.id}
+                      onClick={() => abrirDetalhesItem(t)}
+                      className="hover:bg-muted/20 cursor-pointer"
+                    >
                       <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">{t.data}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <p className="font-semibold text-sm text-foreground">{t.descricao}</p>
@@ -909,9 +945,10 @@ export function FinanceiroTab({
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <button
-                          onClick={() =>
-                            onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida")
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAtualizarStatus(t.id, t.status === "concluida" ? "pendente" : "concluida");
+                          }}
                           title="Clique para alternar status"
                           className="cursor-pointer min-h-[36px] min-w-[36px] inline-flex items-center justify-center"
                         >
@@ -928,15 +965,32 @@ export function FinanceiroTab({
                         </button>
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeletarItemUnificado(t)}
-                          className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
-                          title="Excluir lançamento financeiro"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              abrirDetalhesItem(t);
+                            }}
+                            className="h-9 w-9 p-0 text-muted-foreground hover:text-primary transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                            title="Ver detalhes do lançamento"
+                          >
+                            <Eye className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletarItemUnificado(t);
+                            }}
+                            className="h-9 w-9 p-0 text-muted-foreground hover:text-rose-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                            title="Excluir lançamento financeiro"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1174,6 +1228,154 @@ export function FinanceiroTab({
               className="font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {processandoReatribuicao ? "Reatribuindo..." : "Confirmar & Mesclar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE DETALHES DA TABELA UNIFICADA */}
+      <Dialog open={modalDetalhesItemOpen} onOpenChange={setModalDetalhesItemOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <FileText className="w-5 h-5 text-primary" /> Detalhes do Lançamento
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Informações completas do lançamento financeiro ou notinha fiscal lida.
+            </DialogDescription>
+          </DialogHeader>
+
+          {itemDetalhesSelecionado && (() => {
+            const despesaOriginal = despesas.find((d) => d.id === itemDetalhesSelecionado.id);
+
+            if (despesaOriginal) {
+              return (
+                <div className="space-y-4 py-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold text-foreground">Estabelecimento / Mercado</Label>
+                      <p className="text-sm font-bold text-foreground">{despesaOriginal.fornecedorNome}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Número do Documento</Label>
+                      <p className="text-sm font-bold text-foreground font-mono">
+                        {despesaOriginal.numeroNota || "Não informado"}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Data e Hora</Label>
+                      <p className="text-sm font-semibold text-foreground">
+                        {despesaOriginal.dataCompra}{despesaOriginal.horaCompra ? ` às ${despesaOriginal.horaCompra}` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-foreground">
+                      Itens Comprados ({despesaOriginal.itens?.length || 0}):
+                    </Label>
+                    <div className="rounded-xl border border-border overflow-hidden max-h-56 overflow-y-auto">
+                      <Table>
+                        <TableHeader className="bg-muted/40">
+                          <TableRow>
+                            <TableHead className="text-xs font-bold">Descrição do Item</TableHead>
+                            <TableHead className="text-xs font-bold text-center w-16">Qtd</TableHead>
+                            <TableHead className="text-xs font-bold text-right w-24">Unitário</TableHead>
+                            <TableHead className="text-xs font-bold text-right w-24">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(!despesaOriginal.itens || despesaOriginal.itens.length === 0) ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">
+                                Nenhum item individual discriminado nesta notinha.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            despesaOriginal.itens.map((it, idx) => (
+                              <TableRow key={it.id || idx}>
+                                <TableCell className="text-xs font-medium text-foreground">{it.nome}</TableCell>
+                                <TableCell className="text-xs font-bold text-center">{it.quantidade}</TableCell>
+                                <TableCell className="text-xs text-right text-muted-foreground">
+                                  {formatarMoeda(it.valorUnitario || 0)}
+                                </TableCell>
+                                <TableCell className="text-xs font-bold text-right text-foreground">
+                                  {formatarMoeda(it.valorTotal)}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F3EEF9] border border-[#8E7CC3]/30">
+                    <span className="text-xs font-extrabold text-[#5B478E] uppercase tracking-wider">
+                      Valor Total da Notinha:
+                    </span>
+                    <span className="text-xl font-black text-[#2E1A47]">
+                      {formatarMoeda(despesaOriginal.valorTotal)}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs font-bold text-muted-foreground uppercase">Descrição / Fornecedor</Label>
+                    <p className="text-base font-extrabold text-foreground">{itemDetalhesSelecionado.descricao}</p>
+                    {itemDetalhesSelecionado.clienteOuFornecedor && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{itemDetalhesSelecionado.clienteOuFornecedor}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground uppercase">Categoria</Label>
+                    <p className="text-sm font-semibold text-foreground">{itemDetalhesSelecionado.categoria}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground uppercase">Data do Lançamento</Label>
+                    <p className="text-sm font-semibold text-foreground font-mono">{itemDetalhesSelecionado.data}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground uppercase">Método de Pagamento</Label>
+                    <p className="text-sm font-semibold text-foreground uppercase">{itemDetalhesSelecionado.metodoPagamento.replace("_", " ")}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground uppercase">Tipo &amp; Status</Label>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Badge variant={itemDetalhesSelecionado.tipo === "receita" ? "default" : "destructive"}>
+                        {itemDetalhesSelecionado.tipo === "receita" ? "Entrada" : "Saída"}
+                      </Badge>
+                      <Badge variant={itemDetalhesSelecionado.status === "concluida" ? "outline" : "secondary"}>
+                        {itemDetalhesSelecionado.status === "concluida" ? "Concluído" : "Pendente"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/50 border border-border">
+                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Valor do Lançamento:
+                  </span>
+                  <span className={`text-xl font-black ${itemDetalhesSelecionado.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}`}>
+                    {itemDetalhesSelecionado.tipo === "receita" ? "+" : "-"} {formatarMoeda(itemDetalhesSelecionado.valor)}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="pt-2 border-t">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setModalDetalhesItemOpen(false)} className="text-xs font-bold">
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

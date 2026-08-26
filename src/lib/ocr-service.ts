@@ -196,7 +196,12 @@ Analise a imagem da conta/fatura e extraia os dados estritamente em JSON puro no
 }
 Responda apenas com o JSON puro sem formatação markdown.`
       : `Você é um leitor e classificador especialista em notas fiscais, NFC-e e cupons fiscais brasileiros para Confeitarias.
-Analise a imagem da notinha fiscal e extraia os dados estritamente em JSON puro no formato abaixo:
+
+ATENÇÃO - VERIFICAÇÃO DE DOCUMENTO:
+Verifique se o documento é uma nota fiscal de compra de produtos/insumos. Se for uma conta de consumo (água, energia, aluguel, telefone) ou boleto bancário, retorne APENAS um JSON puro com a chave:
+{"erro_contexto": "Este documento é uma conta de consumo. Por favor, utilize o botão 'Escanear Conta/Despesa'."}
+
+Caso seja uma notinha fiscal de compra de produtos, analise a imagem e extraia os dados estritamente em JSON puro no formato abaixo:
 {
   "establishment": "Nome do estabelecimento ou supermercado",
   "date": "YYYY-MM-DD",
@@ -344,6 +349,11 @@ export async function processarNotinhaComOCR(
 
   const imageBase64 = await comprimirImagemParaBase64(file);
   const parsedJSON = await extractReceiptDataWithGemini(imageBase64, scanMode, onStepProgress);
+
+  if ((parsedJSON as any)?.erro_contexto) {
+    const msgErro = (parsedJSON as any).erro_contexto;
+    throw new Error(msgErro);
+  }
 
   if (scanMode === "despesa") {
     onStepProgress?.("Extraindo dados da conta de consumo...");

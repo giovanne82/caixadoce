@@ -68,6 +68,7 @@ import { toast } from "sonner";
 
 interface ScannerViewProps {
   despesas: DespesaNotaFiscal[];
+  transacoes?: TransacaoFinanceira[];
   encomendas?: Encomenda[];
   listasCompras?: ListaCompras[];
   onSalvarDespesa: (despesa: Omit<DespesaNotaFiscal, "id">) => Promise<void>;
@@ -81,6 +82,7 @@ interface ScannerViewProps {
 
 export function ScannerView({
   despesas,
+  transacoes = [],
   onSalvarDespesa,
   onSalvarTransacaoFinanceira,
   onEditarDespesa,
@@ -233,6 +235,22 @@ export function ScannerView({
       const rawData = dataCompra || extractedData?.dataCompra || new Date().toISOString().split("T")[0];
       const [yyyy, mm, dd] = rawData.split("-");
       const dataEmissaoFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : rawData;
+
+      // Verificação de Duplicidade (SELECT no Supabase)
+      try {
+        const { data: dupCheck } = await supabase
+          .from("transacoes_financeiras")
+          .select("id, valor, data, descricao")
+          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_codigo.eq.${activeCode.toLowerCase()}`)
+          .eq("valor", Number(valNum))
+          .eq("data", dataEmissaoFormatada);
+
+        if (dupCheck && dupCheck.length > 0) {
+          toast.error("Atenção: Este documento já foi capturado e salvo no sistema anteriormente.");
+          setSalvando(false);
+          return;
+        }
+      } catch {}
 
       // 2. Mapeamento exato do payload para as colunas do Supabase espelhando o formulário manual:
       // - descricao: Mapear para o fornecedor
@@ -403,6 +421,22 @@ export function ScannerView({
 
     setSalvando(true);
     try {
+      // Verificação de Duplicidade (SELECT no Supabase)
+      try {
+        const { data: dupCheck } = await supabase
+          .from("despesas")
+          .select("id, valor_total, data_compra, fornecedor_nome")
+          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_codigo.eq.${activeCode.toLowerCase()}`)
+          .eq("valor_total", totaisNota.total)
+          .eq("data_compra", dataCompra);
+
+        if (dupCheck && dupCheck.length > 0) {
+          toast.error("Atenção: Este documento já foi capturado e salvo no sistema anteriormente.");
+          setSalvando(false);
+          return;
+        }
+      } catch {}
+
       const itensComFallback = itensExtraidos.map((item) => ({
         ...item,
         valorUnitario: item.valorUnitario || (item.quantidade > 0 ? parseFloat((item.valorTotal / item.quantidade).toFixed(2)) : item.valorTotal),
@@ -453,7 +487,46 @@ export function ScannerView({
     }
   };
 
-  const ultimosRegistros = despesas;
+  // Unificação na Tabela "Últimos Registros Capturados" (compras + transações do scanner/saídas)
+  const ultimosRegistros = useMemo(() => {
+    const lista: (DespesaNotaFiscal & { tipoOrigem?: string })[] = despesas.map((d) => ({
+      ...d,
+      tipoOrigem: "produtos",
+    }));
+
+    const idsExistentes = new Set(despesas.map((d) => d.id));
+
+    if (Array.isArray(transacoes)) {
+      for (const t of transacoes) {
+        if (!t || !t.id || idsExistentes.has(t.id)) continue;
+        const isSaida = String(t.tipo || "").toLowerCase() === "despesa" || String(t.tipo || "").toLowerCase() === "saida";
+        const isFromScanner = t.origem?.includes("Scanner") || t.descricao?.toLowerCase().includes("notinha") || isSaida;
+
+        if (isFromScanner) {
+          lista.push({
+            id: t.id,
+            fornecedorNome: t.clienteOuFornecedor || t.descricao,
+            dataCompra: t.data,
+            valorTotal: Number(t.valor) || 0,
+            categoria: t.categoria,
+            itens: [],
+            numeroNota: t.descricao.includes("Doc:") ? t.descricao.split("Doc:")[1]?.trim() : "",
+            tipoOrigem: "despesa",
+          });
+        }
+      }
+    }
+
+    return lista.sort((a, b) => {
+      const parseDate = (dStr: string) => {
+        if (!dStr) return 0;
+        const [dd, mm, yyyy] = dStr.split("/");
+        if (dd && mm && yyyy) return new Date(`${yyyy}-${mm}-${dd}`).getTime();
+        return new Date(dStr).getTime() || 0;
+      };
+      return parseDate(b.dataCompra) - parseDate(a.dataCompra);
+    });
+  }, [despesas, transacoes]);
 
   return (
     <div className="space-y-6">

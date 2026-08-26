@@ -1239,6 +1239,22 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
   // Handlers de Transações Financeiras
   const adicionarTransacao = async (nova: Omit<TransacaoFinanceira, "id">) => {
+    // Verificação de Duplicidade (SELECT no Supabase)
+    try {
+      const { data: dupCheck } = await supabase
+        .from("transacoes_financeiras")
+        .select("id, valor, data, descricao")
+        .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_codigo.eq.${activeCode.toLowerCase()}`)
+        .eq("valor", Number(nova.valor))
+        .eq("data", nova.data)
+        .eq("descricao", nova.descricao);
+
+      if (dupCheck && dupCheck.length > 0) {
+        toast.error("Atenção: Este documento já foi capturado e salvo no sistema anteriormente.");
+        return;
+      }
+    } catch {}
+
     const localId = crypto.randomUUID();
     const item: TransacaoFinanceira = {
       ...nova,
@@ -1506,6 +1522,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
             {verificarAcessoModulo("scanner", infoPlano) ? (
               <ScannerView
                 despesas={despesas}
+                transacoes={transacoes}
                 encomendas={encomendas}
                 listasCompras={listasCompras}
                 onSalvarDespesa={salvarDespesa}
