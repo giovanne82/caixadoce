@@ -722,6 +722,7 @@ Responda apenas com o JSON puro sem formatação markdown.`;
 
           let lastError: any = null;
           const modelsToTry = ["gemini-3.6-flash"];
+          const MAX_RETRIES = 5;
 
           for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
             const keyInfo = apiKeys[keyIdx];
@@ -730,51 +731,74 @@ Responda apenas com o JSON puro sem formatação markdown.`;
             for (const modelName of modelsToTry) {
               const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
 
-              try {
-                console.log(`[Server Gemini OCR] Tentando Chave: ${keyInfo.label} | Modelo: ${modelName}...`);
-
-                const resGemini = await fetch(urlGemini, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(geminiBody),
-                });
-
-                if (!resGemini.ok) {
-                  const errText = await resGemini.text();
-                  console.error(
-                    `[Server Gemini OCR Log] Chave ${keyInfo.label} | Modelo ${modelName} | Status: ${resGemini.status} | Detalhe:`,
-                    errText
+              for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                  console.log(
+                    `[Server Gemini OCR] Tentativa ${attempt}/${MAX_RETRIES} | Chave: ${keyInfo.label} | Modelo: ${modelName}...`
                   );
 
-                  lastError = new Error(
-                    `Chave ${keyInfo.label} (${modelName}) indisponível (HTTP ${resGemini.status}).`
-                  );
+                  const resGemini = await fetch(urlGemini, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(geminiBody),
+                  });
 
-                  // Se for erro 429 (Quota Exhausted) ou 403/401, pula para a próxima chave de contingência
-                  if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
-                    console.warn(
-                      `[Server Gemini Fallback Trigger] Cota esgotada (HTTP ${resGemini.status}) na chave ${keyInfo.label}. Alternando para a chave de contingência...`
+                  if (!resGemini.ok) {
+                    const errText = await resGemini.text();
+                    console.error(
+                      `[Server Gemini OCR Log] Tentativa ${attempt}/${MAX_RETRIES} | Chave ${keyInfo.label} | Status: ${resGemini.status} | Detalhe:`,
+                      errText
                     );
-                    break; // Sai do loop de modelos e pula para a próxima chave
+
+                    lastError = new Error(
+                      `Chave ${keyInfo.label} (${modelName}) indisponível (HTTP ${resGemini.status}).`
+                    );
+
+                    // Tratamento de Exponential Backoff para erro 429 (Too Many Requests / Quota Exhausted)
+                    if (resGemini.status === 429) {
+                      if (attempt < MAX_RETRIES) {
+                        const delayMs = Math.pow(2, attempt) * 1000; // 2000ms, 4000ms, 8000ms, 16000ms
+                        console.warn(
+                          `[Exponential Backoff] Cota de requisições excedida (HTTP 429) na tentativa ${attempt}/${MAX_RETRIES}. Aguardando ${delayMs}ms antes de tentar novamente...`
+                        );
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                        continue;
+                      } else if (keyIdx < apiKeys.length - 1) {
+                        console.warn(
+                          `[Server Gemini Fallback] Cota esgotada após ${MAX_RETRIES} tentativas na chave ${keyInfo.label}. Alternando para a chave de contingência...`
+                        );
+                        break;
+                      }
+                    }
+
+                    if (resGemini.status === 403 || resGemini.status === 401) {
+                      break;
+                    }
+
+                    continue;
                   }
 
-                  continue;
+                  const dataGemini = await resGemini.json();
+                  const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+                  const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                  const parsedJSON = JSON.parse(jsonClean);
+
+                  keySuccess = true;
+                  return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  });
+                } catch (err: any) {
+                  console.error(`[Server Gemini Exception] Tentativa ${attempt}/${MAX_RETRIES} | Chave ${keyInfo.label}:`, err?.message || err);
+                  lastError = err;
+                  if (attempt < MAX_RETRIES) {
+                    const delayMs = Math.pow(2, attempt) * 1000;
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                  }
                 }
-
-                const dataGemini = await resGemini.json();
-                const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-                const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-                const parsedJSON = JSON.parse(jsonClean);
-
-                keySuccess = true;
-                return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
-                  status: 200,
-                  headers: { "content-type": "application/json" },
-                });
-              } catch (err: any) {
-                console.error(`[Server Gemini Exception] Chave ${keyInfo.label} | Modelo ${modelName}:`, err?.message || err);
-                lastError = err;
               }
+
+              if (keySuccess) break;
             }
 
             if (keySuccess) break;
