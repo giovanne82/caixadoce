@@ -139,12 +139,16 @@ export function DespesasView({
   const [expandirTop10, setExpandirTop10] = useState(false);
 
   const topInsumos = useMemo(() => {
+    if (!despesas || !Array.isArray(despesas) || despesas.length === 0) {
+      return [];
+    }
+
     const mapa = new Map<string, { nome: string; frequencia: number; quantidadeTotal: number; categoria?: string }>();
 
     despesas.forEach((d) => {
       if (Array.isArray(d.itens)) {
         d.itens.forEach((it) => {
-          const nomeNorm = (it.nomePadronizado || (it as any).nome_padronizado || normalizarNomeInsumo(it.nome)).trim();
+          const nomeNorm = (it.nomePadronizado || (it as any).nome_padronizado || (it.nome ? normalizarNomeInsumo(it.nome) : "")).trim();
           if (!nomeNorm) return;
 
           const key = nomeNorm.toLowerCase();
@@ -675,11 +679,8 @@ export function DespesasView({
               <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-500" /> Top 10 Insumos Mais Comprados
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Inteligência de estoque baseada no seu histórico de compras e notinhas.
-              </CardDescription>
             </div>
-            {topInsumos.length > 3 && (
+            {topInsumos.length > 1 && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -700,7 +701,7 @@ export function DespesasView({
           </CardHeader>
           <CardContent className="pt-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {(expandirTop10 ? topInsumos : topInsumos.slice(0, 3)).map((item, idx) => (
+              {(expandirTop10 ? topInsumos : topInsumos.slice(0, 1)).map((item, idx) => (
                 <div
                   key={item.nome || idx}
                   className="flex items-center justify-between p-3 rounded-xl bg-card border border-border/80 shadow-xs hover:border-purple-500/40 transition-all"
