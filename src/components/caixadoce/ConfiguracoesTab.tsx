@@ -411,7 +411,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           }
         }
       });
-  }, [activeCode, user?.id, profile]);
+  }, [activeCode, user?.id]);
 
   const handleSalvarEstabelecimento = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -451,6 +451,13 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         sloganCardapio,
         menu_slogan: sloganCardapio,
       });
+
+      // Garante sincronização imediata dos campos locais sem reversão
+      if (nomeEst) setNomeEst(nomeEst);
+      if (responsavelEst) setResponsavelEst(responsavelEst);
+      if (telEst) setTelEst(telEst);
+      if (chavePixFinal) setChavePix(chavePixFinal);
+
       toast.success("Dados do estabelecimento e personalização salvos com sucesso!");
     } catch (err: any) {
       console.error("[Configurações] Erro ao salvar estabelecimento:", err);

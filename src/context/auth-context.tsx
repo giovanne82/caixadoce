@@ -989,17 +989,41 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       throw err;
     }
 
-    if (profile) {
+    setProfile((prev) => {
+      const current = prev || profile;
       const merged: UserProfile = {
-        ...profile,
+        ...current,
         ...details,
-        chavePix: details.chavePix || profile.chavePix,
-        tipoChavePix: details.tipoChavePix || profile.tipoChavePix,
-        contasPix: details.contasPix || profile.contasPix,
+        establishmentName: details.nome !== undefined ? details.nome : current.establishmentName,
+        establishmentAddress: details.endereco !== undefined ? details.endereco : current.establishmentAddress,
+        chavePix: details.chavePix !== undefined ? details.chavePix : current.chavePix,
+        tipoChavePix: details.tipoChavePix !== undefined ? details.tipoChavePix : current.tipoChavePix,
+        contasPix: details.contasPix !== undefined ? details.contasPix : current.contasPix,
       };
-      setProfile(merged);
       localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
-    }
+      return merged;
+    });
+
+    setEstabelecimentos((prev) => {
+      const next = prev.map((e) =>
+        e.codigo === currentCode
+          ? {
+              ...e,
+              ...details,
+              nome: details.nome !== undefined ? details.nome : e.nome,
+              endereco: details.endereco !== undefined ? details.endereco : e.endereco,
+            }
+          : e
+      );
+      localStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(next));
+      return next;
+    });
+
+    try {
+      queryClient.invalidateQueries({ queryKey: ["estabelecimento"] });
+      queryClient.invalidateQueries({ queryKey: ["estabelecimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+    } catch {}
 
     salvarDadosInstitucionaisCache(currentCode, {
       nome: details.nome,
