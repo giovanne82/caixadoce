@@ -222,24 +222,64 @@ function Index() {
   // Sincronização direta com a tabela 'estabelecimentos' do Supabase para invalidar o cache local no mobile
   const sincronizarPlanoComSupabase = useCallback(async (code: string) => {
     if (!code) return;
+    const cleanCode = code.toUpperCase();
     try {
+      // 1. Busca via Supabase SDK
+      let row: any = null;
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("status, plano, plano_id, plano_exp, plano_expira_em")
-        .eq("codigo", code.toUpperCase())
+        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao")
+        .eq("codigo", cleanCode)
         .maybeSingle();
 
       if (data && !error) {
-        const statusBanco = data.status || "ativo";
-        const planoIdBanco = data.plano || data.plano_id || "mensal";
-        const expBanco = data.plano_exp || data.plano_expira_em;
+        row = data;
+      }
 
-        if (statusBanco === "ativo" && (planoIdBanco === "mensal" || planoIdBanco === "anual" || planoIdBanco === "pro" || planoIdBanco === "ilimitado")) {
-          salvarDadosPlanoEstabelecimento(code, {
+      // 2. Fallback via REST API com No-Cache se o SDK falhar ou retornar nulo
+      if (!row) {
+        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+        const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+        const restRes = await fetch(
+          `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(cleanCode)}&select=status,status_assinatura,plano_status,plano,plano_id,plano_exp,plano_expira_em,data_expiracao&_t=${Date.now()}`,
+          {
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+            },
+          }
+        );
+
+        if (restRes.ok) {
+          const restData = await restRes.json();
+          if (Array.isArray(restData) && restData.length > 0) {
+            row = restData[0];
+          }
+        }
+      }
+
+      if (row) {
+        const statusBanco = row.status || row.status_assinatura || row.plano_status;
+        const planoIdBanco = row.plano || row.plano_id || "mensal";
+        const expBanco = row.plano_exp || row.plano_expira_em || row.data_expiracao;
+
+        const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+        const isExpValida = !isNaN(expMs) && expMs > Date.now();
+        const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+
+        if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
+          const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          
+          // FORÇA A ATUALIZAÇÃO DO LOCALSTORAGE E LIMPA QUALQUER CACHE DE TRIAL
+          salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
-            planoId: planoIdBanco as any,
-            dataExpiracao: expBanco,
+            planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+            dataExpiracao: dataExpFinal,
+            diasRestantesTrial: 0,
           });
+
           setPlanoTick((prev) => prev + 1);
         }
       }
@@ -248,9 +288,11 @@ function Index() {
     }
   }, []);
 
-  // Sincroniza o plano no carregamento inicial e quando o app/aba ganha foco (desfaz cache antigo no mobile)
+  // Refetch no Mount + Focus + VisibilityChange + Intervalo de 5s no mobile
   useEffect(() => {
     if (!activeCode) return;
+    
+    // Execução imediata no mount
     sincronizarPlanoComSupabase(activeCode);
 
     const handleFocus = () => {
@@ -259,10 +301,17 @@ function Index() {
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("online", handleFocus);
+
+    const intervalId = setInterval(() => {
+      sincronizarPlanoComSupabase(activeCode);
+    }, 5000);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("online", handleFocus);
+      clearInterval(intervalId);
     };
   }, [activeCode, sincronizarPlanoComSupabase]);
 
