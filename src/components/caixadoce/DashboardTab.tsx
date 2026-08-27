@@ -66,56 +66,7 @@ export function DashboardTab({
 }: DashboardTabProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [periodoGrafico, setPeriodoGrafico] = useState<"mes" | "semana">("mes");
-  const [showDetails, setShowDetails] = useState(false);
-  const [comprasInsumosBanco, setComprasInsumosBanco] = useState<{ valor: number }[]>([]);
-
-  // Carrega histórico de compras de insumos diretamente do Supabase como fonte adicional de consolidação
-  useEffect(() => {
-    let cancelado = false;
-    async function carregarComprasInsumos() {
-      if (!activeCode) return;
-      try {
-        const code = activeCode.toUpperCase();
-        const { data: data1, error: err1 } = await supabase
-          .from("historico_compras_insumos" as any)
-          .select("valor_pago_total, valor_unitario_calculado, quantidade_total_unidades")
-          .or(`estabelecimento_codigo.eq.${code},estabelecimento_codigo.eq.${code.toLowerCase()}`);
-
-        let itensEncontrados: { valor: number }[] = [];
-
-        if (!err1 && data1 && data1.length > 0) {
-          itensEncontrados = data1.map((c: any) => ({
-            valor:
-              parseFloat(String(c.valor_pago_total || 0)) ||
-              parseFloat(String(c.valor_unitario_calculado || 0)) *
-                parseFloat(String(c.quantidade_total_unidades || 1)) ||
-              0,
-          }));
-        } else {
-          const { data: data2 } = await supabase
-            .from("historico_compras" as any)
-            .select("valor_pago_total, valor_total")
-            .or(`estabelecimento_codigo.eq.${code},estabelecimento_codigo.eq.${code.toLowerCase()}`);
-
-          if (data2 && data2.length > 0) {
-            itensEncontrados = data2.map((c: any) => ({
-              valor: parseFloat(String(c.valor_pago_total || c.valor_total || 0)) || 0,
-            }));
-          }
-        }
-
-        if (!cancelado) {
-          setComprasInsumosBanco(itensEncontrados);
-        }
-      } catch (e) {
-        console.warn("Aviso ao carregar compras de insumos no dashboard:", e);
-      }
-    }
-    carregarComprasInsumos();
-    return () => {
-      cancelado = true;
-    };
-  }, [activeCode]);
+  const [mostrarAnalise, setMostrarAnalise] = useState(false);
 
   // 1. Total Faturado (Entrada): Receitas financeiras concluídas + Encomendas confirmadas
   const totalReceitasFinanceiro = useMemo(() => {
@@ -127,7 +78,7 @@ export function DashboardTab({
         const st = String(t.status || "").toLowerCase();
         return (tp === "receita" || tp === "entrada") && (st === "concluida" || st === "pago" || st === "paga");
       })
-      .reduce((acc, t) => acc + (parseFloat(String(t.valor)) || 0), 0);
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
   }, [transacoes]);
 
   const totalEncomendasPagas = useMemo(() => {
@@ -135,8 +86,8 @@ export function DashboardTab({
     return encomendas
       .filter((e) => e && String(e.status || "").toLowerCase() !== "cancelada")
       .reduce((acc, e) => {
-        const total = parseFloat(String(e.valorTotal || 0)) || 0;
-        const entrada = parseFloat(String(e.valorEntrada || 0)) || total * 0.5;
+        const total = Number(e.valorTotal || 0) || 0;
+        const entrada = Number(e.valorEntrada || 0) || total * 0.5;
         if (e.statusPagamento === "pago_integral") return acc + total;
         if (e.statusPagamento === "sinal_pago") return acc + entrada;
         return acc;
@@ -151,7 +102,7 @@ export function DashboardTab({
   // 2. Custos de Produção (Insumos dos doces)
   const custoProducao = useMemo(() => {
     if (!Array.isArray(despesas)) return 0;
-    return despesas.reduce((acc, d) => acc + (parseFloat(String(d.valorProducao || 0)) || 0), 0);
+    return despesas.reduce((acc, d) => acc + (Number(d.valorProducao || 0) || 0), 0);
   }, [despesas]);
 
   // 3. Gastos Operacionais / Utensílios / Outros
@@ -160,14 +111,14 @@ export function DashboardTab({
     return despesas.reduce(
       (acc, d) =>
         acc +
-        (parseFloat(String(d.valorUtensilios || 0)) || 0) +
-        (parseFloat(String(d.valorOutros || 0)) || 0),
+        (Number(d.valorUtensilios || 0) || 0) +
+        (Number(d.valorOutros || 0) || 0),
       0
     );
   }, [despesas]);
 
-  // 4. Saída Global (Gastos Totais / Despesas / Compras)
-  const totalSaidasFinanceiro = useMemo(() => {
+  // 4. ELEVAÇÃO E SOMA DE ESTADO: SAÍDA (GASTOS) = (somaDespesasManuais + somaTotalCompras)
+  const somaDespesasManuais = useMemo(() => {
     if (!Array.isArray(transacoes)) return 0;
     return transacoes
       .filter((t) => {
@@ -178,36 +129,27 @@ export function DashboardTab({
         const isOk = !st || st === "concluida" || st === "pago" || st === "paga";
         return isSaida && isOk;
       })
-      .reduce((acc, t) => acc + (parseFloat(String(t.valor)) || 0), 0);
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
   }, [transacoes]);
 
-  const totalSaidasDespesas = useMemo(() => {
+  const somaTotalCompras = useMemo(() => {
     if (!Array.isArray(despesas)) return 0;
     return despesas.reduce((acc, d) => {
       if (!d) return acc;
-      const vTotal = parseFloat(String(d.valorTotal ?? (d as any).valor_total ?? 0)) || 0;
-      const vProd = parseFloat(String(d.valorProducao ?? 0)) || 0;
-      const vUtens = parseFloat(String(d.valorUtensilios ?? 0)) || 0;
-      const vCons = parseFloat(String(d.valorConsumoProprio ?? 0)) || 0;
-      const vOutros = parseFloat(String(d.valorOutros ?? 0)) || 0;
-      const vSomaSub = vProd + vUtens + vCons + vOutros;
-      const valEfetivo = vTotal > 0 ? vTotal : vSomaSub;
-      return acc + valEfetivo;
+      const vTotal = Number(d.valorTotal ?? (d as any).valor_total ?? 0) || 0;
+      const vProd = Number(d.valorProducao || 0) || 0;
+      const vUtens = Number(d.valorUtensilios || 0) || 0;
+      const vCons = Number(d.valorConsumoProprio || 0) || 0;
+      const vOutros = Number(d.valorOutros || 0) || 0;
+      const valSub = vProd + vUtens + vCons + vOutros;
+      return acc + (vTotal > 0 ? vTotal : valSub);
     }, 0);
   }, [despesas]);
 
-  const totalComprasInsumos = useMemo(() => {
-    if (!Array.isArray(comprasInsumosBanco)) return 0;
-    return comprasInsumosBanco.reduce((acc, c) => acc + (parseFloat(String(c.valor)) || 0), 0);
-  }, [comprasInsumosBanco]);
-
-  // Consolidação Matemática com conversão numérica rigorosa para garantir que compras/notas fiscais alimentem as Saídas Globais
+  // Fórmula final explicita para renderização de Saída: (somaDespesasManuais + somaTotalCompras)
   const totalSaidasGlobal = useMemo(() => {
-    const somaDireta = totalSaidasFinanceiro + totalSaidasDespesas;
-    if (somaDireta > 0) return somaDireta;
-    if (totalComprasInsumos > 0) return totalComprasInsumos;
-    return Math.max(totalSaidasFinanceiro, totalSaidasDespesas, totalComprasInsumos, custoProducao + gastosOperacionais);
-  }, [totalSaidasFinanceiro, totalSaidasDespesas, totalComprasInsumos, custoProducao, gastosOperacionais]);
+    return (Number(somaDespesasManuais) || 0) + (Number(somaTotalCompras) || 0);
+  }, [somaDespesasManuais, somaTotalCompras]);
 
   // 5. Saldo Líquido Real = Total Faturado - Saídas
   const lucroLiquidoReal = totalFaturado - totalSaidasGlobal;
@@ -267,8 +209,8 @@ export function DashboardTab({
         if (!d) continue;
         const nome = d.fornecedorNome || "Outros Fornecedores";
         if (!mapa[nome]) mapa[nome] = { total: 0, producao: 0, count: 0 };
-        mapa[nome].total += parseFloat(String(d.valorTotal || 0)) || 0;
-        mapa[nome].producao += parseFloat(String(d.valorProducao || 0)) || 0;
+        mapa[nome].total += Number(d.valorTotal || 0) || 0;
+        mapa[nome].producao += Number(d.valorProducao || 0) || 0;
         mapa[nome].count += 1;
       }
     }
@@ -386,24 +328,19 @@ export function DashboardTab({
       </div>
 
       {/* ========================================================================= */}
-      {/* BOTÃO CENTRALIZADO PARA TOGGLE DE EXIBIÇÃO DOS DETALHES DE DESPESAS */}
+      {/* BOTÃO TOGGLE OBRIGATÓRIO SOLICITADO */}
       {/* ========================================================================= */}
-      <div className="flex justify-center pt-2 pb-1">
-        <Button
-          variant="outline"
-          onClick={() => setShowDetails(!showDetails)}
-          className="px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-xs border-primary/30 hover:bg-primary/5 hover:text-primary transition-all flex items-center gap-2"
-        >
-          <Sparkles className="w-4 h-4 text-amber-500" />
-          {showDetails ? "Ocultar Detalhes de Despesas" : "Ver Detalhes de Despesas"}
-          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showDetails ? "rotate-180" : ""}`} />
-        </Button>
-      </div>
+      <button
+        onClick={() => setMostrarAnalise(!mostrarAnalise)}
+        className="w-full py-3 mb-6 bg-purple-100 text-purple-700 rounded-lg font-semibold border border-purple-200"
+      >
+        {mostrarAnalise ? "Ocultar Detalhes de Despesas" : "Ver Detalhes de Despesas"}
+      </button>
 
       {/* ========================================================================= */}
-      {/* 2. SEÇÃO DE ANÁLISE DE DESPESAS & MÉTRICAS (RENDERIZAÇÃO CONDICIONAL COM ESTADO ESTÁTICO NATIVO) */}
+      {/* 2. SEÇÃO DE ANÁLISE DE DESPESAS & MÉTRICAS (RENDERIZAÇÃO CONDICIONAL COM MOSTRARANALISE) */}
       {/* ========================================================================= */}
-      {showDetails && (
+      {mostrarAnalise && (
         <div className="space-y-6 animate-in fade-in-50 duration-200">
           {/* Cards secundários de custos */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -444,7 +381,7 @@ export function DashboardTab({
                 <div className="text-xl font-extrabold text-purple-600">
                   {formatarMoeda(
                     Array.isArray(despesas)
-                      ? despesas.reduce((a, b) => a + (parseFloat(String(b?.valorConsumoProprio || 0)) || 0), 0)
+                      ? despesas.reduce((a, b) => a + (Number(b?.valorConsumoProprio || 0) || 0), 0)
                       : 0
                   )}
                 </div>

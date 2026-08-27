@@ -113,6 +113,7 @@ export function FinanceiroTab({
   onReatribuirEstabelecimento,
 }: FinanceiroTabProps) {
   const code = establishmentCode || "";
+  const [mostrarAnalise, setMostrarAnalise] = useState(false);
 
   // Busca de Encomendas no Supabase para Agregação no Financeiro
   const [encomendasBanco, setEncomendasBanco] = useState<any[]>([]);
@@ -571,11 +572,35 @@ export function FinanceiroTab({
 
   const totalReceitas = totalReceitasAvulsas + totalReceitasEncomendas;
 
-  const totalDespesas = useMemo(() => {
+  // 1. Soma das Despesas Manuais (transacoes_financeiras)
+  const somaDespesasManuais = useMemo(() => {
+    if (!Array.isArray(transacoes)) return 0;
     return transacoes
       .filter((t) => isDespesa(t) && isPago(t))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
   }, [transacoes]);
+
+  // 2. Soma do Total de Compras / Notinhas Fiscais (despesas)
+  const somaTotalCompras = useMemo(() => {
+    if (!Array.isArray(despesas)) return 0;
+    return despesas.reduce((acc, d) => {
+      if (!d) return acc;
+      const vTotal = Number(d.valorTotal ?? (d as any).valor_total ?? 0) || 0;
+      const vProd = Number(d.valorProducao || 0) || 0;
+      const vUtens = Number(d.valorUtensilios || 0) || 0;
+      const vCons = Number(d.valorConsumoProprio || 0) || 0;
+      const vOutros = Number(d.valorOutros || 0) || 0;
+      const valSub = vProd + vUtens + vCons + vOutros;
+      return acc + (vTotal > 0 ? vTotal : valSub);
+    }, 0);
+  }, [despesas]);
+
+  // 3. Fórmula Final para Renderização do Card Vermelho "SAÍDA (GASTOS)": (somaDespesasManuais + somaTotalCompras)
+  const totalDespesas = useMemo(() => {
+    const valManuais = Number(somaDespesasManuais) || 0;
+    const valCompras = Number(somaTotalCompras) || 0;
+    return valManuais + valCompras;
+  }, [somaDespesasManuais, somaTotalCompras]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -681,74 +706,83 @@ export function FinanceiroTab({
         </div>
       </div>
 
+      <button
+        onClick={() => setMostrarAnalise(!mostrarAnalise)}
+        className="w-full py-3 mb-6 bg-purple-100 text-purple-700 rounded-lg font-semibold border border-purple-200"
+      >
+        {mostrarAnalise ? "Ocultar Detalhes de Despesas" : "Ver Detalhes de Despesas"}
+      </button>
+
       {/* ========================================================================= */}
-      {/* 2º BLOCO: ANÁLISE DE DESPESAS & COMPRAS (SUBIDO PARA IMEDIATAMENTE ABAIXO DOS CARDS DE CAIXA) */}
+      {/* 2º BLOCO: ANÁLISE DE DESPESAS & COMPRAS (OCULTO POR PADRÃO VIA MOSTRARANALISE) */}
       {/* ========================================================================= */}
-      <div className="space-y-6 pt-6 border-t border-border/80">
-        <div>
-          <h3 className="text-xl font-extrabold text-foreground flex items-center gap-2">
-            Análise de Despesas &amp; Compras <Layers className="w-5 h-5 text-primary" />
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Métricas de custos categorizados (Produção, Utensílios, Consumo Pessoal) e consolidação por estabelecimento.
-          </p>
+      {mostrarAnalise && (
+        <div className="space-y-6 pt-6 border-t border-border/80">
+          <div>
+            <h3 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+              Análise de Despesas &amp; Compras <Layers className="w-5 h-5 text-primary" />
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Métricas de custos categorizados (Produção, Utensílios, Consumo Pessoal) e consolidação por estabelecimento.
+            </p>
+          </div>
+
+          {/* CARDS DE TOTAIS POR CATEGORIA DE DESPESA */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border-border shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🍫 Custo Produção</CardTitle>
+                <Cookie className="w-4 h-4 text-amber-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-amber-600">
+                  {formatarMoeda(metricasDespesas.producao)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Insumos e doces (custo direto)</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🥣 Utensílios</CardTitle>
+                <UtensilsCrossed className="w-4 h-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-blue-600">
+                  {formatarMoeda(metricasDespesas.utensilios)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Formas, espátulas e materiais</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🛒 Consumo Pessoal</CardTitle>
+                <User className="w-4 h-4 text-rose-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-rose-600">
+                  {formatarMoeda(metricasDespesas.consumoProprio)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Mercado particular da casa</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-primary/40 bg-card shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-bold text-primary uppercase">💰 Total de Compras</CardTitle>
+                <PieChart className="w-4 h-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-foreground">
+                  {formatarMoeda(metricasDespesas.total)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">{despesas.length} notas digitalizadas</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-
-        {/* CARDS DE TOTAIS POR CATEGORIA DE DESPESA */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-border shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🍫 Custo Produção</CardTitle>
-              <Cookie className="w-4 h-4 text-amber-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-extrabold text-amber-600">
-                {formatarMoeda(metricasDespesas.producao)}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">Insumos e doces (custo direto)</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🥣 Utensílios</CardTitle>
-              <UtensilsCrossed className="w-4 h-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-extrabold text-blue-600">
-                {formatarMoeda(metricasDespesas.utensilios)}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">Formas, espátulas e materiais</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-bold text-muted-foreground uppercase">🛒 Consumo Pessoal</CardTitle>
-              <User className="w-4 h-4 text-rose-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-extrabold text-rose-600">
-                {formatarMoeda(metricasDespesas.consumoProprio)}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">Mercado particular da casa</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-primary/40 bg-card shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-bold text-primary uppercase">💰 Total de Compras</CardTitle>
-              <PieChart className="w-4 h-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-extrabold text-foreground">
-                {formatarMoeda(metricasDespesas.total)}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">{despesas.length} notas digitalizadas</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3º BLOCO: TABELA UNIFICADA DE LANÇAMENTOS E NOTINHAS (NA PARTE INFERIOR) */}
