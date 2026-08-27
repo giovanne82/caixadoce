@@ -873,7 +873,7 @@ export default {
       }
 
       // =========================================================================
-      // ROTA 4: POST /api/gemini/ocr (Serviço de OCR Direto com Chave Principal)
+      // ROTA 4: POST /api/gemini/ocr (Smart Fallback: VITE_GEMINI_API_KEY Primária)
       // =========================================================================
       if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {
         try {
@@ -893,27 +893,28 @@ export default {
             return (envObj[key] || procObj[key] || "").trim();
           };
 
-          // Chave Principal direta para prioridade total sem rodeios ou loops lentos
+          // Smart Fallback Condicional: VITE_GEMINI_API_KEY / GEMINI_API_KEY como chave principal e primária
           const primaryKey =
-            getEnv("GEMINI_API_KEY") ||
             getEnv("VITE_GEMINI_API_KEY") ||
-            getEnv("GEMINI_API_KEY_1") ||
-            getEnv("VITE_GEMINI_API_KEY_1");
+            getEnv("GEMINI_API_KEY") ||
+            getEnv("VITE_GEMINI_API_KEY_1") ||
+            getEnv("GEMINI_API_KEY_1");
 
           const fallbackKey =
-            getEnv("GEMINI_API_KEY_2") ||
-            getEnv("VITE_GEMINI_API_KEY_2") ||
             getEnv("GEMINI_API_KEY_FALLBACK") ||
-            getEnv("VITE_GEMINI_API_KEY_FALLBACK");
+            getEnv("VITE_GEMINI_API_KEY_FALLBACK") ||
+            getEnv("GEMINI_API_KEY_2") ||
+            getEnv("VITE_GEMINI_API_KEY_2");
 
-          const keysToTry = Array.from(new Set([primaryKey, fallbackKey].filter(Boolean)));
-
-          if (keysToTry.length === 0) {
+          if (!primaryKey && !fallbackKey) {
             return new Response(
-              JSON.stringify({ error: "Nenhuma chave GEMINI_API_KEY configurada no servidor." }),
+              JSON.stringify({ error: "Nenhuma chave VITE_GEMINI_API_KEY configurada no servidor." }),
               { status: 500, headers: { "content-type": "application/json" } }
             );
           }
+
+          const mainKeyToUse = primaryKey || fallbackKey;
+          const fallbackKeyToUse = primaryKey && fallbackKey !== primaryKey ? fallbackKey : null;
 
           const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
 
@@ -980,51 +981,55 @@ Responda apenas com o JSON puro sem formatação markdown.`;
             },
           };
 
-          let lastErrMessage = "";
-          let lastStatusCode = 500;
+          const chamarGeminiAPI = async (apiKey: string) => {
+            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+            return await fetch(urlGemini, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(geminiBody),
+            });
+          };
 
-          // Processamento direto de chave única (com fallback rápido apenas se retornar 429/403)
-          for (let i = 0; i < keysToTry.length; i++) {
-            const key = keysToTry[i];
-            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`;
+          // 1. Tenta a chave primária (VITE_GEMINI_API_KEY)
+          let resGemini = await chamarGeminiAPI(mainKeyToUse);
 
-            try {
-              const resGemini = await fetch(urlGemini, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(geminiBody),
-              });
+          // 2. Se a principal falhou, verifica a natureza do erro (Smart Fallback)
+          if (!resGemini.ok) {
+            const status = resGemini.status;
+            const isRateLimit = status === 429;
+            const isServerError = status >= 500 && status < 600;
 
-              if (resGemini.ok) {
-                const dataGemini = await resGemini.json();
-                const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-                const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-                const parsedJSON = JSON.parse(jsonClean);
-
-                return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
-                  status: 200,
-                  headers: { "content-type": "application/json" },
-                });
+            // SÓ aciona a chave de contingência se o erro for 429 ou 5xx
+            if (fallbackKeyToUse && (isRateLimit || isServerError)) {
+              console.warn(
+                `[Smart Fallback OCR] Chave principal retornou HTTP ${status}. Acionando GEMINI_API_KEY_FALLBACK...`
+              );
+              const resFallback = await chamarGeminiAPI(fallbackKeyToUse);
+              if (resFallback.ok) {
+                resGemini = resFallback;
               }
-
-              const errText = await resGemini.text();
-              lastStatusCode = resGemini.status;
-              lastErrMessage = `HTTP ${resGemini.status}: ${errText}`;
-
-              // Se for erro de quota (429) ou permissão (403/401), tenta a chave de contingência
-              if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
-                continue;
-              }
-
-              break;
-            } catch (err: any) {
-              lastErrMessage = err?.message || String(err);
+            } else {
+              // Fail-fast imediato para outros erros (ex: 400 Bad Request, 401, 403)
+              console.warn(`[Fail-Fast OCR] Abortando na chave principal sem acionar fallback (HTTP ${status}).`);
             }
           }
 
+          if (resGemini.ok) {
+            const dataGemini = await resGemini.json();
+            const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+            const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+            const parsedJSON = JSON.parse(jsonClean);
+
+            return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+
+          const errText = await resGemini.text();
           return new Response(
-            JSON.stringify({ error: lastErrMessage || "Limite de leituras por minuto atingido. Aguarde 1 minuto e tente novamente." }),
-            { status: lastStatusCode, headers: { "content-type": "application/json" } }
+            JSON.stringify({ error: `HTTP ${resGemini.status}: ${errText}` }),
+            { status: resGemini.status, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
           console.error("[Server Gemini OCR Error]", err);
