@@ -82,9 +82,16 @@ export function MercadoPagoBrick({
     };
   }, [dadosPix?.paymentId, estabelecimentoCodigo, onSuccess]);
 
+  // AUTO-SWITCH PARA PIX SE VALOR FOR INFERIOR AO MÍNIMO DO CARTÃO (R$ 1,00)
+  useEffect(() => {
+    if (valor < 1.00 && metodoPagamento === "cartao") {
+      setMetodoPagamento("pix");
+    }
+  }, [valor, metodoPagamento]);
+
   // INICIALIZA O MERCADO PAGO CARD BRICK APENAS SE O MÉTODO SELECIONADO FOR "CARTÃO"
   useEffect(() => {
-    if (metodoPagamento !== "cartao" || dadosPix) return;
+    if (metodoPagamento !== "cartao" || dadosPix || valor < 1.00) return;
 
     let active = true;
     setCarregando(true);
@@ -136,8 +143,11 @@ export function MercadoPagoBrick({
 
         window.paymentBrickController = await bricksBuilder.create("payment", "paymentBrick_container", {
           initialization: {
-            amount: valor,
-            payer: { email: emailInput },
+            amount: Number(valor.toFixed(2)),
+            payer: {
+              email: emailInput,
+              entityType: "individual",
+            },
           },
           customization: {
             paymentMethods: {
@@ -415,18 +425,42 @@ export function MercadoPagoBrick({
                 <Button
                   type="button"
                   variant={metodoPagamento === "cartao" ? "default" : "outline"}
-                  onClick={() => setMetodoPagamento("cartao")}
+                  onClick={() => {
+                    if (valor < 1.00) {
+                      toast.warning(
+                        `Valores abaixo de R$ 1,00 (R$ ${valor.toFixed(2).replace(".", ",")}) não são aceitos por operadoras de cartão. Utilize o Pix Instantâneo!`
+                      );
+                      setMetodoPagamento("pix");
+                      return;
+                    }
+                    setMetodoPagamento("cartao");
+                  }}
                   className={`h-12 text-xs font-extrabold flex items-center justify-center gap-2 rounded-xl transition-all ${
-                    metodoPagamento === "cartao"
+                    valor < 1.00
+                      ? "opacity-60 border-dashed"
+                      : metodoPagamento === "cartao"
                       ? "bg-purple-600 hover:bg-purple-700 text-white shadow-md border-0"
                       : "border-border hover:bg-muted text-foreground"
                   }`}
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>Cartão de Crédito</span>
+                  <span>Cartão {valor < 1.00 ? "(Mín. R$ 1,00)" : "de Crédito"}</span>
                 </Button>
               </div>
             </div>
+
+            {/* AVISO INFORMATIVO QUANDO VALOR FOR INFERIOR A R$ 1,00 */}
+            {valor < 1.00 && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                <div>
+                  <span className="font-bold block">Aviso de Valor Mínimo para Cartão</span>
+                  <span>
+                    O valor promocional com desconto é de <strong>R$ {valor.toFixed(2).replace(".", ",")}</strong>. Como as operadoras de cartão exigem valor mínimo de R$ 1,00, este pagamento deve ser realizado via <strong>Pix Instantâneo</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* EXIBIÇÃO CONFORME O MÉTODO SELECIONADO */}
             {metodoPagamento === "pix" ? (
