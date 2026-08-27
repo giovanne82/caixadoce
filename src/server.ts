@@ -124,6 +124,69 @@ export default {
       }
 
       // =========================================================================
+      // VALIDAÇÃO SERVER-SIDE SEGURA DE CUPOM PROMOCIONAL DE ASSINATURA (/api/validate-promo)
+      // =========================================================================
+      if (url.pathname === "/api/validate-promo" && request.method === "POST") {
+        try {
+          const bodyText = await request.text();
+          let payload: any = {};
+          try {
+            payload = JSON.parse(bodyText);
+          } catch {}
+
+          const cupomDigitado = String(payload.cupom || payload.code || "").trim().toUpperCase();
+
+          if (!cupomDigitado) {
+            return new Response(
+              JSON.stringify({ valido: false, mensagem: "Por favor, digite um código promocional." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          // Dicionário Estritamente Secret e Seguro no Servidor (Server-Side SaaS Promo Codes)
+          const cuponsValidos: Record<string, { percentualDesconto: number; descricao: string }> = {
+            "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
+            "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
+            "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
+            "DOCEVIP": { percentualDesconto: 30, descricao: "30% de desconto VIP na assinatura" },
+            "BOCATAABOCA": { percentualDesconto: 25, descricao: "25% de desconto Parceria Boca a Boca" },
+            "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
+            "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
+            "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
+          };
+
+          const cupomEncontrado = cuponsValidos[cupomDigitado];
+
+          if (cupomEncontrado) {
+            return new Response(
+              JSON.stringify({
+                valido: true,
+                cupom: cupomDigitado,
+                percentualDesconto: cupomEncontrado.percentualDesconto,
+                descricao: cupomEncontrado.descricao,
+                mensagem: `Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso! 🎉`,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({
+              valido: false,
+              mensagem: "Código promocional inválido ou expirado. Verifique o código e tente novamente.",
+            }),
+            { status: 400, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Validate Promo Error]", err);
+          return new Response(
+            JSON.stringify({ valido: false, mensagem: "Erro interno ao validar cupom de desconto." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
       // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
       // =========================================================================
       if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {

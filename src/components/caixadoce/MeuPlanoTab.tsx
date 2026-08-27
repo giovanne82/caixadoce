@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Crown,
   Zap,
@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   X,
   Flame,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
@@ -21,6 +22,8 @@ import {
 } from "@/lib/planos-utils";
 import { MercadoPagoBrick } from "@/components/caixadoce/MercadoPagoBrick";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,6 +45,15 @@ export function MeuPlanoTab() {
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
 
+  // ESTADO DE CUPOM PROMOCIONAL DE ASSINATURA (SAAS PROMO CODE)
+  const [cupomInput, setCupomInput] = useState("");
+  const [validandoCupom, setValidandoCupom] = useState(false);
+  const [cupomAplicado, setCupomAplicado] = useState<{
+    codigo: string;
+    percentualDesconto: number;
+    descricao: string;
+  } | null>(null);
+
   const recarregarPlano = () => {
     setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
   };
@@ -50,8 +62,58 @@ export function MeuPlanoTab() {
     recarregarPlano();
   }, [activeCode, userCreatedAt]);
 
+  // VALIDAÇÃO SEGURA NO SERVIDOR DO CUPOM PROMOCIONAL (SERVER-SIDE)
+  const handleValidarCupom = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const codigoLimpo = cupomInput.trim().toUpperCase();
+    if (!codigoLimpo) {
+      toast.error("Por favor, digite um código promocional.");
+      return;
+    }
+
+    setValidandoCupom(true);
+    try {
+      const res = await fetch("/api/validate-promo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cupom: codigoLimpo }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.valido) {
+        setCupomAplicado({
+          codigo: data.cupom,
+          percentualDesconto: data.percentualDesconto,
+          descricao: data.descricao,
+        });
+        toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
+      } else {
+        toast.error(data.mensagem || "Código promocional inválido ou expirado.");
+      }
+    } catch (err) {
+      console.error("[Validar Cupom Erro]", err);
+      toast.error("Erro ao validar código promocional no servidor.");
+    } finally {
+      setValidandoCupom(false);
+    }
+  };
+
+  const handleRemoverCupom = () => {
+    setCupomAplicado(null);
+    setCupomInput("");
+    toast.info("Código promocional removido.");
+  };
+
+  const valorOriginalPlano = 19.90;
+  const valorPlanoComDesconto = useMemo(() => {
+    if (!cupomAplicado) return valorOriginalPlano;
+    const fator = (100 - cupomAplicado.percentualDesconto) / 100;
+    const calc = valorOriginalPlano * fator;
+    return parseFloat(calc.toFixed(2));
+  }, [cupomAplicado]);
+
   const handleAbrirCheckout = () => {
-    // Se o plano já estiver ativo, não abre o modal e avisa o usuário
     const jaPossuiAssinaturaAtiva =
       infoPlano.status === "ativo" &&
       infoPlano.planoId !== "basico";
@@ -148,7 +210,7 @@ export function MeuPlanoTab() {
               🔥 Plano Mensal Completo PRO por Tempo Limitado!
             </h4>
             <p className="text-xs text-white/90">
-              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ 19,90/mês</strong> sem fidelidade.
+              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
             </p>
           </div>
         </div>
@@ -216,10 +278,65 @@ export function MeuPlanoTab() {
                   className="font-extrabold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white w-full sm:w-auto text-xs"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Assinar Mensal (R$ 19,90/mês)
+                  Assinar Mensal (R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)
                 </Button>
               )}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ========================================================================= */}
+      {/* CARD LIMPO: INPUT DE CÓDIGO PROMOCIONAL DE ASSINATURA SAAS */}
+      {/* ========================================================================= */}
+      <Card className="border border-purple-500/30 bg-purple-500/5 shadow-xs">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs sm:text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                <Tag className="w-4 h-4 text-purple-600" /> Possui um código promocional?
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Insira o código do seu cupom SaaS para obter desconto exclusivo na assinatura do aplicativo.
+              </p>
+            </div>
+
+            <form onSubmit={handleValidarCupom} className="flex items-center gap-2 w-full sm:w-auto">
+              {cupomAplicado ? (
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                  <Badge variant="default" className="bg-emerald-600 font-extrabold text-xs">
+                    {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%)
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoverCupom}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
+                    title="Remover cupom"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Ex: CAIXADOCEVIP20"
+                    value={cupomInput}
+                    onChange={(e) => setCupomInput(e.target.value.toUpperCase())}
+                    className="h-9 text-xs font-mono uppercase font-bold w-44"
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={validandoCupom || !cupomInput.trim()}
+                    className="h-9 px-4 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {validandoCupom ? "Validando..." : "Aplicar"}
+                  </Button>
+                </>
+              )}
+            </form>
           </div>
         </CardContent>
       </Card>
@@ -287,7 +404,7 @@ export function MeuPlanoTab() {
           </div>
         </Card>
 
-        {/* CARD 2: PLANO MENSAL COMPLETO (R$ 19,90 / MÊS) */}
+        {/* CARD 2: PLANO MENSAL COMPLETO (COM SUPORTE A CUPOM DE DESCONTO) */}
         <Card className="border-2 border-[#8E7CC3] shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
             <Sparkles className="w-3.5 h-3.5" /> RECOMENDADO
@@ -304,15 +421,33 @@ export function MeuPlanoTab() {
               Acesso total ilimitado a todas as ferramentas com flexibilidade mensal sem fidelidade.
             </CardDescription>
             <div className="pt-3">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-black text-[#7C3AED]">R$ 19,90</span>
-                <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-              </div>
-              <p className="text-[11px] font-bold text-[#7C3AED] mt-0.5">
+              {cupomAplicado ? (
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-emerald-600 font-mono">
+                      R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}
+                    </span>
+                    <span className="text-sm line-through text-muted-foreground font-mono">
+                      R$ 19,90
+                    </span>
+                    <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 font-bold">
+                    🎉 Cupom {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%) Aplicado
+                  </Badge>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-black text-[#7C3AED]">R$ 19,90</span>
+                  <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
+                </div>
+              )}
+              <p className="text-[11px] font-bold text-[#7C3AED] mt-1">
                 Preço promocional • Cancele quando quiser
               </p>
             </div>
           </CardHeader>
+
           <CardContent className="space-y-3">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Acesso Ilimitado Completo:</p>
             <ul className="space-y-2 text-xs text-foreground font-medium">
@@ -364,7 +499,7 @@ export function MeuPlanoTab() {
                   : "bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white"
               }`}
             >
-              {isPlanoAtivo ? "✓ Plano Já Ativo (Acesso Ilimitado)" : "Assinar Plano Mensal (R$ 19,90/mês)"}
+              {isPlanoAtivo ? "✓ Plano Já Ativo (Acesso Ilimitado)" : `Assinar Plano Mensal (R$ ${valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)`}
               {!isPlanoAtivo && <ArrowRight className="w-4 h-4 ml-1.5" />}
             </Button>
           </div>
@@ -372,15 +507,15 @@ export function MeuPlanoTab() {
 
       </div>
 
-      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO */}
+      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO COM VALOR ATUALIZADO PELO CUPOM */}
       <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <MercadoPagoBrick
             estabelecimentoCodigo={activeCode}
             userEmail={user?.email || "contato@caixadoce.com.br"}
             planoId="mensal"
-            nomePlano="Plano Mensal Completo PRO"
-            valor={19.90}
+            nomePlano={cupomAplicado ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})` : "Plano Mensal Completo PRO"}
+            valor={valorPlanoComDesconto}
             onSuccess={() => {
               salvarDadosPlanoEstabelecimento(activeCode, {
                 planoId: "mensal",
