@@ -873,7 +873,7 @@ export default {
       }
 
       // =========================================================================
-      // ROTA 4: POST /api/gemini/ocr (Serviço de OCR com Fallback de Chave no Backend)
+      // ROTA 4: POST /api/gemini/ocr (Serviço de OCR Direto com Chave Principal)
       // =========================================================================
       if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {
         try {
@@ -893,39 +893,27 @@ export default {
             return (envObj[key] || procObj[key] || "").trim();
           };
 
-          const rawKeys: string[] = [];
+          // Chave Principal direta para prioridade total sem rodeios ou loops lentos
+          const primaryKey =
+            getEnv("GEMINI_API_KEY") ||
+            getEnv("VITE_GEMINI_API_KEY") ||
+            getEnv("GEMINI_API_KEY_1") ||
+            getEnv("VITE_GEMINI_API_KEY_1");
 
-          // 1. Chaves de rotação explícitas
-          if (getEnv("GEMINI_API_KEY_1")) rawKeys.push(getEnv("GEMINI_API_KEY_1"));
-          if (getEnv("GEMINI_API_KEY_2")) rawKeys.push(getEnv("GEMINI_API_KEY_2"));
-          if (getEnv("VITE_GEMINI_API_KEY_1")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_1"));
-          if (getEnv("VITE_GEMINI_API_KEY_2")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_2"));
+          const fallbackKey =
+            getEnv("GEMINI_API_KEY_2") ||
+            getEnv("VITE_GEMINI_API_KEY_2") ||
+            getEnv("GEMINI_API_KEY_FALLBACK") ||
+            getEnv("VITE_GEMINI_API_KEY_FALLBACK");
 
-          // 2. Chave Principal e Fallback padrão
-          if (getEnv("VITE_GEMINI_API_KEY")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY"));
-          if (getEnv("GEMINI_API_KEY")) rawKeys.push(getEnv("GEMINI_API_KEY"));
-          if (getEnv("GEMINI_API_KEY_FALLBACK")) rawKeys.push(getEnv("GEMINI_API_KEY_FALLBACK"));
-          if (getEnv("VITE_GEMINI_API_KEY_FALLBACK")) rawKeys.push(getEnv("VITE_GEMINI_API_KEY_FALLBACK"));
+          const keysToTry = Array.from(new Set([primaryKey, fallbackKey].filter(Boolean)));
 
-          // 3. Lista de chaves separada por vírgula em GEMINI_API_KEYS
-          const commaList = getEnv("GEMINI_API_KEYS");
-          if (commaList) {
-            commaList.split(",").forEach((k) => rawKeys.push(k.trim()));
+          if (keysToTry.length === 0) {
+            return new Response(
+              JSON.stringify({ error: "Nenhuma chave GEMINI_API_KEY configurada no servidor." }),
+              { status: 500, headers: { "content-type": "application/json" } }
+            );
           }
-
-          // Remove duplicatas e strings vazias
-          const uniqueKeys = Array.from(new Set(rawKeys.filter(Boolean)));
-          const apiKeysPool = uniqueKeys.map((k, idx) => ({
-            key: k,
-            label: `Chave ${idx + 1} (${k.substring(0, 6)}...)`,
-          }));
-
-          // Rotação Round-Robin entre requisições concorrentes
-          const startIndex = (globalKeyRotationCounter++) % apiKeysPool.length;
-          const apiKeys = [
-            ...apiKeysPool.slice(startIndex),
-            ...apiKeysPool.slice(0, startIndex),
-          ];
 
           const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
 
@@ -992,91 +980,57 @@ Responda apenas com o JSON puro sem formatação markdown.`;
             },
           };
 
-          let lastError: any = null;
-          const modelsToTry = ["gemini-3.6-flash"];
-          const MAX_ROUNDS = 5;
+          let lastErrMessage = "";
+          let lastStatusCode = 500;
 
-          for (let round = 1; round <= MAX_ROUNDS; round++) {
-            for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
-              const keyInfo = apiKeys[keyIdx];
+          // Processamento direto de chave única (com fallback rápido apenas se retornar 429/403)
+          for (let i = 0; i < keysToTry.length; i++) {
+            const key = keysToTry[i];
+            const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`;
 
-              for (const modelName of modelsToTry) {
-                const urlGemini = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyInfo.key}`;
+            try {
+              const resGemini = await fetch(urlGemini, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(geminiBody),
+              });
 
-                try {
-                  console.log(
-                    `[Server Gemini OCR] Rodada ${round}/${MAX_ROUNDS} | Testando ${keyInfo.label} (${modelName})...`
-                  );
+              if (resGemini.ok) {
+                const dataGemini = await resGemini.json();
+                const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+                const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                const parsedJSON = JSON.parse(jsonClean);
 
-                  const resGemini = await fetch(urlGemini, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(geminiBody),
-                  });
-
-                  if (!resGemini.ok) {
-                    const errText = await resGemini.text();
-                    console.error(
-                      `[Server Gemini OCR Log] Rodada ${round}/${MAX_ROUNDS} | ${keyInfo.label} | Status: ${resGemini.status} | Detalhe:`,
-                      errText
-                    );
-
-                    lastError = new Error(
-                      `HTTP ${resGemini.status}: ${keyInfo.label} (${modelName})`
-                    );
-
-                    // Se for erro 429 (Rate Limit / Quota) ou 403/401, troca de chave imediatamente nesta mesma rodada!
-                    if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
-                      console.warn(
-                        `[Server Gemini Key Switch] HTTP ${resGemini.status} na ${keyInfo.label}. Trocando de chave imediatamente...`
-                      );
-                      break;
-                    }
-
-                    continue;
-                  }
-
-                  const dataGemini = await resGemini.json();
-                  const rawText = dataGemini.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-                  const jsonClean = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-                  const parsedJSON = JSON.parse(jsonClean);
-
-                  return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
-                    status: 200,
-                    headers: { "content-type": "application/json" },
-                  });
-                } catch (err: any) {
-                  console.error(`[Server Gemini Exception] Rodada ${round}/${MAX_ROUNDS} | ${keyInfo.label}:`, err?.message || err);
-                  lastError = err;
-                }
+                return new Response(JSON.stringify({ success: true, data: parsedJSON }), {
+                  status: 200,
+                  headers: { "content-type": "application/json" },
+                });
               }
-            }
 
-            // Se todas as chaves falharam na rodada atual com 429, aguarda Exponential Backoff antes de re-tentar todas as chaves novamente
-            if (round < MAX_ROUNDS) {
-              const delayMs = Math.pow(2, round) * 1000; // 2s, 4s, 8s, 16s
-              console.warn(
-                `[Exponential Backoff] Cota/Instabilidade em todas as chaves na Rodada ${round}/${MAX_ROUNDS}. Aguardando ${delayMs}ms para iniciar nova rodada...`
-              );
-              await new Promise((resolve) => setTimeout(resolve, delayMs));
+              const errText = await resGemini.text();
+              lastStatusCode = resGemini.status;
+              lastErrMessage = `HTTP ${resGemini.status}: ${errText}`;
+
+              // Se for erro de quota (429) ou permissão (403/401), tenta a chave de contingência
+              if (resGemini.status === 429 || resGemini.status === 403 || resGemini.status === 401) {
+                continue;
+              }
+
+              break;
+            } catch (err: any) {
+              lastErrMessage = err?.message || String(err);
             }
           }
 
-          // Se todas as tentativas falharem, retorna o erro real de API (HTTP 429 ou 500)
-          const errMessage = lastError?.message || "Limite de leituras por minuto atingido. Aguarde 1 minuto e tente novamente.";
-          const statusCode = errMessage.includes("429") || errMessage.includes("RATE_LIMIT_429") ? 429 : 500;
-
           return new Response(
-            JSON.stringify({ error: errMessage }),
-            { status: statusCode, headers: { "content-type": "application/json" } }
+            JSON.stringify({ error: lastErrMessage || "Limite de leituras por minuto atingido. Aguarde 1 minuto e tente novamente." }),
+            { status: lastStatusCode, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
-          const errMessage = err?.message || "Falha ao processar o documento com IA. Por favor, tente novamente em instantes.";
-          const statusCode = errMessage.includes("429") || errMessage.includes("RATE_LIMIT_429") ? 429 : 500;
-
+          console.error("[Server Gemini OCR Error]", err);
           return new Response(
-            JSON.stringify({ error: errMessage }),
-            { status: statusCode, headers: { "content-type": "application/json" } }
+            JSON.stringify({ error: "Erro interno no servidor ao processar notinha." }),
+            { status: 500, headers: { "content-type": "application/json" } }
           );
         }
       }
