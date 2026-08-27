@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Crown,
   Zap,
@@ -57,13 +58,43 @@ export function MeuPlanoTab() {
   // ESTADO DO PLANO SELECIONADO NO CHECKOUT (MENSAL OU ANUAL)
   const [planoSelecionadoCheckout, setPlanoSelecionadoCheckout] = useState<"mensal" | "anual">("mensal");
 
-  const recarregarPlano = () => {
-    setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
-  };
+  const recarregarPlano = useCallback(async () => {
+    if (!activeCode) return;
+    const cleanCode = activeCode.toUpperCase();
+    try {
+      const { data } = await supabase
+        .from("estabelecimentos")
+        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao")
+        .eq("codigo", cleanCode)
+        .maybeSingle();
+
+      if (data) {
+        const statusBanco = data.status || data.status_assinatura || data.plano_status;
+        const planoIdBanco = data.plano || data.plano_id || "mensal";
+        const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
+        const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+        const isExpValida = !isNaN(expMs) && expMs > Date.now();
+        const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+
+        if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
+          const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          salvarDadosPlanoEstabelecimento(cleanCode, {
+            status: "ativo",
+            planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+            dataExpiracao: dataExpFinal,
+            diasRestantesTrial: 0,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao recarregar plano do Supabase:", e);
+    }
+    setInfoPlano(obterPlanoEfetivoEstabelecimento(cleanCode, userCreatedAt));
+  }, [activeCode, userCreatedAt]);
 
   useEffect(() => {
     recarregarPlano();
-  }, [activeCode, userCreatedAt]);
+  }, [recarregarPlano]);
 
   // VALIDAÇÃO SEGURA NO SERVIDOR DO CUPOM PROMOCIONAL (SERVER-SIDE)
   const handleValidarCupom = async (e?: React.FormEvent) => {
