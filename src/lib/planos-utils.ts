@@ -121,6 +121,7 @@ export interface InfoPlanoEstabelecimento {
   planoId: PlanoId;
   status: "ativo" | "trial" | "expirado" | "cancelado";
   diasRestantesTrial?: number;
+  trialDiasAdicionais?: number;
   dataInicio?: string;
   dataRenovacao?: string;
   dataExpiracao?: string;
@@ -169,22 +170,25 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     return planoSalvo;
   }
 
-  // 2. Validação Segura do Trial de 7 Dias baseada estritamente na data de criação do Banco (userCreatedAt)
+  // 2. Validação Segura do Trial (7 Dias Padrão + trialDiasAdicionais de Cupons Beta)
   const dataCriacaoStr = userCreatedAt || planoSalvo?.dataInicio;
+  const diasAdicionais = Number(planoSalvo?.trialDiasAdicionais) || 0;
+  const diasTotaisTrial = 7 + diasAdicionais;
 
   if (dataCriacaoStr) {
     const inicioMs = new Date(dataCriacaoStr).getTime();
     const agoraMs = Date.now();
     const diffMs = agoraMs - inicioMs;
     const diasDecorridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diasRestantes = Math.max(0, 7 - diasDecorridos);
+    const diasRestantes = Math.max(0, diasTotaisTrial - diasDecorridos);
 
-    if (diasDecorridos >= 7 || diasRestantes <= 0) {
+    if (diasDecorridos >= diasTotaisTrial || diasRestantes <= 0) {
       return {
         ...(planoSalvo || {}),
         planoId: "basico",
         status: "expirado",
         diasRestantesTrial: 0,
+        trialDiasAdicionais: diasAdicionais,
         dataInicio: dataCriacaoStr,
       };
     }
@@ -194,18 +198,20 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
       planoId: "mensal",
       status: "trial",
       diasRestantesTrial: diasRestantes,
+      trialDiasAdicionais: diasAdicionais,
       dataInicio: dataCriacaoStr,
     };
   }
 
   // Fallback se dataCriacaoStr não estiver disponível ainda
-  const diasRestantes = planoSalvo?.diasRestantesTrial !== undefined ? planoSalvo.diasRestantesTrial : 7;
+  const diasRestantes = planoSalvo?.diasRestantesTrial !== undefined ? planoSalvo.diasRestantesTrial : diasTotaisTrial;
   if (diasRestantes <= 0) {
     return {
       ...(planoSalvo || {}),
       planoId: "basico",
       status: "expirado",
       diasRestantesTrial: 0,
+      trialDiasAdicionais: diasAdicionais,
     };
   }
 
@@ -214,6 +220,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     planoId: "mensal",
     status: "trial",
     diasRestantesTrial: diasRestantes,
+    trialDiasAdicionais: diasAdicionais,
   };
 }
 

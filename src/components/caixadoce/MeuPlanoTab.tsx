@@ -82,12 +82,36 @@ export function MeuPlanoTab() {
       const data = await res.json();
 
       if (res.ok && data.valido) {
-        setCupomAplicado({
-          codigo: data.cupom,
-          percentualDesconto: data.percentualDesconto,
-          descricao: data.descricao,
-        });
-        toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
+        if (data.tipoDesconto === "dias_gratis") {
+          const diasAdicionados = Number(data.diasGratis) || 30;
+          try {
+            await fetch("/api/aplicar-cupom-trial", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cupom: data.cupom, estabelecimentoCodigo: activeCode }),
+            });
+          } catch {}
+
+          const novosDiasAdicionais = (infoPlano.trialDiasAdicionais || 0) + diasAdicionados;
+          salvarDadosPlanoEstabelecimento(activeCode, {
+            trialDiasAdicionais: novosDiasAdicionais,
+            status: "trial",
+            planoId: "mensal",
+          });
+          if (updateEstablishmentPlan) {
+            await updateEstablishmentPlan("mensal", true);
+          }
+          recarregarPlano();
+          setCupomInput("");
+          toast.success(`🎉 Parabéns! Cupom de Beta Tester ativado: +${diasAdicionados} dias grátis de acesso PRO adicionados!`);
+        } else {
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: data.percentualDesconto,
+            descricao: data.descricao,
+          });
+          toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
+        }
       } else {
         toast.error(data.mensagem || "Código promocional inválido ou expirado.");
       }

@@ -173,7 +173,7 @@ export default {
           }
 
           // Dicionário Estritamente Secret e Seguro no Servidor (Server-Side SaaS Promo Codes)
-          const cuponsValidos: Record<string, { percentualDesconto: number; descricao: string }> = {
+          const cuponsValidos: Record<string, { percentualDesconto: number; tipoDesconto?: string; diasGratis?: number; descricao: string }> = {
             "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
             "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
             "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
@@ -183,6 +183,9 @@ export default {
             "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
             "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
             "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
+            "BETA60": { percentualDesconto: 100, tipoDesconto: "dias_gratis", diasGratis: 60, descricao: "Extensão de 60 Dias Grátis de Teste (Beta Tester)" },
+            "BETA30": { percentualDesconto: 100, tipoDesconto: "dias_gratis", diasGratis: 30, descricao: "Extensão de 30 Dias Grátis de Teste (Beta Tester)" },
+            "BETAVIP90": { percentualDesconto: 100, tipoDesconto: "dias_gratis", diasGratis: 90, descricao: "Extensão de 90 Dias Grátis de Teste (Beta Tester)" },
           };
 
           let cupomEncontrado = cuponsValidos[cupomDigitado];
@@ -207,11 +210,21 @@ export default {
                 const dbData = await resDb.json();
                 if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
                   const item = dbData[0];
-                  const perc = item.tipo_desconto === "porcentagem" ? Number(item.valor || 50) : 50;
-                  cupomEncontrado = {
-                    percentualDesconto: perc,
-                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
-                  };
+                  if (item.tipo_desconto === "dias_gratis") {
+                    const dias = Number(item.valor) || 30;
+                    cupomEncontrado = {
+                      percentualDesconto: 100,
+                      tipoDesconto: "dias_gratis",
+                      diasGratis: dias,
+                      descricao: `Cupom ${item.codigo} (+${dias} dias de teste grátis)`,
+                    };
+                  } else {
+                    const perc = item.tipo_desconto === "porcentagem" ? Number(item.valor || 50) : 50;
+                    cupomEncontrado = {
+                      percentualDesconto: perc,
+                      descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                    };
+                  }
                 }
               }
             } catch (errDb) {
@@ -224,9 +237,13 @@ export default {
               JSON.stringify({
                 valido: true,
                 cupom: cupomDigitado,
+                tipoDesconto: cupomEncontrado.tipoDesconto || "porcentagem",
+                diasGratis: cupomEncontrado.diasGratis || 0,
                 percentualDesconto: cupomEncontrado.percentualDesconto,
                 descricao: cupomEncontrado.descricao,
-                mensagem: `Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso! 🎉`,
+                mensagem: cupomEncontrado.tipoDesconto === "dias_gratis"
+                  ? `Cupom "${cupomDigitado}" de +${cupomEncontrado.diasGratis} dias grátis de teste PRO validado! 🎉`
+                  : `Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso! 🎉`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -243,6 +260,119 @@ export default {
           console.error("[Validate Promo Error]", err);
           return new Response(
             JSON.stringify({ valido: false, mensagem: "Erro interno ao validar cupom de desconto." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // ROTA PARA APLICAR CUPOM DE EXTENSÃO DE TRIAL (BETA TESTERS - /api/aplicar-cupom-trial)
+      // =========================================================================
+      if (url.pathname === "/api/aplicar-cupom-trial" && request.method === "POST") {
+        try {
+          const bodyText = await request.text();
+          let payload: any = {};
+          try { payload = JSON.parse(bodyText); } catch {}
+
+          const cupomDigitado = String(payload.cupom || payload.code || "").trim().toUpperCase();
+          const estabelecimentoCodigo = String(payload.estabelecimentoCodigo || payload.codigo || "DEFAULT").trim().toUpperCase();
+
+          if (!cupomDigitado || !estabelecimentoCodigo) {
+            return new Response(
+              JSON.stringify({ sucesso: false, mensagem: "Código de cupom e estabelecimento são obrigatórios." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          let diasAdicionar = 0;
+          let limiteUsoAtual = 9999;
+          let cupomId = null;
+
+          const betaMap: Record<string, number> = {
+            "BETA60": 60,
+            "BETA30": 30,
+            "BETAVIP90": 90,
+          };
+
+          if (betaMap[cupomDigitado]) {
+            diasAdicionar = betaMap[cupomDigitado];
+          } else {
+            const resDb = await fetch(
+              `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=eq.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=id,codigo,valor,tipo_desconto,limite_uso`,
+              {
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                },
+              }
+            );
+
+            if (resDb.ok) {
+              const dbData = await resDb.json();
+              if (Array.isArray(dbData) && dbData.length > 0) {
+                const item = dbData[0];
+                if (item.tipo_desconto === "dias_gratis") {
+                  diasAdicionar = Number(item.valor) || 30;
+                  limiteUsoAtual = Number(item.limite_uso) || 9999;
+                  cupomId = item.id;
+                }
+              }
+            }
+          }
+
+          if (diasAdicionar <= 0) {
+            return new Response(
+              JSON.stringify({ sucesso: false, mensagem: "Este cupom não é um cupom válido de extensão de trial de dias grátis." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          // Decrementa o limite_uso na tabela cupons_assinatura se aplicável
+          if (cupomId && limiteUsoAtual > 0) {
+            try {
+              await fetch(`${supabaseUrl}/rest/v1/cupons_assinatura?id=eq.${cupomId}`, {
+                method: "PATCH",
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                },
+                body: JSON.stringify({ limite_uso: Math.max(0, limiteUsoAtual - 1) }),
+              });
+            } catch {}
+          }
+
+          // Atualiza trial_dias_adicionais na tabela estabelecimentos no Supabase
+          try {
+            await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
+              method: "PATCH",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({ trial_dias_adicionais: diasAdicionar }),
+            });
+          } catch {}
+
+          return new Response(
+            JSON.stringify({
+              sucesso: true,
+              cupom: cupomDigitado,
+              diasAdicionados: diasAdicionar,
+              mensagem: `🎉 Sucesso! Foi adicionado +${diasAdicionar} dias grátis de teste PRO para seu estabelecimento!`,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Aplicar Cupom Trial Erro]", err);
+          return new Response(
+            JSON.stringify({ sucesso: false, mensagem: "Erro ao processar a aplicação do cupom de trial." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
