@@ -187,39 +187,18 @@ export function OrdersView({
   const [linkedMap, setLinkedMap] = useState<Record<string, string[]>>({});
   const [buscaNotinhaMap, setBuscaNotinhaMap] = useState<Record<string, string>>({});
   const [dropdownAbertoMap, setDropdownAbertoMap] = useState<Record<string, boolean>>({});
-  const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);
-  // Carregar vinculações do Supabase no mount por lista
+  const [notaDetalheSelecionada, setNotaDetalheSelecionada] = useState<DespesaNotaFiscal | null>(null);  // Carregar vinculações de notinha por lista/encomenda (Persistência Local Confiável)
   useEffect(() => {
-    async function carregarNotinhasPorLista() {
-      try {
-        const { data, error } = await supabase
-          .from("shopping_list_receipts")
-          .select("shopping_list_id, receipt_id");
-
-        if (!error && data && data.length > 0) {
-          const map: Record<string, string[]> = {};
-          data.forEach((row: any) => {
-            const listId = String(row.shopping_list_id);
-            const rId = String(row.receipt_id);
-            if (!map[listId]) map[listId] = [];
-            if (!map[listId].includes(rId)) map[listId].push(rId);
-          });
-          setLinkedMap(map);
-        } else {
-          const map: Record<string, string[]> = {};
-          encomendas.forEach((e) => {
-            const localIds = activeCode ? obterNotinhasVinculadasPorLista(e.id, activeCode) : [];
-            if (localIds.length > 0) map[e.id] = localIds;
-          });
-          setLinkedMap(map);
-        }
-      } catch {}
-    }
-    carregarNotinhasPorLista();
+    const map: Record<string, string[]> = {};
+    encomendas.forEach((e) => {
+      const localIds = activeCode ? obterNotinhasVinculadasPorLista(e.id, activeCode) : [];
+      if (localIds.length > 0) map[e.id] = localIds;
+    });
+    setLinkedMap(map);
   }, [encomendas, activeCode]);
 
   // Handlers para Vincular / Desvincular Notinha em Lista Específica
-  const handleVincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+  const handleVincularNotinhaLista = (shoppingListId: string, receiptId: string) => {
     const atuais = linkedMap[shoppingListId] || [];
     if (atuais.includes(receiptId)) return;
 
@@ -228,41 +207,15 @@ export function OrdersView({
     if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
     setBuscaNotinhaMap((prev) => ({ ...prev, [shoppingListId]: "" }));
     setDropdownAbertoMap((prev) => ({ ...prev, [shoppingListId]: false }));
-
-    try {
-      await supabase.from("shopping_list_receipts").insert([
-        {
-          shopping_list_id: shoppingListId,
-          receipt_id: receiptId,
-          estabelecimento_codigo: activeCode,
-        },
-      ]);
-    } catch (e) {
-      console.warn("Aviso ao vincular no Supabase:", e);
-    }
     toast.success("Notinha vinculada a este pedido!");
   };
 
-  const handleDesvincularNotinhaLista = async (shoppingListId: string, receiptId: string) => {
+  const handleDesvincularNotinhaLista = (shoppingListId: string, receiptId: string) => {
     const atuais = linkedMap[shoppingListId] || [];
     const novosIds = atuais.filter((id) => id !== receiptId);
     setLinkedMap((prev) => ({ ...prev, [shoppingListId]: novosIds }));
     if (activeCode) salvarNotinhasVinculadasPorLista(shoppingListId, novosIds, activeCode);
-
-    try {
-      const { error } = await supabase
-        .from("shopping_list_receipts")
-        .delete()
-        .eq("shopping_list_id", shoppingListId)
-        .eq("receipt_id", receiptId);
-
-      if (error) {
-        console.warn("Aviso ao desvincular notinha no Supabase:", error.message);
-      }
-    } catch (e) {
-      console.warn("Aviso ao desvincular no Supabase:", e);
-    }
-    toast.info("Notinha desvinculada deste pedido.");
+    toast.success("Notinha desvinculada do pedido!");
   };
 
   // Sugestões de Notinhas para uma Lista Específica

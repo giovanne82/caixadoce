@@ -415,11 +415,69 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   const handleSalvarEstabelecimento = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // VALIDAÇÃO ESTRITA: Impede submissão com campos genéricos, nulos ou placeholders
+    const nomeLimpo = nomeEst.trim();
+    if (!nomeLimpo || nomeLimpo.length < 3 || ["MINHA LOJA", "ESTABELECIMENTO", "NOME DA LOJA"].includes(nomeLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Nome Fantasia / Loja válido (mínimo 3 caracteres).");
+      return;
+    }
+
+    const docDigits = (numDoc || "").replace(/\D/g, "");
+    if (!docDigits || (docDigits.length !== 11 && docDigits.length !== 14) || /^0+$/.test(docDigits)) {
+      toast.error("Por favor, informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido para o estabelecimento.");
+      return;
+    }
+
+    const cepDigits = (cepEst || "").replace(/\D/g, "");
+    if (!cepDigits || cepDigits.length !== 8) {
+      toast.error("Por favor, informe um CEP válido com 8 dígitos.");
+      return;
+    }
+
+    const logradouroLimpo = (logradouroEst || "").trim();
+    if (!logradouroLimpo || logradouroLimpo.length < 3 || ["RUA", "ENDEREÇO", "LOGRADOURO"].includes(logradouroLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Logradouro / Endereço válido.");
+      return;
+    }
+
+    const numeroLimpo = (numeroEst || "").trim();
+    if (!numeroLimpo) {
+      toast.error("Por favor, informe o Número do estabelecimento (ou S/N).");
+      return;
+    }
+
+    const bairroLimpo = (bairroEst || "").trim();
+    if (!bairroLimpo || ["BAIRRO", "SEU BAIRRO", "BAIRRO...", "N/A"].includes(bairroLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Bairro válido. Placeholders genéricos não são permitidos.");
+      return;
+    }
+
+    const cidadeLimpa = (cidadeEst || "").trim();
+    if (!cidadeLimpa || ["CIDADE", "SUA CIDADE", "N/A"].includes(cidadeLimpa.toUpperCase())) {
+      toast.error("Por favor, informe o nome da Cidade.");
+      return;
+    }
+
+    const ufsValidas = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+    const ufLimpa = (ufEst || "").trim().toUpperCase();
+    if (!ufLimpa || !ufsValidas.includes(ufLimpa)) {
+      toast.error("Por favor, informe a sigla do Estado (UF) válida (ex: SP, RJ, MG, BA...).");
+      return;
+    }
+
+    const contasPixValidas = contasPix.filter((c) => c.chave && c.chave.trim() !== "" && c.chave.trim() !== "contato@caixadoce.com.br");
+    const contaPadrao = contasPixValidas.find((c) => c.isDefault) || contasPixValidas[0];
+    const chavePixFinal = contaPadrao ? contaPadrao.chave : (chavePix && chavePix !== "contato@caixadoce.com.br" ? chavePix : "");
+
+    if (!chavePixFinal || chavePixFinal.trim() === "" || chavePixFinal === "contato@caixadoce.com.br") {
+      toast.error("Por favor, cadastre ao menos uma Chave Pix válida para o seu estabelecimento.");
+      return;
+    }
+
     setSalvandoEst(true);
     try {
-      const enderecoFinal = cepEst
-        ? `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`
-        : logradouroEst;
+      const enderecoFinal = `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`;
 
       const contasPixValidas = contasPix.filter((c) => c.chave && c.chave !== "contato@caixadoce.com.br");
       const contaPadrao = contasPixValidas.find((c) => c.isDefault) || contasPixValidas[0];
