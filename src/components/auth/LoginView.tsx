@@ -16,8 +16,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, MailCheck } from "lucide-react";
+import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, MailCheck, Shield } from "lucide-react";
 import { formatarCodigoLoja } from "@/lib/caixadoce-data";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TermosDeUsoContent } from "@/routes/termos";
+import { PrivacidadeContent } from "@/routes/privacidade";
 
 interface LoginViewProps {
   onSuccess?: () => void;
@@ -65,6 +68,16 @@ export function LoginView({ onSuccess }: LoginViewProps) {
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const [registerAceitouTermos, setRegisterAceitouTermos] = useState(false);
+
+  // Modal Termos e Privacidade state
+  const [modalTermosOpen, setModalTermosOpen] = useState(false);
+  const [modalTermosAba, setModalTermosAba] = useState<"termos" | "privacidade">("termos");
+
+  const abrirModalTermos = (aba: "termos" | "privacidade") => {
+    setModalTermosAba(aba);
+    setModalTermosOpen(true);
+  };
 
   // Email confirmation banner state
   const [emailConfirmationSentEmail, setEmailConfirmationSentEmail] = useState<string | null>(null);
@@ -116,6 +129,10 @@ export function LoginView({ onSuccess }: LoginViewProps) {
     }
     if (registerPassword.length < 6) {
       toast.error("A senha deve conter no mínimo 6 caracteres.");
+      return;
+    }
+    if (!registerAceitouTermos) {
+      toast.error("Você precisa declarar que concorda com os Termos de Uso e Políticas de Privacidade.");
       return;
     }
 
@@ -459,7 +476,34 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                   </span>
                 </div>
 
-                <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading}>
+                <div className="flex items-start gap-2.5 pt-1">
+                  <Checkbox
+                    id="reg-terms"
+                    checked={registerAceitouTermos}
+                    onCheckedChange={(checked) => setRegisterAceitouTermos(!!checked)}
+                    className="mt-0.5"
+                  />
+                  <Label htmlFor="reg-terms" className="text-xs text-muted-foreground font-normal leading-tight cursor-pointer">
+                    Li e concordo com os{" "}
+                    <button
+                      type="button"
+                      onClick={() => abrirModalTermos("termos")}
+                      className="underline text-purple-700 dark:text-purple-400 font-bold hover:text-purple-900"
+                    >
+                      Termos de Uso
+                    </button>{" "}
+                    e{" "}
+                    <button
+                      type="button"
+                      onClick={() => abrirModalTermos("privacidade")}
+                      className="underline text-purple-700 dark:text-purple-400 font-bold hover:text-purple-900"
+                    >
+                      Políticas de Privacidade
+                    </button>
+                  </Label>
+                </div>
+
+                <Button type="submit" className="w-full font-semibold shadow-md h-11" disabled={loading || !registerAceitouTermos}>
                   {loading ? "Criando Conta..." : "Começar Gratuitamente"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -512,6 +556,50 @@ export function LoginView({ onSuccess }: LoginViewProps) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: TERMOS DE USO E POLÍTICAS DE PRIVACIDADE */}
+      <Dialog open={modalTermosOpen} onOpenChange={setModalTermosOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold flex items-center gap-2">
+              <Shield className="w-5 h-5 text-purple-600" />
+              {modalTermosAba === "termos" ? "Termos de Uso — CaixaDoce" : "Política de Privacidade — CaixaDoce"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Consulte as diretrizes de serviço e proteção de dados do CaixaDoce.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={modalTermosAba} onValueChange={(v) => setModalTermosAba(v as any)} className="w-full">
+            <TabsList className="grid grid-cols-2 w-full mb-4">
+              <TabsTrigger value="termos">Termos de Uso</TabsTrigger>
+              <TabsTrigger value="privacidade">Política de Privacidade</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="termos" className="pt-2">
+              <TermosDeUsoContent />
+            </TabsContent>
+            <TabsContent value="privacidade" className="pt-2">
+              <PrivacidadeContent />
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="pt-4 border-t border-border flex items-center justify-between sm:justify-end gap-2">
+            <Button
+              type="button"
+              variant="default"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold w-full sm:w-auto"
+              onClick={() => {
+                setRegisterAceitouTermos(true);
+                setModalTermosOpen(false);
+                toast.success("Termos de Uso e Política de Privacidade aceitos!");
+              }}
+            >
+              Li e Concordo com os Termos
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
