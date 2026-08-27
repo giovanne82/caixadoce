@@ -59,7 +59,7 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
     }
 
     setIsScanning(true);
-    setScanStepMessage("⚡ Conectando ao Gemini 3.6 Flash AI...");
+    setScanStepMessage("⚡ Processando documento com IA...");
     setExtractedData(null);
 
     try {

@@ -608,7 +608,7 @@ export function ScannerView({
                 <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
                 <Sparkles className="w-6 h-6 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">Lendo Notinha com Gemini Flash AI...</h3>
+              <h3 className="text-lg font-bold text-foreground">Capturando dados com IA.</h3>
               <p className="text-xs text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
             </div>
           ) : (
