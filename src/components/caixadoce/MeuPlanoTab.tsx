@@ -311,30 +311,30 @@ export function MeuPlanoTab() {
         </div>
       </div>
 
-      {/* BANNER PROMOÇÃO DE LANÇAMENTO POR TEMPO LIMITADO */}
-      <div className="bg-gradient-to-r from-[#8E7CC3] via-purple-600 to-[#5B478E] rounded-2xl p-4 text-white shadow-lg flex items-center justify-between gap-3 font-sans">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
-            <Flame className="w-6 h-6 text-amber-300 animate-bounce" />
+      {/* BANNER PROMOÇÃO DE LANÇAMENTO POR TEMPO LIMITADO (OCULTO SE JÁ FOR PRO ATIVO) */}
+      {!isPlanoAtivo && (
+        <div className="bg-gradient-to-r from-[#8E7CC3] via-purple-600 to-[#5B478E] rounded-2xl p-4 text-white shadow-lg flex items-center justify-between gap-3 font-sans">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+              <Flame className="w-6 h-6 text-amber-300 animate-bounce" />
+            </div>
+            <div>
+              <h4 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-1.5">
+                🔥 Plano Mensal Completo PRO por Tempo Limitado!
+              </h4>
+              <p className="text-xs text-white/90">
+                Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-1.5">
-              🔥 Plano Mensal Completo PRO por Tempo Limitado!
-            </h4>
-            <p className="text-xs text-white/90">
-              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
-            </p>
-          </div>
-        </div>
-        {!isPlanoAtivo && (
           <Button
             onClick={() => handleAbrirCheckout("mensal")}
             className="bg-white text-purple-900 hover:bg-amber-300 hover:text-purple-950 font-black text-xs shrink-0 shadow-md border-0"
           >
             Assinar Agora
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* BANNER DE STATUS DO PLANO E TRIAL DE 7 DIAS */}
       <Card id="card-status-plano-ativo" className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
@@ -376,14 +376,9 @@ export function MeuPlanoTab() {
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {isPlanoAtivo ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setModalCancelOpen(true)}
-                  className="text-xs text-rose-600 hover:bg-rose-500/10 font-bold"
-                >
-                  Gerenciar / Cancelar Assinatura
-                </Button>
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs shadow-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Acesso PRO Liberado
+                </span>
               ) : (
                 <Button
                   onClick={() => handleAbrirCheckout("mensal")}
