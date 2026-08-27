@@ -549,31 +549,33 @@ export default {
                   paymentData.external_reference ||
                   paymentData.metadata?.establishment_code ||
                   paymentData.metadata?.establishmentcode ||
-                  "CD-1001";
+                  "";
                 const planId = paymentData.metadata?.plan_id || paymentData.metadata?.planid || "mensal";
 
-                const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-                const supabaseKey =
-                  process.env.VITE_SUPABASE_ANON_KEY ||
-                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+                if (establishmentCode) {
+                  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+                  const supabaseKey =
+                    process.env.VITE_SUPABASE_ANON_KEY ||
+                    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
-                try {
-                  await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(establishmentCode)}`, {
-                    method: "PATCH",
-                    headers: {
-                      apikey: supabaseKey,
-                      Authorization: `Bearer ${supabaseKey}`,
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      status_assinatura: "ativo",
-                      plano: planId,
-                      updated_at: new Date().toISOString(),
-                    }),
-                  });
-                  console.log(`[Supabase Webhook MP] Assinatura do estabelecimento ${establishmentCode} ATIVADA!`);
-                } catch (dbErr) {
-                  console.error("[Supabase Webhook Error]", dbErr);
+                  try {
+                    await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(establishmentCode)}`, {
+                      method: "PATCH",
+                      headers: {
+                        apikey: supabaseKey,
+                        Authorization: `Bearer ${supabaseKey}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        status_assinatura: "ativo",
+                        plano: planId,
+                        updated_at: new Date().toISOString(),
+                      }),
+                    });
+                    console.log(`[Supabase Webhook MP] Assinatura do estabelecimento ${establishmentCode} ATIVADA!`);
+                  } catch (dbErr) {
+                    console.error("[Supabase Webhook Error]", dbErr);
+                  }
                 }
               }
             }

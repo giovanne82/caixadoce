@@ -87,7 +87,7 @@ export type StaffProfile = {
 
 export type UserProfile = StaffProfile;
 
-const INITIAL_ESTABELECIMENTOS: Estabelecimento[] = [ESTABELECIMENTO_PADRAO];
+const INITIAL_ESTABELECIMENTOS: Estabelecimento[] = [];
 
 type AuthContextType = {
   user: User | null;
@@ -134,11 +134,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>(INITIAL_ESTABELECIMENTOS);
+  const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
   const [isMounted, setIsMounted] = useState(false);
 
 const generateUniqueCodeFromUserId = (userId?: string): string => {
-  if (!userId) return ESTABELECIMENTO_PADRAO.codigo;
+  if (!userId) return "";
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash << 5) - hash + userId.charCodeAt(i);
@@ -162,19 +162,21 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       supabase.auth.updateUser({ data: { establishmentCode: rawCode } }).catch(() => {});
     }
     if (!rawCode) {
-      rawCode = ESTABELECIMENTO_PADRAO.codigo;
+      rawCode = "";
     }
 
-    const formattedCode = rawCode.toUpperCase().startsWith("CD-")
-      ? rawCode.toUpperCase()
-      : rawCode.length === 4 && !isNaN(Number(rawCode))
-      ? `CD-${rawCode}`
-      : rawCode.toUpperCase();
+    const formattedCode = rawCode
+      ? (rawCode.toUpperCase().startsWith("CD-")
+          ? rawCode.toUpperCase()
+          : rawCode.length === 4 && !isNaN(Number(rawCode))
+          ? `CD-${rawCode}`
+          : rawCode.toUpperCase())
+      : "";
 
-    const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
+    const masterEst = estabelecimentos.find((e) => formattedCode && e.codigo.toUpperCase() === formattedCode);
 
     let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
-    if (isColab && !abasPermitidas && typeof window !== "undefined") {
+    if (isColab && !abasPermitidas && typeof window !== "undefined" && formattedCode) {
       try {
         const rawColabs = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
         if (rawColabs) {
@@ -196,10 +198,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
-    return {
+    return {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
-      establishmentName: masterEst?.nome || `Confeitaria ${formattedCode}`,
+      establishmentName: masterEst?.nome || (formattedCode ? `Confeitaria ${formattedCode}` : "Minha Confeitaria"),
       establishmentAddress: masterEst?.endereco || "",
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
@@ -216,11 +218,6 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     setIsMounted(true);
 
     try {
-      const savedEstablishments = localStorage.getItem("caixadoce_estabelecimentos");
-      if (savedEstablishments) {
-        setEstabelecimentos(JSON.parse(savedEstablishments));
-      }
-
       const savedUser = localStorage.getItem("caixadoce_user");
       const savedProfile = localStorage.getItem("caixadoce_profile");
 
@@ -230,7 +227,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       console.warn("[Auth] Erro ao restaurar sessão local:", e);
     }
 
-    // Buscador assíncrono de sessão inicial (Garante resposta rápida do estado inicial)
+    // Buscador assíncrono de sessão inicial com filtro estrito de tenant por user_id
     supabase.auth
       .getSession()
       .then(({ data: { session }, error }) => {
@@ -253,22 +250,18 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setProfile(baseProf);
           localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
 
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.id);
-          const filterStr = isUuid
-            ? `user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`
-            : `codigo.eq.${baseProf.establishmentCode}`;
-
-          // Busca assíncrona dos dados persistidos da loja no Supabase
+          // FILTRO ESTRITO MULTI-TENANT: Busca estritamente pelo user_id do usuário autenticado
           supabase
             .from("estabelecimentos")
             .select("*")
-            .or(filterStr)
+            .eq("user_id", u.id)
             .maybeSingle()
             .then((res) => {
               if (res.data) {
                 const data = res.data;
                 const merged: UserProfile = {
                   ...baseProf,
+                  establishmentCode: data.codigo || baseProf.establishmentCode,
                   establishmentName: data.nome || baseProf.establishmentName,
                   establishmentAddress: data.endereco || baseProf.establishmentAddress,
                   logradouro: data.logradouro || baseProf.logradouro,
@@ -294,11 +287,36 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
                   sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                   menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
-                  ownerUserId: data.user_id || baseProf.ownerUserId,
+                  ownerUserId: data.user_id || u.id,
                   userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+              } else if (baseProf.establishmentCode) {
+                // Se não houver loja criada no Supabase para este user_id, insere automaticamente vinculando o user_id
+                supabase
+                  .from("estabelecimentos")
+                  .insert([{
+                    codigo: baseProf.establishmentCode,
+                    nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
+                    user_id: u.id,
+                    created_at: session.user.created_at || new Date().toISOString()
+                  }])
+                  .select("*")
+                  .maybeSingle()
+                  .then((insertRes) => {
+                    if (insertRes.data) {
+                      const d = insertRes.data;
+                      const newProf: UserProfile = {
+                        ...baseProf,
+                        establishmentCode: d.codigo,
+                        establishmentName: d.nome,
+                        ownerUserId: u.id
+                      };
+                      setProfile(newProf);
+                      localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
+                    }
+                  });
               }
             });
         }

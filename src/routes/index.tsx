@@ -187,18 +187,18 @@ function Index() {
   const [despesas, setDespesas] = useState<DespesaNotaFiscal[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
+  const activeCode = profile?.establishmentCode || "";
+  const activeName = profile?.establishmentName || "";
+
   const [listasCompras, setListasCompras] = useState<ListaCompras[]>(() => {
     try {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
+      if (typeof window !== "undefined" && activeCode) {
+        const saved = localStorage.getItem(`caixadoce_listas_compras_v2_${activeCode}`);
         return saved ? JSON.parse(saved) : LISTAS_COMPRAS_PADRAO;
       }
     } catch {}
     return LISTAS_COMPRAS_PADRAO;
   });
-
-  const activeCode = profile?.establishmentCode || "CD-1001";
-  const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
   const ABAS_PERMITIDAS_COLABORADOR = ["despesas", "produtos", "encomendas"];
 
