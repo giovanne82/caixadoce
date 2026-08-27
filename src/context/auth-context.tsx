@@ -20,6 +20,7 @@ export type User = {
   email: string;
   avatar?: string;
   provider?: "email" | "google";
+  created_at?: string;
 };
 
 export type StaffRole = "admin" | "gerente" | "operador";
@@ -81,11 +82,12 @@ export type StaffProfile = {
   contasPix?: ContaPix[];
   abasPermitidas?: string[];
   ownerUserId?: string;
+  userCreatedAt?: string;
 };
 
 export type UserProfile = StaffProfile;
 
-const INITIAL_ESTABELECIMENTOS: Estabelecimento[] = [ESTABELECIMENTO_PADRAO];
+const INITIAL_ESTABELECIMENTOS: Estabelecimento[] = [];
 
 type AuthContextType = {
   user: User | null;
@@ -132,11 +134,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>(INITIAL_ESTABELECIMENTOS);
+  const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
   const [isMounted, setIsMounted] = useState(false);
 
 const generateUniqueCodeFromUserId = (userId?: string): string => {
-  if (!userId) return ESTABELECIMENTO_PADRAO.codigo;
+  if (!userId) return "";
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash << 5) - hash + userId.charCodeAt(i);
@@ -160,19 +162,21 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       supabase.auth.updateUser({ data: { establishmentCode: rawCode } }).catch(() => {});
     }
     if (!rawCode) {
-      rawCode = ESTABELECIMENTO_PADRAO.codigo;
+      rawCode = "";
     }
 
-    const formattedCode = rawCode.toUpperCase().startsWith("CD-")
-      ? rawCode.toUpperCase()
-      : rawCode.length === 4 && !isNaN(Number(rawCode))
-      ? `CD-${rawCode}`
-      : rawCode.toUpperCase();
+    const formattedCode = rawCode
+      ? (rawCode.toUpperCase().startsWith("CD-")
+          ? rawCode.toUpperCase()
+          : rawCode.length === 4 && !isNaN(Number(rawCode))
+          ? `CD-${rawCode}`
+          : rawCode.toUpperCase())
+      : "";
 
-    const masterEst = estabelecimentos.find((e) => e.codigo.toUpperCase() === formattedCode);
+    const masterEst = estabelecimentos.find((e) => formattedCode && e.codigo.toUpperCase() === formattedCode);
 
     let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
-    if (isColab && !abasPermitidas && typeof window !== "undefined") {
+    if (isColab && !abasPermitidas && typeof window !== "undefined" && formattedCode) {
       try {
         const rawColabs = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
         if (rawColabs) {
@@ -194,20 +198,18 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
-
     return {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
-      establishmentName: masterEst?.nome || `Confeitaria ${formattedCode}`,
+      establishmentName: masterEst?.nome || (formattedCode ? `Confeitaria ${formattedCode}` : "Minha Confeitaria"),
       establishmentAddress: masterEst?.endereco || "",
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
       ownerUserId: isUserUuid ? authUser.id : undefined,
+      userCreatedAt: authUser?.created_at || authUser?.user_metadata?.created_at || masterEst?.created_at,
     };
   };
-
-
 
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -216,11 +218,6 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     setIsMounted(true);
 
     try {
-      const savedEstablishments = localStorage.getItem("caixadoce_estabelecimentos");
-      if (savedEstablishments) {
-        setEstabelecimentos(JSON.parse(savedEstablishments));
-      }
-
       const savedUser = localStorage.getItem("caixadoce_user");
       const savedProfile = localStorage.getItem("caixadoce_profile");
 
@@ -230,7 +227,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       console.warn("[Auth] Erro ao restaurar sessão local:", e);
     }
 
-    // Buscador assíncrono de sessão inicial (Garante resposta rápida do estado inicial)
+    // Buscador assíncrono de sessão inicial com filtro estrito de tenant por user_id
     supabase.auth
       .getSession()
       .then(({ data: { session }, error }) => {
@@ -244,6 +241,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             email: session.user.email || "",
             avatar: session.user.user_metadata?.avatar_url || "",
             provider: session.user.app_metadata?.provider === "google" ? "google" : "email",
+            created_at: session.user.created_at,
           };
           setUser(u);
           localStorage.setItem("caixadoce_user", JSON.stringify(u));
@@ -252,22 +250,18 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setProfile(baseProf);
           localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
 
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.id);
-          const filterStr = isUuid
-            ? `user_id.eq.${u.id},codigo.eq.${baseProf.establishmentCode}`
-            : `codigo.eq.${baseProf.establishmentCode}`;
-
-          // Busca assíncrona dos dados persistidos da loja no Supabase
+          // FILTRO ESTRITO MULTI-TENANT: Busca estritamente pelo user_id do usuário autenticado
           supabase
             .from("estabelecimentos")
             .select("*")
-            .or(filterStr)
+            .eq("user_id", u.id)
             .maybeSingle()
             .then((res) => {
               if (res.data) {
                 const data = res.data;
                 const merged: UserProfile = {
                   ...baseProf,
+                  establishmentCode: data.codigo || baseProf.establishmentCode,
                   establishmentName: data.nome || baseProf.establishmentName,
                   establishmentAddress: data.endereco || baseProf.establishmentAddress,
                   logradouro: data.logradouro || baseProf.logradouro,
@@ -293,10 +287,36 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
                   sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                   menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
-                  ownerUserId: data.user_id || baseProf.ownerUserId,
+                  ownerUserId: data.user_id || u.id,
+                  userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+              } else if (baseProf.establishmentCode) {
+                // Se não houver loja criada no Supabase para este user_id, insere automaticamente vinculando o user_id
+                supabase
+                  .from("estabelecimentos")
+                  .insert([{
+                    codigo: baseProf.establishmentCode,
+                    nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
+                    user_id: u.id,
+                    created_at: session.user.created_at || new Date().toISOString()
+                  }])
+                  .select("*")
+                  .maybeSingle()
+                  .then((insertRes) => {
+                    if (insertRes.data) {
+                      const d = insertRes.data;
+                      const newProf: UserProfile = {
+                        ...baseProf,
+                        establishmentCode: d.codigo,
+                        establishmentName: d.nome,
+                        ownerUserId: u.id
+                      };
+                      setProfile(newProf);
+                      localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
+                    }
+                  });
               }
             });
         }
@@ -529,120 +549,87 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       return;
     }
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (
-          error.status === 429 ||
-          error.message?.toLowerCase().includes("too_many_requests") ||
-          error.message?.toLowerCase().includes("rate limit") ||
-          error.message?.toLowerCase().includes("exceeded")
-        ) {
-          toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
-          throw error;
-        }
-
-        // Fallback local caso offline ou cadastrado localmente no navegador
-        if (password.length >= 4) {
-          const nameFromEmail = email.split("@")[0];
-
-          const fallbackUser: User = {
-            id: `usr_${Date.now()}`,
-            name: nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1),
-            email,
-            provider: "email",
-          };
-
-          const fallbackProfile = buildProfileForUser(null, email);
-          setUser(fallbackUser);
-          setProfile(fallbackProfile);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-            localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-          }
-          toast.success("Login efetuado com sucesso!");
-          return;
-        }
-        throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("[Auth] Erro no signInWithPassword:", error);
+      if (
+        error.status === 429 ||
+        error.message?.toLowerCase().includes("too_many_requests") ||
+        error.message?.toLowerCase().includes("rate limit") ||
+        error.message?.toLowerCase().includes("exceeded")
+      ) {
+        toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
+      } else if (
+        error.status === 400 ||
+        error.message?.toLowerCase().includes("invalid login credentials") ||
+        error.message?.toLowerCase().includes("invalid_grant")
+      ) {
+        toast.error("E-mail ou senha incorretos. Verifique suas credenciais.");
+      } else {
+        toast.error(error.message || "Credenciais inválidas. Tente novamente.");
       }
+      throw error;
+    }
 
-      if (data.user) {
-        const loggedUser: User = {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Usuário",
-          email: data.user.email || email,
-          avatar: data.user.user_metadata?.avatar_url || "",
-          provider: "email",
-        };
-        const loggedProfile = buildProfileForUser(data.user, email);
-        setUser(loggedUser);
-        setProfile(loggedProfile);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
-          localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
-        }
-        toast.success("Bem-vindo ao CaixaDoce!");
+    if (data?.session && data?.user) {
+      const loggedUser: User = {
+        id: data.user.id,
+        name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split("@")[0] || "Usuário",
+        email: data.user.email || email,
+        avatar: data.user.user_metadata?.avatar_url || "",
+        provider: "email",
+      };
+      const loggedProfile = buildProfileForUser(data.user, email);
+      setUser(loggedUser);
+      setProfile(loggedProfile);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao efetuar login. Verifique seu e-mail e senha.");
-      throw err;
+      toast.success("Bem-vindo ao CaixaDoce!");
+    } else {
+      toast.error("Credenciais inválidas ou erro na autenticação.");
+      throw new Error("Sessão inválida do Supabase Auth.");
     }
   };
 
   const registerWithEmail = async (name: string, email: string, password: string): Promise<{ requiresConfirmation: boolean }> => {
-    try {
-      const redirectUrl = getAppBaseUrl();
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: { full_name: name, name },
-        },
-      });
+    const redirectUrl = getAppBaseUrl();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: { full_name: name, name },
+      },
+    });
 
-      if (error) throw error;
-
-      if (data.session) {
-        const newUser: User = {
-          id: data.user?.id || `usr_${Date.now()}`,
-          name,
-          email,
-          provider: "email",
-        };
-        setUser(newUser);
-        localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
-        toast.success("Conta criada e login efetuado com sucesso!");
-        return { requiresConfirmation: false };
-      } else if (data.user) {
-        return { requiresConfirmation: true };
-      }
-
-      return { requiresConfirmation: false };
-    } catch (err: any) {
-      if (err?.message?.includes("Failed to fetch") || err?.status === 0) {
-        const fallbackUser: User = {
-          id: `usr_${Date.now()}`,
-          name,
-          email,
-          provider: "email",
-        };
-        const fallbackProfile: UserProfile = {
-          role: "admin",
-          establishmentCode: ESTABELECIMENTO_PADRAO.codigo,
-          establishmentName: ESTABELECIMENTO_PADRAO.nome,
-          establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
-        };
-        setUser(fallbackUser);
-        setProfile(fallbackProfile);
-        localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-        localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-        toast.success("Conta criada com sucesso!");
-        return { requiresConfirmation: false };
-      }
-      toast.error(err?.message || "Erro ao registrar usuário.");
-      throw err;
+    if (error) {
+      toast.error(error.message || "Erro ao criar conta no Supabase Auth.");
+      throw error;
     }
+
+    if (data?.session && data?.user) {
+      const newUser: User = {
+        id: data.user.id,
+        name,
+        email,
+        provider: "email",
+      };
+      const newProfile = buildProfileForUser(data.user, email);
+      setUser(newUser);
+      setProfile(newProfile);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
+      }
+      toast.success("Conta criada e login efetuado com sucesso!");
+      return { requiresConfirmation: false };
+    } else if (data?.user) {
+      return { requiresConfirmation: true };
+    }
+
+    return { requiresConfirmation: false };
   };
 
   const sendEmailOtpSignUp = async (name: string, email: string, password: string) => {
@@ -987,17 +974,41 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       throw err;
     }
 
-    if (profile) {
+    setProfile((prev) => {
+      const current = prev || profile;
       const merged: UserProfile = {
-        ...profile,
+        ...current,
         ...details,
-        chavePix: details.chavePix || profile.chavePix,
-        tipoChavePix: details.tipoChavePix || profile.tipoChavePix,
-        contasPix: details.contasPix || profile.contasPix,
+        establishmentName: details.nome !== undefined ? details.nome : current.establishmentName,
+        establishmentAddress: details.endereco !== undefined ? details.endereco : current.establishmentAddress,
+        chavePix: details.chavePix !== undefined ? details.chavePix : current.chavePix,
+        tipoChavePix: details.tipoChavePix !== undefined ? details.tipoChavePix : current.tipoChavePix,
+        contasPix: details.contasPix !== undefined ? details.contasPix : current.contasPix,
       };
-      setProfile(merged);
       localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
-    }
+      return merged;
+    });
+
+    setEstabelecimentos((prev) => {
+      const next = prev.map((e) =>
+        e.codigo === currentCode
+          ? {
+              ...e,
+              ...details,
+              nome: details.nome !== undefined ? details.nome : e.nome,
+              endereco: details.endereco !== undefined ? details.endereco : e.endereco,
+            }
+          : e
+      );
+      localStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(next));
+      return next;
+    });
+
+    try {
+      queryClient.invalidateQueries({ queryKey: ["estabelecimento"] });
+      queryClient.invalidateQueries({ queryKey: ["estabelecimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+    } catch {}
 
     salvarDadosInstitucionaisCache(currentCode, {
       nome: details.nome,

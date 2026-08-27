@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as TermosRouteImport } from './routes/termos'
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
 import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
 import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
@@ -36,6 +38,16 @@ const LoginRoute = LoginRouteImport.update({
 const PedidoConfirmadoRoute = PedidoConfirmadoRouteImport.update({
   id: '/pedido-confirmado',
   path: '/pedido-confirmado',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgendarStoreSlugRoute = AgendarStoreSlugRouteImport.update({
@@ -64,6 +76,8 @@ export interface FileRoutesByFullPath {
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -74,6 +88,8 @@ export interface FileRoutesByTo {
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -85,6 +101,8 @@ export interface FileRoutesById {
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos': typeof TermosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -97,6 +115,8 @@ export interface FileRouteTypes {
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
+    | '/privacidade'
+    | '/termos'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -107,6 +127,8 @@ export interface FileRouteTypes {
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
+    | '/privacidade'
+    | '/termos'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -117,6 +139,8 @@ export interface FileRouteTypes {
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
+    | '/privacidade'
+    | '/termos'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -128,6 +152,8 @@ export interface RootRouteChildren {
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
+  PrivacidadeRoute: typeof PrivacidadeRoute
+  TermosRoute: typeof TermosRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
   CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
   PagarCobrancaIdRoute: typeof PagarCobrancaIdRoute
@@ -162,6 +188,20 @@ declare module '@tanstack/react-router' {
       path: '/pedido-confirmado'
       fullPath: '/pedido-confirmado'
       preLoaderRoute: typeof PedidoConfirmadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agendar/$storeSlug': {
@@ -200,6 +240,8 @@ const rootRouteChildren: RootRouteChildren = {
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
+  PrivacidadeRoute: PrivacidadeRoute,
+  TermosRoute: TermosRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
   CardapioStoreCodeRoute: CardapioStoreCodeRoute,
   PagarCobrancaIdRoute: PagarCobrancaIdRoute,

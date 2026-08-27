@@ -27,17 +27,17 @@ export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
   id: "est-1",
   codigo: "CD-1001",
   nome: "CaixaDoce Matriz",
-  endereco: "Av. Principal, 1000 - Centro",
-  cidade: "São Paulo",
-  estado: "SP",
+  endereco: "",
+  cidade: "",
+  estado: "",
   tipoDocumento: "CNPJ",
-  numeroDocumento: "00.000.000/0001-00",
-  chavePix: "contato@caixadoce.com.br",
+  numeroDocumento: "",
+  chavePix: "",
   tipoChavePix: "email",
-  responsavel: "Administrador",
-  telefone: "(11) 99999-9999",
-  whatsapp: "(11) 99999-9999",
-  email: "contato@caixadoce.com.br",
+  responsavel: "",
+  telefone: "",
+  whatsapp: "",
+  email: "",
   stripeAccountId: null,
   repassarTaxaStripe: true,
 };
@@ -970,10 +970,43 @@ export type CategoriaDespesaItem = "producao" | "utensilios" | "consumo_proprio"
 export interface ItemNotaFiscal {
   id: string;
   nome: string;
+  nomePadronizado?: string;
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
   categoria: CategoriaDespesaItem;
+}
+
+export function normalizarNomeInsumo(nome: string): string {
+  if (!nome) return "Insumo Diversos";
+  let clean = nome.trim();
+
+  // Preserva especificações técnicas cruciais (ex: %, %, fat, etc.)
+  // Abreviações de supermercado comuns
+  clean = clean
+    .replace(/\bLT\b|\bLITE\b/gi, "Leite")
+    .replace(/\bCOND\b|\bCONDENS\b/gi, "Condensado")
+    .replace(/\bCHOCO\b|\bCHOCOL\b/gi, "Chocolate")
+    .replace(/\bMARG\b/gi, "Margarina")
+    .replace(/\bDESN\b/gi, "Desnatado")
+    .replace(/\bSEMIDESN\b/gi, "Semidesnatado")
+    .replace(/\bINTEG\b/gi, "Integral")
+    .replace(/\bPO\b/gi, "em Pó")
+    .replace(/\bC\/\s*SAL\b/gi, "com Sal")
+    .replace(/\bS\/\s*SAL\b/gi, "sem Sal")
+    .replace(/\bCX\b|\bPCT\b|\bFD\b|\bTP\b/gi, "")
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:g|kg|ml|l)\b/gi, "") // remove apenas dimensões/pesos redundantes do final
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean
+    .split(" ")
+    .map((word) => {
+      if (word.includes("%")) return word; // Preserva porcentagens técnicas exatamente (ex: 8%, 50%)
+      if (word.length <= 2 && !word.match(/\d/)) return word.toLowerCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
 }
 
 export interface DespesaNotaFiscal {

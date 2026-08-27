@@ -380,41 +380,108 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.cidade !== null && d.cidade !== undefined) setCidadeEst(d.cidade);
           if (d.estado !== null && d.estado !== undefined) setUfEst(d.estado);
           if (d.tipo_chave_pix) setTipoChavePix(d.tipo_chave_pix);
-          if (d.chave_pix) setChavePix(d.chave_pix);
+          if (d.chave_pix && d.chave_pix !== "contato@caixadoce.com.br") setChavePix(d.chave_pix);
+          else if (d.chave_pix === "contato@caixadoce.com.br") setChavePix("");
+
           if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
           if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
           if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
 
-          const pixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
+          const rawPixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
             ? d.pix_accounts
             : (Array.isArray(d.pix_keys) && d.pix_keys.length > 0 ? d.pix_keys : []);
 
-          if (pixList.length > 0) {
-            setContasPix(pixList);
-          } else if (d.chave_pix) {
+          const pixListClean = rawPixList.filter((c: any) => c?.chave && c.chave !== "contato@caixadoce.com.br");
+
+          if (pixListClean.length > 0) {
+            setContasPix(pixListClean);
+          } else if (d.chave_pix && d.chave_pix !== "contato@caixadoce.com.br") {
             setContasPix([
               {
                 id: "default_pix",
                 tipo: d.tipo_chave_pix || "email",
                 chave: d.chave_pix,
-                favorecido: d.nome || d.responsavel || "ArtFesta",
+                favorecido: d.nome || d.responsavel || "",
                 isDefault: true,
               },
             ]);
+          } else {
+            setContasPix([]);
+            setChavePix("");
           }
         }
       });
-  }, [activeCode, user?.id, profile]);
+  }, [activeCode, user?.id]);
 
   const handleSalvarEstabelecimento = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // VALIDAÇÃO ESTRITA: Impede submissão com campos genéricos, nulos ou placeholders
+    const nomeLimpo = nomeEst.trim();
+    if (!nomeLimpo || nomeLimpo.length < 3 || ["MINHA LOJA", "ESTABELECIMENTO", "NOME DA LOJA"].includes(nomeLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Nome Fantasia / Loja válido (mínimo 3 caracteres).");
+      return;
+    }
+
+    const docDigits = (numDoc || "").replace(/\D/g, "");
+    if (!docDigits || (docDigits.length !== 11 && docDigits.length !== 14) || /^0+$/.test(docDigits)) {
+      toast.error("Por favor, informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido para o estabelecimento.");
+      return;
+    }
+
+    const cepDigits = (cepEst || "").replace(/\D/g, "");
+    if (!cepDigits || cepDigits.length !== 8) {
+      toast.error("Por favor, informe um CEP válido com 8 dígitos.");
+      return;
+    }
+
+    const logradouroLimpo = (logradouroEst || "").trim();
+    if (!logradouroLimpo || logradouroLimpo.length < 3 || ["RUA", "ENDEREÇO", "LOGRADOURO"].includes(logradouroLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Logradouro / Endereço válido.");
+      return;
+    }
+
+    const numeroLimpo = (numeroEst || "").trim();
+    if (!numeroLimpo) {
+      toast.error("Por favor, informe o Número do estabelecimento (ou S/N).");
+      return;
+    }
+
+    const bairroLimpo = (bairroEst || "").trim();
+    if (!bairroLimpo || ["BAIRRO", "SEU BAIRRO", "BAIRRO...", "N/A"].includes(bairroLimpo.toUpperCase())) {
+      toast.error("Por favor, informe um Bairro válido. Placeholders genéricos não são permitidos.");
+      return;
+    }
+
+    const cidadeLimpa = (cidadeEst || "").trim();
+    if (!cidadeLimpa || ["CIDADE", "SUA CIDADE", "N/A"].includes(cidadeLimpa.toUpperCase())) {
+      toast.error("Por favor, informe o nome da Cidade.");
+      return;
+    }
+
+    const ufsValidas = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+    const ufLimpa = (ufEst || "").trim().toUpperCase();
+    if (!ufLimpa || !ufsValidas.includes(ufLimpa)) {
+      toast.error("Por favor, informe a sigla do Estado (UF) válida (ex: SP, RJ, MG, BA...).");
+      return;
+    }
+
+    const contasPixValidas = contasPix.filter((c) => c.chave && c.chave.trim() !== "" && c.chave.trim() !== "contato@caixadoce.com.br");
+    const contaPadrao = contasPixValidas.find((c) => c.isDefault) || contasPixValidas[0];
+    const chavePixFinal = contaPadrao ? contaPadrao.chave : (chavePix && chavePix !== "contato@caixadoce.com.br" ? chavePix : "");
+
+    if (!chavePixFinal || chavePixFinal.trim() === "" || chavePixFinal === "contato@caixadoce.com.br") {
+      toast.error("Por favor, cadastre ao menos uma Chave Pix válida para o seu estabelecimento.");
+      return;
+    }
+
     setSalvandoEst(true);
     try {
-      const enderecoFinal = cepEst
-        ? `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`
-        : logradouroEst;
+      const enderecoFinal = `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`;
 
-      const contaPadrao = contasPix.find((c) => c.isDefault) || contasPix[0];
+      const contasPixValidas = contasPix.filter((c) => c.chave && c.chave !== "contato@caixadoce.com.br");
+      const contaPadrao = contasPixValidas.find((c) => c.isDefault) || contasPixValidas[0];
+      const chavePixFinal = contaPadrao ? contaPadrao.chave : (chavePix !== "contato@caixadoce.com.br" ? chavePix : "");
 
       await updateEstablishmentDetails({
         codigo: activeCode,
@@ -432,9 +499,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         cnpj: numDoc,
         responsavel: responsavelEst,
         telefone: telEst,
-        chavePix: contaPadrao ? contaPadrao.chave : chavePix,
+        chavePix: chavePixFinal,
         tipoChavePix: contaPadrao ? contaPadrao.tipo : tipoChavePix,
-        contasPix,
+        contasPix: contasPixValidas,
         logoUrl,
         store_logo_url: logoUrl,
         tituloCardapio,
@@ -442,6 +509,13 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         sloganCardapio,
         menu_slogan: sloganCardapio,
       });
+
+      // Garante sincronização imediata dos campos locais sem reversão
+      if (nomeEst) setNomeEst(nomeEst);
+      if (responsavelEst) setResponsavelEst(responsavelEst);
+      if (telEst) setTelEst(telEst);
+      if (chavePixFinal) setChavePix(chavePixFinal);
+
       toast.success("Dados do estabelecimento e personalização salvos com sucesso!");
     } catch (err: any) {
       console.error("[Configurações] Erro ao salvar estabelecimento:", err);

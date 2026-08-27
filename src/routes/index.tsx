@@ -39,9 +39,11 @@ import {
   Shield,
   Crown,
   Sparkles,
+  Lock,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo } from "@/lib/planos-utils";
+import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
 import {
   type TransacaoFinanceira,
   type StatusTransacao,
@@ -50,7 +52,9 @@ import {
   type DespesaNotaFiscal,
   type Cliente,
   type ProdutoCardapio,
+  type ItemListaCompra,
   type ListaCompras,
+  normalizarNomeInsumo,
   CLIENTES_PADRAO,
   CATALOGO_PRODUTOS_PADRAO,
   LISTAS_COMPRAS_PADRAO,
@@ -183,18 +187,18 @@ function Index() {
   const [despesas, setDespesas] = useState<DespesaNotaFiscal[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
+  const activeCode = profile?.establishmentCode || "";
+  const activeName = profile?.establishmentName || "";
+
   const [listasCompras, setListasCompras] = useState<ListaCompras[]>(() => {
     try {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("caixadoce_listas_compras_v2_CD-1001");
+      if (typeof window !== "undefined" && activeCode) {
+        const saved = localStorage.getItem(`caixadoce_listas_compras_v2_${activeCode}`);
         return saved ? JSON.parse(saved) : LISTAS_COMPRAS_PADRAO;
       }
     } catch {}
     return LISTAS_COMPRAS_PADRAO;
   });
-
-  const activeCode = profile?.establishmentCode || "CD-1001";
-  const activeName = profile?.establishmentName || "CaixaDoce Matriz";
 
   const ABAS_PERMITIDAS_COLABORADOR = ["despesas", "produtos", "encomendas"];
 
@@ -213,7 +217,64 @@ function Index() {
     }
   }, [activeTab, profile, podeAcessarAba]);
 
-  const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
+  const [planoTick, setPlanoTick] = useState(0);
+
+  const infoPlano = useMemo(
+    () => obterPlanoEfetivoEstabelecimento(activeCode, profile?.userCreatedAt),
+    [activeCode, activeTab, profile?.userCreatedAt, planoTick]
+  );
+
+  // Escuta atualizações do webhook do Mercado Pago em tempo real no Supabase
+  useEffect(() => {
+    if (!activeCode) return;
+
+    const channel = supabase
+      .channel(`estabelecimentos_realtime_${activeCode}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "estabelecimentos",
+          filter: `codigo=eq.${activeCode}`,
+        },
+        (payload) => {
+          const newRow = payload.new;
+          if (newRow && (newRow.status_assinatura === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
+            const dataExpiracao = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            salvarDadosPlanoEstabelecimento(activeCode, {
+              status: "ativo",
+              planoId: newRow.plano || "mensal",
+              dataExpiracao,
+            });
+            toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
+            setPlanoTick((prev) => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCode]);
+
+  const isProOuTrial = useMemo(() => {
+    return infoPlano.status === "ativo" || infoPlano.status === "trial" || infoPlano.planoId !== "basico";
+  }, [infoPlano]);
+
+  const isTrialExpirado = useMemo(() => {
+    if (infoPlano.status === "ativo" && infoPlano.planoId !== "basico") return false;
+    return infoPlano.status === "expirado" || (infoPlano.diasRestantesTrial ?? 0) <= 0;
+  }, [infoPlano]);
+
+  // Interceptação de Navegação e Hard Block (Paywall ao Expirar Trial de 7 dias)
+  useEffect(() => {
+    if (isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
+      toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
+      setActiveTab("plano");
+    }
+  }, [isTrialExpirado, activeTab]);
 
 function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
   if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
@@ -225,17 +286,16 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   return "00000000-0000-0000-0000-000000000000";
 }
 
-  // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a nomes de tabela (404)
+  // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a RLS e colunas
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
-      // ISOLAMENTO DE DADOS POR ESTABELECIMENTO
-      if (!activeCode) return [];
+      if (!activeCode || authLoading) return [];
 
       try {
         let query = supabase
           .from(tableName as any)
           .select("*")
-          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
+          .eq("estabelecimento_codigo", activeCode);
 
         if (orderColumn) {
           query = query.order(orderColumn, { ascending });
@@ -245,15 +305,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         if (!res.error && res.data) return res.data;
 
         if (res.error) {
-          console.warn(
-            `[Supabase Filter Warning] Tabela "${tableName}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
-          );
-
           try {
             let fallbackQuery = supabase
               .from(tableName as any)
               .select("*")
-              .eq("estabelecimento_codigo", activeCode);
+              .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
 
             if (orderColumn) {
               fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
@@ -267,7 +323,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
       return [];
     },
-    [user?.id]
+    [user?.id, authLoading]
   );
 
   // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
@@ -471,7 +527,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
   // 6. Carrega Listas de Compras (ListasCompras) do Supabase (Fonte Única da Verdade)
   const fetchListasCompras = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || authLoading) return;
     try {
       const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
 
@@ -1077,7 +1133,10 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       valor_utensilios: item.valorUtensilios || 0,
       valor_consumo_proprio: item.valorConsumoProprio || 0,
       valor_outros: item.valorOutros || 0,
-      itens: item.itens || [],
+      itens: (item.itens || []).map((it) => ({
+        ...it,
+        nome_padronizado: it.nomePadronizado || normalizarNomeInsumo(it.nome),
+      })),
       comprovante_url: item.comprovanteUrl || null,
       metodo_pagamento: item.metodoPagamento || "dinheiro",
     };
@@ -1507,6 +1566,18 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                   <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
                     {profile.establishmentCode}
                   </span>
+                  {isProOuTrial && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
+                        <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
+                      </span>
+                      <span className="text-[10px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                        {infoPlano.status === "ativo"
+                          ? `Válido até ${formatarDataExpiracao(infoPlano.dataExpiracao)}`
+                          : `${infoPlano.diasRestantesTrial || 7} dia(s) de teste`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1539,6 +1610,48 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
+        {/* Banner Sutil de Trial de 7 Dias Ativo */}
+        {infoPlano.status === "trial" && (infoPlano.diasRestantesTrial ?? 0) > 0 && (
+          <div className="mb-6 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+            <div className="flex items-center gap-2 font-bold">
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+              <span>
+                🎁 Você possui{" "}
+                <strong className="underline decoration-amber-500 decoration-2 font-black">
+                  {infoPlano.diasRestantesTrial} dia(s) restante(s)
+                </strong>{" "}
+                de acesso ilimitado.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setActiveTab("plano")}
+              className="h-7 px-3 text-[11px] font-extrabold bg-amber-600 hover:bg-amber-700 text-white shrink-0 shadow-sm"
+            >
+              Assinar Agora
+            </Button>
+          </div>
+        )}
+
+        {/* Banner Alerta de Trial Expirado (Paywall) */}
+        {isTrialExpirado && (
+          <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-900 dark:text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+            <div className="flex items-center gap-2 font-bold">
+              <Lock className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>
+                🚨 Seu período de teste gratuito de 7 dias expirou. Faça uma assinatura para desbloquear o acesso completo a todos os módulos do sistema.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setActiveTab("plano")}
+              className="h-8 px-4 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shrink-0 shadow-md"
+            >
+              Ver Planos & Assinar
+            </Button>
+          </div>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">

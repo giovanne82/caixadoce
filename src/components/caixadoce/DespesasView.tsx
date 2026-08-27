@@ -65,6 +65,8 @@ import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
   formatarMoeda,
+  normalizarNomeInsumo,
+  categorizarItemAutomatico,
   CATEGORIAS_DESPESA_CONFIG,
   type ItemListaCompra,
   type ListaCompras,
@@ -132,6 +134,8 @@ export function DespesasView({
 
   // Campo do Formulário para Criar Nova Lista
   const [nomeNovaListaInput, setNomeNovaListaInput] = useState("");
+
+
 
   // Modal de Adicionar Produtos na Criação da Lista
   const [modalCriarListaOpen, setModalCriarListaOpen] = useState(false);
@@ -569,6 +573,8 @@ export function DespesasView({
           </p>
         </div>
       </div>
+
+
 
       {/* ========================================================================= */}
       {/* 1. BOX SIMPLIFICADO NO INÍCIO: NOME DA LISTA E BOTÃO CRIAR LISTA */}

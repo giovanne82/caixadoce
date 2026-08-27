@@ -82,12 +82,57 @@ export function MeuPlanoTab() {
       const data = await res.json();
 
       if (res.ok && data.valido) {
-        setCupomAplicado({
-          codigo: data.cupom,
-          percentualDesconto: data.percentualDesconto,
-          descricao: data.descricao,
-        });
-        toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
+        if (data.tipoDesconto === "dias_gratis") {
+          const diasAdicionados = Number(data.diasGratis) || 30;
+          try {
+            await fetch("/api/aplicar-cupom-trial", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cupom: data.cupom, estabelecimentoCodigo: activeCode }),
+            });
+          } catch {}
+
+          const novosDiasAdicionais = (infoPlano.trialDiasAdicionais || 0) + diasAdicionados;
+          salvarDadosPlanoEstabelecimento(activeCode, {
+            trialDiasAdicionais: novosDiasAdicionais,
+            status: "trial",
+            planoId: "mensal",
+          });
+          if (updateEstablishmentPlan) {
+            await updateEstablishmentPlan("mensal", true);
+          }
+          recarregarPlano();
+          setCupomInput("");
+          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
+          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO! Aproveite todas as ferramentas sem cadastrar cartão.`);
+        } else if (Number(data.percentualDesconto) >= 100) {
+          // CUPOM 100% GRATUITO - BYPASS TOTAL DE CHECKOUT DO MERCADO PAGO
+          salvarDadosPlanoEstabelecimento(activeCode, {
+            planoId: "mensal",
+            status: "ativo",
+            tipoPagamento: "cupom_100",
+            dataInicio: new Date().toISOString(),
+          });
+          if (updateEstablishmentPlan) {
+            await updateEstablishmentPlan("mensal", true);
+          }
+          recarregarPlano();
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: 100,
+            descricao: data.descricao,
+          });
+          setCupomInput("");
+          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
+          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado gratuitamente sem necessidade de cartão.`);
+        } else {
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: data.percentualDesconto,
+            descricao: data.descricao,
+          });
+          toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
+        }
       } else {
         toast.error(data.mensagem || "Código promocional inválido ou expirado.");
       }
@@ -126,6 +171,23 @@ export function MeuPlanoTab() {
       if (cardRef) {
         cardRef.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+      return;
+    }
+
+    // BYPASS DO MERCADO PAGO SE O PLANO ESTIVER 100% GRATUITO
+    if (valorPlanoComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
+      salvarDadosPlanoEstabelecimento(activeCode, {
+        planoId: "mensal",
+        status: "ativo",
+        tipoPagamento: "cupom_100",
+        dataInicio: new Date().toISOString(),
+      });
+      if (updateEstablishmentPlan) {
+        updateEstablishmentPlan("mensal", true);
+      }
+      recarregarPlano();
+      toast.success("🎉 Oba! Plano PRO ativado gratuitamente sem necessidade de cartão.");
+      setModalCheckoutOpen(false);
       return;
     }
 
@@ -184,6 +246,7 @@ export function MeuPlanoTab() {
 
   const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
   const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
+  const isProOuTrialAtivo = isPlanoAtivo || infoPlano.status === "trial";
 
   return (
     <div className="space-y-6">
@@ -250,9 +313,9 @@ export function MeuPlanoTab() {
                     {infoPlano.status === "ativo"
                       ? "Assinatura Ativa (Ilimitado)"
                       : infoPlano.status === "trial"
-                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 7} dias grátis restantes`
+                      ? "Período de Teste (PRO)"
                       : infoPlano.status === "expirado"
-                      ? "⚠️ Trial Expirado (0 dias restantes)"
+                      ? "⚠️ Trial Expirado"
                       : "Plano Básico (Gratuito)"}
                   </Badge>
                 </div>
@@ -391,14 +454,18 @@ export function MeuPlanoTab() {
           <div className="p-6 pt-0">
             <Button
               variant="outline"
-              className="w-full text-xs font-bold"
-              disabled={infoPlano.planoId === "basico" || isPlanoAtivo}
+              className={`w-full text-xs font-bold transition-all ${
+                infoPlano.planoId === "basico" || isProOuTrialAtivo
+                  ? "opacity-60 bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-300 dark:border-stone-700 cursor-not-allowed pointer-events-none"
+                  : ""
+              }`}
+              disabled={infoPlano.planoId === "basico" || isProOuTrialAtivo}
               onClick={handleMudarParaBasico}
             >
               {infoPlano.planoId === "basico"
                 ? "Plano Atual"
-                : isPlanoAtivo
-                ? "Plano Básico Desativado (Possui Assinatura Ativa)"
+                : isProOuTrialAtivo
+                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
                 : "Usar Plano Gratuito"}
             </Button>
           </div>
@@ -512,7 +579,7 @@ export function MeuPlanoTab() {
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <MercadoPagoBrick
             estabelecimentoCodigo={activeCode}
-            userEmail={user?.email || "contato@caixadoce.com.br"}
+            userEmail={user?.email || ""}
             planoId="mensal"
             nomePlano={cupomAplicado ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})` : "Plano Mensal Completo PRO"}
             valor={valorPlanoComDesconto}
@@ -520,13 +587,14 @@ export function MeuPlanoTab() {
               salvarDadosPlanoEstabelecimento(activeCode, {
                 planoId: "mensal",
                 status: "ativo",
+                dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               });
               if (updateEstablishmentPlan) {
                 updateEstablishmentPlan("mensal" as any, true);
               }
               recarregarPlano();
               setModalCheckoutOpen(false);
-              toast.success("🎉 Assinatura ativada com sucesso!");
+              toast.success("🎉 Assinatura PRO ativada com sucesso!");
             }}
             onCancel={() => setModalCheckoutOpen(false)}
           />

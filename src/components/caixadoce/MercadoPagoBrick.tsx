@@ -73,7 +73,7 @@ export function MercadoPagoBrick({
       const publicKey =
         (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
         (import.meta as any).env?.MERCADOPAGO_PUBLIC_KEY ||
-        "TEST-f6c7f24c-d52c-4592-9fd4-874bd16d636e";
+        "APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc";
 
       try {
         const mp = new window.MercadoPago(publicKey, { locale: "pt-BR" });
@@ -118,7 +118,10 @@ export function MercadoPagoBrick({
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    formData,
+                    formData: {
+                      ...formData,
+                      transaction_amount: valor,
+                    },
                     selectedPaymentMethod,
                     estabelecimentoCodigo,
                     userEmail,

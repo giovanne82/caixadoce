@@ -133,7 +133,7 @@ function CardapioLojaView() {
             telefone: "(11) 99999-9999",
             logo_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80",
             store_logo_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80",
-            chavePix: "demo@caixadoce.com.br",
+            chavePix: "",
             cidade: "São Paulo / SP",
           });
           return;
@@ -186,7 +186,7 @@ function CardapioLojaView() {
             menu_title: estData.menu_title || estData.titulo_cardapio,
             slogan_cardapio: estData.slogan_cardapio || estData.menu_slogan,
             menu_slogan: estData.menu_slogan || estData.slogan_cardapio,
-            chavePix: estData.chave_pix || estData.chavePix || "contato@caixadoce.com.br",
+            chavePix: (estData.chave_pix || estData.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData.chave_pix || estData.chavePix || ""),
             cidade: estData.cidade || "SAO PAULO",
           });
         }

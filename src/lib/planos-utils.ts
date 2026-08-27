@@ -121,6 +121,7 @@ export interface InfoPlanoEstabelecimento {
   planoId: PlanoId;
   status: "ativo" | "trial" | "expirado" | "cancelado";
   diasRestantesTrial?: number;
+  trialDiasAdicionais?: number;
   dataInicio?: string;
   dataRenovacao?: string;
   dataExpiracao?: string;
@@ -142,72 +143,84 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
       dataExpiracao: "2099-12-31T23:59:59.000Z",
     };
   }
+
+  let planoSalvo: InfoPlanoEstabelecimento | null = null;
   try {
     if (typeof window !== "undefined") {
       const raw = localStorage.getItem(`caixadoce_plano_${code}`);
       if (raw) {
-        const parsed: InfoPlanoEstabelecimento = JSON.parse(raw);
-        // Se o plano já estiver ativo, verifica se possui data de expiração (ex: Pix de 30 dias)
-        if (parsed.status === "ativo") {
-          if (parsed.dataExpiracao) {
-            const expMs = new Date(parsed.dataExpiracao).getTime();
-            if (Date.now() > expMs) {
-              return {
-                ...parsed,
-                planoId: "basico",
-                status: "expirado",
-                diasRestantesTrial: 0,
-              };
-            }
-          }
-          return parsed;
-        }
-
-        // Cálculo dinâmico do trial de 7 dias com base no created_at do usuário
-        const dataCriacaoStr = userCreatedAt || parsed.dataInicio || new Date().toISOString();
-        const inicioMs = new Date(dataCriacaoStr).getTime();
-        const agoraMs = Date.now();
-        const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-        const diasRestantes = Math.max(0, 7 - diasDecorridos);
-
-        if (diasRestantes <= 0) {
-          return {
-            ...parsed,
-            planoId: "basico",
-            status: "expirado",
-            diasRestantesTrial: 0,
-          };
-        }
-        return {
-          ...parsed,
-          status: "trial",
-          diasRestantesTrial: diasRestantes,
-          dataInicio: dataCriacaoStr,
-        };
+        planoSalvo = JSON.parse(raw);
       }
     }
   } catch {}
 
-  const dataCriacaoStr = userCreatedAt || new Date().toISOString();
-  const inicioMs = new Date(dataCriacaoStr).getTime();
-  const agoraMs = Date.now();
-  const diasDecorridos = Math.floor((agoraMs - inicioMs) / (1000 * 60 * 60 * 24));
-  const diasRestantes = Math.max(0, 7 - diasDecorridos);
+  // 1. Se o usuário já possui um plano PAGO ativo
+  if (planoSalvo && planoSalvo.status === "ativo" && (planoSalvo.planoId === "mensal" || planoSalvo.planoId === "anual" || planoSalvo.planoId === "pro" || planoSalvo.planoId === "ilimitado")) {
+    if (planoSalvo.dataExpiracao) {
+      const expMs = new Date(planoSalvo.dataExpiracao).getTime();
+      if (Date.now() > expMs) {
+        return {
+          ...planoSalvo,
+          planoId: "basico",
+          status: "expirado",
+          diasRestantesTrial: 0,
+        };
+      }
+    }
+    return planoSalvo;
+  }
 
-  if (diasRestantes <= 0) {
+  // 2. Validação Segura do Trial (7 Dias Padrão + trialDiasAdicionais de Cupons Beta)
+  const dataCriacaoStr = userCreatedAt || planoSalvo?.dataInicio;
+  const diasAdicionais = Number(planoSalvo?.trialDiasAdicionais) || 0;
+  const diasTotaisTrial = 7 + diasAdicionais;
+
+  if (dataCriacaoStr) {
+    const inicioMs = new Date(dataCriacaoStr).getTime();
+    const agoraMs = Date.now();
+    const diffMs = agoraMs - inicioMs;
+    const diasDecorridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diasRestantes = Math.max(0, diasTotaisTrial - diasDecorridos);
+
+    if (diasDecorridos >= diasTotaisTrial || diasRestantes <= 0) {
+      return {
+        ...(planoSalvo || {}),
+        planoId: "basico",
+        status: "expirado",
+        diasRestantesTrial: 0,
+        trialDiasAdicionais: diasAdicionais,
+        dataInicio: dataCriacaoStr,
+      };
+    }
+
     return {
-      planoId: "basico",
-      status: "expirado",
-      diasRestantesTrial: 0,
+      ...(planoSalvo || {}),
+      planoId: "mensal",
+      status: "trial",
+      diasRestantesTrial: diasRestantes,
+      trialDiasAdicionais: diasAdicionais,
       dataInicio: dataCriacaoStr,
     };
   }
 
+  // Fallback se dataCriacaoStr não estiver disponível ainda
+  const diasRestantes = planoSalvo?.diasRestantesTrial !== undefined ? planoSalvo.diasRestantesTrial : diasTotaisTrial;
+  if (diasRestantes <= 0) {
+    return {
+      ...(planoSalvo || {}),
+      planoId: "basico",
+      status: "expirado",
+      diasRestantesTrial: 0,
+      trialDiasAdicionais: diasAdicionais,
+    };
+  }
+
   return {
+    ...(planoSalvo || {}),
     planoId: "mensal",
     status: "trial",
     diasRestantesTrial: diasRestantes,
-    dataInicio: dataCriacaoStr,
+    trialDiasAdicionais: diasAdicionais,
   };
 }
 
@@ -237,11 +250,36 @@ export function verificarAcessoModulo(
   return false;
 }
 
+export function formatarDataExpiracao(dataStr?: string): string {
+  if (!dataStr) {
+    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return d.toLocaleDateString("pt-BR");
+  }
+  try {
+    const d = new Date(dataStr);
+    if (isNaN(d.getTime())) {
+      const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      return fallback.toLocaleDateString("pt-BR");
+    }
+    return d.toLocaleDateString("pt-BR");
+  } catch {
+    const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return fallback.toLocaleDateString("pt-BR");
+  }
+}
+
 export function salvarDadosPlanoEstabelecimento(codigo: string, info: Partial<InfoPlanoEstabelecimento>) {
   const code = (codigo || "DEFAULT").toUpperCase();
   try {
     const current = obterPlanoEfetivoEstabelecimento(code);
-    const updated = { ...current, ...info };
+    const defaultExp = info.status === "ativo" && !info.dataExpiracao && !current.dataExpiracao
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+    const updated = {
+      ...current,
+      ...info,
+      ...(defaultExp ? { dataExpiracao: defaultExp } : {}),
+    };
     localStorage.setItem(`caixadoce_plano_${code}`, JSON.stringify(updated));
   } catch (e) {
     console.warn("Erro ao salvar plano no localStorage:", e);
