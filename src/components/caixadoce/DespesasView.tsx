@@ -65,6 +65,8 @@ import {
   obterCatalogoInsumos,
   LISTAS_COMPRAS_PADRAO,
   formatarMoeda,
+  normalizarNomeInsumo,
+  categorizarItemAutomatico,
   CATEGORIAS_DESPESA_CONFIG,
   type ItemListaCompra,
   type ListaCompras,
@@ -132,6 +134,99 @@ export function DespesasView({
 
   // Campo do Formulário para Criar Nova Lista
   const [nomeNovaListaInput, setNomeNovaListaInput] = useState("");
+
+  // Top 10 Insumos Mais Comprados (Agrupamento por nome_padronizado)
+  const [expandirTop10, setExpandirTop10] = useState(false);
+
+  const topInsumos = useMemo(() => {
+    const mapa = new Map<string, { nome: string; frequencia: number; quantidadeTotal: number; categoria?: string }>();
+
+    despesas.forEach((d) => {
+      if (Array.isArray(d.itens)) {
+        d.itens.forEach((it) => {
+          const nomeNorm = (it.nomePadronizado || (it as any).nome_padronizado || normalizarNomeInsumo(it.nome)).trim();
+          if (!nomeNorm) return;
+
+          const key = nomeNorm.toLowerCase();
+          const atual = mapa.get(key);
+
+          if (atual) {
+            atual.frequencia += 1;
+            atual.quantidadeTotal += Number(it.quantidade) || 1;
+          } else {
+            mapa.set(key, {
+              nome: nomeNorm,
+              frequencia: 1,
+              quantidadeTotal: Number(it.quantidade) || 1,
+              categoria: (it.categoria as any) || categorizarItemAutomatico(nomeNorm),
+            });
+          }
+        });
+      }
+    });
+
+    const lista = Array.from(mapa.values());
+    lista.sort((a, b) => b.frequencia - a.frequencia || b.quantidadeTotal - a.quantidadeTotal);
+    return lista.slice(0, 10);
+  }, [despesas]);
+
+  const handleAdicionarInsumoTop10ALista = (nomeInsumo: string) => {
+    let listaTargetId = expandedListaId || listas.find((l) => l.status === "ativa")?.id || listas[0]?.id;
+    let novasListas: ListaCompras[] = [...listas];
+
+    if (!listaTargetId || novasListas.length === 0) {
+      const novaListaId = crypto.randomUUID();
+      const novaLista: ListaCompras = {
+        id: novaListaId,
+        nome: gerarNomePadraoLista(),
+        estabelecimentoCodigo,
+        status: "ativa",
+        itens: [
+          {
+            id: crypto.randomUUID(),
+            nome: nomeInsumo,
+            quantidade: 1,
+            unidade: "un",
+            comprado: false,
+          },
+        ],
+        createdAt: new Date().toISOString(),
+      };
+      novasListas = [novaLista, ...listas];
+      setExpandedListaId(novaListaId);
+    } else {
+      novasListas = novasListas.map((lista) => {
+        if (lista.id === listaTargetId) {
+          const itemExistente = (lista.itens || []).find(
+            (it) => it.nome.toLowerCase() === nomeInsumo.toLowerCase()
+          );
+
+          let novosItens: ItemListaCompra[];
+          if (itemExistente) {
+            novosItens = lista.itens.map((it) =>
+              it.id === itemExistente.id ? { ...it, quantidade: it.quantidade + 1 } : it
+            );
+          } else {
+            novosItens = [
+              ...(lista.itens || []),
+              {
+                id: crypto.randomUUID(),
+                nome: nomeInsumo,
+                quantidade: 1,
+                unidade: "un",
+                comprado: false,
+              },
+            ];
+          }
+          return { ...lista, itens: novosItens };
+        }
+        return lista;
+      });
+    }
+
+    setListas(novasListas);
+    toast.success(`"${nomeInsumo}" adicionado à Lista de Compras! 🛒`);
+  };
 
   // Modal de Adicionar Produtos na Criação da Lista
   const [modalCriarListaOpen, setModalCriarListaOpen] = useState(false);
@@ -569,6 +664,76 @@ export function DespesasView({
           </p>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* CARD DE DESTAQUE: TOP 10 INSUMOS MAIS COMPRADOS */}
+      {/* ========================================================================= */}
+      {topInsumos.length > 0 && (
+        <Card className="border border-purple-500/30 bg-purple-500/5 shadow-sm rounded-2xl overflow-hidden">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0 border-b border-purple-500/10">
+            <div>
+              <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" /> Top 10 Insumos Mais Comprados
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                Inteligência de estoque baseada no seu histórico de compras e notinhas.
+              </CardDescription>
+            </div>
+            {topInsumos.length > 3 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpandirTop10(!expandirTop10)}
+                className="text-xs font-bold text-primary hover:text-primary/80 gap-1 h-8"
+              >
+                {expandirTop10 ? (
+                  <>
+                    Ver Menos <ChevronUp className="w-4 h-4" />
+                  </>
+                ) : (
+                  <>
+                    Ver Top 10 Completo ({topInsumos.length}) <ChevronDown className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {(expandirTop10 ? topInsumos : topInsumos.slice(0, 3)).map((item, idx) => (
+                <div
+                  key={item.nome || idx}
+                  className="flex items-center justify-between p-3 rounded-xl bg-card border border-border/80 shadow-xs hover:border-purple-500/40 transition-all"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 font-extrabold text-xs shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-extrabold text-xs text-foreground truncate" title={item.nome}>
+                        {item.nome}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {item.frequencia} compra(s) no histórico
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleAdicionarInsumoTop10ALista(item.nome)}
+                    className="h-8 w-8 p-0 shrink-0 border-purple-500/30 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold"
+                    title={`Adicionar "${item.nome}" à lista de compras`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. BOX SIMPLIFICADO NO INÍCIO: NOME DA LISTA E BOTÃO CRIAR LISTA */}

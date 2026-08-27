@@ -1,4 +1,4 @@
-import { categorizarItemAutomatico, type ItemNotaFiscal } from "@/lib/caixadoce-data";
+import { categorizarItemAutomatico, normalizarNomeInsumo, type ItemNotaFiscal } from "@/lib/caixadoce-data";
 import { sanitizarTexto } from "@/lib/security";
 import { toast } from "sonner";
 
@@ -215,11 +215,12 @@ Caso seja uma notinha fiscal de compra de produtos, analise a imagem e extraia o
   "establishment": "Nome do estabelecimento ou supermercado",
   "date": "YYYY-MM-DD",
   "time": "HH:mm",
-  "sale_number": "número da NF, NFCe, NFe, pedido ou cupom",
+  "sale_number": "número da NF, NFCe, NFe",
   "items": [
     {
-      "name": "Nome/Descrição exata do item no cupom",
-      "standard_name": "Nome normalizado de confeitaria (ex: Chocolate Nobre Ao Leite Melken, Cobertura Fracionada Top Harald, Granulado Gourmet, Caixa Bolo Alta 25x25x18, Caixa Salgado Rasa 25x25x3, Morango Bandeja 250g)",
+      "name": "Nome/Descrição exata do item no cupom (ex: LT COND MOCA 8% TP 395G)",
+      "nome_padronizado": "Nome genérico e limpo do insumo MANTENDO obrigatoriamente especificações cruciais (ex: Leite Condensado 8%, Chocolate em Pó 50%, Margarina com Sal)",
+      "standard_name": "Nome normalizado de confeitaria (ex: Chocolate Nobre Ao Leite Melken, Cobertura Fracionada Top Harald, Granulado Gourmet, Caixa Bolo Alta 25x25x18)",
       "category": "Chocolates & Coberturas | Lácteos & Recheios | Confeitos & Açúcares | Embalagens & Caixas | Aditivos & Corantes | Hortifrúti & Frutas | Outros Insumos",
       "quantity": 1,
       "is_fardo_ou_pacote": false,
@@ -238,6 +239,7 @@ Regras Específicas de Confeitaria:
 2. EMBALAGENS E CAIXAS: Se contiver dimensões de altura (ex: 25x25x18, 20x20x15), classifique como 'Caixa para Bolo Alta'. Se for rasa (ex: 25x25x3, 30x30x4), classifique como 'Caixa para Salgados/Tortas Rasa'.
 3. MULTI-PACKS / FARDOS: Se o nome mencionar 'FD C/25', 'CX C/50', 'PCT C/10', marque "is_fardo_ou_pacote": true, coloque "embalagem_qtd": 25 (ou a quantidade do pacote) e calcule o "unit_price_calculated" dividindo o valor total pela quantidade de unidades contidas no fardo.
 4. HORTIFRÚTI: Morangos e uvas em bandeja devem ter unidade "bdj" (bandeja).
+5. NORMALIZAÇÃO TÉCNICA (nome_padronizado): Traduza abreviações de supermercado para um nome genérico e limpo do insumo. PORÉM, você DEVE preservar obrigatoriamente as especificações técnicas cruciais contidas na nota, como porcentagem de gordura, porcentagem de cacau, ou tipo (ex: Integral, Semidesnatado). Ex: 'LT COND MOCA 8% TP 395G' -> 'Leite Condensado 8%', 'CHOCOLATE PO FRADE 50% 1KG' -> 'Chocolate em Pó 50%', 'MARGARINA QUALY C/ SAL 500G' -> 'Margarina com Sal'.
 Responda apenas com o JSON puro sem formatação markdown.`;
 
   const body = {
@@ -402,11 +404,13 @@ export async function processarNotinhaComOCR(
       ? Number(it.unit_price_calculated)
       : qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
     const nomeOriginal = String(it.name || "Insumo").trim();
-    const nomePadronizado = sanitizarTexto(it.standard_name ? String(it.standard_name).trim() : nomeOriginal);
+    const rawPadronizado = String(it.nome_padronizado || it.standard_name || "").trim();
+    const nomePadronizado = rawPadronizado ? sanitizarTexto(rawPadronizado) : normalizarNomeInsumo(nomeOriginal);
 
     return {
       id: crypto.randomUUID(),
-      nome: nomePadronizado,
+      nome: nomeOriginal,
+      nomePadronizado,
       quantidade: qtd,
       valorUnitario: unit,
       valorTotal: total,

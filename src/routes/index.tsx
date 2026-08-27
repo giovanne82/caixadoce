@@ -52,7 +52,9 @@ import {
   type DespesaNotaFiscal,
   type Cliente,
   type ProdutoCardapio,
+  type ItemListaCompra,
   type ListaCompras,
+  normalizarNomeInsumo,
   CLIENTES_PADRAO,
   CATALOGO_PRODUTOS_PADRAO,
   LISTAS_COMPRAS_PADRAO,
@@ -1095,7 +1097,10 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       valor_utensilios: item.valorUtensilios || 0,
       valor_consumo_proprio: item.valorConsumoProprio || 0,
       valor_outros: item.valorOutros || 0,
-      itens: item.itens || [],
+      itens: (item.itens || []).map((it) => ({
+        ...it,
+        nome_padronizado: it.nomePadronizado || normalizarNomeInsumo(it.nome),
+      })),
       comprovante_url: item.comprovanteUrl || null,
       metodo_pagamento: item.metodoPagamento || "dinheiro",
     };
