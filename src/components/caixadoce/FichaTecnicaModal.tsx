@@ -395,14 +395,19 @@ export function FichaTecnicaModal({
                     placeholder="Ex: Chocolate Melken, Leite Condensado..."
                     value={novoInsumoNome}
                     onChange={(e) => {
-                      setNovoInsumoNome(e.target.value);
-                      setDropdownOpen(true);
+                      const val = e.target.value;
+                      setNovoInsumoNome(val);
+                      setDropdownOpen(val.trim().length > 0);
                     }}
-                    onFocus={() => setDropdownOpen(true)}
+                    onFocus={() => {
+                      if (novoInsumoNome.trim().length > 0) {
+                        setDropdownOpen(true);
+                      }
+                    }}
                     className="h-10 text-xs w-full"
                   />
 
-                  {dropdownOpen && sugestoesFiltradas.length > 0 && (
+                  {dropdownOpen && novoInsumoNome.trim().length > 0 && sugestoesFiltradas.length > 0 && (
                     <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 max-h-48 overflow-y-auto bg-popover text-popover-foreground border border-border rounded-xl shadow-xl py-1">
                       {sugestoesFiltradas.map((sug) => (
                         <div
