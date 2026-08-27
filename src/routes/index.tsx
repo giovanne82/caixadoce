@@ -245,17 +245,16 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   return "00000000-0000-0000-0000-000000000000";
 }
 
-  // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a nomes de tabela (404)
+  // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a RLS e colunas
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
-      // ISOLAMENTO DE DADOS POR ESTABELECIMENTO
-      if (!activeCode) return [];
+      if (!activeCode || authLoading) return [];
 
       try {
         let query = supabase
           .from(tableName as any)
           .select("*")
-          .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
+          .eq("estabelecimento_codigo", activeCode);
 
         if (orderColumn) {
           query = query.order(orderColumn, { ascending });
@@ -265,15 +264,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         if (!res.error && res.data) return res.data;
 
         if (res.error) {
-          console.warn(
-            `[Supabase Filter Warning] Tabela "${tableName}" | Erro: ${res.error.message}. Tentando filtro por estabelecimento_codigo...`
-          );
-
           try {
             let fallbackQuery = supabase
               .from(tableName as any)
               .select("*")
-              .eq("estabelecimento_codigo", activeCode);
+              .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
 
             if (orderColumn) {
               fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
@@ -287,7 +282,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
       return [];
     },
-    [user?.id]
+    [user?.id, authLoading]
   );
 
   // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
@@ -491,7 +486,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
   // 6. Carrega Listas de Compras (ListasCompras) do Supabase (Fonte Única da Verdade)
   const fetchListasCompras = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || authLoading) return;
     try {
       const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
 
