@@ -2329,10 +2329,76 @@ export function OrdersView({
                 <span className="text-[10px] text-muted-foreground">{itensTags.length} item(ns) selecionado(s)</span>
               </div>
 
+              {/* INPUT DE BUSCA E BOTÃO ADICIONAR NO TOPO DO CARD */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Digite para buscar doce/bolo do cardápio (ex: Red Velvet, Brigadeiros)..."
+                    value={buscaItemProduto}
+                    onChange={(e) => {
+                      setBuscaItemProduto(e.target.value);
+                      setDropdownItensAberto(true);
+                    }}
+                    onFocus={() => setDropdownItensAberto(true)}
+                    onBlur={() => setTimeout(() => setDropdownItensAberto(false), 200)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAdicionarItemPedido(buscaItemProduto);
+                      }
+                    }}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleAdicionarItemPedido(buscaItemProduto)}
+                    disabled={!buscaItemProduto.trim()}
+                    className="h-8 px-3 text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+                  </Button>
+                </div>
+
+                {dropdownItensAberto && sugestoesProdutos.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 max-h-52 overflow-y-auto bg-popover bg-white dark:bg-slate-900 border border-border shadow-2xl rounded-xl p-1 divide-y divide-border/40">
+                    {sugestoesProdutos.map((prod) => (
+                      <div
+                        key={prod.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleAdicionarItemPedido(prod.nome, prod.preco, prod.id);
+                        }}
+                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          {prod.fotoUrl && <img src={prod.fotoUrl} alt={prod.nome} className="w-6 h-6 rounded object-cover" />}
+                          <span className="font-bold text-foreground">{prod.nome}</span>
+                        </div>
+                        <span className="font-mono font-black text-emerald-600">{formatarMoeda(prod.preco)}</span>
+                      </div>
+                    ))}
+                    {buscaItemProduto.trim().length > 0 &&
+                      !sugestoesProdutos.some((p) => p.nome.toLowerCase() === buscaItemProduto.trim().toLowerCase()) && (
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleAdicionarItemPedido(buscaItemProduto);
+                          }}
+                          className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar "{buscaItemProduto}" como item personalizado
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* LISTA DE PRODUTOS SELECIONADOS ABAIXO DO INPUT */}
               <div className="flex flex-col gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border divide-y divide-border/40 w-full overflow-hidden">
                 {itensTags.length === 0 ? (
                   <span className="text-[11px] text-muted-foreground italic p-2">
-                    Nenhum produto adicionado. Digite abaixo para selecionar do cardápio.
+                    Nenhum produto adicionado. Digite acima para selecionar do cardápio.
                   </span>
                 ) : (
                   itensTags.map((it) => {
@@ -2419,70 +2485,6 @@ export function OrdersView({
                       </div>
                     );
                   })
-                )}
-              </div>
-
-              <div className="relative">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Digite para buscar doce/bolo do cardápio (ex: Red Velvet, Brigadeiros)..."
-                    value={buscaItemProduto}
-                    onChange={(e) => {
-                      setBuscaItemProduto(e.target.value);
-                      setDropdownItensAberto(true);
-                    }}
-                    onFocus={() => setDropdownItensAberto(true)}
-                    onBlur={() => setTimeout(() => setDropdownItensAberto(false), 200)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAdicionarItemPedido(buscaItemProduto);
-                      }
-                    }}
-                    className="h-8 text-xs flex-1"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => handleAdicionarItemPedido(buscaItemProduto)}
-                    disabled={!buscaItemProduto.trim()}
-                    className="h-8 px-3 text-xs font-semibold"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
-                  </Button>
-                </div>
-
-                {dropdownItensAberto && sugestoesProdutos.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 max-h-52 overflow-y-auto bg-popover bg-white dark:bg-slate-900 border border-border shadow-2xl rounded-xl p-1 divide-y divide-border/40">
-                    {sugestoesProdutos.map((prod) => (
-                      <div
-                        key={prod.id}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleAdicionarItemPedido(prod.nome, prod.preco, prod.id);
-                        }}
-                        className="p-2 hover:bg-primary/10 cursor-pointer rounded-lg text-xs flex items-center justify-between transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          {prod.fotoUrl && <img src={prod.fotoUrl} alt={prod.nome} className="w-6 h-6 rounded object-cover" />}
-                          <span className="font-bold text-foreground">{prod.nome}</span>
-                        </div>
-                        <span className="font-mono font-black text-emerald-600">{formatarMoeda(prod.preco)}</span>
-                      </div>
-                    ))}
-                    {buscaItemProduto.trim().length > 0 &&
-                      !sugestoesProdutos.some((p) => p.nome.toLowerCase() === buscaItemProduto.trim().toLowerCase()) && (
-                        <div
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleAdicionarItemPedido(buscaItemProduto);
-                          }}
-                          className="p-2.5 hover:bg-primary/10 cursor-pointer rounded-lg text-xs text-primary font-bold flex items-center gap-1.5"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Adicionar "{buscaItemProduto}" como item personalizado
-                        </div>
-                      )}
-                  </div>
                 )}
               </div>
             </div>
@@ -2738,41 +2740,7 @@ export function OrdersView({
                 <span className="text-[10px] text-muted-foreground">{insumosTags.length} insumo(s)</span>
               </div>
 
-              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
-                {insumosTags.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground italic">
-                    Nenhum insumo vinculado. Digite abaixo para buscar no catálogo de insumos.
-                  </span>
-                ) : (
-                  insumosTags.map((t) => (
-                    <div
-                      key={t.id}
-                      className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold shadow-2xs"
-                    >
-                      <span className="truncate max-w-[150px]">{t.nome}</span>
-                      <span className="text-muted-foreground/60">|</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={t.quantidade ?? 1}
-                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, parseFloat(e.target.value.replace(",", ".")) || 1)}
-                          className="w-12 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoverInsumo(t.id)}
-                        className="hover:text-rose-600 ml-1 text-muted-foreground"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
+              {/* INPUT DE BUSCA DE INSUMOS E BOTÃO ADICIONAR NO TOPO DO CARD */}
               <div className="relative">
                 <div className="flex gap-2">
                   <Input
@@ -2830,6 +2798,42 @@ export function OrdersView({
                         </div>
                       )}
                   </div>
+                )}
+              </div>
+
+              {/* LISTA DE INSUMOS VINCULADOS ABAIXO DO INPUT */}
+              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 bg-background rounded-lg border border-border">
+                {insumosTags.length === 0 ? (
+                  <span className="text-[11px] text-muted-foreground italic">
+                    Nenhum insumo vinculado. Digite acima para buscar no catálogo de insumos.
+                  </span>
+                ) : (
+                  insumosTags.map((t) => (
+                    <div
+                      key={t.id}
+                      className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold shadow-2xs"
+                    >
+                      <span className="truncate max-w-[150px]">{t.nome}</span>
+                      <span className="text-muted-foreground/60">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Qtd:</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={t.quantidade ?? 1}
+                          onChange={(e) => handleAlterarQuantidadeInsumo(t.id, parseFloat(e.target.value.replace(",", ".")) || 1)}
+                          className="w-12 h-5 px-1 text-xs font-mono font-bold bg-background border border-amber-500/40 rounded text-center"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoverInsumo(t.id)}
+                        className="hover:text-rose-600 ml-1 text-muted-foreground"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
