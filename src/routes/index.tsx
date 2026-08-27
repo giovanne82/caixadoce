@@ -222,6 +222,10 @@ function Index() {
     [activeCode, activeTab, profile?.userCreatedAt]
   );
 
+  const isProOuTrial = useMemo(() => {
+    return infoPlano.status === "ativo" || infoPlano.status === "trial" || infoPlano.planoId !== "basico";
+  }, [infoPlano]);
+
   const isTrialExpirado = useMemo(() => {
     if (infoPlano.status === "ativo" && infoPlano.planoId !== "basico") return false;
     return infoPlano.status === "expirado" || (infoPlano.diasRestantesTrial ?? 0) <= 0;
@@ -1525,6 +1529,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                   <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
                     {profile.establishmentCode}
                   </span>
+                  {isProOuTrial && (
+                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase shrink-0 border border-purple-400/30">
+                      <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
+                    </span>
+                  )}
                 </div>
               </div>
 

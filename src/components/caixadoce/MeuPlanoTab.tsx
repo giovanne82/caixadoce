@@ -184,6 +184,7 @@ export function MeuPlanoTab() {
 
   const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
   const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
+  const isProOuTrialAtivo = isPlanoAtivo || infoPlano.status === "trial";
 
   return (
     <div className="space-y-6">
@@ -391,14 +392,18 @@ export function MeuPlanoTab() {
           <div className="p-6 pt-0">
             <Button
               variant="outline"
-              className="w-full text-xs font-bold"
-              disabled={infoPlano.planoId === "basico" || isPlanoAtivo}
+              className={`w-full text-xs font-bold transition-all ${
+                infoPlano.planoId === "basico" || isProOuTrialAtivo
+                  ? "opacity-60 bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-300 dark:border-stone-700 cursor-not-allowed pointer-events-none"
+                  : ""
+              }`}
+              disabled={infoPlano.planoId === "basico" || isProOuTrialAtivo}
               onClick={handleMudarParaBasico}
             >
               {infoPlano.planoId === "basico"
                 ? "Plano Atual"
-                : isPlanoAtivo
-                ? "Plano Básico Desativado (Possui Assinatura Ativa)"
+                : isProOuTrialAtivo
+                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
                 : "Usar Plano Gratuito"}
             </Button>
           </div>
