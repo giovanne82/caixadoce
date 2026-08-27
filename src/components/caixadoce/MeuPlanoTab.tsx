@@ -103,7 +103,28 @@ export function MeuPlanoTab() {
           }
           recarregarPlano();
           setCupomInput("");
-          toast.success(`🎉 Parabéns! Cupom de Beta Tester ativado: +${diasAdicionados} dias grátis de acesso PRO adicionados!`);
+          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
+          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO! Aproveite todas as ferramentas sem cadastrar cartão.`);
+        } else if (Number(data.percentualDesconto) >= 100) {
+          // CUPOM 100% GRATUITO - BYPASS TOTAL DE CHECKOUT DO MERCADO PAGO
+          salvarDadosPlanoEstabelecimento(activeCode, {
+            planoId: "mensal",
+            status: "ativo",
+            tipoPagamento: "cupom_100",
+            dataInicio: new Date().toISOString(),
+          });
+          if (updateEstablishmentPlan) {
+            await updateEstablishmentPlan("mensal", true);
+          }
+          recarregarPlano();
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: 100,
+            descricao: data.descricao,
+          });
+          setCupomInput("");
+          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
+          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado gratuitamente sem necessidade de cartão.`);
         } else {
           setCupomAplicado({
             codigo: data.cupom,
@@ -150,6 +171,23 @@ export function MeuPlanoTab() {
       if (cardRef) {
         cardRef.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+      return;
+    }
+
+    // BYPASS DO MERCADO PAGO SE O PLANO ESTIVER 100% GRATUITO
+    if (valorPlanoComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
+      salvarDadosPlanoEstabelecimento(activeCode, {
+        planoId: "mensal",
+        status: "ativo",
+        tipoPagamento: "cupom_100",
+        dataInicio: new Date().toISOString(),
+      });
+      if (updateEstablishmentPlan) {
+        updateEstablishmentPlan("mensal", true);
+      }
+      recarregarPlano();
+      toast.success("🎉 Oba! Plano PRO ativado gratuitamente sem necessidade de cartão.");
+      setModalCheckoutOpen(false);
       return;
     }
 
