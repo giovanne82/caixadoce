@@ -20,6 +20,7 @@ export type User = {
   email: string;
   avatar?: string;
   provider?: "email" | "google";
+  created_at?: string;
 };
 
 export type StaffRole = "admin" | "gerente" | "operador";
@@ -81,6 +82,7 @@ export type StaffProfile = {
   contasPix?: ContaPix[];
   abasPermitidas?: string[];
   ownerUserId?: string;
+  userCreatedAt?: string;
 };
 
 export type UserProfile = StaffProfile;
@@ -194,8 +196,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
-
-    return {
+    return {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
       establishmentName: masterEst?.nome || `Confeitaria ${formattedCode}`,
@@ -204,10 +205,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
       ownerUserId: isUserUuid ? authUser.id : undefined,
+      userCreatedAt: authUser?.created_at || authUser?.user_metadata?.created_at || masterEst?.created_at,
     };
   };
-
-
 
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -244,6 +244,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             email: session.user.email || "",
             avatar: session.user.user_metadata?.avatar_url || "",
             provider: session.user.app_metadata?.provider === "google" ? "google" : "email",
+            created_at: session.user.created_at,
           };
           setUser(u);
           localStorage.setItem("caixadoce_user", JSON.stringify(u));
@@ -294,6 +295,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                   menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
                   ownerUserId: data.user_id || baseProf.ownerUserId,
+                  userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
                 };
                 setProfile(merged);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(merged));

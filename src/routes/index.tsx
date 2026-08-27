@@ -39,6 +39,8 @@ import {
   Shield,
   Crown,
   Sparkles,
+  Lock,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo } from "@/lib/planos-utils";
@@ -213,7 +215,23 @@ function Index() {
     }
   }, [activeTab, profile, podeAcessarAba]);
 
-  const infoPlano = useMemo(() => obterPlanoEfetivoEstabelecimento(activeCode), [activeCode, activeTab]);
+  const infoPlano = useMemo(
+    () => obterPlanoEfetivoEstabelecimento(activeCode, profile?.userCreatedAt),
+    [activeCode, activeTab, profile?.userCreatedAt]
+  );
+
+  const isTrialExpirado = useMemo(() => {
+    if (infoPlano.status === "ativo" && infoPlano.planoId !== "basico") return false;
+    return infoPlano.status === "expirado" || (infoPlano.diasRestantesTrial ?? 0) <= 0;
+  }, [infoPlano]);
+
+  // Interceptação de Navegação e Hard Block (Paywall ao Expirar Trial de 7 dias)
+  useEffect(() => {
+    if (isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
+      toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
+      setActiveTab("plano");
+    }
+  }, [isTrialExpirado, activeTab]);
 
 function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
   if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
@@ -1539,6 +1557,48 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
+        {/* Banner Sutil de Trial de 7 Dias Ativo */}
+        {infoPlano.status === "trial" && (infoPlano.diasRestantesTrial ?? 0) > 0 && (
+          <div className="mb-6 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+            <div className="flex items-center gap-2 font-bold">
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+              <span>
+                🎁 Período de Teste Grátis PRO: Você possui{" "}
+                <strong className="underline decoration-amber-500 decoration-2 font-black">
+                  {infoPlano.diasRestantesTrial} dia(s) restante(s)
+                </strong>{" "}
+                de acesso ilimitado a todos os recursos do sistema.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setActiveTab("plano")}
+              className="h-7 px-3 text-[11px] font-extrabold bg-amber-600 hover:bg-amber-700 text-white shrink-0 shadow-sm"
+            >
+              Assinar Agora
+            </Button>
+          </div>
+        )}
+
+        {/* Banner Alerta de Trial Expirado (Paywall) */}
+        {isTrialExpirado && (
+          <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-900 dark:text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+            <div className="flex items-center gap-2 font-bold">
+              <Lock className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>
+                🚨 Seu período de teste gratuito de 7 dias expirou. Faça uma assinatura para desbloquear o acesso completo a todos os módulos do sistema.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setActiveTab("plano")}
+              className="h-8 px-4 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shrink-0 shadow-md"
+            >
+              Ver Planos & Assinar
+            </Button>
+          </div>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
