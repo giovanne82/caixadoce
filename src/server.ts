@@ -105,6 +105,192 @@ async function seedInitialCouponInSupabase() {
 }
 seedInitialCouponInSupabase();
 
+// Helper global para ativacao resiliente de plano no Supabase (Webhook + Process Payment)
+async function ativarPlanoEstabelecimentoNoSupabase(params: {
+  establishmentCode: string;
+  planId?: string;
+  paymentId: string | number;
+  paymentMethod?: string;
+  amount?: number;
+}) {
+  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  const code = (establishmentCode || "CD-1001").toUpperCase();
+  const duracaoDias = planId === "anual" || planId === "ilimitado" ? 365 : 30;
+  const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+  const agora = new Date().toISOString();
+  const dataHojeStr = agora.split("T")[0];
+
+  console.log(`[Ativar Plano Supabase] Atualizando estabelecimento '${code}' (Plano: ${planId}, Pagamento ID: ${paymentId}, Expira: ${dataExpiracao})...`);
+
+  // 1. ATUALIZAÇÃO DA TABELA 'estabelecimentos' (suporta todas as variações de colunas no esquema)
+  const fullUpdatePayload: Record<string, any> = {
+    status: "ativo",
+    status_assinatura: "ativo",
+    plano_status: "ativo",
+    plano: planId,
+    plano_id: planId,
+    plano_exp: dataExpiracao,
+    plano_expira_em: dataExpiracao,
+    data_expiracao: dataExpiracao,
+    updated_at: agora,
+    plano_atualizado_em: agora,
+    metodo_pagamento: paymentMethod,
+    mercadopago_pagamento_id: String(paymentId),
+  };
+
+  try {
+    let res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(fullUpdatePayload),
+    });
+
+    let resData: any = null;
+    if (res.ok) {
+      resData = await res.json();
+    }
+
+    // Se o PATCH com todas as colunas falhou ou retornou 0 linhas alteradas, tenta Fallback 1
+    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
+      console.warn(`[Ativar Plano Supabase] Tentativa 1 retornou status ${res.status}. Tentando Fallback 1...`);
+      const fallbackPayload1 = {
+        status: "ativo",
+        plano: planId,
+        plano_exp: dataExpiracao,
+        updated_at: agora,
+      };
+      res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
+        method: "PATCH",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(fallbackPayload1),
+      });
+
+      if (res.ok) resData = await res.json();
+    }
+
+    // Fallback 2 se o Fallback 1 falhou
+    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
+      console.warn("[Ativar Plano Supabase] Fallback 1 não atualizou linhas. Tentando Fallback 2...");
+      const fallbackPayload2 = {
+        status_assinatura: "ativo",
+        plano_id: planId,
+        plano_expira_em: dataExpiracao,
+        updated_at: agora,
+      };
+      res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
+        method: "PATCH",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(fallbackPayload2),
+      });
+
+      if (res.ok) resData = await res.json();
+    }
+
+    // Se a loja ainda não existe no Supabase, cria via INSERT/UPSERT
+    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
+      console.warn("[Ativar Plano Supabase] Nenhuma linha alterada. Criando linha do estabelecimento via UPSERT...");
+      const insertPayload = {
+        codigo: code,
+        nome: `Loja ${code}`,
+        status: "ativo",
+        plano_status: "ativo",
+        plano: planId,
+        plano_id: planId,
+        plano_exp: dataExpiracao,
+        plano_expira_em: dataExpiracao,
+        updated_at: agora,
+      };
+      await fetch(`${supabaseUrl}/rest/v1/estabelecimentos`, {
+        method: "POST",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates",
+        },
+        body: JSON.stringify(insertPayload),
+      });
+    }
+
+    console.log(`[Ativar Plano Supabase] 🎉 Tabela 'estabelecimentos' atualizada com sucesso para ${code}!`);
+  } catch (errEst) {
+    console.error("[Ativar Plano Supabase] Erro ao atualizar estabelecimentos:", errEst);
+  }
+
+  // 2. INSERÇÃO DO REGISTRO DE CONFIRMAÇÃO DE TRANSAÇÃO EM 'transacoes_financeiras'
+  try {
+    const transacaoPayload = {
+      estabelecimento_codigo: code,
+      descricao: `Assinatura Plano PRO/Mensal — CaixaDoce (${paymentMethod.toUpperCase()} #${paymentId})`,
+      valor: Number(amount) || 19.90,
+      tipo: "receita",
+      categoria: "Assinatura SaaS",
+      status: "pago",
+      data: dataHojeStr,
+      comprovante_url: "https://www.mercadopago.com.br",
+    };
+
+    const resTrans = await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(transacaoPayload),
+    });
+
+    if (resTrans.ok) {
+      console.log(`[Ativar Plano Supabase] 🎉 Registro de confirmação inserido em 'transacoes_financeiras' para ${code}!`);
+    } else {
+      const errText = await resTrans.text();
+      console.warn(`[Ativar Plano Supabase] Aviso na transação completa (${resTrans.status}): ${errText}. Tentando payload minimalista...`);
+      const transMinimal = {
+        estabelecimento_codigo: code,
+        descricao: `Assinatura Plano PRO — CaixaDoce (#${paymentId})`,
+        valor: Number(amount) || 19.90,
+        tipo: "receita",
+        categoria: "Assinatura",
+        status: "pago",
+        data: dataHojeStr,
+      };
+      await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
+        method: "POST",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(transMinimal),
+      });
+    }
+  } catch (errTrans) {
+    console.error("[Ativar Plano Supabase] Erro ao registrar transação financeira:", errTrans);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -369,7 +555,7 @@ export default {
       }
 
       // =========================================================================
-      // MERCADO PAGO: WEBHOOK DE NOTIFICAÇÃO ASSÍNCRONA
+      // MERCADO PAGO: WEBHOOK DE NOTIFICAÇÃO ASSÍNCRONA (/api/webhooks/mercadopago e /api/mercadopago/webhook)
       // =========================================================================
       if (
         (url.pathname === "/api/webhooks/mercadopago" || url.pathname === "/api/mercadopago/webhook") &&
@@ -377,11 +563,17 @@ export default {
       ) {
         try {
           let paymentId = url.searchParams.get("data.id") || url.searchParams.get("id");
+
           if (!paymentId && request.method === "POST") {
             try {
               const bodyText = await request.text();
-              const payload = JSON.parse(bodyText);
-              paymentId = payload.data?.id || payload.id;
+              if (bodyText) {
+                const payload = JSON.parse(bodyText);
+                paymentId =
+                  payload.data?.id ||
+                  payload.id ||
+                  (payload.resource ? String(payload.resource).split("/").pop() : null);
+              }
             } catch {}
           }
 
@@ -404,43 +596,39 @@ export default {
               const paymentData = await mpRes.json();
               console.log(`[MercadoPago Webhook] Consulta de Pagamento ${paymentId}: status=${paymentData.status}`);
 
-              if (paymentData.status === "approved") {
+              if (paymentData.status === "approved" || paymentData.status === "authorized") {
                 const establishmentCode =
                   paymentData.external_reference ||
+                  paymentData.metadata?.estabelecimento_codigo ||
                   paymentData.metadata?.establishment_code ||
                   paymentData.metadata?.establishmentcode ||
                   "CD-1001";
-                const planId = paymentData.metadata?.plan_id || paymentData.metadata?.planid || "mensal";
 
-                const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-                const supabaseKey =
-                  process.env.VITE_SUPABASE_ANON_KEY ||
-                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+                const planId =
+                  paymentData.metadata?.plano_id ||
+                  paymentData.metadata?.plan_id ||
+                  paymentData.metadata?.planid ||
+                  "mensal";
 
-                try {
-                  await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(establishmentCode)}`, {
-                    method: "PATCH",
-                    headers: {
-                      apikey: supabaseKey,
-                      Authorization: `Bearer ${supabaseKey}`,
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      status_assinatura: "ativo",
-                      plano: planId,
-                      updated_at: new Date().toISOString(),
-                    }),
-                  });
-                  console.log(`[Supabase Webhook MP] Assinatura do estabelecimento ${establishmentCode} ATIVADA!`);
-                } catch (dbErr) {
-                  console.error("[Supabase Webhook Error]", dbErr);
-                }
+                const amount = Number(paymentData.transaction_amount || 19.90);
+                const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
+                const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+
+                await ativarPlanoEstabelecimentoNoSupabase({
+                  establishmentCode,
+                  planId,
+                  paymentId,
+                  paymentMethod: tipoPag,
+                  amount,
+                });
               }
+            } else {
+              console.error(`[MercadoPago Webhook] Erro ao consultar pagamento ${paymentId} na API do MP: Status ${mpRes.status}`);
             }
           }
 
           return new Response(
-            JSON.stringify({ received: true, status: "mercadopago_webhook_processed" }),
+            JSON.stringify({ received: true, status: "mercadopago_webhook_processed", payment_id: paymentId }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
@@ -453,7 +641,7 @@ export default {
       }
 
       // =========================================================================
-      // ROTA 1: POST /api/mercadopago/process-payment (Checkout Bricks Handler)
+      // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
       // =========================================================================
       if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {
         try {
@@ -462,8 +650,9 @@ export default {
 
           const accessToken =
             process.env.MERCADOPAGO_ACCESS_TOKEN ||
+            process.env.MERCADO_PAGO_ACCESS_TOKEN ||
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-            "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
+            "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
@@ -473,7 +662,7 @@ export default {
             external_reference: estabelecimentoCodigo || "CD-1001",
             metadata: {
               estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
-              plano_id: planoId || "ilimitado",
+              plano_id: planoId || "mensal",
               user_email: userEmail || "contato@caixadoce.com.br",
             },
           };
@@ -509,40 +698,18 @@ export default {
           const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
 
           // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
-          if (status === "approved" && estabelecimentoCodigo) {
-            try {
-              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-              const supabaseKey =
-                process.env.VITE_SUPABASE_ANON_KEY ||
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+          if ((status === "approved" || status === "authorized") && (estabelecimentoCodigo || mpPayload.external_reference)) {
+            const code = estabelecimentoCodigo || mpPayload.external_reference;
+            const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
+            const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
-              const duracaoDias = planoId === "anual" ? 365 : 30;
-              const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-              const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
-              const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
-
-              await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}`, {
-                method: "PATCH",
-                headers: {
-                  apikey: supabaseKey,
-                  Authorization: `Bearer ${supabaseKey}`,
-                  "Content-Type": "application/json",
-                  Prefer: "return=minimal",
-                },
-                body: JSON.stringify({
-                  plano_id: "ilimitado",
-                  plano_status: "ativo",
-                  plano_atualizado_em: new Date().toISOString(),
-                  plano_expira_em: dataExpiracao,
-                  metodo_pagamento: tipoPag,
-                  mercadopago_pagamento_id: String(paymentId),
-                  mercadopago_assinatura_id: mpData.subscription_id ? String(mpData.subscription_id) : null,
-                }),
-              });
-              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
-            } catch (err) {
-              console.error("[MercadoPago Direct] Erro ao atualizar Supabase:", err);
-            }
+            await ativarPlanoEstabelecimentoNoSupabase({
+              establishmentCode: code,
+              planId: planoId || "mensal",
+              paymentId,
+              paymentMethod: tipoPag,
+              amount: Number(valor || mpPayload.transaction_amount || 19.90),
+            });
           }
 
           return new Response(
@@ -561,87 +728,6 @@ export default {
             JSON.stringify({ error: err.message || "Falha interna no servidor de pagamento." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
-        }
-      }
-
-      // =========================================================================
-      // ROTA 2: POST / GET /api/webhooks/mercadopago (Webhook de Atualização Automática)
-      // =========================================================================
-      if (url.pathname === "/api/webhooks/mercadopago") {
-        try {
-          const paymentId = url.searchParams.get("id") || url.searchParams.get("data.id");
-          let payloadId = paymentId;
-
-          if (!payloadId && request.method === "POST") {
-            try {
-              const body = await request.json();
-              payloadId = body?.data?.id || body?.id || body?.resource?.split("/").pop();
-            } catch {}
-          }
-
-          if (payloadId) {
-            const accessToken =
-              process.env.MERCADOPAGO_ACCESS_TOKEN ||
-              process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-              "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
-
-            const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${payloadId}`, {
-              headers: { Authorization: `Bearer ${accessToken}` },
-            });
-
-            if (paymentRes.ok) {
-              const paymentData = await paymentRes.json();
-              const status = paymentData.status;
-              const meta = paymentData.metadata || {};
-              const estabCodigo = meta.estabelecimento_codigo || paymentData.external_reference;
-
-              console.log(`[MercadoPago Webhook] Notificação do Pagamento #${payloadId} - Status: ${status} (Estab: ${estabCodigo})`);
-
-              if (status === "approved" && estabCodigo) {
-                const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-                const supabaseKey =
-                  process.env.VITE_SUPABASE_ANON_KEY ||
-                  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-
-                const planoIdMeta = meta.plano_id || "ilimitado";
-                const duracaoDias = planoIdMeta === "anual" ? 365 : 30;
-                const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-                const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "").toLowerCase();
-                const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
-
-                await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabCodigo)}`, {
-                  method: "PATCH",
-                  headers: {
-                    apikey: supabaseKey,
-                    Authorization: `Bearer ${supabaseKey}`,
-                    "Content-Type": "application/json",
-                    Prefer: "return=minimal",
-                  },
-                  body: JSON.stringify({
-                    plano_id: "ilimitado",
-                    plano_status: "ativo",
-                    plano_atualizado_em: new Date().toISOString(),
-                    plano_expira_em: dataExpiracao,
-                    metodo_pagamento: tipoPag,
-                    mercadopago_pagamento_id: String(payloadId),
-                    mercadopago_assinatura_id: paymentData.subscription_id ? String(paymentData.subscription_id) : null,
-                  }),
-                });
-                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
-              }
-            }
-          }
-
-          return new Response(JSON.stringify({ status: "ok", received: true }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        } catch (err: any) {
-          console.error("[MercadoPago Webhook Error]", err);
-          return new Response(JSON.stringify({ status: "ok", error: err.message }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
         }
       }
 
