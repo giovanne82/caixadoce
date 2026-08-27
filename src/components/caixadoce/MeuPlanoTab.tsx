@@ -432,8 +432,8 @@ export function MeuPlanoTab() {
                     </span>
                     <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
                   </div>
-                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 font-bold">
-                    🎉 Cupom {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%) Aplicado
+                  <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
+                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
                   </Badge>
                 </div>
               ) : (

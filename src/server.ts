@@ -76,6 +76,35 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   return null;
 }
 
+// Injeção de Seed Data do Cupom Inicial "ARTFESTA50" na Tabela cupons_assinatura
+async function seedInitialCouponInSupabase() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/cupons_assinatura`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({
+        codigo: "ARTFESTA50",
+        tipo_desconto: "porcentagem",
+        valor: 50,
+        ativo: true,
+      }),
+    });
+  } catch (err) {
+    console.log("[Seed ARTFESTA50 Log]", err);
+  }
+}
+seedInitialCouponInSupabase();
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -145,6 +174,7 @@ export default {
 
           // Dicionário Estritamente Secret e Seguro no Servidor (Server-Side SaaS Promo Codes)
           const cuponsValidos: Record<string, { percentualDesconto: number; descricao: string }> = {
+            "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
             "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
             "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
             "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
@@ -155,7 +185,39 @@ export default {
             "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
           };
 
-          const cupomEncontrado = cuponsValidos[cupomDigitado];
+          let cupomEncontrado = cuponsValidos[cupomDigitado];
+
+          // Se não estiver no dicionário em memória, faz fallback dinâmico para a tabela cupons_assinatura no Supabase
+          if (!cupomEncontrado) {
+            try {
+              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+              const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+              
+              const resDb = await fetch(
+                `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=eq.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=codigo,valor,tipo_desconto`,
+                {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+
+              if (resDb.ok) {
+                const dbData = await resDb.json();
+                if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
+                  const item = dbData[0];
+                  const perc = item.tipo_desconto === "porcentagem" ? Number(item.valor || 50) : 50;
+                  cupomEncontrado = {
+                    percentualDesconto: perc,
+                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                  };
+                }
+              }
+            } catch (errDb) {
+              console.error("[Supabase Cupons Fetch Error]", errDb);
+            }
+          }
 
           if (cupomEncontrado) {
             return new Response(
