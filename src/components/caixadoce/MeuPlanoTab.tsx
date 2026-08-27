@@ -587,13 +587,14 @@ export function MeuPlanoTab() {
               salvarDadosPlanoEstabelecimento(activeCode, {
                 planoId: "mensal",
                 status: "ativo",
+                dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               });
               if (updateEstablishmentPlan) {
                 updateEstablishmentPlan("mensal" as any, true);
               }
               recarregarPlano();
               setModalCheckoutOpen(false);
-              toast.success("🎉 Assinatura ativada com sucesso!");
+              toast.success("🎉 Assinatura PRO ativada com sucesso!");
             }}
             onCancel={() => setModalCheckoutOpen(false)}
           />

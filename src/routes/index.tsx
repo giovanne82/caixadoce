@@ -43,7 +43,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo } from "@/lib/planos-utils";
+import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
 import {
   type TransacaoFinanceira,
   type StatusTransacao,
@@ -217,10 +217,47 @@ function Index() {
     }
   }, [activeTab, profile, podeAcessarAba]);
 
+  const [planoTick, setPlanoTick] = useState(0);
+
   const infoPlano = useMemo(
     () => obterPlanoEfetivoEstabelecimento(activeCode, profile?.userCreatedAt),
-    [activeCode, activeTab, profile?.userCreatedAt]
+    [activeCode, activeTab, profile?.userCreatedAt, planoTick]
   );
+
+  // Escuta atualizações do webhook do Mercado Pago em tempo real no Supabase
+  useEffect(() => {
+    if (!activeCode) return;
+
+    const channel = supabase
+      .channel(`estabelecimentos_realtime_${activeCode}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "estabelecimentos",
+          filter: `codigo=eq.${activeCode}`,
+        },
+        (payload) => {
+          const newRow = payload.new;
+          if (newRow && (newRow.status_assinatura === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
+            const dataExpiracao = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            salvarDadosPlanoEstabelecimento(activeCode, {
+              status: "ativo",
+              planoId: newRow.plano || "mensal",
+              dataExpiracao,
+            });
+            toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
+            setPlanoTick((prev) => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCode]);
 
   const isProOuTrial = useMemo(() => {
     return infoPlano.status === "ativo" || infoPlano.status === "trial" || infoPlano.planoId !== "basico";
@@ -1530,9 +1567,16 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                     {profile.establishmentCode}
                   </span>
                   {isProOuTrial && (
-                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase shrink-0 border border-purple-400/30">
-                      <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
+                        <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
+                      </span>
+                      <span className="text-[10px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                        {infoPlano.status === "ativo"
+                          ? `Válido até ${formatarDataExpiracao(infoPlano.dataExpiracao)}`
+                          : `${infoPlano.diasRestantesTrial || 7} dia(s) de teste`}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

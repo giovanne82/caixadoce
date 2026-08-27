@@ -250,11 +250,36 @@ export function verificarAcessoModulo(
   return false;
 }
 
+export function formatarDataExpiracao(dataStr?: string): string {
+  if (!dataStr) {
+    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return d.toLocaleDateString("pt-BR");
+  }
+  try {
+    const d = new Date(dataStr);
+    if (isNaN(d.getTime())) {
+      const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      return fallback.toLocaleDateString("pt-BR");
+    }
+    return d.toLocaleDateString("pt-BR");
+  } catch {
+    const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return fallback.toLocaleDateString("pt-BR");
+  }
+}
+
 export function salvarDadosPlanoEstabelecimento(codigo: string, info: Partial<InfoPlanoEstabelecimento>) {
   const code = (codigo || "DEFAULT").toUpperCase();
   try {
     const current = obterPlanoEfetivoEstabelecimento(code);
-    const updated = { ...current, ...info };
+    const defaultExp = info.status === "ativo" && !info.dataExpiracao && !current.dataExpiracao
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+    const updated = {
+      ...current,
+      ...info,
+      ...(defaultExp ? { dataExpiracao: defaultExp } : {}),
+    };
     localStorage.setItem(`caixadoce_plano_${code}`, JSON.stringify(updated));
   } catch (e) {
     console.warn("Erro ao salvar plano no localStorage:", e);
