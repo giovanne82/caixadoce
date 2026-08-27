@@ -54,6 +54,9 @@ export function MeuPlanoTab() {
     descricao: string;
   } | null>(null);
 
+  // ESTADO DO PLANO SELECIONADO NO CHECKOUT (MENSAL OU ANUAL)
+  const [planoSelecionadoCheckout, setPlanoSelecionadoCheckout] = useState<"mensal" | "anual">("mensal");
+
   const recarregarPlano = () => {
     setInfoPlano(obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
   };
@@ -150,15 +153,25 @@ export function MeuPlanoTab() {
     toast.info("Código promocional removido.");
   };
 
-  const valorOriginalPlano = 19.90;
-  const valorPlanoComDesconto = useMemo(() => {
-    if (!cupomAplicado) return valorOriginalPlano;
+  // PLANO MENSAL (R$ 19,90/mês)
+  const valorOriginalPlanoMensal = 19.90;
+  const valorPlanoMensalComDesconto = useMemo(() => {
+    if (!cupomAplicado) return valorOriginalPlanoMensal;
     const fator = (100 - cupomAplicado.percentualDesconto) / 100;
-    const calc = valorOriginalPlano * fator;
+    const calc = valorOriginalPlanoMensal * fator;
     return parseFloat(calc.toFixed(2));
   }, [cupomAplicado]);
 
-  const handleAbrirCheckout = () => {
+  // PLANO ANUAL (R$ 149,90/ano)
+  const valorOriginalPlanoAnual = 149.90;
+  const valorPlanoAnualComDesconto = useMemo(() => {
+    if (!cupomAplicado) return valorOriginalPlanoAnual;
+    const fator = (100 - cupomAplicado.percentualDesconto) / 100;
+    const calc = valorOriginalPlanoAnual * fator;
+    return parseFloat(calc.toFixed(2));
+  }, [cupomAplicado]);
+
+  const handleAbrirCheckout = (plano: "mensal" | "anual" = "mensal") => {
     const jaPossuiAssinaturaAtiva =
       infoPlano.status === "ativo" &&
       infoPlano.planoId !== "basico";
@@ -174,16 +187,21 @@ export function MeuPlanoTab() {
       return;
     }
 
+    setPlanoSelecionadoCheckout(plano);
+    const valorComDesconto = plano === "anual" ? valorPlanoAnualComDesconto : valorPlanoMensalComDesconto;
+
     // BYPASS DO MERCADO PAGO SE O PLANO ESTIVER 100% GRATUITO
-    if (valorPlanoComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
+    if (valorComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
+      const duracaoDias = plano === "anual" ? 365 : 30;
       salvarDadosPlanoEstabelecimento(activeCode, {
-        planoId: "mensal",
+        planoId: plano,
         status: "ativo",
         tipoPagamento: "cupom_100",
         dataInicio: new Date().toISOString(),
+        dataExpiracao: new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString(),
       });
       if (updateEstablishmentPlan) {
-        updateEstablishmentPlan("mensal", true);
+        updateEstablishmentPlan(plano as any, true);
       }
       recarregarPlano();
       toast.success("🎉 Oba! Plano PRO ativado gratuitamente sem necessidade de cartão.");
@@ -273,13 +291,13 @@ export function MeuPlanoTab() {
               🔥 Plano Mensal Completo PRO por Tempo Limitado!
             </h4>
             <p className="text-xs text-white/90">
-              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
+              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
             </p>
           </div>
         </div>
         {!isPlanoAtivo && (
           <Button
-            onClick={handleAbrirCheckout}
+            onClick={() => handleAbrirCheckout("mensal")}
             className="bg-white text-purple-900 hover:bg-amber-300 hover:text-purple-950 font-black text-xs shrink-0 shadow-md border-0"
           >
             Assinar Agora
@@ -337,11 +355,11 @@ export function MeuPlanoTab() {
                 </Button>
               ) : (
                 <Button
-                  onClick={handleAbrirCheckout}
+                  onClick={() => handleAbrirCheckout("mensal")}
                   className="font-extrabold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white w-full sm:w-auto text-xs"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Assinar Mensal (R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)
+                  Assinar Mensal (R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês)
                 </Button>
               )}
             </div>
@@ -405,9 +423,9 @@ export function MeuPlanoTab() {
       </Card>
 
       {/* ========================================================================= */}
-      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO E MENSAL R$ 19,90) */}
+      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO, MENSAL R$ 19,90 E ANUAL R$ 149,90) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 items-stretch">
         
         {/* CARD 1: PLANO BÁSICO (R$ 0,00) */}
         <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-border/80 transition-all">
@@ -465,21 +483,17 @@ export function MeuPlanoTab() {
               {infoPlano.planoId === "basico"
                 ? "Plano Atual"
                 : isProOuTrialAtivo
-                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
+                ? "Plano Básico Desativado"
                 : "Usar Plano Gratuito"}
             </Button>
           </div>
         </Card>
 
-        {/* CARD 2: PLANO MENSAL COMPLETO (COM SUPORTE A CUPOM DE DESCONTO) */}
-        <Card className="border-2 border-[#8E7CC3] shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
-            <Sparkles className="w-3.5 h-3.5" /> RECOMENDADO
-          </div>
-
+        {/* CARD 2: PLANO MENSAL COMPLETO (R$ 19,90/mês) */}
+        <Card className="border-2 border-[#8E7CC3] shadow-lg relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
           <CardHeader className="pb-4 pt-6">
             <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-bold text-[#7C3AED] bg-[#F3EEF9] border border-[#8E7CC3]/30">
-              🔥 ACESSO COMPLETO PRO
+              🔥 FLEXIBILIDADE MENSAL
             </Badge>
             <CardTitle className="text-lg font-extrabold text-foreground flex items-center justify-between">
               Mensal Completo <Zap className="w-5 h-5 text-amber-500" />
@@ -492,7 +506,7 @@ export function MeuPlanoTab() {
                 <div className="space-y-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}
+                      R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
                     </span>
                     <span className="text-sm line-through text-muted-foreground font-mono">
                       R$ 19,90
@@ -520,81 +534,164 @@ export function MeuPlanoTab() {
             <ul className="space-y-2 text-xs text-foreground font-medium">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Escanear a Notinha com IA (Ilimitado)</span>
+                <span>Escanear Notinhas com IA (Ilimitado)</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span><strong>Ficha Técnica &amp; Precificação de Produtos (Margem Real sem Prejuízo)</strong></span>
+                <span><strong>Ficha Técnica &amp; Precificação Real</strong></span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Atualização automática de custos com base no <strong>último preço comprado</strong></span>
+                <span>Atualização de custos por último preço comprado</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Milhares de pré-cadastros de insumos para agilizar sua Lista de Compras</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Controle financeiro dos pedidos e fluxo de caixa</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cardápio digital personalizado</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Consolidação automática de receitas na Lista de Compras</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Compartilhamento de conta com outro usuário</span>
+                <span>Calendário de Encomendas &amp; Gestão Financeira</span>
               </li>
             </ul>
           </CardContent>
           <div className="p-6 pt-0">
             <Button
-              onClick={handleAbrirCheckout}
-              disabled={isPlanoAtivo}
-              className={`w-full font-extrabold shadow-lg text-xs py-5 ${
-                isPlanoAtivo
+              onClick={() => handleAbrirCheckout("mensal")}
+              disabled={isPlanoAtivo && infoPlano.planoId === "mensal"}
+              className={`w-full font-extrabold shadow-md text-xs py-5 ${
+                isPlanoAtivo && infoPlano.planoId === "mensal"
                   ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
-                  : "bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white"
+                  : "bg-purple-600 hover:bg-purple-700 text-white"
               }`}
             >
-              {isPlanoAtivo ? "✓ Plano Já Ativo (Acesso Ilimitado)" : `Assinar Plano Mensal (R$ ${valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)`}
-              {!isPlanoAtivo && <ArrowRight className="w-4 h-4 ml-1.5" />}
+              {isPlanoAtivo && infoPlano.planoId === "mensal"
+                ? "✓ Plano Mensal Ativo"
+                : `Assinar Mensal (R$ ${valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês)`}
+              {!(isPlanoAtivo && infoPlano.planoId === "mensal") && <ArrowRight className="w-4 h-4 ml-1.5" />}
+            </Button>
+          </div>
+        </Card>
+
+        {/* CARD 3: PLANO ANUAL COMPLETO (R$ 149,90/ano - DESTAQUE DE ECONOMIA -37%) */}
+        <Card className="border-2 border-emerald-500 shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ring-2 ring-emerald-500/20">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[11px] font-black px-4 py-1 rounded-full shadow-lg uppercase tracking-wider flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+            <Crown className="w-3.5 h-3.5 text-amber-300" /> ECONOMIZE 37% OFF
+          </div>
+
+          <CardHeader className="pb-4 pt-6">
+            <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-400">
+              🏆 MAIOR ECONOMIA (1 ANO COMPLETO)
+            </Badge>
+            <CardTitle className="text-lg font-black text-foreground flex items-center justify-between">
+              Anual Completo <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
+            </CardTitle>
+            <CardDescription className="text-xs font-semibold">
+              Equivalente a apenas <strong className="text-emerald-600 font-mono">R$ 12,49/mês</strong>. Garanta 1 ano de acesso sem preocupações!
+            </CardDescription>
+            <div className="pt-3">
+              {cupomAplicado ? (
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-emerald-600 font-mono">
+                      R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
+                    </span>
+                    <span className="text-sm line-through text-muted-foreground font-mono">
+                      R$ 149,90
+                    </span>
+                    <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
+                  </div>
+                  <Badge variant="default" className="text-xs bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
+                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
+                  </Badge>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-black text-emerald-600">R$ 149,90</span>
+                    <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground font-mono">
+                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ 88,90!)
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                Pagamento único anual • Pix ou Cartão em até 12x
+              </p>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-3">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Tudo do Plano PRO por 1 Ano:</p>
+            <ul className="space-y-2 text-xs text-foreground font-medium">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span><strong>Validade de 365 dias (1 Ano Sem Interrupções)</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Escanear Notinhas com IA (Ilimitado)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Ficha Técnica &amp; Precificação sem Prejuízo</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Calendário de Encomendas &amp; Gestão Financeira</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Cardápio Digital Público &amp; Lista de Compras</span>
+              </li>
+            </ul>
+          </CardContent>
+          <div className="p-6 pt-0">
+            <Button
+              onClick={() => handleAbrirCheckout("anual")}
+              disabled={isPlanoAtivo && infoPlano.planoId === "anual"}
+              className={`w-full font-black shadow-lg text-xs py-5 ${
+                isPlanoAtivo && infoPlano.planoId === "anual"
+                  ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
+                  : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
+              }`}
+            >
+              {isPlanoAtivo && infoPlano.planoId === "anual"
+                ? "✓ Plano Anual Ativo"
+                : `Assinar Plano Anual (R$ ${valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}/ano)`}
+              {!(isPlanoAtivo && infoPlano.planoId === "anual") && <ArrowRight className="w-4 h-4 ml-1.5" />}
             </Button>
           </div>
         </Card>
 
       </div>
 
-      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO COM VALOR ATUALIZADO PELO CUPOM */}
+      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO COM VALOR E PERÍODO ADAPTATIVOS */}
       <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 border-2 border-purple-500/30">
           <MercadoPagoBrick
             estabelecimentoCodigo={activeCode}
             userEmail={user?.email || ""}
-            planoId="mensal"
-            nomePlano={cupomAplicado ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})` : "Plano Mensal Completo PRO"}
-            valor={valorPlanoComDesconto}
+            planoId={planoSelecionadoCheckout}
+            nomePlano={
+              planoSelecionadoCheckout === "anual"
+                ? cupomAplicado
+                  ? `Plano Anual Completo PRO (Cupom ${cupomAplicado.codigo})`
+                  : "Plano Anual Completo PRO"
+                : cupomAplicado
+                ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})`
+                : "Plano Mensal Completo PRO"
+            }
+            valor={planoSelecionadoCheckout === "anual" ? valorPlanoAnualComDesconto : valorPlanoMensalComDesconto}
             onSuccess={() => {
+              const duracaoDias = planoSelecionadoCheckout === "anual" ? 365 : 30;
               salvarDadosPlanoEstabelecimento(activeCode, {
-                planoId: "mensal",
+                planoId: planoSelecionadoCheckout,
                 status: "ativo",
-                dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                dataExpiracao: new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString(),
               });
               if (updateEstablishmentPlan) {
-                updateEstablishmentPlan("mensal" as any, true);
+                updateEstablishmentPlan(planoSelecionadoCheckout as any, true);
               }
               recarregarPlano();
               setModalCheckoutOpen(false);
-              toast.success("🎉 Assinatura PRO ativada com sucesso!");
+              toast.success(`🎉 Assinatura ${planoSelecionadoCheckout === "anual" ? "Anual" : "Mensal"} PRO ativada com sucesso!`);
             }}
             onCancel={() => setModalCheckoutOpen(false)}
           />
