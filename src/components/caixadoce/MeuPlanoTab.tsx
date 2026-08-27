@@ -251,9 +251,9 @@ export function MeuPlanoTab() {
                     {infoPlano.status === "ativo"
                       ? "Assinatura Ativa (Ilimitado)"
                       : infoPlano.status === "trial"
-                      ? `🎁 Trial: ${infoPlano.diasRestantesTrial ?? 7} dias grátis restantes`
+                      ? "Período de Teste (PRO)"
                       : infoPlano.status === "expirado"
-                      ? "⚠️ Trial Expirado (0 dias restantes)"
+                      ? "⚠️ Trial Expirado"
                       : "Plano Básico (Gratuito)"}
                   </Badge>
                 </div>
