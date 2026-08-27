@@ -358,51 +358,59 @@ export default {
             );
           }
 
-          // Dicionário Estritamente Secret e Seguro no Servidor (Server-Side SaaS Promo Codes)
-          const cuponsValidos: Record<string, { percentualDesconto: number; descricao: string }> = {
-            "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
-            "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
-            "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
-            "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
-            "DOCEVIP": { percentualDesconto: 30, descricao: "30% de desconto VIP na assinatura" },
-            "BOCATAABOCA": { percentualDesconto: 25, descricao: "25% de desconto Parceria Boca a Boca" },
-            "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
-            "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
-            "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
-          };
+          let cupomEncontrado: { percentualDesconto: number; descricao: string } | null = null;
 
-          let cupomEncontrado = cuponsValidos[cupomDigitado];
+          // 1. CONSULTA EM TEMPO REAL NA TABELA 'cupons_assinatura' DO SUPABASE (PRIORIDADE MÁXIMA)
+          try {
+            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseKey =
+              process.env.VITE_SUPABASE_ANON_KEY ||
+              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
-          // Se não estiver no dicionário em memória, faz fallback dinâmico para a tabela cupons_assinatura no Supabase
-          if (!cupomEncontrado) {
-            try {
-              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-              const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-              
-              const resDb = await fetch(
-                `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=eq.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=codigo,valor,tipo_desconto`,
-                {
-                  headers: {
-                    apikey: supabaseKey,
-                    Authorization: `Bearer ${supabaseKey}`,
-                  },
-                }
-              );
-
-              if (resDb.ok) {
-                const dbData = await resDb.json();
-                if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
-                  const item = dbData[0];
-                  const perc = item.tipo_desconto === "porcentagem" ? Number(item.valor || 50) : 50;
-                  cupomEncontrado = {
-                    percentualDesconto: perc,
-                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
-                  };
-                }
+            const resDb = await fetch(
+              `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=codigo,valor,tipo_desconto,ativo`,
+              {
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Cache-Control": "no-cache, no-store, must-revalidate",
+                  Pragma: "no-cache",
+                },
               }
-            } catch (errDb) {
-              console.error("[Supabase Cupons Fetch Error]", errDb);
+            );
+
+            if (resDb.ok) {
+              const dbData = await resDb.json();
+              if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
+                const item = dbData[0];
+                const perc = Number(item.valor) > 0 ? Number(item.valor) : 50;
+                cupomEncontrado = {
+                  percentualDesconto: perc,
+                  descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                };
+                console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' encontrado no Supabase com ${perc}% de desconto!`);
+              }
             }
+          } catch (errDb) {
+            console.error("[Supabase Live Cupons Fetch Error]", errDb);
+          }
+
+          // 2. FALLBACK SECUNDÁRIO CASO O SUPABASE ESTEJA OFFLINE OU O CUPOM NÃO ESTEJA NO BANCO
+          if (!cupomEncontrado) {
+            const cuponsEstaticos: Record<string, { percentualDesconto: number; descricao: string }> = {
+              "ARTFESTAVIPD": { percentualDesconto: 95, descricao: "95% de Desconto Especial VIP (ArtFesta)" },
+              "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
+              "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
+              "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
+              "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
+              "DOCEVIP": { percentualDesconto: 30, descricao: "30% de desconto VIP na assinatura" },
+              "BOCATAABOCA": { percentualDesconto: 25, descricao: "25% de desconto Parceria Boca a Boca" },
+              "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
+              "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
+              "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
+            };
+
+            cupomEncontrado = cuponsEstaticos[cupomDigitado] || null;
           }
 
           if (cupomEncontrado) {
