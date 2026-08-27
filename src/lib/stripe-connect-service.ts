@@ -85,7 +85,7 @@ export function salvarConfiguracoesStripeLoja(
  */
 export async function createStripeConnectAccount(
   establishmentCode: string,
-  email: string = "admin@caixadoce.com.br"
+  email: string = ""
 ): Promise<{ onboardingUrl: string; mockAccountId: string }> {
   const mockAccountId = `acct_1N9x${Math.floor(100000 + Math.random() * 900000)}`;
 

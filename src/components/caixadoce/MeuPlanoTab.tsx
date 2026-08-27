@@ -512,7 +512,7 @@ export function MeuPlanoTab() {
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <MercadoPagoBrick
             estabelecimentoCodigo={activeCode}
-            userEmail={user?.email || "contato@caixadoce.com.br"}
+            userEmail={user?.email || ""}
             planoId="mensal"
             nomePlano={cupomAplicado ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})` : "Plano Mensal Completo PRO"}
             valor={valorPlanoComDesconto}

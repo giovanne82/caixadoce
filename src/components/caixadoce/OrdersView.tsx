@@ -864,11 +864,11 @@ export function OrdersView({
     ord: Encomenda,
     conta: { chave: string; favorecido?: string }
   ) => {
-    const nomeLoja = estabelecimentoNome || profile?.establishmentName || "CaixaDoce";
-    const chavePix = conta.chave || profile?.chavePix || "contato@caixadoce.com.br";
+    const nomeLoja = estabelecimentoNome || profile?.establishmentName || "";
+    const chavePix = conta.chave || profile?.chavePix || "";
     const favorecidoPix = (conta.favorecido && conta.favorecido.trim().length > 0)
       ? conta.favorecido.trim()
-      : (nomeLoja || profile?.responsavel || "CaixaDoce");
+      : (nomeLoja || profile?.responsavel || "");
     const cidadeLoja = profile?.cidade || "SAO PAULO";
 
     const totalPago = calcularTotalPagoEncomenda(ord);
@@ -926,10 +926,13 @@ export function OrdersView({
       return;
     }
 
-    const contas = profile?.contasPix && profile.contasPix.length > 0 ? profile.contasPix : [];
+    const contas = (profile?.contasPix && profile.contasPix.length > 0)
+      ? profile.contasPix.filter((c) => c.chave && c.chave !== "contato@caixadoce.com.br")
+      : (profile?.chavePix && profile.chavePix !== "contato@caixadoce.com.br"
+          ? [{ id: "def", chave: profile.chavePix, favorecido: profile?.establishmentName || profile?.responsavel || "", isDefault: true }]
+          : []);
 
-    // Se tiver 2 ou mais contas Pix cadastradas, exibe o modal de seleção rápida
-    if (contas.length >= 2) {
+    if (contas.length > 1) {
       setEncomendaParaEnvioPix(ord);
       setModalSelecaoPixOpen(true);
       return;
@@ -937,8 +940,8 @@ export function OrdersView({
 
     // Se tiver 0 ou 1 chave, envia direto com a chave principal
     const contaUsar = contas.find((c) => c.isDefault) || contas[0] || {
-      chave: profile?.chavePix || "contato@caixadoce.com.br",
-      favorecido: profile?.establishmentName || profile?.responsavel || "CaixaDoce",
+      chave: profile?.chavePix && profile.chavePix !== "contato@caixadoce.com.br" ? profile.chavePix : "",
+      favorecido: profile?.establishmentName || profile?.responsavel || "",
     };
 
     executarEnvioWhatsAppComContaPix(ord, contaUsar);

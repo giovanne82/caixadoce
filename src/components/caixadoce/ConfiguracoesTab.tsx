@@ -380,27 +380,34 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.cidade !== null && d.cidade !== undefined) setCidadeEst(d.cidade);
           if (d.estado !== null && d.estado !== undefined) setUfEst(d.estado);
           if (d.tipo_chave_pix) setTipoChavePix(d.tipo_chave_pix);
-          if (d.chave_pix) setChavePix(d.chave_pix);
+          if (d.chave_pix && d.chave_pix !== "contato@caixadoce.com.br") setChavePix(d.chave_pix);
+          else if (d.chave_pix === "contato@caixadoce.com.br") setChavePix("");
+
           if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
           if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
           if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
 
-          const pixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
+          const rawPixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
             ? d.pix_accounts
             : (Array.isArray(d.pix_keys) && d.pix_keys.length > 0 ? d.pix_keys : []);
 
-          if (pixList.length > 0) {
-            setContasPix(pixList);
-          } else if (d.chave_pix) {
+          const pixListClean = rawPixList.filter((c: any) => c?.chave && c.chave !== "contato@caixadoce.com.br");
+
+          if (pixListClean.length > 0) {
+            setContasPix(pixListClean);
+          } else if (d.chave_pix && d.chave_pix !== "contato@caixadoce.com.br") {
             setContasPix([
               {
                 id: "default_pix",
                 tipo: d.tipo_chave_pix || "email",
                 chave: d.chave_pix,
-                favorecido: d.nome || d.responsavel || "ArtFesta",
+                favorecido: d.nome || d.responsavel || "",
                 isDefault: true,
               },
             ]);
+          } else {
+            setContasPix([]);
+            setChavePix("");
           }
         }
       });
@@ -414,7 +421,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         ? `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`
         : logradouroEst;
 
-      const contaPadrao = contasPix.find((c) => c.isDefault) || contasPix[0];
+      const contasPixValidas = contasPix.filter((c) => c.chave && c.chave !== "contato@caixadoce.com.br");
+      const contaPadrao = contasPixValidas.find((c) => c.isDefault) || contasPixValidas[0];
+      const chavePixFinal = contaPadrao ? contaPadrao.chave : (chavePix !== "contato@caixadoce.com.br" ? chavePix : "");
 
       await updateEstablishmentDetails({
         codigo: activeCode,
@@ -432,9 +441,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         cnpj: numDoc,
         responsavel: responsavelEst,
         telefone: telEst,
-        chavePix: contaPadrao ? contaPadrao.chave : chavePix,
+        chavePix: chavePixFinal,
         tipoChavePix: contaPadrao ? contaPadrao.tipo : tipoChavePix,
-        contasPix,
+        contasPix: contasPixValidas,
         logoUrl,
         store_logo_url: logoUrl,
         tituloCardapio,

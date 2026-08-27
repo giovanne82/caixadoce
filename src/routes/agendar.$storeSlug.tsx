@@ -157,10 +157,10 @@ function PublicStoreView() {
     tituloCardapio?: string;
     sloganCardapio?: string;
   }>({
-    nome: "Confeitaria CaixaDoce",
-    endereco: "Av. Principal, 1000 - Centro",
-    whatsapp: "(11) 99999-9999",
-    chavePix: "contato@caixadoce.com.br",
+    nome: `Confeitaria ${cleanCode}`,
+    endereco: "",
+    whatsapp: "",
+    chavePix: "",
     tipoChavePix: "email",
   });
 
@@ -238,7 +238,7 @@ function PublicStoreView() {
             endereco: estData.endereco || ESTABELECIMENTO_PADRAO.endereco,
             whatsapp: estData.whatsapp || estData.telefone || ESTABELECIMENTO_PADRAO.whatsapp,
             user_id: estData.user_id,
-            chavePix: estData.chave_pix || estData.chavePix || "contato@caixadoce.com.br",
+            chavePix: (estData.chave_pix || estData.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData.chave_pix || estData.chavePix || ""),
             tipoChavePix: estData.tipo_chave_pix || "email",
             logoUrl: estData.logo_url || estData.store_logo_url,
             tituloCardapio: estData.titulo_cardapio || estData.menu_title,

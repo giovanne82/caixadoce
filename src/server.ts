@@ -282,7 +282,7 @@ export default {
             payment_method_id: formData.payment_method_id,
             issuer_id: formData.issuer_id ? String(formData.issuer_id) : undefined,
             payer: {
-              email: formData.payer?.email || payload.email || "contato@caixadoce.com.br",
+              email: formData.payer?.email || payload.email || "",
               first_name: formData.payer?.first_name || "Assinante",
               last_name: formData.payer?.last_name || "CaixaDoce",
               identification: formData.payer?.identification,
@@ -474,7 +474,7 @@ export default {
             metadata: {
               estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
               plano_id: planoId || "ilimitado",
-              user_email: userEmail || "contato@caixadoce.com.br",
+              user_email: userEmail || "",
             },
           };
 
