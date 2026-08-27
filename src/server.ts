@@ -288,8 +288,8 @@ export default {
           const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
           let diasAdicionar = 0;
-          let limiteUsoAtual = 9999;
           let cupomId = null;
+          let usosAtuaisNum = 0;
 
           const betaMap: Record<string, number> = {
             "BETA60": 60,
@@ -299,26 +299,36 @@ export default {
 
           if (betaMap[cupomDigitado]) {
             diasAdicionar = betaMap[cupomDigitado];
-          } else {
-            const resDb = await fetch(
-              `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=eq.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=id,codigo,valor,tipo_desconto,limite_uso`,
-              {
-                headers: {
-                  apikey: supabaseKey,
-                  Authorization: `Bearer ${supabaseKey}`,
-                },
-              }
-            );
+          }
 
-            if (resDb.ok) {
-              const dbData = await resDb.json();
-              if (Array.isArray(dbData) && dbData.length > 0) {
-                const item = dbData[0];
-                if (item.tipo_desconto === "dias_gratis") {
-                  diasAdicionar = Number(item.valor) || 30;
-                  limiteUsoAtual = Number(item.limite_uso) || 9999;
-                  cupomId = item.id;
-                }
+          const resDb = await fetch(
+            `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=eq.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=id,codigo,valor,tipo_desconto,limite_uso,usos_atuais,ativo`,
+            {
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+
+          if (resDb.ok) {
+            const dbData = await resDb.json();
+            if (Array.isArray(dbData) && dbData.length > 0) {
+              const item = dbData[0];
+              const limite = Number(item.limite_uso) || 999999;
+              const usos = Number(item.usos_atuais) || 0;
+
+              if (usos >= limite) {
+                return new Response(
+                  JSON.stringify({ sucesso: false, mensagem: "Este cupom atingiu o limite máximo de utilizações." }),
+                  { status: 400, headers: { "content-type": "application/json" } }
+                );
+              }
+
+              if (item.tipo_desconto === "dias_gratis" || item.tipo_desconto === "dias") {
+                diasAdicionar = Number(item.valor) || 30;
+                cupomId = item.id;
+                usosAtuaisNum = usos;
               }
             }
           }
@@ -330,8 +340,8 @@ export default {
             );
           }
 
-          // Decrementa o limite_uso na tabela cupons_assinatura se aplicável
-          if (cupomId && limiteUsoAtual > 0) {
+          // Incrementa o contador usos_atuais na tabela cupons_assinatura no Supabase
+          if (cupomId) {
             try {
               await fetch(`${supabaseUrl}/rest/v1/cupons_assinatura?id=eq.${cupomId}`, {
                 method: "PATCH",
@@ -341,7 +351,7 @@ export default {
                   "Content-Type": "application/json",
                   Prefer: "return=minimal",
                 },
-                body: JSON.stringify({ limite_uso: Math.max(0, limiteUsoAtual - 1) }),
+                body: JSON.stringify({ usos_atuais: usosAtuaisNum + 1 }),
               });
             } catch {}
           }
