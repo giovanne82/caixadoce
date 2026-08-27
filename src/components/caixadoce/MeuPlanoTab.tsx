@@ -64,7 +64,7 @@ export function MeuPlanoTab() {
     try {
       const { data } = await supabase
         .from("estabelecimentos")
-        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao")
+        .select("*")
         .eq("codigo", cleanCode)
         .maybeSingle();
 

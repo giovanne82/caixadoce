@@ -224,11 +224,11 @@ function Index() {
     if (!code) return;
     const cleanCode = code.toUpperCase();
     try {
-      // 1. Busca via Supabase SDK
+      // 1. Busca via Supabase SDK com select("*") seguro
       let row: any = null;
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao")
+        .select("*")
         .eq("codigo", cleanCode)
         .maybeSingle();
 
@@ -236,12 +236,12 @@ function Index() {
         row = data;
       }
 
-      // 2. Fallback via REST API com No-Cache se o SDK falhar ou retornar nulo
+      // 2. Fallback via REST API com No-Cache e select=*
       if (!row) {
         const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
         const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
         const restRes = await fetch(
-          `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(cleanCode)}&select=status,status_assinatura,plano_status,plano,plano_id,plano_exp,plano_expira_em,data_expiracao&_t=${Date.now()}`,
+          `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(cleanCode)}&select=*&_t=${Date.now()}`,
           {
             headers: {
               apikey: supabaseKey,
