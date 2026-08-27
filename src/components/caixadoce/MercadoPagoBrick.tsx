@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -284,6 +285,66 @@ export function MercadoPagoBrick({
     }
   };
 
+  const [verificandoManual, setVerificandoManual] = useState(false);
+
+  // VALIDAÇÃO SEGURA E ESTRITA AO CLICAR EM "JÁ PAGUEI" (SEM APROVAÇÃO FAKE/SIMULADA)
+  const handleVerificarPagamentoManual = async () => {
+    setVerificandoManual(true);
+    try {
+      let aprovado = false;
+
+      // 1. Consulta em tempo real na API do Mercado Pago
+      if (dadosPix?.paymentId) {
+        const res = await fetch(
+          `/api/mercadopago/check-status?payment_id=${dadosPix.paymentId}&estabelecimentoCodigo=${encodeURIComponent(
+            estabelecimentoCodigo
+          )}&_t=${Date.now()}`
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.approved || data.status === "approved" || data.status_assinatura === "ativo") {
+            aprovado = true;
+          }
+        }
+      }
+
+      // 2. Consulta direta e estrita na tabela 'estabelecimentos' do Supabase (Fonte da Verdade)
+      if (!aprovado && estabelecimentoCodigo) {
+        const { data: dbData } = await supabase
+          .from("estabelecimentos")
+          .select("status, status_assinatura, plano_exp, plano_expira_em")
+          .eq("codigo", estabelecimentoCodigo.toUpperCase())
+          .maybeSingle();
+
+        if (dbData) {
+          const expBanco = dbData.plano_exp || dbData.plano_expira_em;
+          const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+          const statusBanco = dbData.status || dbData.status_assinatura;
+
+          if ((!isNaN(expMs) && expMs > Date.now()) || statusBanco === "ativo") {
+            aprovado = true;
+          }
+        }
+      }
+
+      if (aprovado) {
+        toast.success("🎉 Pagamento Pix Confirmado com sucesso! Seu acesso PRO foi ativado.");
+        onSuccess();
+      } else {
+        toast.warning(
+          "Ainda não identificamos o pagamento. Pode levar alguns segundos para o banco processar. Tente novamente em instantes.",
+          { duration: 5000 }
+        );
+      }
+    } catch (err) {
+      console.warn("[Verificar Pagamento Manual Error]", err);
+      toast.error("Erro ao consultar status no servidor. Tente novamente em instantes.");
+    } finally {
+      setVerificandoManual(false);
+    }
+  };
+
   const copiarPixCopiaECola = () => {
     if (!dadosPix?.copiaECola) return;
     navigator.clipboard.writeText(dadosPix.copiaECola);
@@ -380,10 +441,18 @@ export function MercadoPagoBrick({
               <Button
                 variant="default"
                 size="sm"
-                onClick={onSuccess}
-                className="text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleVerificarPagamentoManual}
+                disabled={verificandoManual}
+                className="text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
               >
-                Já Paguei / Confirmar
+                {verificandoManual ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>VERIFICANDO NO BANCO...</span>
+                  </>
+                ) : (
+                  <span>Já Paguei / Confirmar</span>
+                )}
               </Button>
             </div>
           </div>
