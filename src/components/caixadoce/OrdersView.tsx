@@ -521,16 +521,12 @@ export function OrdersView({
   // Sugestões de Produtos para Itens do Pedido (com logs de diagnóstico)
   const sugestoesProdutos = useMemo(() => {
     const termo = buscaItemProduto.trim().toLowerCase();
-    const result = !termo
-      ? listaProdutos.slice(0, 10)
-      : listaProdutos.filter(
-          (p) => p.nome.toLowerCase().includes(termo) || (p.categoria && p.categoria.toLowerCase().includes(termo))
-        ).slice(0, 10);
+    if (!termo) return [];
 
-    console.log(
-      `[Autocomplete Produtos] Total no Cardápio: ${listaProdutos.length} | Termo Busca: "${buscaItemProduto}" | Sugestões Encontradas: ${result.length}`,
-      result
-    );
+    const result = listaProdutos.filter(
+      (p) => p.nome.toLowerCase().includes(termo) || (p.categoria && p.categoria.toLowerCase().includes(termo))
+    ).slice(0, 10);
+
     return result;
   }, [buscaItemProduto, listaProdutos]);
 
@@ -554,6 +550,7 @@ export function OrdersView({
   // Sugestões de Insumos (Catálogo + Opções Padrão)
   const sugestoesInsumos = useMemo(() => {
     const termo = buscaTagInsumo.trim().toLowerCase();
+    if (!termo) return [];
 
     const insumosBase: Array<{ id: string; nome: string; categoria: string }> = [
       ...catalogoInsumos.map((i) => ({ id: i.id, nome: i.nome, categoria: i.categoria || "Insumo" })),
@@ -570,10 +567,6 @@ export function OrdersView({
         !nomesJaSelecionados.has(ins.nome.toLowerCase()) &&
         index === self.findIndex((t) => t.nome.toLowerCase() === ins.nome.toLowerCase())
     );
-
-    if (!termo) {
-      return unicosDisponiveis.slice(0, 10);
-    }
 
     return unicosDisponiveis
       .filter(
@@ -2336,10 +2329,15 @@ export function OrdersView({
                     placeholder="Digite para buscar doce/bolo do cardápio (ex: Red Velvet, Brigadeiros)..."
                     value={buscaItemProduto}
                     onChange={(e) => {
-                      setBuscaItemProduto(e.target.value);
-                      setDropdownItensAberto(true);
+                      const val = e.target.value;
+                      setBuscaItemProduto(val);
+                      setDropdownItensAberto(val.trim().length > 0);
                     }}
-                    onFocus={() => setDropdownItensAberto(true)}
+                    onFocus={() => {
+                      if (buscaItemProduto.trim().length > 0) {
+                        setDropdownItensAberto(true);
+                      }
+                    }}
                     onBlur={() => setTimeout(() => setDropdownItensAberto(false), 200)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -2360,7 +2358,7 @@ export function OrdersView({
                   </Button>
                 </div>
 
-                {dropdownItensAberto && sugestoesProdutos.length > 0 && (
+                {dropdownItensAberto && buscaItemProduto.trim().length > 0 && sugestoesProdutos.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-[100] mt-1 max-h-52 overflow-y-auto bg-popover bg-white dark:bg-slate-900 border border-border shadow-2xl rounded-xl p-1 divide-y divide-border/40">
                     {sugestoesProdutos.map((prod) => (
                       <div
@@ -2747,10 +2745,15 @@ export function OrdersView({
                     placeholder="Buscar insumo (ex: Leite Condensado, Chantilly, Nutella)..."
                     value={buscaTagInsumo}
                     onChange={(e) => {
-                      setBuscaTagInsumo(e.target.value);
-                      setDropdownInsumosAberto(true);
+                      const val = e.target.value;
+                      setBuscaTagInsumo(val);
+                      setDropdownInsumosAberto(val.trim().length > 0);
                     }}
-                    onFocus={() => setDropdownInsumosAberto(true)}
+                    onFocus={() => {
+                      if (buscaTagInsumo.trim().length > 0) {
+                        setDropdownInsumosAberto(true);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -2770,7 +2773,7 @@ export function OrdersView({
                   </Button>
                 </div>
 
-                {dropdownInsumosAberto && sugestoesInsumos.length > 0 && (
+                {dropdownInsumosAberto && buscaTagInsumo.trim().length > 0 && sugestoesInsumos.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-xl p-1 divide-y divide-border/40">
                     {sugestoesInsumos.map((sug) => (
                       <div
