@@ -118,7 +118,10 @@ export function MercadoPagoBrick({
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    formData,
+                    formData: {
+                      ...formData,
+                      transaction_amount: valor,
+                    },
                     selectedPaymentMethod,
                     estabelecimentoCodigo,
                     userEmail,

@@ -412,7 +412,7 @@ export default {
 
           const establishmentCode = payload.establishmentCode || formData.establishmentCode || "CD-1001";
           const planId = payload.planId || formData.planId || "mensal";
-          const amount = Number(formData.transaction_amount || payload.transaction_amount || 19.90);
+          const amount = Number(payload.valor || payload.amount || formData.transaction_amount || payload.transaction_amount || 19.90);
 
           const mpPaymentPayload: Record<string, any> = {
             transaction_amount: amount,
