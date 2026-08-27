@@ -219,6 +219,53 @@ function Index() {
 
   const [planoTick, setPlanoTick] = useState(0);
 
+  // Sincronização direta com a tabela 'estabelecimentos' do Supabase para invalidar o cache local no mobile
+  const sincronizarPlanoComSupabase = useCallback(async (code: string) => {
+    if (!code) return;
+    try {
+      const { data, error } = await supabase
+        .from("estabelecimentos")
+        .select("status, plano, plano_id, plano_exp, plano_expira_em")
+        .eq("codigo", code.toUpperCase())
+        .maybeSingle();
+
+      if (data && !error) {
+        const statusBanco = data.status || "ativo";
+        const planoIdBanco = data.plano || data.plano_id || "mensal";
+        const expBanco = data.plano_exp || data.plano_expira_em;
+
+        if (statusBanco === "ativo" && (planoIdBanco === "mensal" || planoIdBanco === "anual" || planoIdBanco === "pro" || planoIdBanco === "ilimitado")) {
+          salvarDadosPlanoEstabelecimento(code, {
+            status: "ativo",
+            planoId: planoIdBanco as any,
+            dataExpiracao: expBanco,
+          });
+          setPlanoTick((prev) => prev + 1);
+        }
+      }
+    } catch (err) {
+      console.warn("[Sync Plan Supabase Error]", err);
+    }
+  }, []);
+
+  // Sincroniza o plano no carregamento inicial e quando o app/aba ganha foco (desfaz cache antigo no mobile)
+  useEffect(() => {
+    if (!activeCode) return;
+    sincronizarPlanoComSupabase(activeCode);
+
+    const handleFocus = () => {
+      sincronizarPlanoComSupabase(activeCode);
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [activeCode, sincronizarPlanoComSupabase]);
+
   const infoPlano = useMemo(
     () => obterPlanoEfetivoEstabelecimento(activeCode, profile?.userCreatedAt),
     [activeCode, activeTab, profile?.userCreatedAt, planoTick]
@@ -241,10 +288,10 @@ function Index() {
         (payload) => {
           const newRow = payload.new;
           if (newRow && (newRow.status_assinatura === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
-            const dataExpiracao = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             salvarDadosPlanoEstabelecimento(activeCode, {
               status: "ativo",
-              planoId: newRow.plano || "mensal",
+              planoId: newRow.plano || newRow.plano_id || "mensal",
               dataExpiracao,
             });
             toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
@@ -1553,28 +1600,28 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-16 sm:pb-12">
         {/* Header Principal do CaixaDoce em Lavanda Suave / Lilás Clean #F3EEF9 com Alto Contraste */}
         <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
-          <div className="mx-auto max-w-6xl px-4 py-2.5 sm:py-3">
-            <div className="flex items-center justify-between gap-3">
-              {/* Bloco Esquerda: Logo + Nome da Loja + Badge CD-1001 */}
-              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                <CaixaDoceLogo size="md" className="shrink-0" />
+          <div className="mx-auto max-w-6xl px-2.5 sm:px-4 py-2 sm:py-3">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+              {/* Bloco Esquerda: Logo Empilhado + Nome da Loja + Badge CD-1001 + Selo PRO */}
+              <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
+                <CaixaDoceLogo size="md" stacked className="shrink-0" />
                 
-                <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0 flex items-center gap-2">
-                  <p className="truncate text-xs sm:text-sm font-bold text-[#2E1A47] max-w-[140px] sm:max-w-[260px]" title={profile.establishmentName}>
+                <div className="border-l border-[#8E7CC3]/30 pl-1.5 sm:pl-3 min-w-0 flex items-center gap-1 sm:gap-2 overflow-hidden">
+                  <p className="truncate text-[11px] sm:text-sm font-bold text-[#2E1A47] max-w-[80px] sm:max-w-[240px]" title={profile.establishmentName}>
                     {profile.establishmentName}
                   </p>
-                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
+                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-1.5 py-0.5 rounded-full text-[9px] sm:text-xs font-mono font-bold shrink-0">
                     {profile.establishmentCode}
                   </span>
                   {isProOuTrial && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
-                        <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="inline-flex items-center gap-0.5 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
+                        <Sparkles className="w-2 h-2 sm:w-2.5 sm:h-2.5 fill-amber-300 text-amber-300" /> PRO
                       </span>
-                      <span className="text-[10px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                      <span className="text-[9px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-1.5 py-0.5 rounded-md border border-purple-200">
                         {infoPlano.status === "ativo"
-                          ? `Válido até ${formatarDataExpiracao(infoPlano.dataExpiracao)}`
-                          : `${infoPlano.diasRestantesTrial || 7} dia(s) de teste`}
+                          ? `Até ${formatarDataExpiracao(infoPlano.dataExpiracao)}`
+                          : `${infoPlano.diasRestantesTrial || 7}d teste`}
                       </span>
                     </div>
                   )}
@@ -1582,7 +1629,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
               </div>
 
               {/* Bloco Direita: Apenas Notificações + Sair/Logout */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 <NotificationBell
                   transacoes={transacoes}
                   despesas={despesas}
@@ -1595,7 +1642,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                   size="sm"
                   onClick={logout}
                   title="Sair da Conta"
-                  className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/80 hover:bg-rose-500/10 border border-[#E8E0F2] shrink-0"
+                  className="h-7 sm:h-8 px-1.5 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/80 hover:bg-rose-500/10 border border-[#E8E0F2] shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-500" />
                   <span className="hidden sm:inline font-bold">Sair</span>
