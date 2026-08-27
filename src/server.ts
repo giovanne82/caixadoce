@@ -123,6 +123,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
@@ -134,49 +135,63 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   console.log(`[Ativar Plano Supabase] Atualizando estabelecimento '${code}' (Plano: ${planId}, Pagamento ID: ${paymentId}, Expira: ${dataExpiracao})...`);
 
-  // 1. ATUALIZAÇÃO DA TABELA 'estabelecimentos' (suporta todas as variações de colunas no esquema)
-  const fullUpdatePayload: Record<string, any> = {
-    status: "ativo",
-    status_assinatura: "ativo",
-    plano_status: "ativo",
-    plano: planId,
-    plano_id: planId,
-    plano_exp: dataExpiracao,
-    plano_expira_em: dataExpiracao,
-    data_expiracao: dataExpiracao,
-    updated_at: agora,
-    plano_atualizado_em: agora,
-    metodo_pagamento: paymentMethod,
-    mercadopago_pagamento_id: String(paymentId),
-  };
-
+  // 1. Busca primeiro o ID da linha na tabela 'estabelecimentos' (suporta ilike e eq)
+  let targetId: string | number | null = null;
   try {
-    let res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
-      method: "PATCH",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(fullUpdatePayload),
-    });
-
-    let resData: any = null;
-    if (res.ok) {
-      resData = await res.json();
+    const searchRes = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+    if (searchRes.ok) {
+      const list = await searchRes.json();
+      if (Array.isArray(list) && list.length > 0) {
+        targetId = list[0].id;
+      }
     }
+  } catch (e) {
+    console.warn("[Ativar Plano Supabase] Erro ao buscar ID do estabelecimento:", e);
+  }
 
-    // Se o PATCH com todas as colunas falhou ou retornou 0 linhas alteradas, tenta Fallback 1
-    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
-      console.warn(`[Ativar Plano Supabase] Tentativa 1 retornou status ${res.status}. Tentando Fallback 1...`);
-      const fallbackPayload1 = {
-        status: "ativo",
-        plano: planId,
-        plano_exp: dataExpiracao,
-        updated_at: agora,
-      };
-      res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
+  // Filtro de busca no Supabase (por ID se encontrado, senao por codigo ilike)
+  const filterQuery = targetId ? `id=eq.${targetId}` : `codigo=ilike.${encodeURIComponent(code)}`;
+
+  const patchPayloads = [
+    // Opção A: Campos padrão
+    {
+      status: "ativo",
+      plano: planId,
+      plano_exp: dataExpiracao,
+      plano_expira_em: dataExpiracao,
+      is_pro: true,
+      metodo_pagamento: paymentMethod,
+      updated_at: agora,
+    },
+    // Opção B: Fallback basico
+    {
+      status: "ativo",
+      plano: planId,
+      plano_exp: dataExpiracao,
+      updated_at: agora,
+    },
+    // Opção C: Fallback alternativo
+    {
+      status_assinatura: "ativo",
+      plano_id: planId,
+      plano_expira_em: dataExpiracao,
+      updated_at: agora,
+    },
+  ];
+
+  let atualizadoComSucesso = false;
+
+  for (const payload of patchPayloads) {
+    try {
+      const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?${filterQuery}`, {
         method: "PATCH",
         headers: {
           apikey: supabaseKey,
@@ -184,49 +199,58 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
           "Content-Type": "application/json",
           Prefer: "return=representation",
         },
-        body: JSON.stringify(fallbackPayload1),
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) resData = await res.json();
+      if (patchRes.ok) {
+        const resData = await patchRes.json();
+        if (Array.isArray(resData) && resData.length > 0) {
+          atualizadoComSucesso = true;
+          console.log(`[Ativar Plano Supabase] ✅ PATCH bem-sucedido para '${code}' com payload:`, Object.keys(payload));
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  // Se os payloads combinados falharam por inconsistência de colunas, faz PATCHES INDIVIDUAIS POR COLUNA (100% à prova de falhas PostgREST)
+  if (!atualizadoComSucesso) {
+    console.warn(`[Ativar Plano Supabase] Executando PATCHES INDIVIDUAIS para '${code}'...`);
+    const individualColumns: Record<string, any> = {
+      plano_expira_em: dataExpiracao,
+      plano_exp: dataExpiracao,
+      metodo_pagamento: paymentMethod,
+      is_pro: true,
+      status: "ativo",
+      status_assinatura: "ativo",
+      plano: planId,
+      plano_id: planId,
+      updated_at: agora,
+    };
+
+    for (const [col, val] of Object.entries(individualColumns)) {
+      try {
+        const indRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?${filterQuery}`, {
+          method: "PATCH",
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ [col]: val }),
+        });
+        if (indRes.ok) {
+          atualizadoComSucesso = true;
+          console.log(`[Ativar Plano Supabase] Coluna '${col}' atualizada com sucesso para '${code}'!`);
+        }
+      } catch {}
     }
+  }
 
-    // Fallback 2 se o Fallback 1 falhou
-    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
-      console.warn("[Ativar Plano Supabase] Fallback 1 não atualizou linhas. Tentando Fallback 2...");
-      const fallbackPayload2 = {
-        status_assinatura: "ativo",
-        plano_id: planId,
-        plano_expira_em: dataExpiracao,
-        updated_at: agora,
-      };
-      res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(code)}`, {
-        method: "PATCH",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(fallbackPayload2),
-      });
-
-      if (res.ok) resData = await res.json();
-    }
-
-    // Se a loja ainda não existe no Supabase, cria via INSERT/UPSERT
-    if (!res.ok || !Array.isArray(resData) || resData.length === 0) {
-      console.warn("[Ativar Plano Supabase] Nenhuma linha alterada. Criando linha do estabelecimento via UPSERT...");
-      const insertPayload = {
-        codigo: code,
-        nome: `Loja ${code}`,
-        status: "ativo",
-        plano_status: "ativo",
-        plano: planId,
-        plano_id: planId,
-        plano_exp: dataExpiracao,
-        plano_expira_em: dataExpiracao,
-        updated_at: agora,
-      };
+  // Se nenhuma linha foi alterada e a loja nao existe, cria via INSERT
+  if (!atualizadoComSucesso && !targetId) {
+    console.warn(`[Ativar Plano Supabase] Nenhuma linha encontrada. Criando linha para '${code}'...`);
+    try {
       await fetch(`${supabaseUrl}/rest/v1/estabelecimentos`, {
         method: "POST",
         headers: {
@@ -235,13 +259,21 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates",
         },
-        body: JSON.stringify(insertPayload),
+        body: JSON.stringify({
+          codigo: code,
+          nome: `Confeitaria ${code}`,
+          status: "ativo",
+          plano: planId,
+          plano_exp: dataExpiracao,
+          plano_expira_em: dataExpiracao,
+          metodo_pagamento: paymentMethod,
+          is_pro: true,
+          updated_at: agora,
+        }),
       });
+    } catch (e) {
+      console.error("[Ativar Plano Supabase] Erro ao inserir novo estabelecimento:", e);
     }
-
-    console.log(`[Ativar Plano Supabase] 🎉 Tabela 'estabelecimentos' atualizada com sucesso para ${code}!`);
-  } catch (errEst) {
-    console.error("[Ativar Plano Supabase] Erro ao atualizar estabelecimentos:", errEst);
   }
 
   // 2. INSERÇÃO DO REGISTRO DE CONFIRMAÇÃO DE TRANSAÇÃO EM 'transacoes_financeiras' (COM TRAVA DE IDEMPOTÊNCIA)
