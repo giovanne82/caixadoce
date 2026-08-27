@@ -182,6 +182,88 @@ export function MercadoPagoBrick({
     };
   }, [valor, userEmail, planoId, estabelecimentoCodigo]);
 
+  // Polling em tempo real para verificar aprovação do Pix a cada 3 segundos
+  useEffect(() => {
+    if (!dadosPix?.paymentId) return;
+
+    let isMounted = true;
+    console.log(`[Pix Polling] Monitorando status do pagamento #${dadosPix.paymentId}...`);
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/mercadopago/check-status?payment_id=${dadosPix.paymentId}&estabelecimentoCodigo=${encodeURIComponent(
+            estabelecimentoCodigo
+          )}`
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && (data.approved || data.status === "approved")) {
+            clearInterval(intervalId);
+            toast.success("🎉 Pagamento Pix Confirmado em Tempo Real! Seu plano PRO foi ativado com sucesso.");
+            onSuccess();
+          }
+        }
+      } catch (err) {
+        console.warn("[Pix Polling Exception]", err);
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [dadosPix?.paymentId, estabelecimentoCodigo, onSuccess]);
+
+  const gerarPixDireto = async () => {
+    setProcessando(true);
+    setErro(null);
+    try {
+      const res = await fetch("/api/mercadopago/process-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formData: {
+            payment_method_id: "pix",
+            transaction_amount: valor,
+            payer: { email: userEmail },
+          },
+          selectedPaymentMethod: "pix",
+          estabelecimentoCodigo,
+          userEmail,
+          planoId,
+          valor,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Falha ao gerar cobrança Pix.");
+      }
+
+      const qrCode = data.pix_qr_code_base64 || data.qr_code_base64;
+      const copiaECola = data.pix_copia_e_cola || data.qr_code;
+      const pid = data.payment_id || data.id;
+
+      if (qrCode || copiaECola) {
+        setDadosPix({
+          qrCodeBase64: qrCode,
+          copiaECola: copiaECola,
+          paymentId: pid,
+        });
+        toast.success("✨ QR Code Pix gerado! Abra o aplicativo do seu banco para pagar.");
+      } else {
+        toast.error("Não foi possível carregar o QR Code Pix. Tente novamente.");
+      }
+    } catch (err: any) {
+      console.error("[Gerar Pix Direto Error]", err);
+      toast.error(`Erro ao gerar Pix: ${err.message}`);
+    } finally {
+      setProcessando(false);
+    }
+  };
+
   const copiarPixCopiaECola = () => {
     if (!dadosPix?.copiaECola) return;
     navigator.clipboard.writeText(dadosPix.copiaECola);
@@ -207,14 +289,35 @@ export function MercadoPagoBrick({
           </span>
         </div>
         <CardTitle className="text-lg font-extrabold text-foreground pt-2">
-          Checkout Bricks — {nomePlano}
+          Checkout — {nomePlano}
         </CardTitle>
         <CardDescription className="text-xs">
-          Valor do investimento: <strong className="text-purple-600 font-mono text-sm">R$ {valor.toFixed(2).replace(".", ",")}</strong> (Cartão de Crédito ou Pix)
+          Valor do investimento: <strong className="text-purple-600 font-mono text-sm">R$ {valor.toFixed(2).replace(".", ",")}</strong> (Pix ou Cartão)
         </CardDescription>
       </CardHeader>
 
       <CardContent className="p-4 sm:p-6 space-y-4">
+        {/* OPÇÃO DE GERAÇÃO DIRETA DE PIX NO TOPO */}
+        {!dadosPix && (
+          <div className="p-3 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-2xl text-center space-y-2">
+            <div className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1.5">
+              <QrCode className="w-4 h-4" /> Deseja pagar instantaneamente via Pix?
+            </div>
+            <Button
+              onClick={gerarPixDireto}
+              disabled={processando}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 shadow-md flex items-center justify-center gap-2"
+            >
+              {processando ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <QrCode className="w-4 h-4" />
+              )}
+              <span>Gerar QR Code Pix e Chave Copia e Cola Agora</span>
+            </Button>
+          </div>
+        )}
+
         {/* TELA SE O PIX FOI GERADO */}
         {dadosPix ? (
           <div className="p-4 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-center space-y-4">
@@ -223,7 +326,7 @@ export function MercadoPagoBrick({
             </div>
 
             {dadosPix.qrCodeBase64 && (
-              <div className="flex justify-center p-2 bg-white rounded-xl shadow-md max-w-[220px] mx-auto">
+              <div className="flex justify-center p-2 bg-white rounded-xl shadow-md max-w-[220px] mx-auto border border-emerald-200">
                 <img
                   src={`data:image/png;base64,${dadosPix.qrCodeBase64}`}
                   alt="QR Code Pix Mercado Pago"
@@ -235,31 +338,37 @@ export function MercadoPagoBrick({
             {dadosPix.copiaECola && (
               <div className="space-y-2 text-left bg-background p-3 rounded-xl border border-border">
                 <span className="text-[11px] font-bold text-muted-foreground block">Código Pix Copia e Cola:</span>
-                <div className="font-mono text-xs break-all bg-muted p-2 rounded-lg text-foreground max-h-24 overflow-y-auto">
+                <div className="font-mono text-xs break-all bg-muted p-2 rounded-lg text-foreground max-h-24 overflow-y-auto border border-border">
                   {dadosPix.copiaECola}
                 </div>
                 <Button
                   onClick={copiarPixCopiaECola}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 py-2.5"
                 >
                   {copiado ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiado ? "Código Copiado!" : "Copiar Chave Pix"}</span>
+                  <span>{copiado ? "Código Copiado!" : "Copiar Chave Pix Copia e Cola"}</span>
                 </Button>
               </div>
             )}
 
-            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-900 dark:text-purple-200">
-              💡 <strong>Assim que o pagamento for concluído</strong> no app do seu banco, nosso sistema receberá a notificação automática e liberará seu acesso <strong>Ilimitado</strong> em instantes!
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-900 dark:text-purple-200 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-purple-600 shrink-0" />
+              <span>
+                <strong>Aguardando confirmação do pagamento em tempo real...</strong> O plano será ativado automaticamente assim que você pagar no app do seu banco!
+              </span>
             </div>
 
-            <div className="pt-2 flex justify-center">
-              <Button variant="outline" size="sm" onClick={onSuccess} className="text-xs font-bold">
-                Concluir / Já Realizei o Pagamento
+            <div className="pt-2 flex justify-between gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setDadosPix(null)} className="text-xs font-bold">
+                Voltar às formas de pagamento
+              </Button>
+              <Button variant="outline" size="sm" onClick={onSuccess} className="text-xs font-bold text-emerald-700 border-emerald-300">
+                Já Paguei / Confirmar
               </Button>
             </div>
           </div>
         ) : (
-          /* FORMULÁRIO BRICKS DO MERCADO PAGO */
+          /* FORMULÁRIO BRICKS DO MERCADO PAGO PARA CARTÃO DE CRÉDITO OU OUTROS MÉTODOS */
           <div className="relative min-h-[320px]">
             {carregando && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xs gap-3">
@@ -291,7 +400,7 @@ export function MercadoPagoBrick({
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/90 backdrop-blur-xs gap-3">
                 <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
                 <span className="text-sm font-extrabold text-purple-900 dark:text-purple-200">
-                  Processando seu pagamento com segurança no Mercado Pago...
+                  Gerando pagamento seguro no Mercado Pago...
                 </span>
               </div>
             )}

@@ -563,9 +563,12 @@ export default {
               status: mpData.status,
               status_detail: mpData.status_detail,
               id: mpData.id,
+              payment_id: mpData.id,
               payment_method_id: mpData.payment_method_id,
               qr_code: mpData.point_of_interaction?.transaction_data?.qr_code,
               qr_code_base64: mpData.point_of_interaction?.transaction_data?.qr_code_base64,
+              pix_copia_e_cola: mpData.point_of_interaction?.transaction_data?.qr_code,
+              pix_qr_code_base64: mpData.point_of_interaction?.transaction_data?.qr_code_base64,
               ticket_url: mpData.point_of_interaction?.transaction_data?.ticket_url,
             }),
             { status: 200, headers: { "content-type": "application/json" } }
@@ -574,6 +577,74 @@ export default {
           console.error("[MercadoPago Process Payment Exception]", err);
           return new Response(
             JSON.stringify({ error: err?.message || "Erro no servidor ao processar pagamento." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // MERCADO PAGO: CONSULTA DE STATUS DE PAGAMENTO EM TEMPO REAL (/api/mercadopago/check-status)
+      // =========================================================================
+      if (url.pathname === "/api/mercadopago/check-status" && request.method === "GET") {
+        try {
+          const paymentId = url.searchParams.get("payment_id") || url.searchParams.get("id");
+          const establishmentCode = (url.searchParams.get("estabelecimentoCodigo") || url.searchParams.get("estabelecimento_codigo") || "CD-1001").toUpperCase();
+
+          if (!paymentId) {
+            return new Response(
+              JSON.stringify({ error: "Parâmetro payment_id é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const accessToken =
+            process.env.MERCADOPAGO_ACCESS_TOKEN ||
+            process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+            process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+            "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+
+          const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+
+          if (!mpRes.ok) {
+            return new Response(
+              JSON.stringify({ approved: false, status: "unknown" }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const paymentData = await mpRes.json();
+          const status = paymentData.status;
+
+          if (status === "approved" || status === "authorized") {
+            const planId = paymentData.metadata?.plan_id || paymentData.metadata?.plano_id || "mensal";
+            const amount = Number(paymentData.transaction_amount || 19.90);
+            const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
+            const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+
+            // Dispara ativação em tempo real no Supabase
+            await ativarPlanoEstabelecimentoNoSupabase({
+              establishmentCode,
+              planId,
+              paymentId,
+              paymentMethod: tipoPag,
+              amount,
+            });
+
+            return new Response(
+              JSON.stringify({ approved: true, status: "approved", payment_id: paymentId }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ approved: false, status: status || "pending", payment_id: paymentId }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ approved: false, status: "error", error: err.message }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
