@@ -604,8 +604,9 @@ export default {
 
           const accessToken =
             process.env.MERCADOPAGO_ACCESS_TOKEN ||
+            process.env.MERCADO_PAGO_ACCESS_TOKEN ||
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-            "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
+            "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
