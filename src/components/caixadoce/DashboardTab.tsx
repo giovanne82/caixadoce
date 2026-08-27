@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -42,6 +42,7 @@ import {
   type Encomenda,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface DashboardTabProps {
@@ -66,52 +67,147 @@ export function DashboardTab({
   const [copiedLink, setCopiedLink] = useState(false);
   const [periodoGrafico, setPeriodoGrafico] = useState<"mes" | "semana">("mes");
   const [showDetails, setShowDetails] = useState(false);
+  const [comprasInsumosBanco, setComprasInsumosBanco] = useState<{ valor: number }[]>([]);
+
+  // Carrega histórico de compras de insumos diretamente do Supabase como fonte adicional de consolidação
+  useEffect(() => {
+    let cancelado = false;
+    async function carregarComprasInsumos() {
+      if (!activeCode) return;
+      try {
+        const code = activeCode.toUpperCase();
+        const { data: data1, error: err1 } = await supabase
+          .from("historico_compras_insumos" as any)
+          .select("valor_pago_total, valor_unitario_calculado, quantidade_total_unidades")
+          .or(`estabelecimento_codigo.eq.${code},estabelecimento_codigo.eq.${code.toLowerCase()}`);
+
+        let itensEncontrados: { valor: number }[] = [];
+
+        if (!err1 && data1 && data1.length > 0) {
+          itensEncontrados = data1.map((c: any) => ({
+            valor:
+              parseFloat(String(c.valor_pago_total || 0)) ||
+              parseFloat(String(c.valor_unitario_calculado || 0)) *
+                parseFloat(String(c.quantidade_total_unidades || 1)) ||
+              0,
+          }));
+        } else {
+          const { data: data2 } = await supabase
+            .from("historico_compras" as any)
+            .select("valor_pago_total, valor_total")
+            .or(`estabelecimento_codigo.eq.${code},estabelecimento_codigo.eq.${code.toLowerCase()}`);
+
+          if (data2 && data2.length > 0) {
+            itensEncontrados = data2.map((c: any) => ({
+              valor: parseFloat(String(c.valor_pago_total || c.valor_total || 0)) || 0,
+            }));
+          }
+        }
+
+        if (!cancelado) {
+          setComprasInsumosBanco(itensEncontrados);
+        }
+      } catch (e) {
+        console.warn("Aviso ao carregar compras de insumos no dashboard:", e);
+      }
+    }
+    carregarComprasInsumos();
+    return () => {
+      cancelado = true;
+    };
+  }, [activeCode]);
 
   // 1. Total Faturado (Entrada): Receitas financeiras concluídas + Encomendas confirmadas
-  const totalReceitasFinanceiro = transacoes
-    .filter((t) => t.tipo === "receita" && t.status === "concluida")
-    .reduce((acc, t) => acc + (t.valor || 0), 0);
+  const totalReceitasFinanceiro = useMemo(() => {
+    if (!Array.isArray(transacoes)) return 0;
+    return transacoes
+      .filter((t) => {
+        if (!t) return false;
+        const tp = String(t.tipo || "").toLowerCase();
+        const st = String(t.status || "").toLowerCase();
+        return (tp === "receita" || tp === "entrada") && (st === "concluida" || st === "pago" || st === "paga");
+      })
+      .reduce((acc, t) => acc + (parseFloat(String(t.valor)) || 0), 0);
+  }, [transacoes]);
 
-  const totalEncomendasPagas = encomendas
-    .filter((e) => e.status !== "cancelada")
-    .reduce((acc, e) => {
-      if (e.statusPagamento === "pago_integral") return acc + (e.valorTotal || 0);
-      if (e.statusPagamento === "sinal_pago") return acc + (e.valorEntrada || (e.valorTotal || 0) * 0.5);
-      return acc;
-    }, 0);
+  const totalEncomendasPagas = useMemo(() => {
+    if (!Array.isArray(encomendas)) return 0;
+    return encomendas
+      .filter((e) => e && String(e.status || "").toLowerCase() !== "cancelada")
+      .reduce((acc, e) => {
+        const total = parseFloat(String(e.valorTotal || 0)) || 0;
+        const entrada = parseFloat(String(e.valorEntrada || 0)) || total * 0.5;
+        if (e.statusPagamento === "pago_integral") return acc + total;
+        if (e.statusPagamento === "sinal_pago") return acc + entrada;
+        return acc;
+      }, 0);
+  }, [encomendas]);
 
-  const totalFaturado = Math.max(totalReceitasFinanceiro, totalEncomendasPagas);
-
-  // 2. Custos de Produção (Insumos dos doces)
-  const custoProducao = despesas.reduce((acc, d) => acc + (Number(d.valorProducao) || 0), 0);
-
-  // 3. Gastos Operacionais / Utensílios / Outros
-  const gastosOperacionais = despesas.reduce(
-    (acc, d) => acc + (Number(d.valorUtensilios) || 0) + (Number(d.valorOutros) || 0),
-    0
+  const totalFaturado = useMemo(
+    () => Math.max(totalReceitasFinanceiro, totalEncomendasPagas),
+    [totalReceitasFinanceiro, totalEncomendasPagas]
   );
 
+  // 2. Custos de Produção (Insumos dos doces)
+  const custoProducao = useMemo(() => {
+    if (!Array.isArray(despesas)) return 0;
+    return despesas.reduce((acc, d) => acc + (parseFloat(String(d.valorProducao || 0)) || 0), 0);
+  }, [despesas]);
+
+  // 3. Gastos Operacionais / Utensílios / Outros
+  const gastosOperacionais = useMemo(() => {
+    if (!Array.isArray(despesas)) return 0;
+    return despesas.reduce(
+      (acc, d) =>
+        acc +
+        (parseFloat(String(d.valorUtensilios || 0)) || 0) +
+        (parseFloat(String(d.valorOutros || 0)) || 0),
+      0
+    );
+  }, [despesas]);
+
   // 4. Saída Global (Gastos Totais / Despesas / Compras)
-  const totalSaidasFinanceiro = transacoes
-    .filter((t) => t.tipo === "despesa" && (t.status === "concluida" || !t.status))
-    .reduce((acc, t) => acc + (t.valor || 0), 0);
+  const totalSaidasFinanceiro = useMemo(() => {
+    if (!Array.isArray(transacoes)) return 0;
+    return transacoes
+      .filter((t) => {
+        if (!t) return false;
+        const tp = String(t.tipo || "").toLowerCase();
+        const st = String(t.status || "").toLowerCase();
+        const isSaida = tp === "despesa" || tp === "saida";
+        const isOk = !st || st === "concluida" || st === "pago" || st === "paga";
+        return isSaida && isOk;
+      })
+      .reduce((acc, t) => acc + (parseFloat(String(t.valor)) || 0), 0);
+  }, [transacoes]);
 
-  const totalSaidasDespesas = despesas.reduce((acc, d) => {
-    const val =
-      Number(d.valorTotal) ||
-      Number((d as any).valor_total) ||
-      (Number(d.valorProducao) || 0) +
-        (Number(d.valorUtensilios) || 0) +
-        (Number(d.valorConsumoProprio) || 0) +
-        (Number(d.valorOutros) || 0);
-    return acc + val;
-  }, 0);
+  const totalSaidasDespesas = useMemo(() => {
+    if (!Array.isArray(despesas)) return 0;
+    return despesas.reduce((acc, d) => {
+      if (!d) return acc;
+      const vTotal = parseFloat(String(d.valorTotal ?? (d as any).valor_total ?? 0)) || 0;
+      const vProd = parseFloat(String(d.valorProducao ?? 0)) || 0;
+      const vUtens = parseFloat(String(d.valorUtensilios ?? 0)) || 0;
+      const vCons = parseFloat(String(d.valorConsumoProprio ?? 0)) || 0;
+      const vOutros = parseFloat(String(d.valorOutros ?? 0)) || 0;
+      const vSomaSub = vProd + vUtens + vCons + vOutros;
+      const valEfetivo = vTotal > 0 ? vTotal : vSomaSub;
+      return acc + valEfetivo;
+    }, 0);
+  }, [despesas]);
 
-  // Consolidação matemática direta: soma as despesas financeiras + compras de notinhas para alimentar o card de Saídas
-  const totalSaidasGlobal =
-    totalSaidasFinanceiro + totalSaidasDespesas > 0
-      ? totalSaidasFinanceiro + totalSaidasDespesas
-      : Math.max(totalSaidasFinanceiro, totalSaidasDespesas, custoProducao + gastosOperacionais);
+  const totalComprasInsumos = useMemo(() => {
+    if (!Array.isArray(comprasInsumosBanco)) return 0;
+    return comprasInsumosBanco.reduce((acc, c) => acc + (parseFloat(String(c.valor)) || 0), 0);
+  }, [comprasInsumosBanco]);
+
+  // Consolidação Matemática com conversão numérica rigorosa para garantir que compras/notas fiscais alimentem as Saídas Globais
+  const totalSaidasGlobal = useMemo(() => {
+    const somaDireta = totalSaidasFinanceiro + totalSaidasDespesas;
+    if (somaDireta > 0) return somaDireta;
+    if (totalComprasInsumos > 0) return totalComprasInsumos;
+    return Math.max(totalSaidasFinanceiro, totalSaidasDespesas, totalComprasInsumos, custoProducao + gastosOperacionais);
+  }, [totalSaidasFinanceiro, totalSaidasDespesas, totalComprasInsumos, custoProducao, gastosOperacionais]);
 
   // 5. Saldo Líquido Real = Total Faturado - Saídas
   const lucroLiquidoReal = totalFaturado - totalSaidasGlobal;
@@ -166,12 +262,15 @@ export function DashboardTab({
   // Gastos Agrupados por Estabelecimento
   const gastosPorLoja = useMemo(() => {
     const mapa: Record<string, { total: number; producao: number; count: number }> = {};
-    for (const d of despesas) {
-      const nome = d.fornecedorNome || "Outros Fornecedores";
-      if (!mapa[nome]) mapa[nome] = { total: 0, producao: 0, count: 0 };
-      mapa[nome].total += Number(d.valorTotal) || 0;
-      mapa[nome].producao += Number(d.valorProducao) || 0;
-      mapa[nome].count += 1;
+    if (Array.isArray(despesas)) {
+      for (const d of despesas) {
+        if (!d) continue;
+        const nome = d.fornecedorNome || "Outros Fornecedores";
+        if (!mapa[nome]) mapa[nome] = { total: 0, producao: 0, count: 0 };
+        mapa[nome].total += parseFloat(String(d.valorTotal || 0)) || 0;
+        mapa[nome].producao += parseFloat(String(d.valorProducao || 0)) || 0;
+        mapa[nome].count += 1;
+      }
     }
     const array = Object.entries(mapa).map(([nome, d]) => ({
       nome,
@@ -343,7 +442,11 @@ export function DashboardTab({
               </CardHeader>
               <CardContent>
                 <div className="text-xl font-extrabold text-purple-600">
-                  {formatarMoeda(despesas.reduce((a, b) => a + (b.valorConsumoProprio || 0), 0))}
+                  {formatarMoeda(
+                    Array.isArray(despesas)
+                      ? despesas.reduce((a, b) => a + (parseFloat(String(b?.valorConsumoProprio || 0)) || 0), 0)
+                      : 0
+                  )}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">Gastos pessoais/casa passados no cartão</p>
               </CardContent>
