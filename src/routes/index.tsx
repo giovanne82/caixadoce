@@ -1572,11 +1572,11 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
             <div className="flex items-center gap-2 font-bold">
               <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
               <span>
-                🎁 Período de Teste Grátis PRO: Você possui{" "}
+                🎁 Você possui{" "}
                 <strong className="underline decoration-amber-500 decoration-2 font-black">
                   {infoPlano.diasRestantesTrial} dia(s) restante(s)
                 </strong>{" "}
-                de acesso ilimitado a todos os recursos do sistema.
+                de acesso ilimitado.
               </span>
             </div>
             <Button
