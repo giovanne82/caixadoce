@@ -549,120 +549,87 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       return;
     }
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (
-          error.status === 429 ||
-          error.message?.toLowerCase().includes("too_many_requests") ||
-          error.message?.toLowerCase().includes("rate limit") ||
-          error.message?.toLowerCase().includes("exceeded")
-        ) {
-          toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
-          throw error;
-        }
-
-        // Fallback local caso offline ou cadastrado localmente no navegador
-        if (password.length >= 4) {
-          const nameFromEmail = email.split("@")[0];
-
-          const fallbackUser: User = {
-            id: `usr_${Date.now()}`,
-            name: nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1),
-            email,
-            provider: "email",
-          };
-
-          const fallbackProfile = buildProfileForUser(null, email);
-          setUser(fallbackUser);
-          setProfile(fallbackProfile);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-            localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-          }
-          toast.success("Login efetuado com sucesso!");
-          return;
-        }
-        throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("[Auth] Erro no signInWithPassword:", error);
+      if (
+        error.status === 429 ||
+        error.message?.toLowerCase().includes("too_many_requests") ||
+        error.message?.toLowerCase().includes("rate limit") ||
+        error.message?.toLowerCase().includes("exceeded")
+      ) {
+        toast.error("Muitas tentativas falhas. Tente novamente em alguns minutos.");
+      } else if (
+        error.status === 400 ||
+        error.message?.toLowerCase().includes("invalid login credentials") ||
+        error.message?.toLowerCase().includes("invalid_grant")
+      ) {
+        toast.error("E-mail ou senha incorretos. Verifique suas credenciais.");
+      } else {
+        toast.error(error.message || "Credenciais inválidas. Tente novamente.");
       }
+      throw error;
+    }
 
-      if (data.user) {
-        const loggedUser: User = {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Usuário",
-          email: data.user.email || email,
-          avatar: data.user.user_metadata?.avatar_url || "",
-          provider: "email",
-        };
-        const loggedProfile = buildProfileForUser(data.user, email);
-        setUser(loggedUser);
-        setProfile(loggedProfile);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
-          localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
-        }
-        toast.success("Bem-vindo ao CaixaDoce!");
+    if (data?.session && data?.user) {
+      const loggedUser: User = {
+        id: data.user.id,
+        name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split("@")[0] || "Usuário",
+        email: data.user.email || email,
+        avatar: data.user.user_metadata?.avatar_url || "",
+        provider: "email",
+      };
+      const loggedProfile = buildProfileForUser(data.user, email);
+      setUser(loggedUser);
+      setProfile(loggedProfile);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao efetuar login. Verifique seu e-mail e senha.");
-      throw err;
+      toast.success("Bem-vindo ao CaixaDoce!");
+    } else {
+      toast.error("Credenciais inválidas ou erro na autenticação.");
+      throw new Error("Sessão inválida do Supabase Auth.");
     }
   };
 
   const registerWithEmail = async (name: string, email: string, password: string): Promise<{ requiresConfirmation: boolean }> => {
-    try {
-      const redirectUrl = getAppBaseUrl();
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: { full_name: name, name },
-        },
-      });
+    const redirectUrl = getAppBaseUrl();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: { full_name: name, name },
+      },
+    });
 
-      if (error) throw error;
-
-      if (data.session) {
-        const newUser: User = {
-          id: data.user?.id || `usr_${Date.now()}`,
-          name,
-          email,
-          provider: "email",
-        };
-        setUser(newUser);
-        localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
-        toast.success("Conta criada e login efetuado com sucesso!");
-        return { requiresConfirmation: false };
-      } else if (data.user) {
-        return { requiresConfirmation: true };
-      }
-
-      return { requiresConfirmation: false };
-    } catch (err: any) {
-      if (err?.message?.includes("Failed to fetch") || err?.status === 0) {
-        const fallbackUser: User = {
-          id: `usr_${Date.now()}`,
-          name,
-          email,
-          provider: "email",
-        };
-        const fallbackProfile: UserProfile = {
-          role: "admin",
-          establishmentCode: ESTABELECIMENTO_PADRAO.codigo,
-          establishmentName: ESTABELECIMENTO_PADRAO.nome,
-          establishmentAddress: ESTABELECIMENTO_PADRAO.endereco,
-        };
-        setUser(fallbackUser);
-        setProfile(fallbackProfile);
-        localStorage.setItem("caixadoce_user", JSON.stringify(fallbackUser));
-        localStorage.setItem("caixadoce_profile", JSON.stringify(fallbackProfile));
-        toast.success("Conta criada com sucesso!");
-        return { requiresConfirmation: false };
-      }
-      toast.error(err?.message || "Erro ao registrar usuário.");
-      throw err;
+    if (error) {
+      toast.error(error.message || "Erro ao criar conta no Supabase Auth.");
+      throw error;
     }
+
+    if (data?.session && data?.user) {
+      const newUser: User = {
+        id: data.user.id,
+        name,
+        email,
+        provider: "email",
+      };
+      const newProfile = buildProfileForUser(data.user, email);
+      setUser(newUser);
+      setProfile(newProfile);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
+        localStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
+      }
+      toast.success("Conta criada e login efetuado com sucesso!");
+      return { requiresConfirmation: false };
+    } else if (data?.user) {
+      return { requiresConfirmation: true };
+    }
+
+    return { requiresConfirmation: false };
   };
 
   const sendEmailOtpSignUp = async (name: string, email: string, password: string) => {
