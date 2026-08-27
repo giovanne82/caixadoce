@@ -117,6 +117,9 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
   const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
@@ -464,9 +467,20 @@ export default {
             );
           }
 
-          const establishmentCode = payload.establishmentCode || formData.establishmentCode || "CD-1001";
-          const planId = payload.planId || formData.planId || "mensal";
-          const amount = Number(formData.transaction_amount || payload.transaction_amount || 19.90);
+          const establishmentCode = (
+            payload.estabelecimentoCodigo ||
+            payload.estabelecimento_codigo ||
+            payload.establishmentCode ||
+            payload.establishment_code ||
+            formData.estabelecimentoCodigo ||
+            formData.estabelecimento_codigo ||
+            formData.establishmentCode ||
+            formData.establishment_code ||
+            "CD-1001"
+          ).toUpperCase();
+
+          const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
+          const amount = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 19.90);
 
           const mpPaymentPayload: Record<string, any> = {
             transaction_amount: amount,
@@ -476,7 +490,7 @@ export default {
             payment_method_id: formData.payment_method_id,
             issuer_id: formData.issuer_id ? String(formData.issuer_id) : undefined,
             payer: {
-              email: formData.payer?.email || payload.email || "contato@caixadoce.com.br",
+              email: formData.payer?.email || payload.userEmail || payload.email || "contato@caixadoce.com.br",
               first_name: formData.payer?.first_name || "Assinante",
               last_name: formData.payer?.last_name || "CaixaDoce",
               identification: formData.payer?.identification,
@@ -484,8 +498,11 @@ export default {
             external_reference: establishmentCode,
             notification_url: `${url.origin}/api/webhooks/mercadopago`,
             metadata: {
-              establishmentCode,
+              estabelecimento_codigo: establishmentCode,
+              estabelecimentoCodigo: establishmentCode,
+              establishmentCode: establishmentCode,
               planId,
+              plano_id: planId,
             },
           };
 
