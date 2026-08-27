@@ -105,6 +105,9 @@ async function seedInitialCouponInSupabase() {
 }
 seedInitialCouponInSupabase();
 
+// Cache global em memória para trava de idempotência de pagamentos processados
+const processedPaymentsSet = new Set<string>();
+
 // Helper global para ativacao resiliente de plano no Supabase (Webhook + Process Payment)
 async function ativarPlanoEstabelecimentoNoSupabase(params: {
   establishmentCode: string;
@@ -241,8 +244,40 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     console.error("[Ativar Plano Supabase] Erro ao atualizar estabelecimentos:", errEst);
   }
 
-  // 2. INSERÇÃO DO REGISTRO DE CONFIRMAÇÃO DE TRANSAÇÃO EM 'transacoes_financeiras'
+  // 2. INSERÇÃO DO REGISTRO DE CONFIRMAÇÃO DE TRANSAÇÃO EM 'transacoes_financeiras' (COM TRAVA DE IDEMPOTÊNCIA)
   try {
+    const paymentStr = String(paymentId);
+
+    // 2a. Trava de Idempotência em Memória (bloqueia chamadas concorrentes no mesmo processo em milissegundos)
+    if (processedPaymentsSet.has(paymentStr)) {
+      console.log(`[Idempotência Cache] 🛡️ Transação #${paymentStr} já foi processada nesta sessão. Ignorando duplicidade.`);
+      return;
+    }
+
+    // 2b. Trava de Idempotência no Banco Supabase (bloqueia duplicatas mesmo em processos ou deploys distintos)
+    const checkRes = await fetch(
+      `${supabaseUrl}/rest/v1/transacoes_financeiras?descricao=ilike.*%23${encodeURIComponent(paymentStr)}*&select=id`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        processedPaymentsSet.add(paymentStr);
+        console.log(`[Idempotência Supabase] 🛡️ Transação #${paymentStr} já existe em 'transacoes_financeiras' (ID: ${existing[0].id}). Ignorando inserção duplicada.`);
+        return;
+      }
+    }
+
+    // Registra ID no cache de memória
+    processedPaymentsSet.add(paymentStr);
+    if (processedPaymentsSet.size > 2000) processedPaymentsSet.clear();
+
     const transacaoPayload = {
       estabelecimento_codigo: code,
       descricao: `Assinatura Plano PRO/Mensal — CaixaDoce (${paymentMethod.toUpperCase()} #${paymentId})`,
