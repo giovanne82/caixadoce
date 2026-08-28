@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "npm:nodemailer@6.9.16";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Suporte estrito para requisições preflight CORS (OPTIONS) respondendo 200 OK com corsHeaders
+  // Suporte estrito para requisições preflight CORS (OPTIONS)
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       status: 200,
@@ -78,35 +78,28 @@ serve(async (req) => {
       </html>
     `;
 
-    // Conexão SMTP Hostinger (Porta 465/SSL com connectTLS)
-    const client = new SmtpClient();
+    // Transporter Nodemailer compatível com Deno moderno e Hostinger SMTPS
+    const transporter = nodemailer.createTransport({
+      host: host,
+      port: port,
+      secure: port === 465,
+      auth: {
+        user: username,
+        pass: password,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
-    if (port === 465) {
-      await client.connectTLS({
-        hostname: host,
-        port: port,
-        username: username,
-        password: password,
-      });
-    } else {
-      await client.connect({
-        hostname: host,
-        port: port,
-        username: username,
-        password: password,
-      });
-    }
-
-    await client.send({
+    await transporter.sendMail({
       from: `CaixaDoce App <${username}>`,
       to: "contato@caixadoce.com.br",
       replyTo: remetenteEmail,
       subject: `[${motivoStr.toUpperCase()}] ${nomeLoja} (${codigoLoja})`,
-      content: mensagem.trim(),
+      text: mensagem.trim(),
       html: htmlBody,
     });
-
-    await client.close();
 
     return new Response(
       JSON.stringify({ success: true, message: "E-mail de contato enviado com sucesso!" }),
