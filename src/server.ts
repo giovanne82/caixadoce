@@ -128,18 +128,24 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
   const code = (establishmentCode || "CD-1001").toUpperCase();
-  const duracaoDias = planId === "anual" || planId === "ilimitado" ? 365 : 30;
-  const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-  const agora = new Date().toISOString();
-  const dataHojeStr = agora.split("T")[0];
 
-  console.log(`[Ativar Plano Supabase] Atualizando estabelecimento '${code}' (Plano: ${planId}, Pagamento ID: ${paymentId}, Expira: ${dataExpiracao})...`);
+  // IDENTIFICAÇÃO ESTRITA SE É PLANO ANUAL (365 DIAS) OU MENSAL (30 DIAS)
+  const isAnual =
+    planId === "anual" ||
+    planId === "ilimitado" ||
+    Number(amount || 0) > 50;
 
-  // 1. Busca primeiro o ID da linha na tabela 'estabelecimentos' (suporta ilike e eq)
+  const targetPlanId = isAnual ? "anual" : "mensal";
+  const duracaoDias = isAnual ? 365 : 30;
+
+  // BUSCA ID DO ESTABELECIMENTO E VALIDADE ATUAL PARA ACÚMULO DE DIAS
   let targetId: string | number | null = null;
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
   try {
     const searchRes = await fetch(
-      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo`,
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo,status,status_assinatura,plano_status,is_pro,plano_exp,plano_expira_em`,
       {
         headers: {
           apikey: supabaseKey,
@@ -150,38 +156,56 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     if (searchRes.ok) {
       const list = await searchRes.json();
       if (Array.isArray(list) && list.length > 0) {
-        targetId = list[0].id;
+        const estab = list[0];
+        targetId = estab.id;
+
+        const isAtivo =
+          estab.status === "ativo" ||
+          estab.status_assinatura === "ativo" ||
+          estab.plano_status === "ativo" ||
+          estab.is_pro === true;
+
+        const currentExp = estab.plano_exp || estab.plano_expira_em;
+        if (isAtivo && currentExp) {
+          const expMs = new Date(currentExp).getTime();
+          if (!isNaN(expMs) && expMs > agoraMs) {
+            baseMs = expMs;
+            console.log(`[Acúmulo Backend Supabase] Estabelecimento '${code}' já ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias (Plano: ${targetPlanId})!`);
+          }
+        }
       }
     }
   } catch (e) {
-    console.warn("[Ativar Plano Supabase] Erro ao buscar ID do estabelecimento:", e);
+    console.warn("[Ativar Plano Supabase] Erro ao consultar validade existente:", e);
   }
 
-  // Filtro de busca no Supabase (por ID se encontrado, senao por codigo ilike)
+  const dataExpiracao = new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+  const agora = new Date().toISOString();
+
+  console.log(`[Ativar Plano Supabase] Atualizando '${code}' -> Plano: ${targetPlanId} (+${duracaoDias} dias), Pagamento ID: ${paymentId}, Nova Expiração: ${dataExpiracao}`);
+
   const filterQuery = targetId ? `id=eq.${targetId}` : `codigo=ilike.${encodeURIComponent(code)}`;
 
   const patchPayloads = [
-    // Opção A: Campos padrão
     {
       status: "ativo",
-      plano: planId,
+      plano: targetPlanId,
+      plano_id: targetPlanId,
       plano_exp: dataExpiracao,
       plano_expira_em: dataExpiracao,
       is_pro: true,
       metodo_pagamento: paymentMethod,
       updated_at: agora,
     },
-    // Opção B: Fallback basico
     {
       status: "ativo",
-      plano: planId,
+      plano: targetPlanId,
       plano_exp: dataExpiracao,
       updated_at: agora,
     },
-    // Opção C: Fallback alternativo
     {
       status_assinatura: "ativo",
-      plano_id: planId,
+      plano_id: targetPlanId,
       plano_expira_em: dataExpiracao,
       updated_at: agora,
     },
@@ -760,20 +784,26 @@ export default {
               console.log(`[MercadoPago Webhook] Consulta de Pagamento ${paymentId}: status=${paymentData.status}`);
 
               if (paymentData.status === "approved" || paymentData.status === "authorized") {
+                const meta = paymentData.metadata || {};
+                const desc = String(paymentData.description || "").toLowerCase();
+                const amount = Number(paymentData.transaction_amount || 0);
+
+                const isAnual =
+                  meta.plano_id === "anual" ||
+                  meta.plan_id === "anual" ||
+                  meta.plan_type === "anual" ||
+                  meta.tipo_plano === "anual" ||
+                  desc.includes("anual") ||
+                  amount > 50;
+
+                const planId = isAnual ? "anual" : (meta.plano_id || meta.plan_id || "mensal");
                 const establishmentCode =
                   paymentData.external_reference ||
-                  paymentData.metadata?.estabelecimento_codigo ||
-                  paymentData.metadata?.establishment_code ||
-                  paymentData.metadata?.establishmentcode ||
+                  meta.estabelecimento_codigo ||
+                  meta.establishment_code ||
+                  meta.establishmentcode ||
                   "CD-1001";
 
-                const planId =
-                  paymentData.metadata?.plano_id ||
-                  paymentData.metadata?.plan_id ||
-                  paymentData.metadata?.planid ||
-                  "mensal";
-
-                const amount = Number(paymentData.transaction_amount || 19.90);
                 const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
                 const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -817,15 +847,25 @@ export default {
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
             "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
+          const isPlanoAnualRequest =
+            planoId === "anual" ||
+            planoId === "ilimitado" ||
+            Number(valor || formData?.transaction_amount || 0) > 50;
+
+          const targetPlanType = isPlanoAnualRequest ? "anual" : "mensal";
+
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
             ...formData,
-            transaction_amount: Number(valor || formData?.transaction_amount || 19.90),
-            description: `Assinatura CaixaDoce Pro — ${planoId === "anual" ? "Plano Anual" : "Plano Mensal"}`,
+            transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 149.90 : 19.90)),
+            description: `Assinatura CaixaDoce Pro — ${targetPlanType === "anual" ? "Plano Anual (365 dias)" : "Plano Mensal (30 dias)"}`,
             external_reference: estabelecimentoCodigo || "CD-1001",
             metadata: {
               estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
-              plano_id: planoId || "mensal",
+              plano_id: targetPlanType,
+              plan_id: targetPlanType,
+              plan_type: targetPlanType,
+              tipo_plano: targetPlanType,
               user_email: userEmail || "contato@caixadoce.com.br",
             },
           };
