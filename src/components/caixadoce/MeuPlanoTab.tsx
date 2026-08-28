@@ -370,19 +370,9 @@ export function MeuPlanoTab() {
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {isPlanoAtivo ? (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs shadow-xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Acesso PRO Liberado
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setModalCancelOpen(true)}
-                    className="text-xs text-rose-600 hover:bg-rose-500/10 font-bold"
-                  >
-                    Gerenciar / Cancelar
-                  </Button>
-                </div>
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs shadow-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Acesso PRO Liberado
+                </span>
               ) : (
                 <Button
                   onClick={() => handleAbrirCheckout("mensal")}
