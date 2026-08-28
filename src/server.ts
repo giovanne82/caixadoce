@@ -651,6 +651,49 @@ export default {
           const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
           const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
 
+async function calcularNovaDataExpiracaoBackend(
+  estabelecimentoCodigo: string,
+  duracaoDias: number,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string> {
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
+  try {
+    const fetchRes = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=plano_status,status_assinatura,plano_expira_em`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (fetchRes.ok) {
+      const rows = await fetchRes.json();
+      const estab = rows?.[0];
+      const isAtivo =
+        estab?.plano_status === "ativo" ||
+        estab?.status_assinatura === "ativo" ||
+        estab?.plano_status === "pro";
+
+      if (isAtivo && estab?.plano_expira_em) {
+        const expMs = new Date(estab.plano_expira_em).getTime();
+        if (!isNaN(expMs) && expMs > agoraMs) {
+          baseMs = expMs;
+          console.log(`[Acúmulo de Dias Backend] Estabelecimento ${estabelecimentoCodigo} ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias.`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Acúmulo de Dias Backend] Erro ao consultar validade atual:", err);
+  }
+
+  return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+}
+
           // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
           if (status === "approved" && estabelecimentoCodigo) {
             try {
@@ -660,7 +703,7 @@ export default {
                 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
               const duracaoDias = planoId === "anual" ? 365 : 30;
-              const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+              const dataExpiracao = await calcularNovaDataExpiracaoBackend(estabelecimentoCodigo, duracaoDias, supabaseUrl, supabaseKey);
               const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
               const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -673,8 +716,10 @@ export default {
                   Prefer: "return=minimal",
                 },
                 body: JSON.stringify({
-                  plano_id: "ilimitado",
+                  plano: planoId === "anual" ? "anual" : "mensal",
+                  plano_id: planoId === "anual" ? "anual" : "mensal",
                   plano_status: "ativo",
+                  status_assinatura: "ativo",
                   plano_atualizado_em: new Date().toISOString(),
                   plano_expira_em: dataExpiracao,
                   metodo_pagamento: tipoPag,
@@ -682,7 +727,7 @@ export default {
                   mercadopago_assinatura_id: mpData.subscription_id ? String(mpData.subscription_id) : null,
                 }),
               });
-              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
+              console.log(`[MercadoPago Direct] Estabelecimento ${estabelecimentoCodigo} atualizado para '${planoId}' (Ativo até ${dataExpiracao})!`);
             } catch (err) {
               console.error("[MercadoPago Direct] Erro ao atualizar Supabase:", err);
             }
@@ -726,7 +771,7 @@ export default {
             const accessToken =
               process.env.MERCADOPAGO_ACCESS_TOKEN ||
               process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-              "TEST-3682622436709302-082412-8c8fb33c77bc130933ca4f6fce377e6a-78387856";
+              "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
             const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${payloadId}`, {
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -746,9 +791,9 @@ export default {
                   process.env.VITE_SUPABASE_ANON_KEY ||
                   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
-                const planoIdMeta = meta.plano_id || "ilimitado";
+                const planoIdMeta = meta.plano_id || "mensal";
                 const duracaoDias = planoIdMeta === "anual" ? 365 : 30;
-                const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+                const dataExpiracao = await calcularNovaDataExpiracaoBackend(estabCodigo, duracaoDias, supabaseUrl, supabaseKey);
                 const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "").toLowerCase();
                 const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -761,8 +806,10 @@ export default {
                     Prefer: "return=minimal",
                   },
                   body: JSON.stringify({
-                    plano_id: "ilimitado",
+                    plano: planoIdMeta === "anual" ? "anual" : "mensal",
+                    plano_id: planoIdMeta === "anual" ? "anual" : "mensal",
                     plano_status: "ativo",
+                    status_assinatura: "ativo",
                     plano_atualizado_em: new Date().toISOString(),
                     plano_expira_em: dataExpiracao,
                     metodo_pagamento: tipoPag,
@@ -770,7 +817,7 @@ export default {
                     mercadopago_assinatura_id: paymentData.subscription_id ? String(paymentData.subscription_id) : null,
                   }),
                 });
-                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado para 'ilimitado' (Ativo até ${dataExpiracao})!`);
+                console.log(`[MercadoPago Webhook] 🎉 Plano de ${estabCodigo} atualizado para '${planoIdMeta}' (Ativo até ${dataExpiracao})!`);
               }
             }
           }

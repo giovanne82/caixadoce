@@ -12,6 +12,7 @@ import {
   X,
   Flame,
   Tag,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
@@ -19,6 +20,7 @@ import {
   obterPlanoEfetivoEstabelecimento,
   PLANOS_CONFIG,
   salvarDadosPlanoEstabelecimento,
+  calcularDataExpiracaoAcumulada,
 } from "@/lib/planos-utils";
 import { MercadoPagoBrick } from "@/components/caixadoce/MercadoPagoBrick";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,7 @@ export function MeuPlanoTab() {
   const userCreatedAt = (user as any)?.created_at || (profile as any)?.createdAt;
 
   const [infoPlano, setInfoPlano] = useState(() => obterPlanoEfetivoEstabelecimento(activeCode, userCreatedAt));
+  const [planoSelecionado, setPlanoSelecionado] = useState<"mensal" | "anual">("mensal");
   const [modalCheckoutOpen, setModalCheckoutOpen] = useState(false);
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
@@ -92,25 +95,24 @@ export function MeuPlanoTab() {
             });
           } catch {}
 
-          const novosDiasAdicionais = (infoPlano.trialDiasAdicionais || 0) + diasAdicionados;
+          const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, diasAdicionados);
           salvarDadosPlanoEstabelecimento(activeCode, {
-            trialDiasAdicionais: novosDiasAdicionais,
+            dataExpiracao: novaExp,
             status: "trial",
-            planoId: "mensal",
           });
           if (updateEstablishmentPlan) {
             await updateEstablishmentPlan("mensal", true);
           }
           recarregarPlano();
           setCupomInput("");
-          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
-          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO! Aproveite todas as ferramentas sem cadastrar cartão.`);
+          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO!`);
         } else if (Number(data.percentualDesconto) >= 100) {
-          // CUPOM 100% GRATUITO - BYPASS TOTAL DE CHECKOUT DO MERCADO PAGO
+          const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, 30);
           salvarDadosPlanoEstabelecimento(activeCode, {
             planoId: "mensal",
             status: "ativo",
             tipoPagamento: "cupom_100",
+            dataExpiracao: novaExp,
             dataInicio: new Date().toISOString(),
           });
           if (updateEstablishmentPlan) {
@@ -123,8 +125,7 @@ export function MeuPlanoTab() {
             descricao: data.descricao,
           });
           setCupomInput("");
-          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
-          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado gratuitamente sem necessidade de cartão.`);
+          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado.`);
         } else {
           setCupomAplicado({
             codigo: data.cupom,
@@ -150,43 +151,48 @@ export function MeuPlanoTab() {
     toast.info("Código promocional removido.");
   };
 
-  const valorOriginalPlano = 19.90;
-  const valorPlanoComDesconto = useMemo(() => {
-    if (!cupomAplicado) return valorOriginalPlano;
+  const valorOriginalMensal = 19.90;
+  const valorOriginalAnual = 178.80;
+
+  const valorMensalComDesconto = useMemo(() => {
+    if (!cupomAplicado) return valorOriginalMensal;
     const fator = (100 - cupomAplicado.percentualDesconto) / 100;
-    const calc = valorOriginalPlano * fator;
-    return parseFloat(calc.toFixed(2));
+    return parseFloat((valorOriginalMensal * fator).toFixed(2));
   }, [cupomAplicado]);
 
-  const handleAbrirCheckout = () => {
-    const jaPossuiAssinaturaAtiva =
-      infoPlano.status === "ativo" &&
-      infoPlano.planoId !== "basico";
+  const valorAnualComDesconto = useMemo(() => {
+    if (!cupomAplicado) return valorOriginalAnual;
+    const fator = (100 - cupomAplicado.percentualDesconto) / 100;
+    return parseFloat((valorOriginalAnual * fator).toFixed(2));
+  }, [cupomAplicado]);
 
-    if (jaPossuiAssinaturaAtiva) {
-      toast.info("Seu plano já se encontra ativo! Você possui acesso ilimitado a todas as ferramentas do sistema.", {
-        duration: 4500,
-      });
-      const cardRef = document.getElementById("card-status-plano-ativo");
-      if (cardRef) {
-        cardRef.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      return;
-    }
+  const valorPlanoSelecionadoComDesconto = useMemo(() => {
+    return planoSelecionado === "anual" ? valorAnualComDesconto : valorMensalComDesconto;
+  }, [planoSelecionado, valorMensalComDesconto, valorAnualComDesconto]);
 
-    // BYPASS DO MERCADO PAGO SE O PLANO ESTIVER 100% GRATUITO
-    if (valorPlanoComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
+  const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
+  const isPlanoMensalAtivo = isPlanoAtivo && (infoPlano.planoId === "mensal" || infoPlano.planoId === "pro");
+  const isPlanoAnualAtivo = isPlanoAtivo && (infoPlano.planoId === "anual" || infoPlano.planoId === "ilimitado");
+
+  const handleAbrirCheckout = (planoTarget: "mensal" | "anual" = "mensal") => {
+    setPlanoSelecionado(planoTarget);
+    const valorFinal = planoTarget === "anual" ? valorAnualComDesconto : valorMensalComDesconto;
+
+    if (valorFinal <= 0 || cupomAplicado?.percentualDesconto === 100) {
+      const duracaoDias = planoTarget === "anual" ? 365 : 30;
+      const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, duracaoDias);
       salvarDadosPlanoEstabelecimento(activeCode, {
-        planoId: "mensal",
+        planoId: planoTarget,
         status: "ativo",
         tipoPagamento: "cupom_100",
+        dataExpiracao: novaExp,
         dataInicio: new Date().toISOString(),
       });
       if (updateEstablishmentPlan) {
-        updateEstablishmentPlan("mensal", true);
+        updateEstablishmentPlan(planoTarget as any, true);
       }
       recarregarPlano();
-      toast.success("🎉 Oba! Plano PRO ativado gratuitamente sem necessidade de cartão.");
+      toast.success(`🎉 Oba! Plano ${planoTarget === "anual" ? "Anual" : "Mensal"} PRO ativado gratuitamente.`);
       setModalCheckoutOpen(false);
       return;
     }
@@ -195,14 +201,6 @@ export function MeuPlanoTab() {
   };
 
   const handleMudarParaBasico = () => {
-    if (isPlanoAtivo) {
-      toast.info(
-        "Seu estabelecimento já possui um plano superior ativo. Para migrar para o Plano Básico, utilize a opção 'Gerenciar / Cancelar Assinatura' acima.",
-        { duration: 4500 }
-      );
-      return;
-    }
-
     salvarDadosPlanoEstabelecimento(activeCode, {
       planoId: "basico",
       status: "ativo",
@@ -219,185 +217,115 @@ export function MeuPlanoTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estabelecimentoCodigo: activeCode }),
       });
-
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Falha ao processar cancelamento no Mercado Pago.");
+      if (res.ok && data.success) {
+        salvarDadosPlanoEstabelecimento(activeCode, {
+          planoId: "basico",
+          status: "expirado",
+        });
+        if (updateEstablishmentPlan) {
+          updateEstablishmentPlan("basico", false);
+        }
+        recarregarPlano();
+        setModalCancelOpen(false);
+        toast.success("Assinatura cancelada. Seu plano foi alterado para o Básico.");
+      } else {
+        toast.error(data.error || "Erro ao cancelar assinatura no Mercado Pago.");
       }
-
-      salvarDadosPlanoEstabelecimento(activeCode, {
-        planoId: "basico",
-        status: "cancelado",
-      });
-      if (updateEstablishmentPlan) {
-        await updateEstablishmentPlan("basico" as any, false);
-      }
-
-      setModalCancelOpen(false);
-      recarregarPlano();
-      toast.info("Assinatura cancelada com sucesso no Mercado Pago. Seu plano mudou para o Plano Básico.");
-    } catch (err: any) {
-      console.error("[Cancel Subscription Error]", err);
-      toast.error(`Erro ao cancelar assinatura: ${err.message}`);
+    } catch (err) {
+      toast.error("Falha ao comunicar com o servidor para cancelamento.");
     } finally {
       setProcessandoCancelamento(false);
     }
   };
 
-  const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
-  const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
   const isProOuTrialAtivo = isPlanoAtivo || infoPlano.status === "trial";
 
   return (
-    <div className="space-y-6">
-      {/* Header Info */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Aproveite 7 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo via Mercado Pago.
-          </p>
-        </div>
-      </div>
-
-      {/* BANNER PROMOÇÃO DE LANÇAMENTO POR TEMPO LIMITADO */}
-      <div className="bg-gradient-to-r from-[#8E7CC3] via-purple-600 to-[#5B478E] rounded-2xl p-4 text-white shadow-lg flex items-center justify-between gap-3 font-sans">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
-            <Flame className="w-6 h-6 text-amber-300 animate-bounce" />
-          </div>
-          <div>
-            <h4 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-1.5">
-              🔥 Plano Mensal Completo PRO por Tempo Limitado!
-            </h4>
-            <p className="text-xs text-white/90">
-              Garanta acesso ilimitado a todas as ferramentas: <strong>Plano Mensal Completo por apenas R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês</strong> sem fidelidade.
-            </p>
-          </div>
-        </div>
-        {!isPlanoAtivo && (
-          <Button
-            onClick={handleAbrirCheckout}
-            className="bg-white text-purple-900 hover:bg-amber-300 hover:text-purple-950 font-black text-xs shrink-0 shadow-md border-0"
-          >
-            Assinar Agora
-          </Button>
-        )}
-      </div>
-
-      {/* BANNER DE STATUS DO PLANO E TRIAL DE 7 DIAS */}
-      <Card id="card-status-plano-ativo" className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-[#F3EEF9] text-[#7C3AED]">
-                <Crown className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-xl font-extrabold text-foreground">{planoAtualConfig.nome}</h3>
-                  <Badge
-                    variant={infoPlano.status === "ativo" ? "default" : "secondary"}
-                    className={
-                      infoPlano.status === "ativo"
-                        ? "bg-emerald-600 text-white font-bold"
-                        : infoPlano.status === "trial"
-                        ? "bg-[#F3EEF9] text-[#5B478E] border border-[#8E7CC3]/40 font-extrabold animate-pulse"
-                        : infoPlano.status === "expirado"
-                        ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-bold"
-                        : "bg-stone-500/20 text-stone-700 font-bold"
-                    }
-                  >
-                    {infoPlano.status === "ativo"
-                      ? "Assinatura Ativa (Ilimitado)"
-                      : infoPlano.status === "trial"
-                      ? "Período de Teste (PRO)"
-                      : infoPlano.status === "expirado"
-                      ? "⚠️ Trial Expirado"
-                      : "Plano Básico (Gratuito)"}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Estabelecimento conectado: <span className="font-mono font-bold text-foreground">{activeCode}</span>
-                </p>
-              </div>
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {/* STATUS HEADER */}
+      <Card id="card-status-plano-ativo" className="border-2 border-[#8E7CC3]/40 shadow-lg bg-gradient-to-r from-[#F3EEF9] via-white to-purple-50">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Crown className="w-6 h-6 text-[#7C3AED]" />
+              <CardTitle className="text-xl font-extrabold text-foreground">
+                Meu Plano &amp; Assinatura
+              </CardTitle>
             </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {isPlanoAtivo ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setModalCancelOpen(true)}
-                  className="text-xs text-rose-600 hover:bg-rose-500/10 font-bold"
-                >
-                  Gerenciar / Cancelar Assinatura
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleAbrirCheckout}
-                  className="font-extrabold shadow-md bg-[#8E7CC3] hover:bg-[#7C69B3] text-white w-full sm:w-auto text-xs"
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Assinar Mensal (R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)
-                </Button>
-              )}
-            </div>
+            <CardDescription className="text-xs">
+              Gerencie a assinatura do seu estabelecimento e aproveite acesso ilimitado.
+            </CardDescription>
           </div>
-        </CardContent>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant={isPlanoAtivo ? "default" : infoPlano.status === "trial" ? "secondary" : "outline"}
+              className={`text-xs font-bold px-3 py-1 ${
+                isPlanoAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-600 text-white"
+                  : infoPlano.status === "trial"
+                  ? "bg-[#7C3AED] text-white"
+                  : "border-stone-300 text-stone-600"
+              }`}
+            >
+              {isPlanoAtivo
+                ? `Plano PRO Ativo (${infoPlano.planoId === "anual" ? "Anual" : "Mensal"})`
+                : infoPlano.status === "trial"
+                ? `Teste Grátis (${infoPlano.diasRestantesTrial} dias restantes)`
+                : "Plano Básico Gratuito"}
+            </Badge>
+
+            {isPlanoAtivo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setModalCancelOpen(true)}
+                className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50 font-semibold h-7"
+              >
+                Gerenciar / Cancelar
+              </Button>
+            )}
+          </div>
+        </CardHeader>
       </Card>
 
-      {/* ========================================================================= */}
-      {/* CARD LIMPO: INPUT DE CÓDIGO PROMOCIONAL DE ASSINATURA SAAS */}
-      {/* ========================================================================= */}
-      <Card className="border border-purple-500/30 bg-purple-500/5 shadow-xs">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <Label className="text-xs sm:text-sm font-extrabold text-foreground flex items-center gap-1.5">
-                <Tag className="w-4 h-4 text-purple-600" /> Possui um código promocional?
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Insira o código do seu cupom SaaS para obter desconto exclusivo na assinatura do aplicativo.
-              </p>
-            </div>
-
-            <form onSubmit={handleValidarCupom} className="flex items-center gap-2 w-full sm:w-auto">
-              {cupomAplicado ? (
-                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
-                  <Badge variant="default" className="bg-emerald-600 font-extrabold text-xs">
-                    {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%)
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRemoverCupom}
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                    title="Remover cupom"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Input
-                    placeholder="Ex: CAIXADOCEVIP20"
-                    value={cupomInput}
-                    onChange={(e) => setCupomInput(e.target.value.toUpperCase())}
-                    className="h-9 text-xs font-mono uppercase font-bold w-44"
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={validandoCupom || !cupomInput.trim()}
-                    className="h-9 px-4 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    {validandoCupom ? "Validando..." : "Aplicar"}
-                  </Button>
-                </>
+      {/* SEÇÃO: CUPOM PROMOCIONAL DE ASSINATURA */}
+      <Card className="border border-purple-200 bg-white shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Tag className="w-4 h-4 text-[#7C3AED]" /> Cupom Promocional ou Voucher de Desconto
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Possui um código de desconto ou voucher promocional? Insira abaixo para aplicar o benefício na assinatura.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <form onSubmit={handleValidarCupom} className="flex gap-2 w-full max-w-md">
+              <Input
+                placeholder="Ex: BETA60 ou CAIXADOCEOFF"
+                value={cupomInput}
+                onChange={(e) => setCupomInput(e.target.value.toUpperCase())}
+                disabled={validandoCupom}
+                className="text-xs font-mono font-bold uppercase"
+              />
+              <Button
+                type="submit"
+                disabled={validandoCupom || !cupomInput.trim()}
+                className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-xs shrink-0"
+              >
+                {validandoCupom ? "Validando..." : "Aplicar Cupom"}
+              </Button>
+              {cupomAplicado && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleRemoverCupom}
+                  className="text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                >
+                  Remover
+                </Button>
               )}
             </form>
           </div>
@@ -405,192 +333,159 @@ export function MeuPlanoTab() {
       </Card>
 
       {/* ========================================================================= */}
-      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO E MENSAL R$ 19,90) */}
+      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO, MENSAL E ANUAL) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 items-stretch">
         
         {/* CARD 1: PLANO BÁSICO (R$ 0,00) */}
         <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-border/80 transition-all">
           <CardHeader className="pb-4">
             <Badge variant="outline" className="w-fit mb-2 text-[10px] font-bold text-stone-500 border-stone-300">
-              GRATUITO PARA SEMPRE
+              GRATUITO
             </Badge>
             <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-primary" /> Plano Básico
             </CardTitle>
             <CardDescription className="text-xs">
-              Para organizar suas compras e matérias-primas com acesso exclusivo à Lista de Compras.
+              Para organizar suas compras e matérias-primas essenciais.
             </CardDescription>
             <div className="pt-3">
               <span className="text-3xl font-black text-foreground">R$ 0,00</span>
-              <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Recursos Incluídos:</p>
             <ul className="space-y-2 text-xs text-foreground font-medium">
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span><strong>Acesso Exclusivo à Lista de Compras Interativa</strong></span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Escanear a Notinha com IA (Bloqueado no Básico)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Calendário de Encomendas &amp; Clientes (Bloqueado)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Painel Financeiro &amp; Fluxo de Caixa (Bloqueado)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Cardápio Digital Público &amp; Produtos (Bloqueado)</span>
+                <span>Lista de Compras Interativa</span>
               </li>
             </ul>
           </CardContent>
           <div className="p-6 pt-0">
             <Button
               variant="outline"
-              className={`w-full text-xs font-bold transition-all ${
-                infoPlano.planoId === "basico" || isProOuTrialAtivo
-                  ? "opacity-60 bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-300 dark:border-stone-700 cursor-not-allowed pointer-events-none"
-                  : ""
-              }`}
-              disabled={infoPlano.planoId === "basico" || isProOuTrialAtivo}
+              className="w-full text-xs font-bold"
+              disabled={infoPlano.planoId === "basico"}
               onClick={handleMudarParaBasico}
             >
-              {infoPlano.planoId === "basico"
-                ? "Plano Atual"
-                : isProOuTrialAtivo
-                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
-                : "Usar Plano Gratuito"}
+              {infoPlano.planoId === "basico" ? "Plano Atual" : "Usar Plano Gratuito"}
             </Button>
           </div>
         </Card>
 
-        {/* CARD 2: PLANO MENSAL COMPLETO (COM SUPORTE A CUPOM DE DESCONTO) */}
-        <Card className="border-2 border-[#8E7CC3] shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8E7CC3] to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
-            <Sparkles className="w-3.5 h-3.5" /> RECOMENDADO
-          </div>
-
+        {/* CARD 2: PLANO MENSAL */}
+        <Card className={`border-2 shadow-xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ${
+          isPlanoMensalAtivo ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-[#8E7CC3]"
+        }`}>
           <CardHeader className="pb-4 pt-6">
             <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-bold text-[#7C3AED] bg-[#F3EEF9] border border-[#8E7CC3]/30">
-              🔥 ACESSO COMPLETO PRO
+              {isPlanoMensalAtivo ? "✓ SEU PLANO ATUAL" : "🔥 MENSAL FLEXÍVEL"}
             </Badge>
             <CardTitle className="text-lg font-extrabold text-foreground flex items-center justify-between">
               Mensal Completo <Zap className="w-5 h-5 text-amber-500" />
             </CardTitle>
             <CardDescription className="text-xs">
-              Acesso total ilimitado a todas as ferramentas com flexibilidade mensal sem fidelidade.
+              Acesso total ilimitado a todas as ferramentas.
             </CardDescription>
             <div className="pt-3">
-              {cupomAplicado ? (
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoComDesconto.toFixed(2).replace(".", ",")}
-                    </span>
-                    <span className="text-sm line-through text-muted-foreground font-mono">
-                      R$ 19,90
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-                  </div>
-                  <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
-                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
-                  </Badge>
-                </div>
-              ) : (
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black text-[#7C3AED]">R$ 19,90</span>
-                  <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-                </div>
-              )}
-              <p className="text-[11px] font-bold text-[#7C3AED] mt-1">
-                Preço promocional • Cancele quando quiser
-              </p>
+              <span className="text-3xl font-black text-[#7C3AED]">R$ {valorMensalComDesconto.toFixed(2).replace(".", ",")}</span>
             </div>
           </CardHeader>
-
           <CardContent className="space-y-3">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Acesso Ilimitado Completo:</p>
-            <ul className="space-y-2 text-xs text-foreground font-medium">
+             <ul className="space-y-2 text-xs text-foreground font-medium">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Escanear a Notinha com IA (Ilimitado)</span>
+                <span>Escanear Notinha IA (Ilimitado)</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span><strong>Ficha Técnica &amp; Precificação de Produtos (Margem Real sem Prejuízo)</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Atualização automática de custos com base no <strong>último preço comprado</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Milhares de pré-cadastros de insumos para agilizar sua Lista de Compras</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Controle financeiro dos pedidos e fluxo de caixa</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cardápio digital personalizado</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Consolidação automática de receitas na Lista de Compras</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Compartilhamento de conta com outro usuário</span>
+                <span>Ficha Técnica & Precificação</span>
               </li>
             </ul>
           </CardContent>
           <div className="p-6 pt-0">
             <Button
-              onClick={handleAbrirCheckout}
-              disabled={isPlanoAtivo}
+              onClick={() => handleAbrirCheckout("mensal")}
               className={`w-full font-extrabold shadow-lg text-xs py-5 ${
-                isPlanoAtivo
-                  ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
+                isPlanoMensalAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : "bg-gradient-to-r from-[#8E7CC3] to-purple-600 hover:from-[#7C69B3] hover:to-purple-700 text-white"
               }`}
             >
-              {isPlanoAtivo ? "✓ Plano Já Ativo (Acesso Ilimitado)" : `Assinar Plano Mensal (R$ ${valorPlanoComDesconto.toFixed(2).replace(".", ",")}/mês)`}
-              {!isPlanoAtivo && <ArrowRight className="w-4 h-4 ml-1.5" />}
+              {isPlanoMensalAtivo ? `Renovar (+30 Dias)` : `Assinar Mensal`}
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
         </Card>
 
+        {/* CARD 3: PLANO ANUAL */}
+        <Card className={`border-2 shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ${
+          isPlanoAnualAtivo ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-amber-500/80"
+        }`}>
+           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-purple-600 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
+            <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" /> ⭐ MAIOR ECONOMIA
+          </div>
+          <CardHeader className="pb-4 pt-6">
+            <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300">
+              {isPlanoAnualAtivo ? "✓ SEU PLANO ATUAL" : "🚀 UPGRADE ANUAL"}
+            </Badge>
+            <CardTitle className="text-lg font-extrabold text-foreground flex items-center justify-between">
+              Anual Completo <Crown className="w-5 h-5 text-amber-500 fill-amber-500" />
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Garanta 12 meses de acesso com 25% de desconto.
+            </CardDescription>
+            <div className="pt-3">
+              <span className="text-3xl font-black text-amber-600">R$ {valorAnualComDesconto.toFixed(2).replace(".", ",")}</span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+             <ul className="space-y-2 text-xs text-foreground font-medium">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Todos Recursos PRO Incluídos</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Prioridade no suporte</span>
+              </li>
+            </ul>
+          </CardContent>
+          <div className="p-6 pt-0">
+            <Button
+              onClick={() => handleAbrirCheckout("anual")}
+              className={`w-full font-extrabold shadow-xl text-xs py-5 ${
+                isPlanoAnualAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-gradient-to-r from-amber-500 via-purple-600 to-[#7C3AED] hover:from-amber-600 hover:to-purple-800 text-white"
+              }`}
+            >
+              {isPlanoAnualAtivo ? `Renovar Anual (+365 Dias)` : `Assinar Anual`}
+              <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </div>
+        </Card>
       </div>
 
-      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO COM VALOR ATUALIZADO PELO CUPOM */}
+      {/* MODAL: CHECKOUT */}
       <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <MercadoPagoBrick
             estabelecimentoCodigo={activeCode}
             userEmail={user?.email || ""}
-            planoId="mensal"
-            nomePlano={cupomAplicado ? `Plano Mensal Completo PRO (Cupom ${cupomAplicado.codigo})` : "Plano Mensal Completo PRO"}
-            valor={valorPlanoComDesconto}
+            planoId={planoSelecionado}
+            nomePlano={planoSelecionado === "anual" ? "Plano Anual Completo PRO" : "Plano Mensal Completo PRO"}
+            valor={valorPlanoSelecionadoComDesconto}
             onSuccess={() => {
+              const duracaoDias = planoSelecionado === "anual" ? 365 : 30;
+              const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, duracaoDias);
               salvarDadosPlanoEstabelecimento(activeCode, {
-                planoId: "mensal",
+                planoId: planoSelecionado,
                 status: "ativo",
-                dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                dataExpiracao: novaExp,
               });
               if (updateEstablishmentPlan) {
-                updateEstablishmentPlan("mensal" as any, true);
+                updateEstablishmentPlan(planoSelecionado as any, true);
               }
               recarregarPlano();
               setModalCheckoutOpen(false);
@@ -601,7 +496,7 @@ export function MeuPlanoTab() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: CONFIRMAR CANCELAMENTO */}
+      {/* MODAL: CANCELAR */}
       <Dialog open={modalCancelOpen} onOpenChange={setModalCancelOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
