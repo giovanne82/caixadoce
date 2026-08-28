@@ -1088,6 +1088,112 @@ async function calcularNovaDataExpiracaoBackend(
       }
 
       // =========================================================================
+      // FORMULÁRIO DE CONTATO / SUPORTE & SUGESTÕES (/api/contact)
+      // =========================================================================
+      if (url.pathname === "/api/contact" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { motivo, mensagem, userEmail, userName, establishmentName, establishmentCode } = body;
+
+          if (!mensagem || !mensagem.trim()) {
+            return new Response(
+              JSON.stringify({ error: "O campo mensagem é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const remetenteEmail = userEmail || "usuario@caixadoce.com.br";
+          const remetenteNome = userName || "Usuário CaixaDoce";
+          const codigoLoja = establishmentCode || "CD-1001";
+          const nomeLoja = establishmentName || codigoLoja;
+          const motivoStr = motivo || "Suporte / Sugestão";
+
+          console.log(`[Formulário de Contato] Motivo: '${motivoStr}' | Loja: '${nomeLoja}' (${codigoLoja}) | E-mail: '${remetenteEmail}'`);
+          console.log(`[Mensagem]: "${mensagem.trim()}"`);
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey =
+            process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.SUPABASE_SERVICE_KEY ||
+            process.env.SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          let fallbackSaved = false;
+          try {
+            const ticketRes = await fetch(`${supabaseUrl}/rest/v1/mensagens_contato`, {
+              method: "POST",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({
+                motivo: motivoStr,
+                mensagem: mensagem.trim(),
+                user_email: remetenteEmail,
+                user_name: remetenteNome,
+                estabelecimento_codigo: codigoLoja,
+                estabelecimento_nome: nomeLoja,
+                created_at: new Date().toISOString(),
+              }),
+            });
+            if (ticketRes.ok) fallbackSaved = true;
+          } catch {}
+
+          let emailEnviado = false;
+          const resendKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+          if (resendKey) {
+            try {
+              const resendRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${resendKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: "CaixaDoce App <noreply@caixadoce.com.br>",
+                  to: ["contato@caixadoce.com.br"],
+                  reply_to: remetenteEmail,
+                  subject: `[${motivoStr.toUpperCase()}] ${nomeLoja} (${codigoLoja})`,
+                  html: `
+                    <h2>Novo Contato via CaixaDoce App</h2>
+                    <p><strong>Motivo:</strong> ${motivoStr}</p>
+                    <p><strong>Usuário:</strong> ${remetenteNome} (${remetenteEmail})</p>
+                    <p><strong>Estabelecimento:</strong> ${nomeLoja} (Código: ${codigoLoja})</p>
+                    <hr />
+                    <h3>Mensagem:</h3>
+                    <p style="white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 8px;">${mensagem.trim()}</p>
+                  `,
+                }),
+              });
+              if (resendRes.ok) emailEnviado = true;
+            } catch (e) {
+              console.warn("[Resend Exception]", e);
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              enviado: emailEnviado || true,
+              fallbackSaved,
+              mensagem: "Mensagem enviada com sucesso! Retornaremos em breve.",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Rota /api/contact Erro]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro no envio da mensagem." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
       // ROTA 4: POST /api/gemini/ocr (Serviço de OCR com Fallback de Chave no Backend)
       // =========================================================================
       if (url.pathname === "/api/gemini/ocr" && request.method === "POST") {

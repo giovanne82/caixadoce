@@ -49,6 +49,8 @@ import {
   Sparkles,
   Edit2,
   Users,
+  Mail,
+  Send,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -219,6 +221,56 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }));
     await persistirContasPix(atualizadas);
     toast.success("Conta Pix padrão atualizada!");
+  };
+
+  // Form de Contato (Suporte & Sugestões)
+  const [motivoContato, setMotivoContato] = useState<"Sugestão" | "Suporte">("Sugestão");
+  const [mensagemContato, setMensagemContato] = useState("");
+  const [enviandoContato, setEnviandoContato] = useState(false);
+
+  const handleEnviarContato = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mensagemContato.trim()) {
+      toast.error("Por favor, digite sua mensagem antes de enviar.");
+      return;
+    }
+
+    setEnviandoContato(true);
+    try {
+      const payload = {
+        motivo: motivoContato,
+        mensagem: mensagemContato.trim(),
+        userEmail: emailUsuario || user?.email || "",
+        userName: nomeUsuario || user?.name || user?.user_metadata?.full_name || "",
+        establishmentName: nomeEst || profile?.establishmentName || activeCode,
+        establishmentCode: activeCode,
+      };
+
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && (data.success || data.enviado)) {
+        setMensagemContato("");
+        toast.success("Mensagem enviada com sucesso! Retornaremos em breve.");
+      } else {
+        if (data.fallbackSaved) {
+          setMensagemContato("");
+          toast.success("Mensagem enviada com sucesso! Retornaremos em breve.");
+        } else {
+          toast.error(data.mensagem || data.error || "Erro ao enviar mensagem.");
+        }
+      }
+    } catch (err: any) {
+      console.error("[Enviar Contato Erro]", err);
+      toast.error("Falha ao comunicar com o servidor de suporte.");
+    } finally {
+      setEnviandoContato(false);
+    }
   };
 
   // Personalização do Cardápio Público
@@ -632,26 +684,34 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       })()}
 
       <Tabs defaultValue="empresa" className="space-y-6">
-        <TabsList className="grid w-full sm:w-auto grid-cols-1 sm:grid-cols-3 bg-muted/80 p-1">
-          <TabsTrigger
-            value="empresa"
-            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <Building2 className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Perfil &amp; Estabelecimento
-          </TabsTrigger>
-          <TabsTrigger
-            value="colaboradores"
-            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <Users className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Colaboradores &amp; Equipe
-          </TabsTrigger>
-          <TabsTrigger
-            value="seguranca"
-            className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <Lock className="w-4 h-4 text-slate-700 dark:text-slate-200" /> Segurança
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto scrollbar-none pb-1">
+          <TabsList className="inline-flex w-max min-w-full sm:min-w-0 items-center justify-start gap-1 sm:gap-2 bg-muted/80 p-1.5 rounded-2xl border border-border/50">
+            <TabsTrigger
+              value="empresa"
+              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+            >
+              <Building2 className="w-4 h-4 text-primary shrink-0" /> Estabelecimento
+            </TabsTrigger>
+            <TabsTrigger
+              value="colaboradores"
+              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+            >
+              <Users className="w-4 h-4 text-primary shrink-0" /> Colaboradores &amp; Equipe
+            </TabsTrigger>
+            <TabsTrigger
+              value="seguranca"
+              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+            >
+              <Lock className="w-4 h-4 text-primary shrink-0" /> Segurança
+            </TabsTrigger>
+            <TabsTrigger
+              value="contato"
+              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+            >
+              <Mail className="w-4 h-4 text-primary shrink-0" /> Contato
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* TAB: PERFIL & ESTABELECIMENTO */}
         <TabsContent value="empresa" className="space-y-6">
@@ -1155,6 +1215,90 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* TAB: CONTATO */}
+        <TabsContent value="contato" className="space-y-6">
+          <Card className="border-border shadow-sm max-w-2xl">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold text-foreground">Fale Conosco</CardTitle>
+                  <CardDescription className="text-xs">
+                    Envie sua dúvida, sugestão de funcionalidade ou pedido de suporte diretamente para nossa equipe.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleEnviarContato} className="space-y-4">
+                {/* Identificação Automática Oculta */}
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3.5 space-y-1 text-xs">
+                  <p className="font-extrabold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Identificação Automática da Conta
+                  </p>
+                  <p className="text-muted-foreground">
+                    Sua mensagem será enviada vinculada a <strong>{nomeUsuario || "Usuário"}</strong> ({emailUsuario}) do estabelecimento <span className="font-mono font-bold text-foreground">{activeCode}</span>.
+                  </p>
+                </div>
+
+                {/* Motivo do Contato */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="contato-motivo" className="text-xs font-bold text-foreground">
+                    Motivo do Contato
+                  </Label>
+                  <Select value={motivoContato} onValueChange={(val: any) => setMotivoContato(val)}>
+                    <SelectTrigger id="contato-motivo" className="w-full text-xs font-medium">
+                      <SelectValue placeholder="Selecione o motivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Sugestão" className="text-xs font-medium">
+                        💡 Sugestão de Funcionalidade
+                      </SelectItem>
+                      <SelectItem value="Suporte" className="text-xs font-medium">
+                        🛠️ Suporte Técnico
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Mensagem */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="contato-mensagem" className="text-xs font-bold text-foreground">
+                    Mensagem
+                  </Label>
+                  <Textarea
+                    id="contato-mensagem"
+                    placeholder="Descreva detalhadamente sua sugestão ou dúvida..."
+                    rows={6}
+                    value={mensagemContato}
+                    onChange={(e) => setMensagemContato(e.target.value)}
+                    required
+                    className="text-xs resize-y min-h-[120px]"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={enviandoContato || !mensagemContato.trim()}
+                  className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
+                >
+                  {enviandoContato ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" /> Enviar Mensagem
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
