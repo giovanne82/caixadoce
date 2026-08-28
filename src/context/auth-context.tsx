@@ -250,116 +250,145 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setProfile(baseProf);
           localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
 
-          // FILTRO ESTRITO MULTI-TENANT: Busca estritamente pelo user_id do usuário autenticado
-          supabase
-            .from("estabelecimentos")
-            .select("*")
-            .eq("user_id", u.id)
-            .maybeSingle()
-            .then((res) => {
-              if (res.data) {
-                const data = res.data;
+          // CHECAGEM PRÉVIA DE SEGURANÇA: Busca primeiro por user_id ou por codigo da loja para evitar 409 Conflict
+          const carregarOuCriarEstabelecimento = async () => {
+            let data: any = null;
 
-                // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCREVE CACHE LOCAL)
-                const statusBanco = data.status || data.status_assinatura || data.plano_status;
-                const planoIdBanco = data.plano || data.plano_id || "mensal";
-                const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
-                const expMs = expBanco ? new Date(expBanco).getTime() : 0;
-                const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
+            // 1. Busca por user_id
+            const { data: byUser } = await supabase
+              .from("estabelecimentos")
+              .select("*")
+              .eq("user_id", u.id)
+              .maybeSingle();
 
-                const targetCode = data.codigo || baseProf.establishmentCode;
-                if (targetCode) {
-                  if (temDataExpiracao) {
-                    if (expMs > Date.now()) {
-                      salvarDadosPlanoEstabelecimento(targetCode, {
-                        status: "ativo",
-                        planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-                        dataExpiracao: expBanco,
-                        diasRestantesTrial: 0,
-                      });
-                    } else {
-                      salvarDadosPlanoEstabelecimento(targetCode, {
-                        status: "expirado",
-                        planoId: "basico",
-                        dataExpiracao: expBanco,
-                        diasRestantesTrial: 0,
-                      });
-                    }
-                  } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
+            if (byUser) {
+              data = byUser;
+            } else if (baseProf.establishmentCode) {
+              // 2. Busca por código da loja (case-insensitive)
+              const { data: byCode } = await supabase
+                .from("estabelecimentos")
+                .select("*")
+                .ilike("codigo", baseProf.establishmentCode)
+                .maybeSingle();
+
+              if (byCode) {
+                data = byCode;
+                if (!byCode.user_id && u.id) {
+                  await supabase
+                    .from("estabelecimentos")
+                    .update({ user_id: u.id })
+                    .eq("id", byCode.id);
+                }
+              }
+            }
+
+            if (data) {
+              // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCREVE CACHE LOCAL)
+              const statusBanco = data.status || data.status_assinatura || data.plano_status;
+              const planoIdBanco = data.plano || data.plano_id || "mensal";
+              const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
+              const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+              const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
+
+              const targetCode = data.codigo || baseProf.establishmentCode;
+              if (targetCode) {
+                if (temDataExpiracao) {
+                  if (expMs > Date.now()) {
                     salvarDadosPlanoEstabelecimento(targetCode, {
                       status: "ativo",
                       planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                      dataExpiracao: expBanco,
                       diasRestantesTrial: 0,
                     });
-                  } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+                  } else {
                     salvarDadosPlanoEstabelecimento(targetCode, {
                       status: "expirado",
                       planoId: "basico",
+                      dataExpiracao: expBanco,
                       diasRestantesTrial: 0,
                     });
                   }
-                }
-
-                const merged: UserProfile = {
-                  ...baseProf,
-                  establishmentCode: data.codigo || baseProf.establishmentCode,
-                  establishmentName: data.nome || baseProf.establishmentName,
-                  establishmentAddress: data.endereco || baseProf.establishmentAddress,
-                  logradouro: data.logradouro || baseProf.logradouro,
-                  numero: data.numero || baseProf.numero,
-                  complemento: data.complemento || baseProf.complemento,
-                  bairro: data.bairro || baseProf.bairro,
-                  cidade: data.cidade || baseProf.cidade,
-                  estado: data.estado || baseProf.estado,
-                  cep: data.cep || baseProf.cep,
-                  tipoDocumento: data.tipo_documento || baseProf.tipoDocumento,
-                  numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
-                  chavePix: data.chave_pix || baseProf.chavePix,
-                  tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
-                  contasPix: Array.isArray(data.pix_accounts) && data.pix_accounts.length > 0
-                    ? data.pix_accounts
-                    : (Array.isArray(data.pix_keys) && data.pix_keys.length > 0 ? data.pix_keys : baseProf.contasPix),
-                  responsavel: data.responsavel || baseProf.responsavel,
-                  telefone: data.telefone || baseProf.telefone,
-                  whatsapp: data.whatsapp || baseProf.whatsapp,
-                  logoUrl: data.logo_url || data.store_logo_url || baseProf.logoUrl,
-                  store_logo_url: data.store_logo_url || data.logo_url || baseProf.store_logo_url,
-                  tituloCardapio: data.titulo_cardapio || data.menu_title || baseProf.tituloCardapio,
-                  menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
-                  sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
-                  menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
-                  ownerUserId: data.user_id || u.id,
-                  userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
-                };
-                setProfile(merged);
-                localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
-              } else if (baseProf.establishmentCode) {
-                // Se não houver loja criada no Supabase para este user_id, insere automaticamente vinculando o user_id
-                supabase
-                  .from("estabelecimentos")
-                  .insert([{
-                    codigo: baseProf.establishmentCode,
-                    nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
-                    user_id: u.id,
-                    created_at: session.user.created_at || new Date().toISOString()
-                  }])
-                  .select("*")
-                  .maybeSingle()
-                  .then((insertRes) => {
-                    if (insertRes.data) {
-                      const d = insertRes.data;
-                      const newProf: UserProfile = {
-                        ...baseProf,
-                        establishmentCode: d.codigo,
-                        establishmentName: d.nome,
-                        ownerUserId: u.id
-                      };
-                      setProfile(newProf);
-                      localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
-                    }
+                } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
+                  salvarDadosPlanoEstabelecimento(targetCode, {
+                    status: "ativo",
+                    planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                    diasRestantesTrial: 0,
                   });
+                } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+                  salvarDadosPlanoEstabelecimento(targetCode, {
+                    status: "expirado",
+                    planoId: "basico",
+                    diasRestantesTrial: 0,
+                  });
+                }
               }
-            });
+
+              const merged: UserProfile = {
+                ...baseProf,
+                establishmentCode: data.codigo || baseProf.establishmentCode,
+                establishmentName: data.nome || baseProf.establishmentName,
+                establishmentAddress: data.endereco || baseProf.establishmentAddress,
+                logradouro: data.logradouro || baseProf.logradouro,
+                numero: data.numero || baseProf.numero,
+                complemento: data.complemento || baseProf.complemento,
+                bairro: data.bairro || baseProf.bairro,
+                cidade: data.cidade || baseProf.cidade,
+                estado: data.estado || baseProf.estado,
+                cep: data.cep || baseProf.cep,
+                tipoDocumento: data.tipo_documento || baseProf.tipoDocumento,
+                numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
+                chavePix: data.chave_pix || baseProf.chavePix,
+                tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
+                contasPix: Array.isArray(data.pix_accounts) && data.pix_accounts.length > 0
+                  ? data.pix_accounts
+                  : (Array.isArray(data.pix_keys) && data.pix_keys.length > 0 ? data.pix_keys : baseProf.contasPix),
+                responsavel: data.responsavel || baseProf.responsavel,
+                telefone: data.telefone || baseProf.telefone,
+                whatsapp: data.whatsapp || baseProf.whatsapp,
+                logoUrl: data.logo_url || data.store_logo_url || baseProf.logoUrl,
+                store_logo_url: data.store_logo_url || data.logo_url || baseProf.store_logo_url,
+                tituloCardapio: data.titulo_cardapio || data.menu_title || baseProf.tituloCardapio,
+                menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
+                sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
+                menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
+                ownerUserId: data.user_id || u.id,
+                userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
+              };
+              setProfile(merged);
+              localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+            } else if (baseProf.establishmentCode) {
+              // Somente executa UPSERT se a loja realmente não existir no banco
+              const { data: insertedData } = await supabase
+                .from("estabelecimentos")
+                .upsert(
+                  [
+                    {
+                      codigo: baseProf.establishmentCode,
+                      nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
+                      user_id: u.id,
+                      created_at: session.user.created_at || new Date().toISOString(),
+                    },
+                  ],
+                  { onConflict: "codigo" }
+                )
+                .select("*")
+                .maybeSingle();
+
+              if (insertedData) {
+                const d = insertedData;
+                const newProf: UserProfile = {
+                  ...baseProf,
+                  establishmentCode: d.codigo,
+                  establishmentName: d.nome,
+                  ownerUserId: u.id,
+                };
+                setProfile(newProf);
+                localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
+              }
+            }
+          };
+
+          carregarOuCriarEstabelecimento();
         }
       })
       .finally(() => {
@@ -939,10 +968,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         };
         const insertRes = await supabase
           .from("estabelecimentos")
-          .insert([insertPayload])
+          .upsert([insertPayload], { onConflict: "codigo" })
           .select();
 
-        console.log("RESPOSTA SUPABASE INSERT:", insertRes);
+        console.log("RESPOSTA SUPABASE UPSERT:", insertRes);
         saveError = insertRes.error;
       }
 
@@ -987,7 +1016,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
               codigo: currentCode,
               user_id: isUuid ? user.id : null,
             };
-            await supabase.from("estabelecimentos").insert([fallbackInsertPayload]).select();
+            await supabase.from("estabelecimentos").upsert([fallbackInsertPayload], { onConflict: "codigo" }).select();
           }
         } else {
           console.warn("[Supabase estabelecimentos update warning]:", saveError.message);

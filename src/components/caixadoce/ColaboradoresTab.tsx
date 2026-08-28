@@ -205,10 +205,7 @@ export function ColaboradoresTab() {
 
           if (error && (error.code === "23503" || error.message?.includes("foreign key"))) {
             console.warn("[Supabase] Chave estrangeira violada. Assegurando o estabelecimento mestre via insert limpo...");
-            const { data: checkEst } = await supabase.from("estabelecimentos").select("id").eq("codigo", activeCode).limit(1);
-            if (!checkEst || checkEst.length === 0) {
-              await supabase.from("estabelecimentos").insert([{ codigo: activeCode, nome: `Loja ${activeCode}` }]);
-            }
+              await supabase.from("estabelecimentos").upsert([{ codigo: activeCode, nome: `Loja ${activeCode}` }], { onConflict: "codigo" });
 
             let retryRes = await supabase.from("colaboradores").upsert([payloadPrimary], { onConflict: "id" });
             if (retryRes.error && storeUuid) {
