@@ -470,7 +470,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
 
       if (data && Array.isArray(data)) {
-        const mapeadas: TransacaoFinanceira[] = data.map((d: any) => ({
+        // Descarta qualquer lançamento de assinatura do CaixaDoce para não poluir o fluxo de caixa pessoal da confeitaria
+        const validas = data.filter((d: any) => {
+          const cat = String(d.categoria || "").toLowerCase();
+          const desc = String(d.descricao || "").toLowerCase();
+          return !cat.includes("assinatura") && !desc.includes("assinatura") && !desc.includes("caixadoce");
+        });
+
+        const mapeadas: TransacaoFinanceira[] = validas.map((d: any) => ({
           id: String(d.id),
           estabelecimentoCodigo: d.estabelecimento_codigo,
           descricao: d.descricao,
@@ -487,6 +494,25 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         try {
           localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(mapeadas));
         } catch {}
+
+        // Purga silenciosa de lançamentos automáticos de assinatura gravados incorretamente no Supabase
+        const idsAssinatura = data
+          .filter((d: any) => {
+            const cat = String(d.categoria || "").toLowerCase();
+            const desc = String(d.descricao || "").toLowerCase();
+            return cat.includes("assinatura") || desc.includes("assinatura") || desc.includes("caixadoce");
+          })
+          .map((d: any) => d.id);
+
+        if (idsAssinatura.length > 0) {
+          supabase
+            .from("transacoes_financeiras")
+            .delete()
+            .in("id", idsAssinatura)
+            .then(() => {
+              console.log(`[Limpeza Transações Assinatura] 🧹 Purga de ${idsAssinatura.length} lançamentos efetuada.`);
+            });
+        }
       }
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);

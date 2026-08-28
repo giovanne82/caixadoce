@@ -316,88 +316,21 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     }
   }
 
-  // 2. INSERÇÃO DO REGISTRO DE CONFIRMAÇÃO DE TRANSAÇÃO EM 'transacoes_financeiras' (COM TRAVA DE IDEMPOTÊNCIA)
+  // 2. LIMPEZA AUTOMÁTICA DE SEGURANÇA: Remove qualquer lançamento de receita incorreto relativo a assinatura SaaS
   try {
-    const paymentStr = String(paymentId);
-
-    // 2a. Trava de Idempotência em Memória (bloqueia chamadas concorrentes no mesmo processo em milissegundos)
-    if (processedPaymentsSet.has(paymentStr)) {
-      console.log(`[Idempotência Cache] 🛡️ Transação #${paymentStr} já foi processada nesta sessão. Ignorando duplicidade.`);
-      return;
-    }
-
-    // 2b. Trava de Idempotência no Banco Supabase (bloqueia duplicatas mesmo em processos ou deploys distintos)
-    const checkRes = await fetch(
-      `${supabaseUrl}/rest/v1/transacoes_financeiras?descricao=ilike.*%23${encodeURIComponent(paymentStr)}*&select=id`,
+    await fetch(
+      `${supabaseUrl}/rest/v1/transacoes_financeiras?estabelecimento_codigo=eq.${encodeURIComponent(code)}&or=(categoria.eq.Assinatura SaaS,categoria.eq.Assinatura,descricao.ilike.*Assinatura Plano PRO*,descricao.ilike.*Assinatura*CaixaDoce*)`,
       {
+        method: "DELETE",
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
         },
       }
     );
-
-    if (checkRes.ok) {
-      const existing = await checkRes.json();
-      if (Array.isArray(existing) && existing.length > 0) {
-        processedPaymentsSet.add(paymentStr);
-        console.log(`[Idempotência Supabase] 🛡️ Transação #${paymentStr} já existe em 'transacoes_financeiras' (ID: ${existing[0].id}). Ignorando inserção duplicada.`);
-        return;
-      }
-    }
-
-    // Registra ID no cache de memória
-    processedPaymentsSet.add(paymentStr);
-    if (processedPaymentsSet.size > 2000) processedPaymentsSet.clear();
-
-    const transacaoPayload = {
-      estabelecimento_codigo: code,
-      descricao: `Assinatura Plano PRO/Mensal — CaixaDoce (${paymentMethod.toUpperCase()} #${paymentId})`,
-      valor: Number(amount) || 19.90,
-      tipo: "receita",
-      categoria: "Assinatura SaaS",
-      status: "pago",
-      data: dataHojeStr,
-      comprovante_url: "https://www.mercadopago.com.br",
-    };
-
-    const resTrans = await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(transacaoPayload),
-    });
-
-    if (resTrans.ok) {
-      console.log(`[Ativar Plano Supabase] 🎉 Registro de confirmação inserido em 'transacoes_financeiras' para ${code}!`);
-    } else {
-      const errText = await resTrans.text();
-      console.warn(`[Ativar Plano Supabase] Aviso na transação completa (${resTrans.status}): ${errText}. Tentando payload minimalista...`);
-      const transMinimal = {
-        estabelecimento_codigo: code,
-        descricao: `Assinatura Plano PRO — CaixaDoce (#${paymentId})`,
-        valor: Number(amount) || 19.90,
-        tipo: "receita",
-        categoria: "Assinatura",
-        status: "pago",
-        data: dataHojeStr,
-      };
-      await fetch(`${supabaseUrl}/rest/v1/transacoes_financeiras`, {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(transMinimal),
-      });
-    }
-  } catch (errTrans) {
-    console.error("[Ativar Plano Supabase] Erro ao registrar transação financeira:", errTrans);
+    console.log(`[Ativar Plano Supabase] 🧹 Limpeza de lançamentos financeiros de assinatura efetuada com sucesso para ${code}!`);
+  } catch (errClean) {
+    console.warn("[Ativar Plano Supabase] Aviso ao executar limpeza de transações:", errClean);
   }
 }
 
