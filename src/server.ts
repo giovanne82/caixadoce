@@ -667,6 +667,46 @@ export default {
             console.error("[Aplicar Cupom Trial Update Error]", eUpdate);
           }
 
+          // Incrementar usos_atuais no cupom de assinatura no Supabase
+          const cupomCode = String(payload.cupom || payload.code || "").trim();
+          if (cupomCode) {
+            try {
+              const resCup = await fetch(
+                `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomCode)}&select=codigo,usos_atuais`,
+                {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+              if (resCup.ok) {
+                const cupRows = await resCup.json();
+                if (Array.isArray(cupRows) && cupRows.length > 0) {
+                  const atual = Number(cupRows[0].usos_atuais || 0);
+                  await fetch(
+                    `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomCode)}`,
+                    {
+                      method: "PATCH",
+                      headers: {
+                        apikey: supabaseKey,
+                        Authorization: `Bearer ${supabaseKey}`,
+                        "Content-Type": "application/json",
+                        Prefer: "return=minimal",
+                      },
+                      body: JSON.stringify({
+                        usos_atuais: atual + 1,
+                      }),
+                    }
+                  );
+                  console.log(`[Aplicar Cupom Trial] Incrementado usos_atuais do cupom '${cupomCode}' para ${atual + 1}!`);
+                }
+              }
+            } catch (eCup) {
+              console.error("[Aplicar Cupom Trial Increment Error]", eCup);
+            }
+          }
+
           return new Response(
             JSON.stringify({
               sucesso: true,

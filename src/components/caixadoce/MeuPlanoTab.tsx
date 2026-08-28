@@ -243,6 +243,37 @@ export function MeuPlanoTab() {
 
   const handleAbrirCheckout = (plano: "mensal" | "anual" = "mensal") => {
     setPlanoSelecionadoCheckout(plano);
+
+    // Se o cupom aplicado for de dias_gratis, realiza ativação direta sem abrir Mercado Pago
+    if (cupomAplicado?.tipoDesconto === "dias_gratis") {
+      const dias = cupomAplicado.diasGratis || 30;
+      const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, dias);
+      salvarDadosPlanoEstabelecimento(activeCode, {
+        planoId: plano,
+        status: "ativo",
+        tipoPagamento: "cupom_dias_gratis",
+        dataExpiracao: novaExp,
+        dataInicio: new Date().toISOString(),
+      });
+      fetch("/api/aplicar-cupom-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cupom: cupomAplicado.codigo,
+          estabelecimentoCodigo: activeCode,
+          diasGratis: dias,
+        }),
+      }).catch((e) => console.error("[Aplicar Cupom Error]", e));
+
+      if (updateEstablishmentPlan) {
+        updateEstablishmentPlan(plano as any, true);
+      }
+      recarregarPlano();
+      toast.success(`🎉 Oba! Cupom de dias grátis ativado com sucesso! +${dias} dias adicionados ao seu acesso PRO.`);
+      setModalCheckoutOpen(false);
+      return;
+    }
+
     const valorComDesconto = plano === "anual" ? valorPlanoAnualComDesconto : valorPlanoMensalComDesconto;
 
     if (valorComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
