@@ -10,9 +10,4 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     detectSessionInUrl: true,
     storageKey: "caixadoce_supabase_auth_token",
   },
-  global: {
-    headers: {
-      "x-application-name": "CaixaDoce",
-    },
-  },
 });

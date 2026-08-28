@@ -3,21 +3,16 @@ import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-application, x-application-name, x-client-info, x-requested-with",
-  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-  "Access-Control-Max-Age": "86400",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-application-name, x-application",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
-  // Suporte estrito e pré-flight estático/dinâmico para requisições CORS (OPTIONS)
+  // Suporte estrito para requisições preflight CORS (OPTIONS)
   if (req.method === "OPTIONS") {
-    const requestedHeaders = req.headers.get("Access-Control-Request-Headers");
     return new Response("ok", {
       status: 200,
-      headers: {
-        ...corsHeaders,
-        "Access-Control-Allow-Headers": requestedHeaders || corsHeaders["Access-Control-Allow-Headers"],
-      },
+      headers: corsHeaders,
     });
   }
 
