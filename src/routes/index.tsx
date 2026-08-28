@@ -264,22 +264,39 @@ function Index() {
         const statusBanco = row.status || row.status_assinatura || row.plano_status;
         const planoIdBanco = row.plano || row.plano_id || "mensal";
         const expBanco = row.plano_exp || row.plano_expira_em || row.data_expiracao;
-
         const expMs = expBanco ? new Date(expBanco).getTime() : 0;
-        const isExpValida = !isNaN(expMs) && expMs > Date.now();
-        const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+        const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
 
-        if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
-          const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-          
-          // FORÇA A ATUALIZAÇÃO DO LOCALSTORAGE E LIMPA QUALQUER CACHE DE TRIAL
+        if (temDataExpiracao) {
+          if (expMs > Date.now()) {
+            salvarDadosPlanoEstabelecimento(cleanCode, {
+              status: "ativo",
+              planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+              dataExpiracao: expBanco,
+              diasRestantesTrial: 0,
+            });
+          } else {
+            salvarDadosPlanoEstabelecimento(cleanCode, {
+              status: "expirado",
+              planoId: "basico",
+              dataExpiracao: expBanco,
+              diasRestantesTrial: 0,
+            });
+          }
+          setPlanoTick((prev) => prev + 1);
+        } else if (statusBanco === "ativo" && (row.mercadopago_pagamento_id || row.mercadopago_assinatura_id || row.stripe_subscription_id)) {
           salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
             planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-            dataExpiracao: dataExpFinal,
             diasRestantesTrial: 0,
           });
-
+          setPlanoTick((prev) => prev + 1);
+        } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+          salvarDadosPlanoEstabelecimento(cleanCode, {
+            status: "expirado",
+            planoId: "basico",
+            diasRestantesTrial: 0,
+          });
           setPlanoTick((prev) => prev + 1);
         }
       }
@@ -336,15 +353,27 @@ function Index() {
         },
         (payload) => {
           const newRow = payload.new;
-          if (newRow && (newRow.status_assinatura === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
-            const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            salvarDadosPlanoEstabelecimento(activeCode, {
-              status: "ativo",
-              planoId: newRow.plano || newRow.plano_id || "mensal",
-              dataExpiracao,
-            });
-            toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
-            setPlanoTick((prev) => prev + 1);
+          if (newRow) {
+            const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || newRow.data_expiracao;
+            const expMs = dataExpiracao ? new Date(dataExpiracao).getTime() : 0;
+            const isValido = !isNaN(expMs) && expMs > Date.now();
+
+            if (isValido && (newRow.status_assinatura === "ativo" || newRow.status === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
+              salvarDadosPlanoEstabelecimento(activeCode, {
+                status: "ativo",
+                planoId: newRow.plano || newRow.plano_id || "mensal",
+                dataExpiracao,
+              });
+              toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
+              setPlanoTick((prev) => prev + 1);
+            } else if (dataExpiracao && expMs <= Date.now()) {
+              salvarDadosPlanoEstabelecimento(activeCode, {
+                status: "expirado",
+                planoId: "basico",
+                dataExpiracao,
+              });
+              setPlanoTick((prev) => prev + 1);
+            }
           }
         }
       )

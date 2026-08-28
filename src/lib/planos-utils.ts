@@ -154,8 +154,17 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     }
   } catch {}
 
-  // 1. Se o estabelecimento possui plano ativo ou data de expiração válida no futuro
+  // 1. Se o estabelecimento possui plano ativo ou data de expiração gravada
   if (planoSalvo) {
+    if (planoSalvo.status === "expirado") {
+      return {
+        ...planoSalvo,
+        planoId: "basico",
+        status: "expirado",
+        diasRestantesTrial: 0,
+      };
+    }
+
     if (planoSalvo.dataExpiracao) {
       const expMs = new Date(planoSalvo.dataExpiracao).getTime();
       if (!isNaN(expMs)) {
@@ -179,6 +188,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     }
 
     if (planoSalvo.status === "ativo" && (planoSalvo.planoId === "mensal" || planoSalvo.planoId === "anual" || planoSalvo.planoId === "pro" || planoSalvo.planoId === "ilimitado")) {
+      // Se possui status ativo porem a data de expiracao era valida no passado, respeita a expiracao
       return {
         ...planoSalvo,
         status: "ativo",
@@ -268,20 +278,13 @@ export function verificarAcessoModulo(
 }
 
 export function formatarDataExpiracao(dataStr?: string): string {
-  if (!dataStr) {
-    const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    return d.toLocaleDateString("pt-BR");
-  }
+  if (!dataStr) return "Indefinida";
   try {
     const d = new Date(dataStr);
-    if (isNaN(d.getTime())) {
-      const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      return fallback.toLocaleDateString("pt-BR");
-    }
+    if (isNaN(d.getTime())) return "Indefinida";
     return d.toLocaleDateString("pt-BR");
   } catch {
-    const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    return fallback.toLocaleDateString("pt-BR");
+    return "Indefinida";
   }
 }
 
@@ -289,13 +292,9 @@ export function salvarDadosPlanoEstabelecimento(codigo: string, info: Partial<In
   const code = (codigo || "DEFAULT").toUpperCase();
   try {
     const current = obterPlanoEfetivoEstabelecimento(code);
-    const defaultExp = info.status === "ativo" && !info.dataExpiracao && !current.dataExpiracao
-      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      : undefined;
     const updated = {
       ...current,
       ...info,
-      ...(defaultExp ? { dataExpiracao: defaultExp } : {}),
     };
     localStorage.setItem(`caixadoce_plano_${code}`, JSON.stringify(updated));
   } catch (e) {

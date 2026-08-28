@@ -73,15 +73,34 @@ export function MeuPlanoTab() {
         const planoIdBanco = data.plano || data.plano_id || "mensal";
         const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
         const expMs = expBanco ? new Date(expBanco).getTime() : 0;
-        const isExpValida = !isNaN(expMs) && expMs > Date.now();
-        const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+        const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
 
-        if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
-          const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        if (temDataExpiracao) {
+          if (expMs > Date.now()) {
+            salvarDadosPlanoEstabelecimento(cleanCode, {
+              status: "ativo",
+              planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+              dataExpiracao: expBanco,
+              diasRestantesTrial: 0,
+            });
+          } else {
+            salvarDadosPlanoEstabelecimento(cleanCode, {
+              status: "expirado",
+              planoId: "basico",
+              dataExpiracao: expBanco,
+              diasRestantesTrial: 0,
+            });
+          }
+        } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
           salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
             planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-            dataExpiracao: dataExpFinal,
+            diasRestantesTrial: 0,
+          });
+        } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+          salvarDadosPlanoEstabelecimento(cleanCode, {
+            status: "expirado",
+            planoId: "basico",
             diasRestantesTrial: 0,
           });
         }

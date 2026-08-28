@@ -260,22 +260,41 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
               if (res.data) {
                 const data = res.data;
 
-                // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCEE CACHE LOCAL)
+                // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCREVE CACHE LOCAL)
                 const statusBanco = data.status || data.status_assinatura || data.plano_status;
                 const planoIdBanco = data.plano || data.plano_id || "mensal";
                 const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
                 const expMs = expBanco ? new Date(expBanco).getTime() : 0;
-                const isExpValida = !isNaN(expMs) && expMs > Date.now();
-                const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+                const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
 
-                if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
-                  const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-                  const targetCode = data.codigo || baseProf.establishmentCode;
-                  if (targetCode) {
+                const targetCode = data.codigo || baseProf.establishmentCode;
+                if (targetCode) {
+                  if (temDataExpiracao) {
+                    if (expMs > Date.now()) {
+                      salvarDadosPlanoEstabelecimento(targetCode, {
+                        status: "ativo",
+                        planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                        dataExpiracao: expBanco,
+                        diasRestantesTrial: 0,
+                      });
+                    } else {
+                      salvarDadosPlanoEstabelecimento(targetCode, {
+                        status: "expirado",
+                        planoId: "basico",
+                        dataExpiracao: expBanco,
+                        diasRestantesTrial: 0,
+                      });
+                    }
+                  } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
                     salvarDadosPlanoEstabelecimento(targetCode, {
                       status: "ativo",
                       planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-                      dataExpiracao: dataExpFinal,
+                      diasRestantesTrial: 0,
+                    });
+                  } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+                    salvarDadosPlanoEstabelecimento(targetCode, {
+                      status: "expirado",
+                      planoId: "basico",
                       diasRestantesTrial: 0,
                     });
                   }
