@@ -3,7 +3,7 @@ import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-application-name, x-application",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-application, x-application-name, x-requested-with",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
