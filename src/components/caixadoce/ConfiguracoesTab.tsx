@@ -246,24 +246,32 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         establishmentCode: activeCode,
       };
 
+      // 1. Invocação direta da Edge Function 'send-contact-email' no Supabase
+      const { data, error } = await supabase.functions.invoke("send-contact-email", {
+        body: payload,
+      });
+
+      if (!error && (data?.success || data?.enviado)) {
+        setMensagemContato("");
+        toast.success("Mensagem enviada com sucesso! Retornaremos em breve.");
+        return;
+      }
+
+      // 2. Fallback gracioso para a API /api/contact do backend
+      console.warn("[Edge Function Fallback] Invocando rota /api/contact:", error?.message);
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const resData = await res.json();
 
-      if (res.ok && (data.success || data.enviado)) {
+      if (res.ok && (resData.success || resData.enviado || resData.fallbackSaved)) {
         setMensagemContato("");
         toast.success("Mensagem enviada com sucesso! Retornaremos em breve.");
       } else {
-        if (data.fallbackSaved) {
-          setMensagemContato("");
-          toast.success("Mensagem enviada com sucesso! Retornaremos em breve.");
-        } else {
-          toast.error(data.mensagem || data.error || "Erro ao enviar mensagem.");
-        }
+        toast.error(resData.mensagem || resData.error || error?.message || "Erro ao enviar mensagem.");
       }
     } catch (err: any) {
       console.error("[Enviar Contato Erro]", err);
