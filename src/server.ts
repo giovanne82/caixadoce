@@ -130,9 +130,10 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   const code = (establishmentCode || "CD-1001").toUpperCase();
 
   // IDENTIFICAÇÃO ESTRITA SE É PLANO ANUAL (365 DIAS) OU MENSAL (30 DIAS)
+  const planIdClean = String(planId || "").toLowerCase();
   const isAnual =
-    planId === "anual" ||
-    planId === "ilimitado" ||
+    planIdClean === "anual" ||
+    planIdClean === "ilimitado" ||
     Number(amount || 0) > 50;
 
   const targetPlanId = isAnual ? "anual" : "mensal";
@@ -788,15 +789,25 @@ export default {
                 const desc = String(paymentData.description || "").toLowerCase();
                 const amount = Number(paymentData.transaction_amount || 0);
 
+                const metaPlanoId = String(
+                  meta.plano_id || meta.plan_id || meta.plan_type || meta.tipo_plano || ""
+                ).toLowerCase();
+
                 const isAnual =
-                  meta.plano_id === "anual" ||
-                  meta.plan_id === "anual" ||
-                  meta.plan_type === "anual" ||
-                  meta.tipo_plano === "anual" ||
+                  metaPlanoId === "anual" ||
+                  metaPlanoId === "ilimitado" ||
                   desc.includes("anual") ||
+                  desc.includes("365") ||
                   amount > 50;
 
-                const planId = isAnual ? "anual" : (meta.plano_id || meta.plan_id || "mensal");
+                const planId = isAnual ? "anual" : "mensal";
+
+                console.log(
+                  `[MercadoPago Webhook PARSER STRICT] Payment ID: ${paymentId} | Plan Identified: '${planId}' (${isAnual ? "+365 DIAS (ANUAL)" : "+30 DIAS (MENSAL)"}) | Amount: R$ ${amount} | Meta:`,
+                  JSON.stringify(meta),
+                  `| Description: "${paymentData.description}"`
+                );
+
                 const establishmentCode =
                   paymentData.external_reference ||
                   meta.estabelecimento_codigo ||
@@ -847,20 +858,24 @@ export default {
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
             "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
+          const requestedPlanClean = String(planoId || body?.nomePlano || formData?.description || "").toLowerCase();
           const isPlanoAnualRequest =
-            planoId === "anual" ||
-            planoId === "ilimitado" ||
+            requestedPlanClean.includes("anual") ||
+            requestedPlanClean.includes("ilimitado") ||
             Number(valor || formData?.transaction_amount || 0) > 50;
 
           const targetPlanType = isPlanoAnualRequest ? "anual" : "mensal";
+
+          console.log(`[Process Payment Request] Estabelecimento: ${estabelecimentoCodigo} | Plano Solicitado: '${targetPlanType}' (${isPlanoAnualRequest ? "+365 dias" : "+30 dias"}) | Valor: R$ ${valor}`);
 
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
             ...formData,
             transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 149.90 : 19.90)),
-            description: `Assinatura CaixaDoce Pro — ${targetPlanType === "anual" ? "Plano Anual (365 dias)" : "Plano Mensal (30 dias)"}`,
+            description: `Plano ${targetPlanType === "anual" ? "Anual Completo PRO (365 dias)" : "Mensal Completo PRO (30 dias)"} — CaixaDoce`,
             external_reference: estabelecimentoCodigo || "CD-1001",
             metadata: {
+              ...formData?.metadata,
               estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
               plano_id: targetPlanType,
               plan_id: targetPlanType,
@@ -951,10 +966,10 @@ async function calcularNovaDataExpiracaoBackend(
 
             await ativarPlanoEstabelecimentoNoSupabase({
               establishmentCode: code,
-              planId: planoId || "mensal",
+              planId: targetPlanType,
               paymentId,
               paymentMethod: tipoPag,
-              amount: Number(valor || mpPayload.transaction_amount || 19.90),
+              amount: Number(valor || mpPayload.transaction_amount || (targetPlanType === "anual" ? 149.90 : 19.90)),
             });
           }
 
