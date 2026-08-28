@@ -196,6 +196,24 @@ export function MeuPlanoTab() {
     return parseFloat(calc.toFixed(2));
   }, [cupomAplicado]);
 
+  // CÁLCULOS DINÂMICOS REATIVOS PARA O CARD DO PLANO ANUAL (MODIFICAÇÃO AUTOMÁTICA AO APLICAR CUPOM)
+  const valorMensalEquivalenteAnual = useMemo(() => {
+    return parseFloat((valorPlanoAnualComDesconto / 12).toFixed(2));
+  }, [valorPlanoAnualComDesconto]);
+
+  const percentualEconomiaAnual = useMemo(() => {
+    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    if (precoCheio12Meses <= 0) return 0;
+    const desconto = ((precoCheio12Meses - valorPlanoAnualComDesconto) / precoCheio12Meses) * 100;
+    return Math.round(Math.max(0, desconto));
+  }, [valorPlanoAnualComDesconto]);
+
+  const economiaEmReaisAnual = useMemo(() => {
+    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const economizado = precoCheio12Meses - valorPlanoAnualComDesconto;
+    return parseFloat(Math.max(0, economizado).toFixed(2));
+  }, [valorPlanoAnualComDesconto]);
+
   const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
   const isPlanoMensalAtivo = isPlanoAtivo && (infoPlano.planoId === "mensal" || infoPlano.planoId === "pro");
   const isPlanoAnualAtivo = isPlanoAtivo && (infoPlano.planoId === "anual" || infoPlano.planoId === "ilimitado");
@@ -578,7 +596,7 @@ export function MeuPlanoTab() {
 
         <Card className="border-2 border-emerald-500 shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ring-2 ring-emerald-500/20">
           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[11px] font-black px-4 py-1 rounded-full shadow-lg uppercase tracking-wider flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-            <Crown className="w-3.5 h-3.5 text-amber-300" /> ECONOMIZE 37% OFF
+            <Crown className="w-3.5 h-3.5 text-amber-300" /> ECONOMIZE {percentualEconomiaAnual}% OFF
           </div>
 
           <CardHeader className="pb-4 pt-6">
@@ -589,7 +607,7 @@ export function MeuPlanoTab() {
               Anual Completo <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
             </CardTitle>
             <CardDescription className="text-xs font-semibold">
-              Equivalente a apenas <strong className="text-emerald-600 font-mono">R$ 12,49/mês</strong>. Garanta 1 ano de acesso sem preocupações!
+              Equivalente a apenas <strong className="text-emerald-600 font-mono">R$ {valorMensalEquivalenteAnual.toFixed(2).replace(".", ",")}/mês</strong>. Garanta 1 ano de acesso sem preocupações!
             </CardDescription>
             <div className="pt-3">
               {cupomAplicado ? (
@@ -606,6 +624,9 @@ export function MeuPlanoTab() {
                   <Badge variant="default" className="text-xs bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
                     🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
                   </Badge>
+                  <p className="text-[11px] text-muted-foreground font-mono mt-1">
+                    <span className="line-through">De R$ 238,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-0.5">
@@ -614,7 +635,7 @@ export function MeuPlanoTab() {
                     <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ 88,90!)
+                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
                   </p>
                 </div>
               )}
