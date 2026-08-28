@@ -52,6 +52,8 @@ export function MeuPlanoTab() {
   const [cupomAplicado, setCupomAplicado] = useState<{
     codigo: string;
     percentualDesconto: number;
+    diasGratis?: number;
+    tipoDesconto?: "percentual" | "dias_gratis";
     descricao: string;
   } | null>(null);
 
@@ -115,26 +117,45 @@ export function MeuPlanoTab() {
 
       if (res.ok && data.valido) {
         if (data.tipoDesconto === "dias_gratis") {
-          const diasAdicionados = Number(data.diasGratis) || 30;
+          const diasAdicionados = Number(data.diasGratis || data.valor) || 30;
           try {
             await fetch("/api/aplicar-cupom-trial", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ cupom: data.cupom, estabelecimentoCodigo: activeCode }),
+              body: JSON.stringify({
+                cupom: data.cupom,
+                estabelecimentoCodigo: activeCode,
+                diasGratis: diasAdicionados,
+              }),
             });
-          } catch {}
+          } catch (eTrial) {
+            console.error("[Aplicar Cupom Trial Client Error]", eTrial);
+          }
 
           const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, diasAdicionados);
           salvarDadosPlanoEstabelecimento(activeCode, {
+            planoId: "mensal",
+            status: "ativo",
+            tipoPagamento: "cupom_dias_gratis",
             dataExpiracao: novaExp,
-            status: "trial",
+            dataInicio: new Date().toISOString(),
           });
+
           if (updateEstablishmentPlan) {
             await updateEstablishmentPlan("mensal", true);
           }
+
           recarregarPlano();
+
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: 0,
+            diasGratis: diasAdicionados,
+            tipoDesconto: "dias_gratis",
+            descricao: data.descricao || `+${diasAdicionados} Dias Grátis`,
+          });
           setCupomInput("");
-          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO!`);
+          toast.success(`🎉 Oba! Cupom "${data.cupom}" ativado com sucesso! Você ganhou +${diasAdicionados} dias grátis de acesso PRO!`);
         } else if (Number(data.percentualDesconto) >= 100) {
           const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, 30);
           salvarDadosPlanoEstabelecimento(activeCode, {
@@ -151,6 +172,7 @@ export function MeuPlanoTab() {
           setCupomAplicado({
             codigo: data.cupom,
             percentualDesconto: 100,
+            tipoDesconto: "percentual",
             descricao: data.descricao,
           });
           setCupomInput("");
@@ -159,6 +181,7 @@ export function MeuPlanoTab() {
           setCupomAplicado({
             codigo: data.cupom,
             percentualDesconto: data.percentualDesconto,
+            tipoDesconto: "percentual",
             descricao: data.descricao,
           });
           toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
@@ -403,7 +426,9 @@ export function MeuPlanoTab() {
               {cupomAplicado ? (
                 <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
                   <Badge variant="default" className="bg-emerald-600 font-extrabold text-xs">
-                    {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}%)`}
                   </Badge>
                   <Button
                     type="button"
@@ -517,17 +542,26 @@ export function MeuPlanoTab() {
             <div className="pt-3">
               {cupomAplicado ? (
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
-                    </span>
-                    <span className="text-sm line-through text-muted-foreground font-mono">
-                      R$ 19,90
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-                  </div>
+                  {cupomAplicado.tipoDesconto === "dias_gratis" ? (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">GRÁTIS</span>
+                      <span className="text-xs text-muted-foreground font-semibold"> por {cupomAplicado.diasGratis || 30} dias</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">
+                        R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
+                      </span>
+                      <span className="text-sm line-through text-muted-foreground font-mono">
+                        R$ 19,90
+                      </span>
+                      <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
+                    </div>
+                  )}
                   <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
-                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}% OFF)`}
                   </Badge>
                 </div>
               ) : (
@@ -602,21 +636,32 @@ export function MeuPlanoTab() {
             <div className="pt-3">
               {cupomAplicado ? (
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
-                    </span>
-                    <span className="text-sm line-through text-muted-foreground font-mono">
-                      R$ 149,90
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
-                  </div>
+                  {cupomAplicado.tipoDesconto === "dias_gratis" ? (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">GRÁTIS</span>
+                      <span className="text-xs text-muted-foreground font-semibold"> (+{cupomAplicado.diasGratis || 30} dias ativados)</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">
+                        R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
+                      </span>
+                      <span className="text-sm line-through text-muted-foreground font-mono">
+                        R$ 149,90
+                      </span>
+                      <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
+                    </div>
+                  )}
                   <Badge variant="default" className="text-xs bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
-                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}% OFF)`}
                   </Badge>
-                  <p className="text-[11px] text-muted-foreground font-mono mt-1">
-                    <span className="line-through">De R$ 238,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
-                  </p>
+                  {cupomAplicado.tipoDesconto !== "dias_gratis" && (
+                    <p className="text-[11px] text-muted-foreground font-mono mt-1">
+                      <span className="line-through">De R$ 238,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-0.5">

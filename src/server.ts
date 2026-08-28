@@ -76,7 +76,7 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   return null;
 }
 
-// Injeção de Seed Data do Cupom Inicial "ARTFESTA50" na Tabela cupons_assinatura
+// Injeção de Seed Data dos Cupons Iniciais ("ARTFESTA50" e "ARFESTAVIP30") na Tabela cupons_assinatura
 async function seedInitialCouponInSupabase() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
@@ -92,15 +92,29 @@ async function seedInitialCouponInSupabase() {
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates",
       },
-      body: JSON.stringify({
-        codigo: "ARTFESTA50",
-        tipo_desconto: "porcentagem",
-        valor: 50,
-        ativo: true,
-      }),
+      body: JSON.stringify([
+        {
+          codigo: "ARTFESTA50",
+          tipo_desconto: "porcentagem",
+          valor: 50,
+          ativo: true,
+        },
+        {
+          codigo: "ARFESTAVIP30",
+          tipo_desconto: "dias_gratis",
+          valor: 30,
+          ativo: true,
+        },
+        {
+          codigo: "ARTFESTAVIP30",
+          tipo_desconto: "dias_gratis",
+          valor: 30,
+          ativo: true,
+        },
+      ]),
     });
   } catch (err) {
-    console.log("[Seed ARTFESTA50 Log]", err);
+    console.log("[Seed Cupons Log]", err);
   }
 }
 seedInitialCouponInSupabase();
@@ -453,7 +467,14 @@ export default {
             );
           }
 
-          let cupomEncontrado: { percentualDesconto: number; descricao: string } | null = null;
+          interface CupomInfo {
+            tipoDesconto: "dias_gratis" | "percentual";
+            percentualDesconto: number;
+            diasGratis: number;
+            descricao: string;
+          }
+
+          let cupomEncontrado: CupomInfo | null = null;
 
           // 1. CONSULTA EM TEMPO REAL NA TABELA 'cupons_assinatura' DO SUPABASE (PRIORIDADE MÁXIMA)
           try {
@@ -478,12 +499,34 @@ export default {
               const dbData = await resDb.json();
               if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
                 const item = dbData[0];
-                const perc = Number(item.valor) > 0 ? Number(item.valor) : 50;
-                cupomEncontrado = {
-                  percentualDesconto: perc,
-                  descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
-                };
-                console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' encontrado no Supabase com ${perc}% de desconto!`);
+                const tipoRaw = String(item.tipo_desconto || "").toLowerCase().trim();
+                const val = Number(item.valor || 0);
+
+                if (
+                  tipoRaw === "dias_gratis" ||
+                  tipoRaw === "dias" ||
+                  tipoRaw === "trial" ||
+                  item.codigo.toUpperCase() === "ARFESTAVIP30" ||
+                  item.codigo.toUpperCase() === "ARTFESTAVIP30"
+                ) {
+                  const dias = val > 0 ? val : 30;
+                  cupomEncontrado = {
+                    tipoDesconto: "dias_gratis",
+                    percentualDesconto: 0,
+                    diasGratis: dias,
+                    descricao: `Cupom ${item.codigo} (+${dias} dias grátis de acesso PRO)`,
+                  };
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de +${dias} dias grátis ativado!`);
+                } else {
+                  const perc = val > 0 ? val : 50;
+                  cupomEncontrado = {
+                    tipoDesconto: "percentual",
+                    percentualDesconto: perc,
+                    diasGratis: 0,
+                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                  };
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de ${perc}% de desconto ativado!`);
+                }
               }
             }
           } catch (errDb) {
@@ -492,30 +535,37 @@ export default {
 
           // 2. FALLBACK SECUNDÁRIO CASO O SUPABASE ESTEJA OFFLINE OU O CUPOM NÃO ESTEJA NO BANCO
           if (!cupomEncontrado) {
-            const cuponsEstaticos: Record<string, { percentualDesconto: number; descricao: string }> = {
-              "ARTFESTAVIPD": { percentualDesconto: 95, descricao: "95% de Desconto Especial VIP (ArtFesta)" },
-              "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
-              "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
-              "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
-              "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
-              "DOCEVIP": { percentualDesconto: 30, descricao: "30% de desconto VIP na assinatura" },
-              "BOCATAABOCA": { percentualDesconto: 25, descricao: "25% de desconto Parceria Boca a Boca" },
-              "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
-              "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
-              "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
+            const cuponsEstaticos: Record<string, CupomInfo> = {
+              "ARFESTAVIP30": { tipoDesconto: "dias_gratis", percentualDesconto: 0, diasGratis: 30, descricao: "+30 Dias Grátis de Acesso PRO (ARFESTAVIP30)" },
+              "ARTFESTAVIP30": { tipoDesconto: "dias_gratis", percentualDesconto: 0, diasGratis: 30, descricao: "+30 Dias Grátis de Acesso PRO (ARTFESTAVIP30)" },
+              "ARTFESTAVIPD": { tipoDesconto: "percentual", percentualDesconto: 95, diasGratis: 0, descricao: "95% de Desconto Especial VIP (ArtFesta)" },
+              "ARTFESTA50": { tipoDesconto: "percentual", percentualDesconto: 50, diasGratis: 0, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
+              "CAIXADOCEVIP10": { tipoDesconto: "percentual", percentualDesconto: 10, diasGratis: 0, descricao: "10% de desconto na assinatura" },
+              "CAIXADOCEVIP20": { tipoDesconto: "percentual", percentualDesconto: 20, diasGratis: 0, descricao: "20% de desconto na assinatura" },
+              "CAIXADOCE50": { tipoDesconto: "percentual", percentualDesconto: 50, diasGratis: 0, descricao: "50% de desconto especial na assinatura" },
+              "DOCEVIP": { tipoDesconto: "percentual", percentualDesconto: 30, diasGratis: 0, descricao: "30% de desconto VIP na assinatura" },
+              "BOCATAABOCA": { tipoDesconto: "percentual", percentualDesconto: 25, diasGratis: 0, descricao: "25% de desconto Parceria Boca a Boca" },
+              "BEMVINDO100": { tipoDesconto: "percentual", percentualDesconto: 100, diasGratis: 0, descricao: "100% de desconto (1 Mês Grátis)" },
+              "CONFEITARIA20": { tipoDesconto: "percentual", percentualDesconto: 20, diasGratis: 0, descricao: "20% de desconto Confeitaria PRO" },
+              "PROMO30": { tipoDesconto: "percentual", percentualDesconto: 30, diasGratis: 0, descricao: "30% de desconto promocional" },
             };
 
             cupomEncontrado = cuponsEstaticos[cupomDigitado] || null;
           }
 
           if (cupomEncontrado) {
+            const isDias = cupomEncontrado.tipoDesconto === "dias_gratis";
             return new Response(
               JSON.stringify({
                 valido: true,
                 cupom: cupomDigitado,
+                tipoDesconto: cupomEncontrado.tipoDesconto,
                 percentualDesconto: cupomEncontrado.percentualDesconto,
+                diasGratis: cupomEncontrado.diasGratis,
                 descricao: cupomEncontrado.descricao,
-                mensagem: `Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso! 🎉`,
+                mensagem: isDias
+                  ? `🎉 Cupom "${cupomDigitado}" ativado com sucesso! Você ganhou +${cupomEncontrado.diasGratis} dias grátis de acesso PRO!`
+                  : `🎉 Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso!`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -532,6 +582,104 @@ export default {
           console.error("[Validate Promo Error]", err);
           return new Response(
             JSON.stringify({ valido: false, mensagem: "Erro interno ao validar cupom de desconto." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // APLICAÇÃO DE CUPOM DE DIAS GRÁTIS NO SUPABASE (/api/aplicar-cupom-trial)
+      // =========================================================================
+      if (url.pathname === "/api/aplicar-cupom-trial" && request.method === "POST") {
+        try {
+          const bodyText = await request.text();
+          let payload: any = {};
+          try {
+            payload = JSON.parse(bodyText);
+          } catch {}
+
+          const estCode = String(
+            payload.estabelecimentoCodigo || payload.establishmentCode || payload.codigo || "CD-1001"
+          ).trim().toUpperCase();
+          const dias = Number(payload.diasGratis || payload.dias || 30);
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
+          const supabaseKey =
+            process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          let dataAtualExp = new Date();
+          try {
+            const resEst = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode)}&select=plano_expira_em,plano_exp`,
+              {
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                },
+              }
+            );
+            if (resEst.ok) {
+              const rows = await resEst.json();
+              if (Array.isArray(rows) && rows.length > 0) {
+                const row = rows[0];
+                const expStr = row.plano_expira_em || row.plano_exp;
+                if (expStr) {
+                  const parsed = new Date(expStr);
+                  if (!isNaN(parsed.getTime()) && parsed > dataAtualExp) {
+                    dataAtualExp = parsed;
+                  }
+                }
+              }
+            }
+          } catch (eEst) {
+            console.error("[Aplicar Cupom Trial Fetch Est Error]", eEst);
+          }
+
+          const novaExp = new Date(dataAtualExp.getTime() + dias * 24 * 60 * 60 * 1000);
+          const novaExpIso = novaExp.toISOString();
+
+          try {
+            await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode)}`,
+              {
+                method: "PATCH",
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                },
+                body: JSON.stringify({
+                  plano_expira_em: novaExpIso,
+                  plano_exp: novaExpIso,
+                  plano_status: "ativo",
+                  status_assinatura: "ativo",
+                  is_pro: true,
+                  plano_id: "mensal",
+                }),
+              }
+            );
+            console.log(`[Aplicar Cupom Trial] Estabelecimento '${estCode}' atualizado com +${dias} dias grátis! Nova expiração: ${novaExpIso}`);
+          } catch (eUpdate) {
+            console.error("[Aplicar Cupom Trial Update Error]", eUpdate);
+          }
+
+          return new Response(
+            JSON.stringify({
+              sucesso: true,
+              estabelecimentoCodigo: estCode,
+              diasAdicionados: dias,
+              novaDataExpiracao: novaExpIso,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Aplicar Cupom Trial Server Error]", err);
+          return new Response(
+            JSON.stringify({ sucesso: false, mensagem: "Erro ao processar cupom trial." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
