@@ -154,20 +154,37 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     }
   } catch {}
 
-  // 1. Se o usuário já possui um plano PAGO ativo
-  if (planoSalvo && planoSalvo.status === "ativo" && (planoSalvo.planoId === "mensal" || planoSalvo.planoId === "anual" || planoSalvo.planoId === "pro" || planoSalvo.planoId === "ilimitado")) {
+  // 1. Se o estabelecimento possui plano ativo ou data de expiração válida no futuro
+  if (planoSalvo) {
     if (planoSalvo.dataExpiracao) {
       const expMs = new Date(planoSalvo.dataExpiracao).getTime();
-      if (Date.now() > expMs) {
-        return {
-          ...planoSalvo,
-          planoId: "basico",
-          status: "expirado",
-          diasRestantesTrial: 0,
-        };
+      if (!isNaN(expMs)) {
+        if (expMs > Date.now()) {
+          const planoIdReal = planoSalvo.planoId && planoSalvo.planoId !== "basico" ? planoSalvo.planoId : "mensal";
+          return {
+            ...planoSalvo,
+            planoId: planoIdReal,
+            status: "ativo",
+            diasRestantesTrial: 0,
+          };
+        } else {
+          return {
+            ...planoSalvo,
+            planoId: "basico",
+            status: "expirado",
+            diasRestantesTrial: 0,
+          };
+        }
       }
     }
-    return planoSalvo;
+
+    if (planoSalvo.status === "ativo" && (planoSalvo.planoId === "mensal" || planoSalvo.planoId === "anual" || planoSalvo.planoId === "pro" || planoSalvo.planoId === "ilimitado")) {
+      return {
+        ...planoSalvo,
+        status: "ativo",
+        diasRestantesTrial: 0,
+      };
+    }
   }
 
   // 2. Validação Segura do Trial (7 Dias Padrão + trialDiasAdicionais de Cupons Beta)

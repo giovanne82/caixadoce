@@ -259,6 +259,28 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             .then((res) => {
               if (res.data) {
                 const data = res.data;
+
+                // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCEE CACHE LOCAL)
+                const statusBanco = data.status || data.status_assinatura || data.plano_status;
+                const planoIdBanco = data.plano || data.plano_id || "mensal";
+                const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
+                const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+                const isExpValida = !isNaN(expMs) && expMs > Date.now();
+                const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+
+                if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
+                  const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+                  const targetCode = data.codigo || baseProf.establishmentCode;
+                  if (targetCode) {
+                    salvarDadosPlanoEstabelecimento(targetCode, {
+                      status: "ativo",
+                      planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                      dataExpiracao: dataExpFinal,
+                      diasRestantesTrial: 0,
+                    });
+                  }
+                }
+
                 const merged: UserProfile = {
                   ...baseProf,
                   establishmentCode: data.codigo || baseProf.establishmentCode,

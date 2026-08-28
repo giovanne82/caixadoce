@@ -219,6 +219,102 @@ function Index() {
 
   const [planoTick, setPlanoTick] = useState(0);
 
+  // Sincronização direta com a tabela 'estabelecimentos' do Supabase para invalidar o cache local no mobile
+  const sincronizarPlanoComSupabase = useCallback(async (code: string) => {
+    if (!code) return;
+    const cleanCode = code.toUpperCase();
+    try {
+      // 1. Busca via Supabase SDK com select("*") seguro
+      let row: any = null;
+      const { data, error } = await supabase
+        .from("estabelecimentos")
+        .select("*")
+        .eq("codigo", cleanCode)
+        .maybeSingle();
+
+      if (data && !error) {
+        row = data;
+      }
+
+      // 2. Fallback via REST API com No-Cache e select=*
+      if (!row) {
+        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+        const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+        const restRes = await fetch(
+          `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(cleanCode)}&select=*&_t=${Date.now()}`,
+          {
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+            },
+          }
+        );
+
+        if (restRes.ok) {
+          const restData = await restRes.json();
+          if (Array.isArray(restData) && restData.length > 0) {
+            row = restData[0];
+          }
+        }
+      }
+
+      if (row) {
+        const statusBanco = row.status || row.status_assinatura || row.plano_status;
+        const planoIdBanco = row.plano || row.plano_id || "mensal";
+        const expBanco = row.plano_exp || row.plano_expira_em || row.data_expiracao;
+
+        const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+        const isExpValida = !isNaN(expMs) && expMs > Date.now();
+        const isStatusAtivo = statusBanco === "ativo" || statusBanco === "active";
+
+        if (isExpValida || (isStatusAtivo && planoIdBanco !== "basico")) {
+          const dataExpFinal = isExpValida ? expBanco : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          
+          // FORÇA A ATUALIZAÇÃO DO LOCALSTORAGE E LIMPA QUALQUER CACHE DE TRIAL
+          salvarDadosPlanoEstabelecimento(cleanCode, {
+            status: "ativo",
+            planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+            dataExpiracao: dataExpFinal,
+            diasRestantesTrial: 0,
+          });
+
+          setPlanoTick((prev) => prev + 1);
+        }
+      }
+    } catch (err) {
+      console.warn("[Sync Plan Supabase Error]", err);
+    }
+  }, []);
+
+  // Refetch no Mount + Focus + VisibilityChange + Intervalo de 5s no mobile
+  useEffect(() => {
+    if (!activeCode) return;
+    
+    // Execução imediata no mount
+    sincronizarPlanoComSupabase(activeCode);
+
+    const handleFocus = () => {
+      sincronizarPlanoComSupabase(activeCode);
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("online", handleFocus);
+
+    const intervalId = setInterval(() => {
+      sincronizarPlanoComSupabase(activeCode);
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("online", handleFocus);
+      clearInterval(intervalId);
+    };
+  }, [activeCode, sincronizarPlanoComSupabase]);
+
   const infoPlano = useMemo(
     () => obterPlanoEfetivoEstabelecimento(activeCode, profile?.userCreatedAt),
     [activeCode, activeTab, profile?.userCreatedAt, planoTick]
@@ -241,10 +337,10 @@ function Index() {
         (payload) => {
           const newRow = payload.new;
           if (newRow && (newRow.status_assinatura === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
-            const dataExpiracao = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             salvarDadosPlanoEstabelecimento(activeCode, {
               status: "ativo",
-              planoId: newRow.plano || "mensal",
+              planoId: newRow.plano || newRow.plano_id || "mensal",
               dataExpiracao,
             });
             toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
@@ -259,22 +355,32 @@ function Index() {
     };
   }, [activeCode]);
 
-  const isProOuTrial = useMemo(() => {
-    return infoPlano.status === "ativo" || infoPlano.status === "trial" || infoPlano.planoId !== "basico";
+  const isPlanoPagoAtivo = useMemo(() => {
+    return (
+      infoPlano.status === "ativo" &&
+      (infoPlano.planoId === "mensal" ||
+        infoPlano.planoId === "anual" ||
+        infoPlano.planoId === "pro" ||
+        infoPlano.planoId === "ilimitado")
+    );
   }, [infoPlano]);
+
+  const isProOuTrial = useMemo(() => {
+    return isPlanoPagoAtivo || infoPlano.status === "trial";
+  }, [isPlanoPagoAtivo, infoPlano.status]);
 
   const isTrialExpirado = useMemo(() => {
-    if (infoPlano.status === "ativo" && infoPlano.planoId !== "basico") return false;
+    if (isPlanoPagoAtivo) return false;
     return infoPlano.status === "expirado" || (infoPlano.diasRestantesTrial ?? 0) <= 0;
-  }, [infoPlano]);
+  }, [isPlanoPagoAtivo, infoPlano.status, infoPlano.diasRestantesTrial]);
 
-  // Interceptação de Navegação e Hard Block (Paywall ao Expirar Trial de 7 dias)
+  // Interceptação de Navegação e Hard Block (Paywall apenas se trial expirado e SEM plano PRO pago ativo)
   useEffect(() => {
-    if (isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
+    if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
       toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
       setActiveTab("plano");
     }
-  }, [isTrialExpirado, activeTab]);
+  }, [isPlanoPagoAtivo, isTrialExpirado, activeTab]);
 
 function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
   if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
@@ -1553,36 +1659,41 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-16 sm:pb-12">
         {/* Header Principal do CaixaDoce em Lavanda Suave / Lilás Clean #F3EEF9 com Alto Contraste */}
         <header className="sticky top-0 z-40 bg-[#F3EEF9] text-[#2E1A47] shadow-xs border-b border-[#E8E0F2]">
-          <div className="mx-auto max-w-6xl px-4 py-2.5 sm:py-3">
-            <div className="flex items-center justify-between gap-3">
-              {/* Bloco Esquerda: Logo + Nome da Loja + Badge CD-1001 */}
-              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                <CaixaDoceLogo size="md" className="shrink-0" />
+          <div className="mx-auto max-w-6xl px-2.5 sm:px-4 py-2 sm:py-3">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+              {/* Bloco Esquerda: Logo Empilhado + Code (CD-8100) + Selo PRO (Nome Oculto no Mobile) */}
+              <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
+                <CaixaDoceLogo size="md" stacked className="shrink-0" />
                 
-                <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0 flex items-center gap-2">
-                  <p className="truncate text-xs sm:text-sm font-bold text-[#2E1A47] max-w-[140px] sm:max-w-[260px]" title={profile.establishmentName}>
+                <div className="border-l border-[#8E7CC3]/30 pl-1.5 sm:pl-3 min-w-0 flex items-center gap-1 sm:gap-2">
+                  {/* Nome da Confeitaria oculto no celular para evitar sobreposição */}
+                  <p className="hidden sm:block truncate text-sm font-bold text-[#2E1A47] max-w-[200px]" title={profile.establishmentName}>
                     {profile.establishmentName}
                   </p>
-                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold shrink-0">
+                  <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-1.5 py-0.5 rounded-full text-[9px] sm:text-xs font-mono font-bold shrink-0">
                     {profile.establishmentCode}
                   </span>
-                  {isProOuTrial && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
-                        <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> PRO
+
+                  {/* Prioridade Absoluta PRO: Se ativo, renderiza estritamente o badge PRO e validade (sem qualquer menção a trial) */}
+                  {isPlanoPagoAtivo ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="inline-flex items-center gap-0.5 bg-gradient-to-r from-[#7C3AED] to-purple-800 text-white font-extrabold text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded-full shadow-xs tracking-wider uppercase border border-purple-400/30">
+                        <Sparkles className="w-2 h-2 sm:w-2.5 sm:h-2.5 fill-amber-300 text-amber-300" /> PRO
                       </span>
-                      <span className="text-[10px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
-                        {infoPlano.status === "ativo"
-                          ? `Válido até ${formatarDataExpiracao(infoPlano.dataExpiracao)}`
-                          : `${infoPlano.diasRestantesTrial || 7} dia(s) de teste`}
+                      <span className="text-[9px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-1.5 py-0.5 rounded-md border border-purple-200">
+                        Até {formatarDataExpiracao(infoPlano.dataExpiracao)}
                       </span>
                     </div>
-                  )}
+                  ) : infoPlano.status === "trial" ? (
+                    <span className="text-[9px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-1.5 py-0.5 rounded-md border border-purple-200 shrink-0">
+                      {infoPlano.diasRestantesTrial || 7}d teste
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
-              {/* Bloco Direita: Apenas Notificações + Sair/Logout */}
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Bloco Direita: Notificações + Sair/Logout */}
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 <NotificationBell
                   transacoes={transacoes}
                   despesas={despesas}
@@ -1595,7 +1706,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                   size="sm"
                   onClick={logout}
                   title="Sair da Conta"
-                  className="h-8 px-2 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/80 hover:bg-rose-500/10 border border-[#E8E0F2] shrink-0"
+                  className="h-7 sm:h-8 px-1.5 sm:px-3 text-xs text-[#2E1A47] hover:text-rose-600 bg-white/80 hover:bg-rose-500/10 border border-[#E8E0F2] shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5 sm:mr-1.5 text-rose-500" />
                   <span className="hidden sm:inline font-bold">Sair</span>
@@ -1610,8 +1721,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
-        {/* Banner Sutil de Trial de 7 Dias Ativo */}
-        {infoPlano.status === "trial" && (infoPlano.diasRestantesTrial ?? 0) > 0 && (
+        {/* Banner Sutil de Trial de 7 Dias Ativo (EXIBIDO APENAS SE NÃO FOR PRO PAGO ATIVO) */}
+        {!isPlanoPagoAtivo && infoPlano.status === "trial" && (infoPlano.diasRestantesTrial ?? 0) > 0 && (
           <div className="mb-6 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
             <div className="flex items-center gap-2 font-bold">
               <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
@@ -1633,8 +1744,8 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
           </div>
         )}
 
-        {/* Banner Alerta de Trial Expirado (Paywall) */}
-        {isTrialExpirado && (
+        {/* Banner Alerta de Trial Expirado (Paywall APENAS SE NÃO FOR PRO PAGO ATIVO) */}
+        {!isPlanoPagoAtivo && isTrialExpirado && (
           <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-900 dark:text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
             <div className="flex items-center gap-2 font-bold">
               <Lock className="w-5 h-5 text-rose-600 shrink-0" />
