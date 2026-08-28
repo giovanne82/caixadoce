@@ -684,29 +684,29 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       })()}
 
       <Tabs defaultValue="empresa" className="space-y-6">
-        <div className="overflow-x-auto scrollbar-none pb-1">
-          <TabsList className="inline-flex w-max min-w-full sm:min-w-0 items-center justify-start gap-1 sm:gap-2 bg-muted/80 p-1.5 rounded-2xl border border-border/50">
+        <div className="w-full overflow-x-auto scrollbar-none pb-1">
+          <TabsList className="grid grid-cols-4 w-full bg-muted/80 p-1 sm:p-1.5 rounded-2xl border border-border/50 gap-1">
             <TabsTrigger
               value="empresa"
-              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
             >
-              <Building2 className="w-4 h-4 text-primary shrink-0" /> Estabelecimento
+              <Building2 className="w-4 h-4 text-primary shrink-0" /> Loja
             </TabsTrigger>
             <TabsTrigger
               value="colaboradores"
-              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
             >
-              <Users className="w-4 h-4 text-primary shrink-0" /> Colaboradores &amp; Equipe
+              <Users className="w-4 h-4 text-primary shrink-0" /> Equipe
             </TabsTrigger>
             <TabsTrigger
               value="seguranca"
-              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
             >
               <Lock className="w-4 h-4 text-primary shrink-0" /> Segurança
             </TabsTrigger>
             <TabsTrigger
               value="contato"
-              className="flex items-center gap-2 font-bold px-4 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
             >
               <Mail className="w-4 h-4 text-primary shrink-0" /> Contato
             </TabsTrigger>
