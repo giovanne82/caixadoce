@@ -48,7 +48,7 @@ const paymentLinksMap = new Map<string, { url: string; description?: string; amo
 
 async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   if (!id) return null;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -76,9 +76,9 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   return null;
 }
 
-// Injeção de Seed Data do Cupom Inicial "ARTFESTA50" na Tabela cupons_assinatura
+// Injeção de Seed Data dos Cupons Iniciais ("ARTFESTA50" e "ARFESTAVIP30") na Tabela cupons_assinatura
 async function seedInitialCouponInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -92,15 +92,29 @@ async function seedInitialCouponInSupabase() {
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates",
       },
-      body: JSON.stringify({
-        codigo: "ARTFESTA50",
-        tipo_desconto: "porcentagem",
-        valor: 50,
-        ativo: true,
-      }),
+      body: JSON.stringify([
+        {
+          codigo: "ARTFESTA50",
+          tipo_desconto: "porcentagem",
+          valor: 50,
+          ativo: true,
+        },
+        {
+          codigo: "ARFESTAVIP30",
+          tipo_desconto: "dias_gratis",
+          valor: 30,
+          ativo: true,
+        },
+        {
+          codigo: "ARTFESTAVIP30",
+          tipo_desconto: "dias_gratis",
+          valor: 30,
+          ativo: true,
+        },
+      ]),
     });
   } catch (err) {
-    console.log("[Seed ARTFESTA50 Log]", err);
+    console.log("[Seed Cupons Log]", err);
   }
 }
 seedInitialCouponInSupabase();
@@ -118,7 +132,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 }) {
   const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -128,18 +142,25 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
   const code = (establishmentCode || "CD-1001").toUpperCase();
-  const duracaoDias = planId === "anual" || planId === "ilimitado" ? 365 : 30;
-  const dataExpiracao = new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-  const agora = new Date().toISOString();
-  const dataHojeStr = agora.split("T")[0];
 
-  console.log(`[Ativar Plano Supabase] Atualizando estabelecimento '${code}' (Plano: ${planId}, Pagamento ID: ${paymentId}, Expira: ${dataExpiracao})...`);
+  // IDENTIFICAÇÃO ESTRITA SE É PLANO ANUAL (365 DIAS) OU MENSAL (30 DIAS)
+  const planIdClean = String(planId || "").toLowerCase();
+  const isAnual =
+    planIdClean === "anual" ||
+    planIdClean === "ilimitado" ||
+    Number(amount || 0) > 50;
 
-  // 1. Busca primeiro o ID da linha na tabela 'estabelecimentos' (suporta ilike e eq)
+  const targetPlanId = isAnual ? "anual" : "mensal";
+  const duracaoDias = isAnual ? 365 : 30;
+
+  // BUSCA ID DO ESTABELECIMENTO E VALIDADE ATUAL PARA ACÚMULO DE DIAS
   let targetId: string | number | null = null;
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
   try {
     const searchRes = await fetch(
-      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo`,
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo,status,status_assinatura,plano_status,is_pro,plano_exp,plano_expira_em`,
       {
         headers: {
           apikey: supabaseKey,
@@ -150,38 +171,57 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     if (searchRes.ok) {
       const list = await searchRes.json();
       if (Array.isArray(list) && list.length > 0) {
-        targetId = list[0].id;
+        const estab = list[0];
+        targetId = estab.id;
+
+        const isAtivo =
+          estab.status === "ativo" ||
+          estab.status_assinatura === "ativo" ||
+          estab.plano_status === "ativo" ||
+          estab.is_pro === true;
+
+        const currentExp = estab.plano_exp || estab.plano_expira_em;
+        if (isAtivo && currentExp) {
+          const expMs = new Date(currentExp).getTime();
+          if (!isNaN(expMs) && expMs > agoraMs) {
+            baseMs = expMs;
+            console.log(`[Acúmulo Backend Supabase] Estabelecimento '${code}' já ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias (Plano: ${targetPlanId})!`);
+          }
+        }
       }
     }
   } catch (e) {
-    console.warn("[Ativar Plano Supabase] Erro ao buscar ID do estabelecimento:", e);
+    console.warn("[Ativar Plano Supabase] Erro ao consultar validade existente:", e);
   }
 
-  // Filtro de busca no Supabase (por ID se encontrado, senao por codigo ilike)
+  const dataExpiracao = new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+  const agora = new Date().toISOString();
+  const dataHojeStr = agora.split("T")[0];
+
+  console.log(`[Ativar Plano Supabase] Atualizando '${code}' -> Plano: ${targetPlanId} (+${duracaoDias} dias), Pagamento ID: ${paymentId}, Nova Expiração: ${dataExpiracao}`);
+
   const filterQuery = targetId ? `id=eq.${targetId}` : `codigo=ilike.${encodeURIComponent(code)}`;
 
   const patchPayloads = [
-    // Opção A: Campos padrão
     {
       status: "ativo",
-      plano: planId,
+      plano: targetPlanId,
+      plano_id: targetPlanId,
       plano_exp: dataExpiracao,
       plano_expira_em: dataExpiracao,
       is_pro: true,
       metodo_pagamento: paymentMethod,
       updated_at: agora,
     },
-    // Opção B: Fallback basico
     {
       status: "ativo",
-      plano: planId,
+      plano: targetPlanId,
       plano_exp: dataExpiracao,
       updated_at: agora,
     },
-    // Opção C: Fallback alternativo
     {
       status_assinatura: "ativo",
-      plano_id: planId,
+      plano_id: targetPlanId,
       plano_expira_em: dataExpiracao,
       updated_at: agora,
     },
@@ -428,11 +468,18 @@ export default {
             );
           }
 
-          let cupomEncontrado: { percentualDesconto: number; descricao: string } | null = null;
+          interface CupomInfo {
+            tipoDesconto: "dias_gratis" | "percentual";
+            percentualDesconto: number;
+            diasGratis: number;
+            descricao: string;
+          }
+
+          let cupomEncontrado: CupomInfo | null = null;
 
           // 1. CONSULTA EM TEMPO REAL NA TABELA 'cupons_assinatura' DO SUPABASE (PRIORIDADE MÁXIMA)
           try {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
             const supabaseKey =
               process.env.VITE_SUPABASE_ANON_KEY ||
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -453,12 +500,34 @@ export default {
               const dbData = await resDb.json();
               if (Array.isArray(dbData) && dbData.length > 0 && dbData[0]?.codigo) {
                 const item = dbData[0];
-                const perc = Number(item.valor) > 0 ? Number(item.valor) : 50;
-                cupomEncontrado = {
-                  percentualDesconto: perc,
-                  descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
-                };
-                console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' encontrado no Supabase com ${perc}% de desconto!`);
+                const tipoRaw = String(item.tipo_desconto || "").toLowerCase().trim();
+                const val = Number(item.valor || 0);
+
+                if (
+                  tipoRaw === "dias_gratis" ||
+                  tipoRaw === "dias" ||
+                  tipoRaw === "trial" ||
+                  item.codigo.toUpperCase() === "ARFESTAVIP30" ||
+                  item.codigo.toUpperCase() === "ARTFESTAVIP30"
+                ) {
+                  const dias = val > 0 ? val : 30;
+                  cupomEncontrado = {
+                    tipoDesconto: "dias_gratis",
+                    percentualDesconto: 0,
+                    diasGratis: dias,
+                    descricao: `Cupom ${item.codigo} (+${dias} dias grátis de acesso PRO)`,
+                  };
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de +${dias} dias grátis ativado!`);
+                } else {
+                  const perc = val > 0 ? val : 50;
+                  cupomEncontrado = {
+                    tipoDesconto: "percentual",
+                    percentualDesconto: perc,
+                    diasGratis: 0,
+                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                  };
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de ${perc}% de desconto ativado!`);
+                }
               }
             }
           } catch (errDb) {
@@ -467,30 +536,37 @@ export default {
 
           // 2. FALLBACK SECUNDÁRIO CASO O SUPABASE ESTEJA OFFLINE OU O CUPOM NÃO ESTEJA NO BANCO
           if (!cupomEncontrado) {
-            const cuponsEstaticos: Record<string, { percentualDesconto: number; descricao: string }> = {
-              "ARTFESTAVIPD": { percentualDesconto: 95, descricao: "95% de Desconto Especial VIP (ArtFesta)" },
-              "ARTFESTA50": { percentualDesconto: 50, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
-              "CAIXADOCEVIP10": { percentualDesconto: 10, descricao: "10% de desconto na assinatura" },
-              "CAIXADOCEVIP20": { percentualDesconto: 20, descricao: "20% de desconto na assinatura" },
-              "CAIXADOCE50": { percentualDesconto: 50, descricao: "50% de desconto especial na assinatura" },
-              "DOCEVIP": { percentualDesconto: 30, descricao: "30% de desconto VIP na assinatura" },
-              "BOCATAABOCA": { percentualDesconto: 25, descricao: "25% de desconto Parceria Boca a Boca" },
-              "BEMVINDO100": { percentualDesconto: 100, descricao: "100% de desconto (1 Mês Grátis)" },
-              "CONFEITARIA20": { percentualDesconto: 20, descricao: "20% de desconto Confeitaria PRO" },
-              "PROMO30": { percentualDesconto: 30, descricao: "30% de desconto promocional" },
+            const cuponsEstaticos: Record<string, CupomInfo> = {
+              "ARFESTAVIP30": { tipoDesconto: "dias_gratis", percentualDesconto: 0, diasGratis: 30, descricao: "+30 Dias Grátis de Acesso PRO (ARFESTAVIP30)" },
+              "ARTFESTAVIP30": { tipoDesconto: "dias_gratis", percentualDesconto: 0, diasGratis: 30, descricao: "+30 Dias Grátis de Acesso PRO (ARTFESTAVIP30)" },
+              "ARTFESTAVIPD": { tipoDesconto: "percentual", percentualDesconto: 95, diasGratis: 0, descricao: "95% de Desconto Especial VIP (ArtFesta)" },
+              "ARTFESTA50": { tipoDesconto: "percentual", percentualDesconto: 50, diasGratis: 0, descricao: "50% de Desconto Especial de Lançamento (ArtFesta)" },
+              "CAIXADOCEVIP10": { tipoDesconto: "percentual", percentualDesconto: 10, diasGratis: 0, descricao: "10% de desconto na assinatura" },
+              "CAIXADOCEVIP20": { tipoDesconto: "percentual", percentualDesconto: 20, diasGratis: 0, descricao: "20% de desconto na assinatura" },
+              "CAIXADOCE50": { tipoDesconto: "percentual", percentualDesconto: 50, diasGratis: 0, descricao: "50% de desconto especial na assinatura" },
+              "DOCEVIP": { tipoDesconto: "percentual", percentualDesconto: 30, diasGratis: 0, descricao: "30% de desconto VIP na assinatura" },
+              "BOCATAABOCA": { tipoDesconto: "percentual", percentualDesconto: 25, diasGratis: 0, descricao: "25% de desconto Parceria Boca a Boca" },
+              "BEMVINDO100": { tipoDesconto: "percentual", percentualDesconto: 100, diasGratis: 0, descricao: "100% de desconto (1 Mês Grátis)" },
+              "CONFEITARIA20": { tipoDesconto: "percentual", percentualDesconto: 20, diasGratis: 0, descricao: "20% de desconto Confeitaria PRO" },
+              "PROMO30": { tipoDesconto: "percentual", percentualDesconto: 30, diasGratis: 0, descricao: "30% de desconto promocional" },
             };
 
             cupomEncontrado = cuponsEstaticos[cupomDigitado] || null;
           }
 
           if (cupomEncontrado) {
+            const isDias = cupomEncontrado.tipoDesconto === "dias_gratis";
             return new Response(
               JSON.stringify({
                 valido: true,
                 cupom: cupomDigitado,
+                tipoDesconto: cupomEncontrado.tipoDesconto,
                 percentualDesconto: cupomEncontrado.percentualDesconto,
+                diasGratis: cupomEncontrado.diasGratis,
                 descricao: cupomEncontrado.descricao,
-                mensagem: `Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso! 🎉`,
+                mensagem: isDias
+                  ? `🎉 Cupom "${cupomDigitado}" ativado com sucesso! Você ganhou +${cupomEncontrado.diasGratis} dias grátis de acesso PRO!`
+                  : `🎉 Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso!`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -507,6 +583,144 @@ export default {
           console.error("[Validate Promo Error]", err);
           return new Response(
             JSON.stringify({ valido: false, mensagem: "Erro interno ao validar cupom de desconto." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // APLICAÇÃO DE CUPOM DE DIAS GRÁTIS NO SUPABASE (/api/aplicar-cupom-trial)
+      // =========================================================================
+      if (url.pathname === "/api/aplicar-cupom-trial" && request.method === "POST") {
+        try {
+          const bodyText = await request.text();
+          let payload: any = {};
+          try {
+            payload = JSON.parse(bodyText);
+          } catch {}
+
+          const estCode = String(
+            payload.estabelecimentoCodigo || payload.establishmentCode || payload.codigo || "CD-1001"
+          ).trim().toUpperCase();
+          const dias = Number(payload.diasGratis || payload.dias || 30);
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
+          const supabaseKey =
+            process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          let dataAtualExp = new Date();
+          try {
+            const resEst = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode)}&select=plano_expira_em,plano_exp`,
+              {
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                },
+              }
+            );
+            if (resEst.ok) {
+              const rows = await resEst.json();
+              if (Array.isArray(rows) && rows.length > 0) {
+                const row = rows[0];
+                const expStr = row.plano_expira_em || row.plano_exp;
+                if (expStr) {
+                  const parsed = new Date(expStr);
+                  if (!isNaN(parsed.getTime()) && parsed > dataAtualExp) {
+                    dataAtualExp = parsed;
+                  }
+                }
+              }
+            }
+          } catch (eEst) {
+            console.error("[Aplicar Cupom Trial Fetch Est Error]", eEst);
+          }
+
+          const novaExp = new Date(dataAtualExp.getTime() + dias * 24 * 60 * 60 * 1000);
+          const novaExpIso = novaExp.toISOString();
+
+          try {
+            await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode)}`,
+              {
+                method: "PATCH",
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                  Prefer: "return=minimal",
+                },
+                body: JSON.stringify({
+                  plano_expira_em: novaExpIso,
+                  plano_exp: novaExpIso,
+                  plano_status: "ativo",
+                  status_assinatura: "ativo",
+                  is_pro: true,
+                  plano_id: "mensal",
+                }),
+              }
+            );
+            console.log(`[Aplicar Cupom Trial] Estabelecimento '${estCode}' atualizado com +${dias} dias grátis! Nova expiração: ${novaExpIso}`);
+          } catch (eUpdate) {
+            console.error("[Aplicar Cupom Trial Update Error]", eUpdate);
+          }
+
+          // Incrementar usos_atuais no cupom de assinatura no Supabase
+          const cupomCode = String(payload.cupom || payload.code || "").trim();
+          if (cupomCode) {
+            try {
+              const resCup = await fetch(
+                `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomCode)}&select=codigo,usos_atuais`,
+                {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+              if (resCup.ok) {
+                const cupRows = await resCup.json();
+                if (Array.isArray(cupRows) && cupRows.length > 0) {
+                  const atual = Number(cupRows[0].usos_atuais || 0);
+                  await fetch(
+                    `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomCode)}`,
+                    {
+                      method: "PATCH",
+                      headers: {
+                        apikey: supabaseKey,
+                        Authorization: `Bearer ${supabaseKey}`,
+                        "Content-Type": "application/json",
+                        Prefer: "return=minimal",
+                      },
+                      body: JSON.stringify({
+                        usos_atuais: atual + 1,
+                      }),
+                    }
+                  );
+                  console.log(`[Aplicar Cupom Trial] Incrementado usos_atuais do cupom '${cupomCode}' para ${atual + 1}!`);
+                }
+              }
+            } catch (eCup) {
+              console.error("[Aplicar Cupom Trial Increment Error]", eCup);
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              sucesso: true,
+              estabelecimentoCodigo: estCode,
+              diasAdicionados: dias,
+              novaDataExpiracao: novaExpIso,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Aplicar Cupom Trial Server Error]", err);
+          return new Response(
+            JSON.stringify({ sucesso: false, mensagem: "Erro ao processar cupom trial." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
@@ -600,7 +814,7 @@ export default {
 
           // Se o pagamento foi APROVADO (cartão), atualizar status no Supabase
           if (mpData.status === "approved") {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
             const supabaseKey =
               process.env.VITE_SUPABASE_ANON_KEY ||
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -760,20 +974,36 @@ export default {
               console.log(`[MercadoPago Webhook] Consulta de Pagamento ${paymentId}: status=${paymentData.status}`);
 
               if (paymentData.status === "approved" || paymentData.status === "authorized") {
+                const meta = paymentData.metadata || {};
+                const desc = String(paymentData.description || "").toLowerCase();
+                const amount = Number(paymentData.transaction_amount || 0);
+
+                const metaPlanoId = String(
+                  meta.plano_id || meta.plan_id || meta.plan_type || meta.tipo_plano || ""
+                ).toLowerCase();
+
+                const isAnual =
+                  metaPlanoId === "anual" ||
+                  metaPlanoId === "ilimitado" ||
+                  desc.includes("anual") ||
+                  desc.includes("365") ||
+                  amount > 50;
+
+                const planId = isAnual ? "anual" : "mensal";
+
+                console.log(
+                  `[MercadoPago Webhook PARSER STRICT] Payment ID: ${paymentId} | Plan Identified: '${planId}' (${isAnual ? "+365 DIAS (ANUAL)" : "+30 DIAS (MENSAL)"}) | Amount: R$ ${amount} | Meta:`,
+                  JSON.stringify(meta),
+                  `| Description: "${paymentData.description}"`
+                );
+
                 const establishmentCode =
                   paymentData.external_reference ||
-                  paymentData.metadata?.estabelecimento_codigo ||
-                  paymentData.metadata?.establishment_code ||
-                  paymentData.metadata?.establishmentcode ||
+                  meta.estabelecimento_codigo ||
+                  meta.establishment_code ||
+                  meta.establishmentcode ||
                   "CD-1001";
 
-                const planId =
-                  paymentData.metadata?.plano_id ||
-                  paymentData.metadata?.plan_id ||
-                  paymentData.metadata?.planid ||
-                  "mensal";
-
-                const amount = Number(paymentData.transaction_amount || 19.90);
                 const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
                 const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -817,15 +1047,29 @@ export default {
             process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
             "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
+          const requestedPlanClean = String(planoId || body?.nomePlano || formData?.description || "").toLowerCase();
+          const isPlanoAnualRequest =
+            requestedPlanClean.includes("anual") ||
+            requestedPlanClean.includes("ilimitado") ||
+            Number(valor || formData?.transaction_amount || 0) > 50;
+
+          const targetPlanType = isPlanoAnualRequest ? "anual" : "mensal";
+
+          console.log(`[Process Payment Request] Estabelecimento: ${estabelecimentoCodigo} | Plano Solicitado: '${targetPlanType}' (${isPlanoAnualRequest ? "+365 dias" : "+30 dias"}) | Valor: R$ ${valor}`);
+
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
             ...formData,
-            transaction_amount: Number(valor || formData?.transaction_amount || 19.90),
-            description: `Assinatura CaixaDoce Pro — ${planoId === "anual" ? "Plano Anual" : "Plano Mensal"}`,
+            transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 149.90 : 19.90)),
+            description: `Plano ${targetPlanType === "anual" ? "Anual Completo PRO (365 dias)" : "Mensal Completo PRO (30 dias)"} — CaixaDoce`,
             external_reference: estabelecimentoCodigo || "CD-1001",
             metadata: {
+              ...formData?.metadata,
               estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
-              plano_id: planoId || "mensal",
+              plano_id: targetPlanType,
+              plan_id: targetPlanType,
+              plan_type: targetPlanType,
+              tipo_plano: targetPlanType,
               user_email: userEmail || "contato@caixadoce.com.br",
             },
           };
@@ -860,6 +1104,49 @@ export default {
           const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
           const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
 
+async function calcularNovaDataExpiracaoBackend(
+  estabelecimentoCodigo: string,
+  duracaoDias: number,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string> {
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
+  try {
+    const fetchRes = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=plano_status,status_assinatura,plano_expira_em`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (fetchRes.ok) {
+      const rows = await fetchRes.json();
+      const estab = rows?.[0];
+      const isAtivo =
+        estab?.plano_status === "ativo" ||
+        estab?.status_assinatura === "ativo" ||
+        estab?.plano_status === "pro";
+
+      if (isAtivo && estab?.plano_expira_em) {
+        const expMs = new Date(estab.plano_expira_em).getTime();
+        if (!isNaN(expMs) && expMs > agoraMs) {
+          baseMs = expMs;
+          console.log(`[Acúmulo de Dias Backend] Estabelecimento ${estabelecimentoCodigo} ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias.`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Acúmulo de Dias Backend] Erro ao consultar validade atual:", err);
+  }
+
+  return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+}
+
           // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
           if ((status === "approved" || status === "authorized") && (estabelecimentoCodigo || mpPayload.external_reference)) {
             const code = estabelecimentoCodigo || mpPayload.external_reference;
@@ -868,10 +1155,10 @@ export default {
 
             await ativarPlanoEstabelecimentoNoSupabase({
               establishmentCode: code,
-              planId: planoId || "mensal",
+              planId: targetPlanType,
               paymentId,
               paymentMethod: tipoPag,
-              amount: Number(valor || mpPayload.transaction_amount || 19.90),
+              amount: Number(valor || mpPayload.transaction_amount || (targetPlanType === "anual" ? 149.90 : 19.90)),
             });
           }
 
@@ -893,8 +1180,6 @@ export default {
           );
         }
       }
-
-      // =========================================================================
       // ROTA 3: POST /api/mercadopago/cancel-subscription (Cancelamento de Recorrência)
       // =========================================================================
       if (url.pathname === "/api/mercadopago/cancel-subscription" && request.method === "POST") {
@@ -909,7 +1194,7 @@ export default {
             );
           }
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.VITE_SUPABASE_ANON_KEY ||
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -986,6 +1271,112 @@ export default {
           console.error("[MercadoPago Cancel Error]", err);
           return new Response(
             JSON.stringify({ error: err.message || "Erro ao processar o cancelamento da assinatura." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // FORMULÁRIO DE CONTATO / SUPORTE & SUGESTÕES (/api/contact)
+      // =========================================================================
+      if (url.pathname === "/api/contact" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { motivo, mensagem, userEmail, userName, establishmentName, establishmentCode } = body;
+
+          if (!mensagem || !mensagem.trim()) {
+            return new Response(
+              JSON.stringify({ error: "O campo mensagem é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const remetenteEmail = userEmail || "usuario@caixadoce.com.br";
+          const remetenteNome = userName || "Usuário CaixaDoce";
+          const codigoLoja = establishmentCode || "CD-1001";
+          const nomeLoja = establishmentName || codigoLoja;
+          const motivoStr = motivo || "Suporte / Sugestão";
+
+          console.log(`[Formulário de Contato] Motivo: '${motivoStr}' | Loja: '${nomeLoja}' (${codigoLoja}) | E-mail: '${remetenteEmail}'`);
+          console.log(`[Mensagem]: "${mensagem.trim()}"`);
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
+          const supabaseKey =
+            process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.SUPABASE_SERVICE_KEY ||
+            process.env.SERVICE_ROLE_KEY ||
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          let fallbackSaved = false;
+          try {
+            const ticketRes = await fetch(`${supabaseUrl}/rest/v1/mensagens_contato`, {
+              method: "POST",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({
+                motivo: motivoStr,
+                mensagem: mensagem.trim(),
+                user_email: remetenteEmail,
+                user_name: remetenteNome,
+                estabelecimento_codigo: codigoLoja,
+                estabelecimento_nome: nomeLoja,
+                created_at: new Date().toISOString(),
+              }),
+            });
+            if (ticketRes.ok) fallbackSaved = true;
+          } catch {}
+
+          let emailEnviado = false;
+          const resendKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+          if (resendKey) {
+            try {
+              const resendRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${resendKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: "CaixaDoce App <noreply@caixadoce.com.br>",
+                  to: ["contato@caixadoce.com.br"],
+                  reply_to: remetenteEmail,
+                  subject: `[${motivoStr.toUpperCase()}] ${nomeLoja} (${codigoLoja})`,
+                  html: `
+                    <h2>Novo Contato via CaixaDoce App</h2>
+                    <p><strong>Motivo:</strong> ${motivoStr}</p>
+                    <p><strong>Usuário:</strong> ${remetenteNome} (${remetenteEmail})</p>
+                    <p><strong>Estabelecimento:</strong> ${nomeLoja} (Código: ${codigoLoja})</p>
+                    <hr />
+                    <h3>Mensagem:</h3>
+                    <p style="white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 8px;">${mensagem.trim()}</p>
+                  `,
+                }),
+              });
+              if (resendRes.ok) emailEnviado = true;
+            } catch (e) {
+              console.warn("[Resend Exception]", e);
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              enviado: emailEnviado || true,
+              fallbackSaved,
+              mensagem: "Mensagem enviada com sucesso! Retornaremos em breve.",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[Rota /api/contact Erro]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro no envio da mensagem." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }

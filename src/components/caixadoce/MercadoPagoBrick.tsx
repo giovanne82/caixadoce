@@ -168,13 +168,20 @@ export function MercadoPagoBrick({
             onSubmit: async ({ selectedPaymentMethod, formData }: any) => {
               if (active) setProcessando(true);
               try {
+                const descPlano = planoId === "anual" ? "Plano Anual Completo PRO (365 dias)" : "Plano Mensal Completo PRO (30 dias)";
                 const res = await fetch("/api/mercadopago/process-payment", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     formData: {
                       ...formData,
+                      description: descPlano,
                       transaction_amount: valor,
+                      metadata: {
+                        plan_type: planoId,
+                        plano_id: planoId,
+                        estabelecimento_codigo: estabelecimentoCodigo,
+                      },
                     },
                     selectedPaymentMethod,
                     estabelecimentoCodigo,
@@ -240,6 +247,7 @@ export function MercadoPagoBrick({
     setProcessando(true);
     setErro(null);
     try {
+      const descPlano = planoId === "anual" ? "Plano Anual Completo PRO (365 dias)" : "Plano Mensal Completo PRO (30 dias)";
       const res = await fetch("/api/mercadopago/process-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -247,7 +255,13 @@ export function MercadoPagoBrick({
           formData: {
             payment_method_id: "pix",
             transaction_amount: valor,
+            description: descPlano,
             payer: { email: emailValido },
+            metadata: {
+              plan_type: planoId,
+              plano_id: planoId,
+              estabelecimento_codigo: estabelecimentoCodigo,
+            },
           },
           selectedPaymentMethod: "pix",
           estabelecimentoCodigo,

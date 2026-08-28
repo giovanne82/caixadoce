@@ -20,6 +20,7 @@ import {
   obterPlanoEfetivoEstabelecimento,
   PLANOS_CONFIG,
   salvarDadosPlanoEstabelecimento,
+  calcularDataExpiracaoAcumulada,
 } from "@/lib/planos-utils";
 import { MercadoPagoBrick } from "@/components/caixadoce/MercadoPagoBrick";
 import { Button } from "@/components/ui/button";
@@ -46,16 +47,16 @@ export function MeuPlanoTab() {
   const [modalCancelOpen, setModalCancelOpen] = useState(false);
   const [processandoCancelamento, setProcessandoCancelamento] = useState(false);
 
-  // ESTADO DE CUPOM PROMOCIONAL DE ASSINATURA (SAAS PROMO CODE)
   const [cupomInput, setCupomInput] = useState("");
   const [validandoCupom, setValidandoCupom] = useState(false);
   const [cupomAplicado, setCupomAplicado] = useState<{
     codigo: string;
     percentualDesconto: number;
+    diasGratis?: number;
+    tipoDesconto?: "percentual" | "dias_gratis";
     descricao: string;
   } | null>(null);
 
-  // ESTADO DO PLANO SELECIONADO NO CHECKOUT (MENSAL OU ANUAL)
   const [planoSelecionadoCheckout, setPlanoSelecionadoCheckout] = useState<"mensal" | "anual">("mensal");
 
   const recarregarPlano = useCallback(async () => {
@@ -115,7 +116,6 @@ export function MeuPlanoTab() {
     recarregarPlano();
   }, [recarregarPlano]);
 
-  // VALIDAÇÃO SEGURA NO SERVIDOR DO CUPOM PROMOCIONAL (SERVER-SIDE)
   const handleValidarCupom = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const codigoLimpo = cupomInput.trim().toUpperCase();
@@ -136,34 +136,52 @@ export function MeuPlanoTab() {
 
       if (res.ok && data.valido) {
         if (data.tipoDesconto === "dias_gratis") {
-          const diasAdicionados = Number(data.diasGratis) || 30;
+          const diasAdicionados = Number(data.diasGratis || data.valor) || 30;
           try {
             await fetch("/api/aplicar-cupom-trial", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ cupom: data.cupom, estabelecimentoCodigo: activeCode }),
+              body: JSON.stringify({
+                cupom: data.cupom,
+                estabelecimentoCodigo: activeCode,
+                diasGratis: diasAdicionados,
+              }),
             });
-          } catch {}
+          } catch (eTrial) {
+            console.error("[Aplicar Cupom Trial Client Error]", eTrial);
+          }
 
-          const novosDiasAdicionais = (infoPlano.trialDiasAdicionais || 0) + diasAdicionados;
+          const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, diasAdicionados);
           salvarDadosPlanoEstabelecimento(activeCode, {
-            trialDiasAdicionais: novosDiasAdicionais,
-            status: "trial",
             planoId: "mensal",
+            status: "ativo",
+            tipoPagamento: "cupom_dias_gratis",
+            dataExpiracao: novaExp,
+            dataInicio: new Date().toISOString(),
           });
+
           if (updateEstablishmentPlan) {
             await updateEstablishmentPlan("mensal", true);
           }
+
           recarregarPlano();
+
+          setCupomAplicado({
+            codigo: data.cupom,
+            percentualDesconto: 0,
+            diasGratis: diasAdicionados,
+            tipoDesconto: "dias_gratis",
+            descricao: data.descricao || `+${diasAdicionados} Dias Grátis`,
+          });
           setCupomInput("");
-          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
-          toast.success(`🎉 Oba! Você ganhou +${diasAdicionados} dias de acesso PRO! Aproveite todas as ferramentas sem cadastrar cartão.`);
+          toast.success(`🎉 Oba! Cupom "${data.cupom}" ativado com sucesso! Você ganhou +${diasAdicionados} dias grátis de acesso PRO!`);
         } else if (Number(data.percentualDesconto) >= 100) {
-          // CUPOM 100% GRATUITO - BYPASS TOTAL DE CHECKOUT DO MERCADO PAGO
+          const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, 30);
           salvarDadosPlanoEstabelecimento(activeCode, {
             planoId: "mensal",
             status: "ativo",
             tipoPagamento: "cupom_100",
+            dataExpiracao: novaExp,
             dataInicio: new Date().toISOString(),
           });
           if (updateEstablishmentPlan) {
@@ -173,15 +191,16 @@ export function MeuPlanoTab() {
           setCupomAplicado({
             codigo: data.cupom,
             percentualDesconto: 100,
+            tipoDesconto: "percentual",
             descricao: data.descricao,
           });
           setCupomInput("");
-          setModalCheckoutOpen(false); // BYPASS TOTAL DO CHECKOUT BRICKS
-          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado gratuitamente sem necessidade de cartão.`);
+          toast.success(`🎉 Oba! Cupom de 100% ativado! Plano PRO liberado.`);
         } else {
           setCupomAplicado({
             codigo: data.cupom,
             percentualDesconto: data.percentualDesconto,
+            tipoDesconto: "percentual",
             descricao: data.descricao,
           });
           toast.success(data.mensagem || `Cupom "${data.cupom}" aplicado com sucesso! 🎉`);
@@ -203,7 +222,6 @@ export function MeuPlanoTab() {
     toast.info("Código promocional removido.");
   };
 
-  // PLANO MENSAL (R$ 19,90/mês)
   const valorOriginalPlanoMensal = 19.90;
   const valorPlanoMensalComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoMensal;
@@ -212,7 +230,6 @@ export function MeuPlanoTab() {
     return parseFloat(calc.toFixed(2));
   }, [cupomAplicado]);
 
-  // PLANO ANUAL (R$ 149,90/ano)
   const valorOriginalPlanoAnual = 149.90;
   const valorPlanoAnualComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoAnual;
@@ -221,40 +238,78 @@ export function MeuPlanoTab() {
     return parseFloat(calc.toFixed(2));
   }, [cupomAplicado]);
 
-  const handleAbrirCheckout = (plano: "mensal" | "anual" = "mensal") => {
-    const jaPossuiAssinaturaAtiva =
-      infoPlano.status === "ativo" &&
-      infoPlano.planoId !== "basico";
+  // CÁLCULOS DINÂMICOS REATIVOS PARA O CARD DO PLANO ANUAL (MODIFICAÇÃO AUTOMÁTICA AO APLICAR CUPOM)
+  const valorMensalEquivalenteAnual = useMemo(() => {
+    return parseFloat((valorPlanoAnualComDesconto / 12).toFixed(2));
+  }, [valorPlanoAnualComDesconto]);
 
-    if (jaPossuiAssinaturaAtiva) {
-      toast.info("Seu plano já se encontra ativo! Você possui acesso ilimitado a todas as ferramentas do sistema.", {
-        duration: 4500,
+  const percentualEconomiaAnual = useMemo(() => {
+    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    if (precoCheio12Meses <= 0) return 0;
+    const desconto = ((precoCheio12Meses - valorPlanoAnualComDesconto) / precoCheio12Meses) * 100;
+    return Math.round(Math.max(0, desconto));
+  }, [valorPlanoAnualComDesconto]);
+
+  const economiaEmReaisAnual = useMemo(() => {
+    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const economizado = precoCheio12Meses - valorPlanoAnualComDesconto;
+    return parseFloat(Math.max(0, economizado).toFixed(2));
+  }, [valorPlanoAnualComDesconto]);
+
+  const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
+  const isPlanoMensalAtivo = isPlanoAtivo && (infoPlano.planoId === "mensal" || infoPlano.planoId === "pro");
+  const isPlanoAnualAtivo = isPlanoAtivo && (infoPlano.planoId === "anual" || infoPlano.planoId === "ilimitado");
+
+  const handleAbrirCheckout = (plano: "mensal" | "anual" = "mensal") => {
+    setPlanoSelecionadoCheckout(plano);
+
+    // Se o cupom aplicado for de dias_gratis, realiza ativação direta sem abrir Mercado Pago
+    if (cupomAplicado?.tipoDesconto === "dias_gratis") {
+      const dias = cupomAplicado.diasGratis || 30;
+      const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, dias);
+      salvarDadosPlanoEstabelecimento(activeCode, {
+        planoId: plano,
+        status: "ativo",
+        tipoPagamento: "cupom_dias_gratis",
+        dataExpiracao: novaExp,
+        dataInicio: new Date().toISOString(),
       });
-      const cardRef = document.getElementById("card-status-plano-ativo");
-      if (cardRef) {
-        cardRef.scrollIntoView({ behavior: "smooth", block: "center" });
+      fetch("/api/aplicar-cupom-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cupom: cupomAplicado.codigo,
+          estabelecimentoCodigo: activeCode,
+          diasGratis: dias,
+        }),
+      }).catch((e) => console.error("[Aplicar Cupom Error]", e));
+
+      if (updateEstablishmentPlan) {
+        updateEstablishmentPlan(plano as any, true);
       }
+      recarregarPlano();
+      toast.success(`🎉 Oba! Cupom de dias grátis ativado com sucesso! +${dias} dias adicionados ao seu acesso PRO.`);
+      setModalCheckoutOpen(false);
       return;
     }
 
-    setPlanoSelecionadoCheckout(plano);
     const valorComDesconto = plano === "anual" ? valorPlanoAnualComDesconto : valorPlanoMensalComDesconto;
 
-    // BYPASS DO MERCADO PAGO SE O PLANO ESTIVER 100% GRATUITO
     if (valorComDesconto <= 0 || cupomAplicado?.percentualDesconto === 100) {
       const duracaoDias = plano === "anual" ? 365 : 30;
+      const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, duracaoDias);
       salvarDadosPlanoEstabelecimento(activeCode, {
         planoId: plano,
         status: "ativo",
         tipoPagamento: "cupom_100",
+        dataExpiracao: novaExp,
         dataInicio: new Date().toISOString(),
-        dataExpiracao: new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString(),
       });
       if (updateEstablishmentPlan) {
         updateEstablishmentPlan(plano as any, true);
       }
       recarregarPlano();
-      toast.success("🎉 Oba! Plano PRO ativado gratuitamente sem necessidade de cartão.");
+      toast.success(`🎉 Oba! Plano ${plano === "anual" ? "Anual" : "Mensal"} PRO ativado gratuitamente.`);
       setModalCheckoutOpen(false);
       return;
     }
@@ -287,50 +342,44 @@ export function MeuPlanoTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estabelecimentoCodigo: activeCode }),
       });
-
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Falha ao processar cancelamento no Mercado Pago.");
+      if (res.ok && data.success) {
+        salvarDadosPlanoEstabelecimento(activeCode, {
+          planoId: "basico",
+          status: "expirado",
+        });
+        if (updateEstablishmentPlan) {
+          updateEstablishmentPlan("basico", false);
+        }
+        recarregarPlano();
+        setModalCancelOpen(false);
+        toast.success("Assinatura cancelada. Seu plano foi alterado para o Básico.");
+      } else {
+        toast.error(data.error || "Erro ao cancelar assinatura no Mercado Pago.");
       }
-
-      salvarDadosPlanoEstabelecimento(activeCode, {
-        planoId: "basico",
-        status: "cancelado",
-      });
-      if (updateEstablishmentPlan) {
-        await updateEstablishmentPlan("basico" as any, false);
-      }
-
-      setModalCancelOpen(false);
-      recarregarPlano();
-      toast.info("Assinatura cancelada com sucesso no Mercado Pago. Seu plano mudou para o Plano Básico.");
-    } catch (err: any) {
-      console.error("[Cancel Subscription Error]", err);
-      toast.error(`Erro ao cancelar assinatura: ${err.message}`);
+    } catch (err) {
+      toast.error("Falha ao comunicar com o servidor para cancelamento.");
     } finally {
       setProcessandoCancelamento(false);
     }
   };
 
-  const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
-  const isPlanoAtivo = infoPlano.status === "ativo" && infoPlano.planoId !== "basico";
   const isProOuTrialAtivo = isPlanoAtivo || infoPlano.status === "trial";
+  const planoAtualConfig = PLANOS_CONFIG[infoPlano.planoId] || PLANOS_CONFIG.mensal;
 
   return (
     <div className="space-y-6">
-      {/* Header Info */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
             Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Aproveite 7 dias grátis de acesso ilimitado ou assine o Plano Mensal Completo via Mercado Pago.
+            Aproveite 7 dias grátis de acesso ilimitado ou assine o Plano Mensal/Anual Completo via Mercado Pago.
           </p>
         </div>
       </div>
 
-      {/* BANNER PROMOÇÃO DE LANÇAMENTO POR TEMPO LIMITADO (OCULTO SE JÁ FOR PRO ATIVO) */}
       {!isPlanoAtivo && (
         <div className="bg-gradient-to-r from-[#8E7CC3] via-purple-600 to-[#5B478E] rounded-2xl p-4 text-white shadow-lg flex items-center justify-between gap-3 font-sans">
           <div className="flex items-center gap-3">
@@ -355,7 +404,6 @@ export function MeuPlanoTab() {
         </div>
       )}
 
-      {/* BANNER DE STATUS DO PLANO E TRIAL DE 7 DIAS */}
       <Card id="card-status-plano-ativo" className="border-2 border-primary/30 shadow-md bg-card overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -379,7 +427,7 @@ export function MeuPlanoTab() {
                     }
                   >
                     {infoPlano.status === "ativo"
-                      ? "Assinatura Ativa (Ilimitado)"
+                      ? `Assinatura Ativa (${isPlanoAnualAtivo ? "Anual" : "Mensal"})`
                       : infoPlano.status === "trial"
                       ? "Período de Teste (PRO)"
                       : infoPlano.status === "expirado"
@@ -412,9 +460,6 @@ export function MeuPlanoTab() {
         </CardContent>
       </Card>
 
-      {/* ========================================================================= */}
-      {/* CARD LIMPO: INPUT DE CÓDIGO PROMOCIONAL DE ASSINATURA SAAS */}
-      {/* ========================================================================= */}
       <Card className="border border-purple-500/30 bg-purple-500/5 shadow-xs">
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -431,7 +476,9 @@ export function MeuPlanoTab() {
               {cupomAplicado ? (
                 <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
                   <Badge variant="default" className="bg-emerald-600 font-extrabold text-xs">
-                    {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}%)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}%)`}
                   </Badge>
                   <Button
                     type="button"
@@ -467,12 +514,7 @@ export function MeuPlanoTab() {
         </CardContent>
       </Card>
 
-      {/* ========================================================================= */}
-      {/* OS CARDS COMPARATIVOS DE PLANOS (GRATUITO, MENSAL R$ 19,90 E ANUAL R$ 149,90) */}
-      {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 items-stretch">
-        
-        {/* CARD 1: PLANO BÁSICO (R$ 0,00) */}
         <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-border/80 transition-all">
           <CardHeader className="pb-4">
             <Badge variant="outline" className="w-fit mb-2 text-[10px] font-bold text-stone-500 border-stone-300">
@@ -528,17 +570,18 @@ export function MeuPlanoTab() {
               {infoPlano.planoId === "basico"
                 ? "Plano Atual"
                 : isProOuTrialAtivo
-                ? "Plano Básico Desativado"
+                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
                 : "Usar Plano Gratuito"}
             </Button>
           </div>
         </Card>
 
-        {/* CARD 2: PLANO MENSAL COMPLETO (R$ 19,90/mês) */}
-        <Card className="border-2 border-[#8E7CC3] shadow-lg relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all">
+        <Card className={`border-2 shadow-lg relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ${
+          isPlanoMensalAtivo ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-[#8E7CC3]"
+        }`}>
           <CardHeader className="pb-4 pt-6">
             <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-bold text-[#7C3AED] bg-[#F3EEF9] border border-[#8E7CC3]/30">
-              🔥 FLEXIBILIDADE MENSAL
+              {isPlanoMensalAtivo ? "✓ SEU PLANO ATUAL" : "🔥 FLEXIBILIDADE MENSAL"}
             </Badge>
             <CardTitle className="text-lg font-extrabold text-foreground flex items-center justify-between">
               Mensal Completo <Zap className="w-5 h-5 text-amber-500" />
@@ -549,17 +592,26 @@ export function MeuPlanoTab() {
             <div className="pt-3">
               {cupomAplicado ? (
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
-                    </span>
-                    <span className="text-sm line-through text-muted-foreground font-mono">
-                      R$ 19,90
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-                  </div>
+                  {cupomAplicado.tipoDesconto === "dias_gratis" ? (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">GRÁTIS</span>
+                      <span className="text-xs text-muted-foreground font-semibold"> por {cupomAplicado.diasGratis || 30} dias</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">
+                        R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
+                      </span>
+                      <span className="text-sm line-through text-muted-foreground font-mono">
+                        R$ 19,90
+                      </span>
+                      <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
+                    </div>
+                  )}
                   <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
-                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}% OFF)`}
                   </Badge>
                 </div>
               ) : (
@@ -593,57 +645,73 @@ export function MeuPlanoTab() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                 <span>Calendário de Encomendas &amp; Gestão Financeira</span>
               </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Cardápio Digital Público &amp; Lista de Compras</span>
+              </li>
             </ul>
           </CardContent>
           <div className="p-6 pt-0">
             <Button
               onClick={() => handleAbrirCheckout("mensal")}
-              disabled={isPlanoAtivo && infoPlano.planoId === "mensal"}
               className={`w-full font-extrabold shadow-md text-xs py-5 ${
-                isPlanoAtivo && infoPlano.planoId === "mensal"
-                  ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
+                isPlanoMensalAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : "bg-purple-600 hover:bg-purple-700 text-white"
               }`}
             >
-              {isPlanoAtivo && infoPlano.planoId === "mensal"
-                ? "✓ Plano Mensal Ativo"
+              {isPlanoMensalAtivo
+                ? "✓ Renovar Antecipado (+30 Dias)"
                 : `Assinar Mensal (R$ ${valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}/mês)`}
-              {!(isPlanoAtivo && infoPlano.planoId === "mensal") && <ArrowRight className="w-4 h-4 ml-1.5" />}
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
         </Card>
 
-        {/* CARD 3: PLANO ANUAL COMPLETO (R$ 149,90/ano - DESTAQUE DE ECONOMIA -37%) */}
         <Card className="border-2 border-emerald-500 shadow-2xl relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ring-2 ring-emerald-500/20">
           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[11px] font-black px-4 py-1 rounded-full shadow-lg uppercase tracking-wider flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-            <Crown className="w-3.5 h-3.5 text-amber-300" /> ECONOMIZE 37% OFF
+            <Crown className="w-3.5 h-3.5 text-amber-300" /> ECONOMIZE {percentualEconomiaAnual}% OFF
           </div>
 
           <CardHeader className="pb-4 pt-6">
             <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-400">
-              🏆 MAIOR ECONOMIA (1 ANO COMPLETO)
+              {isPlanoAnualAtivo ? "✓ SEU PLANO ATUAL" : "🏆 MAIOR ECONOMIA (1 ANO COMPLETO)"}
             </Badge>
             <CardTitle className="text-lg font-black text-foreground flex items-center justify-between">
               Anual Completo <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
             </CardTitle>
             <CardDescription className="text-xs font-semibold">
-              Equivalente a apenas <strong className="text-emerald-600 font-mono">R$ 12,49/mês</strong>. Garanta 1 ano de acesso sem preocupações!
+              Equivalente a apenas <strong className="text-emerald-600 font-mono">R$ {valorMensalEquivalenteAnual.toFixed(2).replace(".", ",")}/mês</strong>. Garanta 1 ano de acesso sem preocupações!
             </CardDescription>
             <div className="pt-3">
               {cupomAplicado ? (
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-emerald-600 font-mono">
-                      R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
-                    </span>
-                    <span className="text-sm line-through text-muted-foreground font-mono">
-                      R$ 149,90
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
-                  </div>
+                  {cupomAplicado.tipoDesconto === "dias_gratis" ? (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">GRÁTIS</span>
+                      <span className="text-xs text-muted-foreground font-semibold"> (+{cupomAplicado.diasGratis || 30} dias ativados)</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-emerald-600 font-mono">
+                        R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
+                      </span>
+                      <span className="text-sm line-through text-muted-foreground font-mono">
+                        R$ 149,90
+                      </span>
+                      <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
+                    </div>
+                  )}
                   <Badge variant="default" className="text-xs bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
-                    🎉 Cupom Aplicado! {cupomAplicado.codigo} (-{cupomAplicado.percentualDesconto}% OFF)
+                    {cupomAplicado.tipoDesconto === "dias_gratis"
+                      ? `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
+                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}% OFF)`}
                   </Badge>
+                  {cupomAplicado.tipoDesconto !== "dias_gratis" && (
+                    <p className="text-[11px] text-muted-foreground font-mono mt-1">
+                      <span className="line-through">De R$ 238,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-0.5">
@@ -652,7 +720,7 @@ export function MeuPlanoTab() {
                     <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ 88,90!)
+                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
                   </p>
                 </div>
               )}
@@ -690,24 +758,23 @@ export function MeuPlanoTab() {
           <div className="p-6 pt-0">
             <Button
               onClick={() => handleAbrirCheckout("anual")}
-              disabled={isPlanoAtivo && infoPlano.planoId === "anual"}
               className={`w-full font-black shadow-lg text-xs py-5 ${
-                isPlanoAtivo && infoPlano.planoId === "anual"
-                  ? "bg-emerald-600 hover:bg-emerald-600 text-white cursor-default opacity-90"
+                isPlanoAnualAtivo
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
               }`}
             >
-              {isPlanoAtivo && infoPlano.planoId === "anual"
-                ? "✓ Plano Anual Ativo"
+              {isPlanoMensalAtivo
+                ? "🚀 Fazer Upgrade para Anual (+365 Dias)"
+                : isPlanoAnualAtivo
+                ? "✓ Renovar Antecipado Anual (+365 Dias)"
                 : `Assinar Plano Anual (R$ ${valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}/ano)`}
-              {!(isPlanoAtivo && infoPlano.planoId === "anual") && <ArrowRight className="w-4 h-4 ml-1.5" />}
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
         </Card>
-
       </div>
 
-      {/* MODAL: CHECKOUT BRICKS MERCADO PAGO COM VALOR E PERÍODO ADAPTATIVOS */}
       <Dialog open={modalCheckoutOpen} onOpenChange={setModalCheckoutOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 border-2 border-purple-500/30">
           <MercadoPagoBrick
@@ -726,10 +793,11 @@ export function MeuPlanoTab() {
             valor={planoSelecionadoCheckout === "anual" ? valorPlanoAnualComDesconto : valorPlanoMensalComDesconto}
             onSuccess={() => {
               const duracaoDias = planoSelecionadoCheckout === "anual" ? 365 : 30;
+              const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, duracaoDias);
               salvarDadosPlanoEstabelecimento(activeCode, {
                 planoId: planoSelecionadoCheckout,
                 status: "ativo",
-                dataExpiracao: new Date(Date.now() + duracaoDias * 24 * 60 * 60 * 1000).toISOString(),
+                dataExpiracao: novaExp,
               });
               if (updateEstablishmentPlan) {
                 updateEstablishmentPlan(planoSelecionadoCheckout as any, true);
@@ -743,7 +811,6 @@ export function MeuPlanoTab() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: CONFIRMAR CANCELAMENTO */}
       <Dialog open={modalCancelOpen} onOpenChange={setModalCancelOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

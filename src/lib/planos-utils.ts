@@ -288,13 +288,33 @@ export function formatarDataExpiracao(dataStr?: string): string {
   }
 }
 
+export function calcularDataExpiracaoAcumulada(currentExpStr?: string, duracaoDias: number = 30): string {
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
+  if (currentExpStr) {
+    const expMs = new Date(currentExpStr).getTime();
+    if (!isNaN(expMs) && expMs > agoraMs) {
+      baseMs = expMs;
+    }
+  }
+
+  return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export function salvarDadosPlanoEstabelecimento(codigo: string, info: Partial<InfoPlanoEstabelecimento>) {
   const code = (codigo || "DEFAULT").toUpperCase();
   try {
     const current = obterPlanoEfetivoEstabelecimento(code);
+    let newExp = info.dataExpiracao;
+    if (info.status === "ativo" && !newExp && !current.dataExpiracao) {
+      const duracaoDias = info.planoId === "anual" ? 365 : 30;
+      newExp = calcularDataExpiracaoAcumulada(current.dataExpiracao, duracaoDias);
+    }
     const updated = {
       ...current,
       ...info,
+      ...(newExp ? { dataExpiracao: newExp } : {}),
     };
     localStorage.setItem(`caixadoce_plano_${code}`, JSON.stringify(updated));
   } catch (e) {
