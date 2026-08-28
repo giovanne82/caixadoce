@@ -48,7 +48,7 @@ const paymentLinksMap = new Map<string, { url: string; description?: string; amo
 
 async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   if (!id) return null;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -78,7 +78,7 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
 
 // Injeção de Seed Data do Cupom Inicial "ARTFESTA50" na Tabela cupons_assinatura
 async function seedInitialCouponInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -118,7 +118,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 }) {
   const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -457,7 +457,7 @@ export default {
 
           // 1. CONSULTA EM TEMPO REAL NA TABELA 'cupons_assinatura' DO SUPABASE (PRIORIDADE MÁXIMA)
           try {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
             const supabaseKey =
               process.env.VITE_SUPABASE_ANON_KEY ||
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -625,7 +625,7 @@ export default {
 
           // Se o pagamento foi APROVADO (cartão), atualizar status no Supabase
           if (mpData.status === "approved") {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
             const supabaseKey =
               process.env.VITE_SUPABASE_ANON_KEY ||
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -1005,7 +1005,7 @@ async function calcularNovaDataExpiracaoBackend(
             );
           }
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.VITE_SUPABASE_ANON_KEY ||
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -1111,7 +1111,7 @@ async function calcularNovaDataExpiracaoBackend(
           console.log(`[Formulário de Contato] Motivo: '${motivoStr}' | Loja: '${nomeLoja}' (${codigoLoja}) | E-mail: '${remetenteEmail}'`);
           console.log(`[Mensagem]: "${mensagem.trim()}"`);
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.SUPABASE_SERVICE_ROLE_KEY ||
             process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
