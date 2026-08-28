@@ -4,11 +4,11 @@ import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-application, x-application-name, x-requested-with",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
 };
 
 serve(async (req) => {
-  // Suporte estrito para requisições preflight CORS (OPTIONS)
+  // Suporte estrito para requisições preflight CORS (OPTIONS) respondendo 200 OK com corsHeaders
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       status: 200,
@@ -78,7 +78,7 @@ serve(async (req) => {
       </html>
     `;
 
-    // Conexão SMTP Hostinger
+    // Conexão SMTP Hostinger (Porta 465/SSL com connectTLS)
     const client = new SmtpClient();
 
     if (port === 465) {
