@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Copy, CheckCircle2, QrCode, AlertCircle, ShieldCheck, ArrowLeft, CreditCard, Sparkles } from "lucide-react";
+import { Loader2, Copy, CheckCircle2, QrCode, AlertCircle, ShieldCheck, ArrowLeft, CreditCard, Sparkles, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 declare global {
@@ -34,6 +34,8 @@ export function MercadoPagoBrick({
   onCancel,
 }: MercadoPagoBrickProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mpInstanceRef = useRef<any>(null);
+
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
   const [emailInput, setEmailInput] = useState(userEmail || "contato@caixadoce.com.br");
 
@@ -48,6 +50,70 @@ export function MercadoPagoBrick({
     copiaECola?: string;
     paymentId?: string | number;
   } | null>(null);
+
+  // FORMULÁRIO DE CARTÃO TRANSPARENTE
+  const [numeroCartao, setNumeroCartao] = useState("");
+  const [nomeCartao, setNomeCartao] = useState("");
+  const [validadeCartao, setValidadeCartao] = useState("");
+  const [cvv, setCvv] = useState("");
+  const [cpfCnpj, setCpfCnpj] = useState("");
+
+  // ESTADOS DO PARCELAMENTO (INSTALLMENTS & BIN)
+  const [binAtual, setBinAtual] = useState("");
+  const [buscandoParcelas, setBuscandoParcelas] = useState(false);
+  const [paymentMethodId, setPaymentMethodId] = useState<string>("credit_card");
+  const [issuerId, setIssuerId] = useState<string | undefined>(undefined);
+  const [parcelaSelecionada, setParcelaSelecionada] = useState<string>("1");
+  const [opcoesParcelamento, setOpcoesParcelamento] = useState<
+    Array<{
+      installments: number;
+      recommended_message: string;
+      installment_amount: number;
+      total_amount: number;
+    }>
+  >([]);
+
+  // CARREGA E INICIALIZA O SDK JS DO MERCADO PAGO V2
+  useEffect(() => {
+    let active = true;
+
+    let script = document.getElementById("mercadopago-sdk-js") as HTMLScriptElement;
+    if (!script) {
+      script = document.createElement("script");
+      script.id = "mercadopago-sdk-js";
+      script.src = "https://sdk.mercadopago.com/js/v2";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
+    const initMp = async () => {
+      let attempts = 0;
+      while (!window.MercadoPago && attempts < 35) {
+        if (!active) return;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        attempts++;
+      }
+
+      if (window.MercadoPago && active) {
+        const publicKey =
+          (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
+          (import.meta as any).env?.MERCADOPAGO_PUBLIC_KEY ||
+          "APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc";
+        try {
+          mpInstanceRef.current = new window.MercadoPago(publicKey, { locale: "pt-BR" });
+          console.log("[MercadoPago SDK v2] Inicializado com sucesso.");
+        } catch (err) {
+          console.error("[Init MercadoPago SDK Error]", err);
+        }
+      }
+    };
+
+    initMp();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // EFETUA O POLLING DO PIX EM TEMPO REAL (A CADA 3 SEG) QUANDO O PIX ESTÁ ATIVO NA ETAPA 2
   useEffect(() => {
@@ -90,37 +156,163 @@ export function MercadoPagoBrick({
     }
   }, [valor, metodoPagamento]);
 
-  // INICIALIZA O MERCADO PAGO CARD BRICK APENAS SE O MÉTODO SELECIONADO FOR "CARTÃO"
-  useEffect(() => {
-    if (metodoPagamento !== "cartao" || dadosPix || valor < 1.00) return;
+  // BUSCAR PARCELAS (INSTALLMENTS) VIA SDK MERCADO PAGO AO DIGITAR O BIN (6 DÍGITOS)
+  const consultarParcelasPorBin = async (binStr: string) => {
+    if (!binStr || binStr.length < 6) return;
+    setBuscandoParcelas(true);
 
-    let active = true;
-    setCarregando(true);
-    setErro(null);
-
-    let script = document.getElementById("mercadopago-sdk-js") as HTMLScriptElement;
-    if (!script) {
-      script = document.createElement("script");
-      script.id = "mercadopago-sdk-js";
-      script.src = "https://sdk.mercadopago.com/js/v2";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-
-    const initBrick = async () => {
-      let attempts = 0;
-      while (!window.MercadoPago && attempts < 35) {
-        if (!active) return;
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        attempts++;
+    try {
+      const mp = mpInstanceRef.current || (window.MercadoPago ? new window.MercadoPago("APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc", { locale: "pt-BR" }) : null);
+      if (!mp) {
+        console.warn("[getInstallments] MercadoPago SDK ainda não pronto.");
+        return;
       }
 
-      if (!window.MercadoPago) {
-        if (active) {
-          setErro("Não foi possível carregar o formulário de Cartão de Crédito. Verifique sua conexão.");
-          setCarregando(false);
+      const response = await mp.getInstallments({
+        amount: String(valor.toFixed(2)),
+        bin: binStr,
+        paymentTypeId: "credit_card",
+      });
+
+      if (Array.isArray(response) && response.length > 0) {
+        const data = response[0];
+        if (data.payment_method_id) {
+          setPaymentMethodId(data.payment_method_id);
         }
-        return;
+        if (data.issuer?.id) {
+          setIssuerId(String(data.issuer.id));
+        }
+
+        if (Array.isArray(data.payer_costs) && data.payer_costs.length > 0) {
+          setOpcoesParcelamento(data.payer_costs);
+          // Manter 1x como padrão ou ajustar se a opção atual for inválida
+          const existe = data.payer_costs.some((cost: any) => String(cost.installments) === parcelaSelecionada);
+          if (!existe) {
+            setParcelaSelecionada("1");
+          }
+          console.log(`[getInstallments] ${data.payer_costs.length} opções de parcelamento encontradas para ${data.payment_method_id}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[getInstallments API Error]", err);
+    } finally {
+      setBuscandoParcelas(false);
+    }
+  };
+
+  // HANDLER DO NÚMERO DO CARTÃO COM MÁSCARA E DETECÇÃO DE BIN
+  const handleNumeroCartaoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 16);
+    const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
+    setNumeroCartao(formatted);
+
+    const bin = raw.slice(0, 6);
+    if (bin.length === 6 && bin !== binAtual) {
+      setBinAtual(bin);
+      consultarParcelasPorBin(bin);
+    }
+  };
+
+  // HANDLER DA VALIDADE MM/AA
+  const handleValidadeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
+    if (raw.length >= 3) {
+      setValidadeCartao(`${raw.slice(0, 2)}/${raw.slice(2)}`);
+    } else {
+      setValidadeCartao(raw);
+    }
+  };
+
+  // HANDLER DO CPF/CNPJ COM MÁSCARA
+  const handleCpfCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 14);
+    if (raw.length > 11) {
+      // CNPJ: 00.000.000/0000-00
+      const formatted = raw
+        .replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+      setCpfCnpj(formatted);
+    } else {
+      // CPF: 000.000.000-00
+      const formatted = raw
+        .replace(/(\d{3})(?=\d)/g, "$1.")
+        .replace(/\.(\d{3})$/, "-$1");
+      setCpfCnpj(formatted);
+    }
+  };
+
+  // LISTA EFETIVA DE PARCELAS (DADOS REAIS DA API OU CÁLCULO ESTIMADO SE BIN NÃO DIGITADO)
+  const opcoesParcelamentoEfetivas = useMemo(() => {
+    if (opcoesParcelamento.length > 0) {
+      return opcoesParcelamento;
+    }
+
+    const max = planoId === "anual" || valor >= 50 ? 12 : 6;
+    const list = [];
+    for (let i = 1; i <= max; i++) {
+      const valParcela = valor / i;
+      list.push({
+        installments: i,
+        recommended_message: `${i}x de R$ ${valParcela.toFixed(2).replace(".", ",")} ${i === 1 ? "(À vista sem juros)" : ""}`,
+        installment_amount: valParcela,
+        total_amount: valor,
+      });
+    }
+    return list;
+  }, [opcoesParcelamento, valor, planoId]);
+
+  // NOME AMIGÁVEL DA BANDEIRA DO CARTÃO
+  const nomeBandeira = useMemo(() => {
+    if (!paymentMethodId || paymentMethodId === "credit_card") return null;
+    const map: Record<string, string> = {
+      visa: "Visa",
+      master: "Mastercard",
+      elo: "Elo",
+      amex: "American Express",
+      hipercard: "Hipercard",
+      diners: "Diners Club",
+    };
+    return map[paymentMethodId.toLowerCase()] || paymentMethodId.toUpperCase();
+  }, [paymentMethodId]);
+
+  // PROCESSAMENTO DO FORMULÁRIO DE CARTÃO TRANSPARENTE
+  const handleSubmeterCartao = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const numLimpo = numeroCartao.replace(/\D/g, "");
+    if (numLimpo.length < 13) {
+      toast.error("Por favor, digite o número completo do seu cartão de crédito.");
+      return;
+    }
+    if (!nomeCartao.trim()) {
+      toast.error("Por favor, informe o nome exatamente como impresso no cartão.");
+      return;
+    }
+    const valLimpa = validadeCartao.replace(/\D/g, "");
+    if (valLimpa.length < 4) {
+      toast.error("Por favor, informe a data de validade (MM/AA).");
+      return;
+    }
+    if (cvv.trim().length < 3) {
+      toast.error("Por favor, informe o código de segurança (CVV).");
+      return;
+    }
+    const cpfLimpo = cpfCnpj.replace(/\D/g, "");
+    if (cpfLimpo.length < 11) {
+      toast.error("Por favor, informe um CPF ou CNPJ válido do titular.");
+      return;
+    }
+
+    setProcessando(true);
+    setErro(null);
+
+    try {
+      const expMonth = valLimpa.slice(0, 2);
+      let expYear = valLimpa.slice(2, 4);
+      if (expYear.length === 2) {
+        expYear = `20${expYear}`;
       }
 
       const publicKey =
@@ -128,113 +320,89 @@ export function MercadoPagoBrick({
         (import.meta as any).env?.MERCADOPAGO_PUBLIC_KEY ||
         "APP_USR-827b8ae6-24e7-4251-86ee-ed4c2e947dbc";
 
-      try {
-        const mp = new window.MercadoPago(publicKey, { locale: "pt-BR" });
-        const bricksBuilder = mp.bricks();
+      const mp = mpInstanceRef.current || (window.MercadoPago ? new window.MercadoPago(publicKey, { locale: "pt-BR" }) : null);
 
-        if (containerRef.current) {
-          containerRef.current.innerHTML = "";
-        }
+      if (!mp) {
+        throw new Error("Não foi possível carregar a biblioteca de pagamentos do Mercado Pago.");
+      }
 
-        if (window.paymentBrickController?.unmount) {
-          try {
-            window.paymentBrickController.unmount();
-          } catch {}
-        }
+      // 1. GERAR TOKEN DO CARTÃO DE CRÉDITO
+      const cardTokenResult = await mp.createCardToken({
+        cardNumber: numLimpo,
+        cardholderName: nomeCartao.trim(),
+        cardExpirationMonth: expMonth,
+        cardExpirationYear: expYear,
+        securityCode: cvv.trim(),
+        identificationType: cpfLimpo.length > 11 ? "CNPJ" : "CPF",
+        identificationNumber: cpfLimpo,
+      });
 
-        window.paymentBrickController = await bricksBuilder.create("payment", "paymentBrick_container", {
-          initialization: {
-            amount: Number(valor.toFixed(2)),
+      if (!cardTokenResult || !cardTokenResult.id) {
+        throw new Error(cardTokenResult?.error?.message || "Dados do cartão inválidos. Verifique os números e tente novamente.");
+      }
+
+      const token = cardTokenResult.id;
+      const numInstallments = Number(parcelaSelecionada || 1);
+      const descPlano = planoId === "anual" ? "Plano Anual Completo PRO (365 dias)" : "Plano Mensal Completo PRO (30 dias)";
+
+      // 2. ENVIAR PAYLOAD COMPLETO COM INSTALLMENTS, PAYMENT_METHOD_ID E ISSUER_ID
+      const res = await fetch("/api/mercadopago/process-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: token,
+          installments: numInstallments,
+          payment_method_id: paymentMethodId,
+          issuer_id: issuerId,
+          transaction_amount: valor,
+          description: descPlano,
+          userEmail: emailInput,
+          estabelecimentoCodigo: estabelecimentoCodigo,
+          planoId: planoId,
+          valor: valor,
+          formData: {
+            token: token,
+            installments: numInstallments,
+            payment_method_id: paymentMethodId,
+            issuer_id: issuerId,
+            transaction_amount: valor,
+            description: descPlano,
             payer: {
               email: emailInput,
-              entityType: "individual",
-            },
-          },
-          customization: {
-            paymentMethods: {
-              creditCard: "all",
-              maxInstallments: 12,
-            },
-            visual: {
-              style: {
-                theme: "default",
+              first_name: nomeCartao.trim().split(" ")[0] || "Assinante",
+              last_name: nomeCartao.trim().split(" ").slice(1).join(" ") || "CaixaDoce",
+              identification: {
+                type: cpfLimpo.length > 11 ? "CNPJ" : "CPF",
+                number: cpfLimpo,
               },
             },
-          },
-          callbacks: {
-            onReady: () => {
-              if (active) setCarregando(false);
-            },
-            onSubmit: async ({ selectedPaymentMethod, formData }: any) => {
-              if (active) setProcessando(true);
-              try {
-                const descPlano = planoId === "anual" ? "Plano Anual Completo PRO (365 dias)" : "Plano Mensal Completo PRO (30 dias)";
-                const res = await fetch("/api/mercadopago/process-payment", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    formData: {
-                      ...formData,
-                      description: descPlano,
-                      transaction_amount: valor,
-                      metadata: {
-                        plan_type: planoId,
-                        plano_id: planoId,
-                        estabelecimento_codigo: estabelecimentoCodigo,
-                      },
-                    },
-                    selectedPaymentMethod,
-                    estabelecimentoCodigo,
-                    userEmail: emailInput,
-                    planoId,
-                    valor,
-                  }),
-                });
-
-                const data = await res.json();
-                if (!res.ok || data.error) {
-                  throw new Error(data.error || "Erro ao comunicar com o servidor de pagamento.");
-                }
-
-                if (data.status === "approved" || data.status === "authorized") {
-                  toast.success("🎉 Pagamento por Cartão Aprovado! Seu plano foi ativado com sucesso.");
-                  onSuccess();
-                } else {
-                  toast.info(`Status do Pagamento: ${data.status_detail || data.status || "Aguardando aprovação"}`);
-                }
-              } catch (err: any) {
-                console.error("[Process Payment Card Error]", err);
-                toast.error(`Falha no pagamento por cartão: ${err.message}`);
-              } finally {
-                if (active) setProcessando(false);
-              }
-            },
-            onError: (error: any) => {
-              console.error("[MercadoPago Brick Error]", error);
-              toast.error("Ocorreu um erro no formulário do cartão.");
+            metadata: {
+              plan_type: planoId,
+              plano_id: planoId,
+              estabelecimento_codigo: estabelecimentoCodigo,
             },
           },
-        });
-      } catch (e: any) {
-        console.error("[Init MercadoPago Error]", e);
-        if (active) {
-          setErro(e.message || "Erro ao inicializar formulário de cartão.");
-          setCarregando(false);
-        }
-      }
-    };
+        }),
+      });
 
-    initBrick();
-
-    return () => {
-      active = false;
-      if (window.paymentBrickController?.unmount) {
-        try {
-          window.paymentBrickController.unmount();
-        } catch {}
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Erro ao comunicar com o servidor de pagamento.");
       }
-    };
-  }, [metodoPagamento, valor, emailInput, planoId, estabelecimentoCodigo, dadosPix]);
+
+      if (data.status === "approved" || data.status === "authorized") {
+        toast.success("🎉 Pagamento por Cartão Aprovado! Seu plano foi ativado com sucesso.");
+        onSuccess();
+      } else {
+        toast.info(`Status do Pagamento: ${data.status_detail || data.status || "Aguardando aprovação"}`);
+      }
+    } catch (err: any) {
+      console.error("[Process Payment Card Error]", err);
+      toast.error(`Falha no pagamento por cartão: ${err.message}`);
+    } finally {
+      setProcessando(false);
+    }
+  };
 
   // GERAR COBRANÇA PIX INSTANTÂNEA E AVANÇAR PARA A ETAPA 2
   const handleGerarPix = async () => {
@@ -281,7 +449,6 @@ export function MercadoPagoBrick({
       const pid = data.payment_id || data.id;
 
       if (qrCode || copiaECola) {
-        // MUDA PARA A ETAPA 2 (Resultado Pix limpo sem formulário)
         setDadosPix({
           qrCodeBase64: qrCode,
           copiaECola: copiaECola,
@@ -301,13 +468,11 @@ export function MercadoPagoBrick({
 
   const [verificandoManual, setVerificandoManual] = useState(false);
 
-  // VALIDAÇÃO SEGURA E ESTRITA AO CLICAR EM "JÁ PAGUEI" (SEM APROVAÇÃO FAKE/SIMULADA)
   const handleVerificarPagamentoManual = async () => {
     setVerificandoManual(true);
     try {
       let aprovado = false;
 
-      // 1. Consulta em tempo real na API do Mercado Pago
       if (dadosPix?.paymentId) {
         const res = await fetch(
           `/api/mercadopago/check-status?payment_id=${dadosPix.paymentId}&estabelecimentoCodigo=${encodeURIComponent(
@@ -323,7 +488,6 @@ export function MercadoPagoBrick({
         }
       }
 
-      // 2. Consulta direta e estrita na tabela 'estabelecimentos' do Supabase (Fonte da Verdade)
       if (!aprovado && estabelecimentoCodigo) {
         const { data: dbData } = await supabase
           .from("estabelecimentos")
@@ -393,9 +557,7 @@ export function MercadoPagoBrick({
       </CardHeader>
 
       <CardContent className="px-0 space-y-4">
-        {/* ========================================================================= */}
-        {/* ETAPA 2: RESULTADO DO PIX (100% LIMPO SEM FORMULÁRIO OU SOBREPOSIÇÃO) */}
-        {/* ========================================================================= */}
+        {/* ETAPA 2: RESULTADO DO PIX */}
         {dadosPix ? (
           <div className="p-4 sm:p-6 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-center space-y-5 shadow-sm">
             <div className="space-y-1">
@@ -407,7 +569,6 @@ export function MercadoPagoBrick({
               </h3>
             </div>
 
-            {/* IMAGEM DO QR CODE CENTRALIZADA */}
             {dadosPix.qrCodeBase64 && (
               <div className="flex justify-center p-3 bg-white rounded-2xl shadow-md max-w-[210px] mx-auto border-2 border-emerald-300">
                 <img
@@ -418,7 +579,6 @@ export function MercadoPagoBrick({
               </div>
             )}
 
-            {/* CHAVE PIX COPIA E COLA */}
             {dadosPix.copiaECola && (
               <div className="space-y-2 text-left bg-background p-3.5 rounded-xl border border-border">
                 <span className="text-[11px] font-bold text-muted-foreground block">Ou copie o código Pix abaixo:</span>
@@ -435,7 +595,6 @@ export function MercadoPagoBrick({
               </div>
             )}
 
-            {/* STATUS POLLING AMIGÁVEL */}
             <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-900 dark:text-purple-200 flex items-center justify-center gap-2.5">
               <Loader2 className="w-4 h-4 animate-spin text-purple-600 shrink-0" />
               <span className="font-medium text-left leading-relaxed">
@@ -471,9 +630,7 @@ export function MercadoPagoBrick({
             </div>
           </div>
         ) : (
-          /* ========================================================================= */
           /* ETAPA 1: SELEÇÃO DE FORMA DE PAGAMENTO E DADOS */
-          /* ========================================================================= */
           <div className="space-y-4">
             {/* EMAIL DO ASSINANTE */}
             <div className="space-y-1.5">
@@ -532,20 +689,20 @@ export function MercadoPagoBrick({
               </div>
             </div>
 
-            {/* AVISO INFORMATIVO QUANDO VALOR FOR INFERIOR A R$ 1,00 */}
+            {/* AVISO DE VALOR MÍNIMO PARA CARTÃO */}
             {valor < 1.00 && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                 <div>
                   <span className="font-bold block">Aviso de Valor Mínimo para Cartão</span>
                   <span>
-                    O valor promocional com desconto é de <strong>R$ {valor.toFixed(2).replace(".", ",")}</strong>. Como as operadoras de cartão exigem valor mínimo de R$ 1,00, este pagamento deve ser realizado via <strong>Pix Instantâneo</strong>.
+                    O valor promocional com desconto é de <strong>R$ {valor.toFixed(2).replace(".", ",")}</strong>. Como as operadoras exigem valor mínimo de R$ 1,00, este pagamento deve ser realizado via <strong>Pix Instantâneo</strong>.
                   </span>
                 </div>
               </div>
             )}
 
-            {/* EXIBIÇÃO CONFORME O MÉTODO SELECIONADO */}
+            {/* FORMULÁRIOS DE PAGAMENTO */}
             {metodoPagamento === "pix" ? (
               <div className="p-4 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 space-y-3">
                 <div className="text-xs text-emerald-900 dark:text-emerald-200 font-semibold space-y-1">
@@ -560,7 +717,7 @@ export function MercadoPagoBrick({
                 <Button
                   onClick={handleGerarPix}
                   disabled={processando}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2"
                 >
                   {processando ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -571,38 +728,135 @@ export function MercadoPagoBrick({
                 </Button>
               </div>
             ) : (
-              /* FORMULÁRIO SEGURO MERCADO PAGO BRICK PARA CARTÃO DE CRÉDITO */
-              <div className="relative min-h-[300px] border border-border rounded-xl p-2 bg-card">
-                {carregando && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xs gap-3 rounded-xl">
-                    <Loader2 className="w-7 h-7 text-purple-600 animate-spin" />
-                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
-                      Carregando formulário seguro de Cartão...
+              /* FORMULÁRIO DE CARTÃO TRANSPARENTE COM DETECÇÃO DE BIN & PARCELAMENTO */
+              <form onSubmit={handleSubmeterCartao} className="space-y-3.5 border border-border rounded-2xl p-4 bg-card shadow-xs">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-extrabold text-foreground">Dados do Cartão de Crédito</span>
+                  </div>
+                  {nomeBandeira && (
+                    <span className="text-[11px] font-black uppercase text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">
+                      {nomeBandeira}
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {erro ? (
-                  <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs flex items-start gap-2.5">
-                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block mb-1">Erro de Carregamento</span>
-                      <span>{erro}</span>
-                    </div>
+                {/* NÚMERO DO CARTÃO */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold text-foreground">Número do Cartão:</Label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={numeroCartao}
+                      onChange={handleNumeroCartaoChange}
+                      placeholder="0000 0000 0000 0000"
+                      className="h-10 text-xs font-mono font-bold pr-10"
+                      maxLength={19}
+                      required
+                    />
+                    <CreditCard className="w-4 h-4 absolute right-3 top-3 text-muted-foreground pointer-events-none" />
                   </div>
-                ) : (
-                  <div id="paymentBrick_container" ref={containerRef} className="w-full min-h-[280px]" />
-                )}
+                </div>
 
-                {processando && (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/90 backdrop-blur-xs gap-3 rounded-xl">
-                    <Loader2 className="w-9 h-9 text-purple-600 animate-spin" />
-                    <span className="text-xs font-extrabold text-purple-900 dark:text-purple-200">
-                      Processando pagamento do cartão no Mercado Pago...
-                    </span>
+                {/* NOME DO TITULAR */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold text-foreground">Nome impresso no cartão:</Label>
+                  <Input
+                    type="text"
+                    value={nomeCartao}
+                    onChange={(e) => setNomeCartao(e.target.value.toUpperCase())}
+                    placeholder="EX: MARIA S SILVA"
+                    className="h-10 text-xs font-bold uppercase"
+                    required
+                  />
+                </div>
+
+                {/* VALIDADE & CVV */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-bold text-foreground">Validade (MM/AA):</Label>
+                    <Input
+                      type="text"
+                      value={validadeCartao}
+                      onChange={handleValidadeChange}
+                      placeholder="12/28"
+                      className="h-10 text-xs font-mono font-bold text-center"
+                      maxLength={5}
+                      required
+                    />
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-bold text-foreground">Cód. Segurança (CVV):</Label>
+                    <Input
+                      type="password"
+                      value={cvv}
+                      onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder="123"
+                      className="h-10 text-xs font-mono font-bold text-center"
+                      maxLength={4}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* CPF / CNPJ DO TITULAR */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold text-foreground">CPF / CNPJ do Titular do Cartão:</Label>
+                  <Input
+                    type="text"
+                    value={cpfCnpj}
+                    onChange={handleCpfCnpjChange}
+                    placeholder="000.000.000-00"
+                    className="h-10 text-xs font-mono font-bold"
+                    maxLength={18}
+                    required
+                  />
+                </div>
+
+                {/* SELETOR DE PARCELAMENTO (INSTALLMENTS) */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] font-extrabold text-foreground">Número de Parcelas:</Label>
+                    {buscandoParcelas && (
+                      <span className="text-[10px] font-medium text-purple-600 dark:text-purple-300 flex items-center gap-1 animate-pulse">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Buscando taxas...
+                      </span>
+                    )}
+                  </div>
+
+                  <select
+                    value={parcelaSelecionada}
+                    onChange={(e) => setParcelaSelecionada(e.target.value)}
+                    className="w-full h-10 text-xs font-bold rounded-xl border border-input bg-background px-3 py-2 text-foreground focus:outline-hidden focus:ring-2 focus:ring-purple-600 transition-all cursor-pointer"
+                  >
+                    {opcoesParcelamentoEfetivas.map((opt) => (
+                      <option key={opt.installments} value={String(opt.installments)}>
+                        {opt.recommended_message || `${opt.installments}x de R$ ${opt.installment_amount.toFixed(2).replace(".", ",")} (Total: R$ ${opt.total_amount.toFixed(2).replace(".", ",")})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* BOTÃO SUBMIT PAGAMENTO */}
+                <Button
+                  type="submit"
+                  disabled={processando}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black text-xs py-4 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2"
+                >
+                  {processando ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>PROCESSANDO CARTÃO...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4 text-purple-200" />
+                      <span>PAGAR R$ {valor.toFixed(2).replace(".", ",")} NO CARTÃO</span>
+                    </>
+                  )}
+                </Button>
+              </form>
             )}
           </div>
         )}
