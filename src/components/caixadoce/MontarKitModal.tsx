@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,11 @@ import {
   Package,
   Image as ImageIcon,
   Check,
+  Upload,
+  X,
+  Loader2,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   type ProdutoCardapio,
   type KitProduto,
@@ -54,10 +58,13 @@ export function MontarKitModal({
   kitEditing,
   onSalvarKit,
 }: MontarKitModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [prazoEntrega, setPrazoEntrega] = useState("2 dias úteis");
   const [fotoUrl, setFotoUrl] = useState("");
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [precoVendaInput, setPrecoVendaInput] = useState("R$ 0,00");
   const [itensSelecionados, setItensSelecionados] = useState<KitItemComponente[]>([]);
   const [buscaProduto, setBuscaProduto] = useState("");
@@ -96,6 +103,7 @@ export function MontarKitModal({
         setItensSelecionados([]);
       }
       setBuscaProduto("");
+      setEnviandoFoto(false);
     }
   }, [open, kitEditing]);
 
@@ -108,6 +116,41 @@ export function MontarKitModal({
   const { custoTotalInsumos, margemLucroPercentual } = useMemo(() => {
     return calcularCustosEMargemKit(itensSelecionados, produtosDisponiveis, precoVendaNumero);
   }, [itensSelecionados, produtosDisponiveis, precoVendaNumero]);
+
+  // Upload de Imagem do Kit (Supabase Storage com Fallback Base64)
+  const handleUploadFotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEnviandoFoto(true);
+    try {
+      const fileExt = file.name.split(".").pop() || "jpg";
+      const filePath = `kits/${estabelecimentoCodigo || "CD-1001"}_${Date.now()}.${fileExt}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("public")
+        .upload(filePath, file, { upsert: true });
+
+      let finalUrl = "";
+      if (!uploadError && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+        finalUrl = publicUrlData.publicUrl;
+      } else {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setFotoUrl(finalUrl);
+      toast.success("Foto do kit carregada com sucesso!");
+    } catch {
+      toast.error("Erro ao processar arquivo de imagem.");
+    } finally {
+      setEnviandoFoto(false);
+    }
+  };
 
   // Adiciona um produto ao kit ou incrementa sua quantidade
   const handleAdicionarProduto = (prod: ProdutoCardapio) => {
@@ -150,14 +193,13 @@ export function MontarKitModal({
   const handleSetQuantidade = (produtoId: string, qtdStr: string) => {
     const val = parseInt(qtdStr, 10);
     setItensSelecionados((prev) => {
-      return prev
-        .map((it) => {
-          if (it.produtoId === produtoId) {
-            const novaQtd = isNaN(val) || val <= 0 ? 1 : val;
-            return { ...it, quantidade: novaQtd };
-          }
-          return it;
-        });
+      return prev.map((it) => {
+        if (it.produtoId === produtoId) {
+          const novaQtd = isNaN(val) || val <= 0 ? 1 : val;
+          return { ...it, quantidade: novaQtd };
+        }
+        return it;
+      });
     });
   };
 
@@ -238,6 +280,15 @@ export function MontarKitModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Input Oculto de Seleção de Arquivo */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={handleUploadFotoFile}
+          />
+
           {/* Dados Gerais do Kit */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -281,25 +332,89 @@ export function MontarKitModal({
               />
             </div>
 
+            {/* Componente de Upload de Imagem do Kit */}
             <div className="sm:col-span-2 space-y-2">
-              <Label htmlFor="kit-foto" className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+              <Label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5 text-purple-600" />
-                URL da Foto do Kit
+                Foto do Kit (Upload de Imagem)
               </Label>
-              <Input
-                id="kit-foto"
-                placeholder="https://suaimagem.com/foto-kit.jpg"
-                value={fotoUrl}
-                onChange={(e) => setFotoUrl(e.target.value)}
-                className="h-10 text-sm"
-              />
+
+              {fotoUrl ? (
+                <div className="flex items-center gap-4 bg-stone-50 dark:bg-stone-950 p-3 rounded-xl border border-stone-200 dark:border-stone-800">
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-stone-300 dark:border-stone-700 shrink-0">
+                    <img src={fotoUrl} alt="Preview Kit" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-medium text-stone-600 dark:text-stone-400">
+                      Imagem selecionada para o kit
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={enviandoFoto}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="h-8 text-xs font-semibold"
+                      >
+                        {enviandoFoto ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Carregando...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5 mr-1.5 text-purple-600" /> Trocar Foto
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFotoUrl("")}
+                        className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Remover
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-purple-300 dark:border-purple-900/50 hover:border-purple-500 bg-purple-50/40 dark:bg-purple-950/10 p-5 rounded-xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2"
+                >
+                  {enviandoFoto ? (
+                    <>
+                      <Loader2 className="w-7 h-7 text-purple-600 animate-spin" />
+                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                        Processando imagem...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-2.5 bg-purple-100 dark:bg-purple-900/40 rounded-full text-purple-600 dark:text-purple-400">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-purple-900 dark:text-purple-200">
+                          Clique aqui para selecionar uma foto (JPG, PNG ou WebP)
+                        </p>
+                        <p className="text-[11px] text-stone-500">
+                          Escolha uma imagem do seu dispositivo móvel ou computador.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           <hr className="border-stone-200 dark:border-stone-800" />
 
-          {/* 2. Seleção de Produtos e Composição */}
-          <div className="space-y-3">
+          {/* 2. Seleção de Produtos e Composição (ORDEM INVERTIDA) */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
                 <Package className="w-4 h-4 text-purple-600" />
@@ -310,104 +425,36 @@ export function MontarKitModal({
               </Badge>
             </div>
 
-            {/* Itens Atualmente Selecionados no Kit */}
-            {itensSelecionados.length > 0 ? (
-              <div className="space-y-2 bg-stone-50 dark:bg-stone-950 p-3 rounded-xl border border-stone-200 dark:border-stone-800 max-h-48 overflow-y-auto">
-                {itensSelecionados.map((item) => {
-                  const prod = produtosDisponiveis.find((p) => p.id === item.produtoId);
-                  const nomeProd = item.nomeProduto || prod?.nome || "Produto Componente";
-                  const precoProd = prod?.preco || item.precoUnitarioSnapshot || 0;
-
-                  return (
-                    <div
-                      key={item.produtoId}
-                      className="flex items-center justify-between gap-3 bg-white dark:bg-stone-900 p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 shadow-sm"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-xs text-stone-900 dark:text-stone-100 block truncate">
-                          {nomeProd}
-                        </span>
-                        <span className="text-[11px] text-stone-500">
-                          Unitário: {formatarMoeda(precoProd)} | Subtotal: {formatarMoeda(precoProd * item.quantidade)}
-                        </span>
-                      </div>
-
-                      {/* Controle de Quantidade */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 rounded-md"
-                          onClick={() => handleAlterarQuantidade(item.produtoId, -1)}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantidade}
-                          onChange={(e) => handleSetQuantidade(item.produtoId, e.target.value)}
-                          className="h-7 w-12 text-center text-xs p-1 font-bold"
-                        />
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 rounded-md"
-                          onClick={() => handleAlterarQuantidade(item.produtoId, 1)}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                          onClick={() => handleRemoverItem(item.produtoId)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* BLOCO 1 (ACIMA): Busca & Cards dos Produtos Cadastrados Disponíveis */}
+            <div className="space-y-2.5 bg-stone-50/70 dark:bg-stone-950/70 p-3.5 rounded-xl border border-stone-200 dark:border-stone-800">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-purple-600" />
+                  1. Buscar Produtos do Estoque para Adicionar ao Kit
+                </span>
+                <span className="text-[11px] text-stone-500">
+                  {produtosFiltrados.length} produtos disponíveis
+                </span>
               </div>
-            ) : (
-              <div className="text-center py-6 bg-stone-50 dark:bg-stone-950 rounded-xl border border-dashed border-stone-300 dark:border-stone-800">
-                <Box className="w-8 h-8 text-stone-400 mx-auto mb-1.5" />
-                <p className="text-xs font-medium text-stone-600 dark:text-stone-400">
-                  Nenhum produto adicionado ao kit ainda.
-                </p>
-                <p className="text-[11px] text-stone-400">
-                  Busque abaixo os produtos do seu estoque e clique em "+ Adicionar".
-                </p>
-              </div>
-            )}
 
-            {/* Busca & Lista de Produtos para Adicionar */}
-            <div className="space-y-2 pt-2">
               <div className="relative">
-                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
                 <Input
-                  placeholder="Buscar produto cadastrado para incluir no kit..."
+                  placeholder="Digite o nome ou categoria do doce/produto..."
                   value={buscaProduto}
                   onChange={(e) => setBuscaProduto(e.target.value)}
-                  className="pl-9 h-9 text-xs"
+                  className="pl-9 h-9 text-xs bg-white dark:bg-stone-900"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
                 {produtosFiltrados.map((prod) => {
                   const jaNoKit = itensSelecionados.some((it) => it.produtoId === prod.id);
 
                   return (
                     <div
                       key={prod.id}
-                      className="flex items-center justify-between p-2 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-colors"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-purple-300 dark:hover:border-purple-800 transition-colors shadow-2xs"
                     >
                       <div className="min-w-0 pr-2">
                         <p className="text-xs font-semibold text-stone-900 dark:text-stone-100 truncate">
@@ -422,7 +469,7 @@ export function MontarKitModal({
                         type="button"
                         size="sm"
                         variant={jaNoKit ? "secondary" : "outline"}
-                        className={`h-7 text-xs px-2.5 ${
+                        className={`h-7 text-xs px-2.5 shrink-0 ${
                           jaNoKit ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 font-bold" : ""
                         }`}
                         onClick={() => handleAdicionarProduto(prod)}
@@ -442,11 +489,96 @@ export function MontarKitModal({
                 })}
 
                 {produtosFiltrados.length === 0 && (
-                  <p className="text-xs text-stone-400 col-span-2 text-center py-3">
+                  <p className="text-xs text-stone-400 col-span-2 text-center py-4 bg-white dark:bg-stone-900 rounded-lg border border-dashed border-stone-200 dark:border-stone-800">
                     Nenhum produto cadastrado encontrado.
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* BLOCO 2 (ABAIXO): Box/Resumo que Lista os Itens Já Adicionados ao Kit */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                <Box className="w-3.5 h-3.5 text-purple-600" />
+                2. Itens Já Adicionados a este Kit ({itensSelecionados.length})
+              </span>
+
+              {itensSelecionados.length > 0 ? (
+                <div className="space-y-2 bg-stone-50 dark:bg-stone-950 p-3 rounded-xl border border-stone-200 dark:border-stone-800 max-h-48 overflow-y-auto">
+                  {itensSelecionados.map((item) => {
+                    const prod = produtosDisponiveis.find((p) => p.id === item.produtoId);
+                    const nomeProd = item.nomeProduto || prod?.nome || "Produto Componente";
+                    const precoProd = prod?.preco || item.precoUnitarioSnapshot || 0;
+
+                    return (
+                      <div
+                        key={item.produtoId}
+                        className="flex items-center justify-between gap-3 bg-white dark:bg-stone-900 p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 shadow-2xs"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-xs text-stone-900 dark:text-stone-100 block truncate">
+                            {nomeProd}
+                          </span>
+                          <span className="text-[11px] text-stone-500">
+                            Unitário: {formatarMoeda(precoProd)} | Subtotal: {formatarMoeda(precoProd * item.quantidade)}
+                          </span>
+                        </div>
+
+                        {/* Controle de Quantidade */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 rounded-md"
+                            onClick={() => handleAlterarQuantidade(item.produtoId, -1)}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+
+                          <Input
+                            type="number"
+                            min={1}
+                            value={item.quantidade}
+                            onChange={(e) => handleSetQuantidade(item.produtoId, e.target.value)}
+                            className="h-7 w-12 text-center text-xs p-1 font-bold"
+                          />
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 rounded-md"
+                            onClick={() => handleAlterarQuantidade(item.produtoId, 1)}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            onClick={() => handleRemoverItem(item.produtoId)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6 bg-stone-50 dark:bg-stone-950 rounded-xl border border-dashed border-stone-300 dark:border-stone-800">
+                  <Box className="w-8 h-8 text-stone-400 mx-auto mb-1.5" />
+                  <p className="text-xs font-medium text-stone-600 dark:text-stone-400">
+                    Nenhum produto adicionado ao kit ainda.
+                  </p>
+                  <p className="text-[11px] text-stone-400">
+                    Clique em "+ Adicionar" na lista acima para incluir os produtos neste kit.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -461,7 +593,7 @@ export function MontarKitModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
               {/* Custo Total Insumos */}
-              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-sm">
+              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-2xs">
                 <span className="text-[11px] font-semibold text-stone-500 block mb-1">
                   Custo Total Insumos
                 </span>
@@ -472,7 +604,7 @@ export function MontarKitModal({
               </div>
 
               {/* Preço de Venda do Kit (Input Editável) */}
-              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-sm space-y-1">
+              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
                 <Label htmlFor="kit-preco-venda" className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
                   <DollarSign className="w-3 h-3" /> Preço de Venda do Kit
                 </Label>
@@ -485,7 +617,7 @@ export function MontarKitModal({
               </div>
 
               {/* Margem de Lucro Estimada (%) */}
-              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-sm">
+              <div className="bg-white dark:bg-stone-900 p-3 rounded-lg border border-stone-200 dark:border-stone-800 shadow-2xs">
                 <span className="text-[11px] font-semibold text-stone-500 block mb-1">
                   Margem de Lucro Estimada
                 </span>
