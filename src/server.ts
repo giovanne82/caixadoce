@@ -696,18 +696,31 @@ export default {
           const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
           const amount = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 19.90);
 
+          const token = formData.token || payload.token;
+          const installments = Number(formData.installments || payload.installments || 1);
+          const payment_method_id = formData.payment_method_id || payload.payment_method_id;
+          const rawIssuerId = formData.issuer_id || payload.issuer_id;
+          const issuer_id = rawIssuerId ? String(rawIssuerId) : undefined;
+
+          const descPlano =
+            payload.description ||
+            formData.description ||
+            (planId === "anual"
+              ? `Plano Anual Completo PRO — CaixaDoce (${establishmentCode})`
+              : `Plano Mensal PRO — CaixaDoce (${establishmentCode})`);
+
           const mpPaymentPayload: Record<string, any> = {
             transaction_amount: amount,
-            token: formData.token,
-            description: payload.description || `Assinatura Plano Mensal PRO — CaixaDoce (${establishmentCode})`,
-            installments: Number(formData.installments || 1),
-            payment_method_id: formData.payment_method_id,
-            issuer_id: formData.issuer_id ? String(formData.issuer_id) : undefined,
+            token: token,
+            description: descPlano,
+            installments: installments,
+            payment_method_id: payment_method_id,
+            issuer_id: issuer_id,
             payer: {
               email: formData.payer?.email || payload.userEmail || payload.email || "contato@caixadoce.com.br",
-              first_name: formData.payer?.first_name || "Assinante",
-              last_name: formData.payer?.last_name || "CaixaDoce",
-              identification: formData.payer?.identification,
+              first_name: formData.payer?.first_name || payload.first_name || "Assinante",
+              last_name: formData.payer?.last_name || payload.last_name || "CaixaDoce",
+              identification: formData.payer?.identification || payload.identification,
             },
             external_reference: establishmentCode,
             notification_url: `${url.origin}/api/webhooks/mercadopago`,
@@ -717,10 +730,13 @@ export default {
               establishmentCode: establishmentCode,
               planId,
               plano_id: planId,
+              plan_type: planId,
             },
           };
 
-          console.log("[MercadoPago Server] Criando cobrança para:", establishmentCode, "Valor:", amount);
+          console.log(
+            `[MercadoPago Server] Processando cartão | Est: ${establishmentCode} | Valor: R$ ${amount} | Parcelas: ${installments}x | Bandeira: ${payment_method_id || "n/a"} | Issuer: ${issuer_id || "n/a"}`
+          );
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
