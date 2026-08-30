@@ -44,15 +44,18 @@ import {
   Clock,
   Calculator,
   Upload,
+  Box,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
+import { MontarKitModal } from "./MontarKitModal";
 import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
   type ProdutoCardapio,
+  type KitProduto,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -62,6 +65,7 @@ interface ProductsViewProps {
   onCriarProduto: (dados: Omit<ProdutoCardapio, "id" | "estabelecimentoCodigo" | "createdAt">) => Promise<void>;
   onEditarProduto: (id: string, dados: Partial<ProdutoCardapio>) => Promise<void>;
   onExcluirProduto: (id: string) => Promise<void>;
+  onSalvarKit?: (kit: KitProduto) => Promise<void>;
 }
 
 const CATEGORIAS_PADRAO = [
@@ -79,12 +83,15 @@ export function ProductsView({
   onCriarProduto,
   onEditarProduto,
   onExcluirProduto,
+  onSalvarKit,
 }: ProductsViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [busca, setBusca] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
+  const [modalKitOpen, setModalKitOpen] = useState(false);
+  const [kitEditing, setKitEditing] = useState<KitProduto | null>(null);
   const [modalQrOpen, setModalQrOpen] = useState(false);
   const [modalNovaCatOpen, setModalNovaCatOpen] = useState(false);
   const [modalFichaOpen, setModalFichaOpen] = useState(false);
@@ -389,12 +396,24 @@ export function ProductsView({
           </p>
         </div>
 
-        <Button
-          onClick={handleAbrirCriacao}
-          className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
-        >
-          <Plus className="w-4 h-4 mr-1.5" /> Novo Produto
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => {
+              setKitEditing(null);
+              setModalKitOpen(true);
+            }}
+            className="font-bold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs h-9"
+          >
+            <Box className="w-4 h-4 mr-1.5" /> + Montar Kit
+          </Button>
+
+          <Button
+            onClick={handleAbrirCriacao}
+            className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
+          >
+            <Plus className="w-4 h-4 mr-1.5" /> Novo Produto
+          </Button>
+        </div>
       </div>
 
       {/* Filtros e Busca */}
@@ -461,15 +480,25 @@ export function ProductsView({
                       }}
                     />
                     <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
-                      <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-semibold">
-                        {prod.categoria}
-                      </Badge>
+                      {prod.isKit || prod.categoria === "Kits & Combos" ? (
+                        <Badge className="bg-purple-700 text-white border-0 text-[10px] font-bold flex items-center gap-1">
+                          <Box className="w-3 h-3" /> Kit ({(prod.itensKit || []).length} itens)
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-semibold">
+                          {prod.categoria}
+                        </Badge>
+                      )}
                       {prod.destaque && (
                         <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold flex items-center gap-1">
                           <Sparkles className="w-3 h-3" /> Destaque
                         </Badge>
                       )}
-                      {prod.availability_type === "pronta_entrega" ? (
+                      {prod.isKit || prod.categoria === "Kits & Combos" ? (
+                        <Badge className="bg-amber-600 text-white border-0 text-[10px] font-bold flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {prod.prazoEntregaIndependente || "2 dias úteis"}
+                        </Badge>
+                      ) : prod.availability_type === "pronta_entrega" ? (
                         <Badge className="bg-emerald-600 text-white border-0 text-[10px] font-bold">
                           ⚡ Pronta Entrega
                         </Badge>
@@ -488,14 +517,41 @@ export function ProductsView({
                 </div>
 
                 <div className="px-3.5 pt-2">
-                  <Button
-                    type="button"
-                    onClick={() => handleAbrirFichaTecnica(prod)}
-                    className="w-full h-8 text-xs font-extrabold bg-purple-600/10 hover:bg-purple-600/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 gap-1.5 flex items-center justify-center rounded-xl transition-all shadow-2xs"
-                  >
-                    <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                    <span>🧮 Ficha Técnica &amp; Custos</span>
-                  </Button>
+                  {prod.isKit || prod.categoria === "Kits & Combos" ? (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setKitEditing({
+                          id: prod.id,
+                          estabelecimentoCodigo,
+                          nome: prod.nome,
+                          descricao: prod.descricao,
+                          precoVenda: prod.preco,
+                          custoTotalInsumos: prod.custoTotalInsumos || 0,
+                          margemLucroPercentual: prod.margemLucroPercentual || 0,
+                          prazoEntrega: prod.prazoEntregaIndependente || "2 dias úteis",
+                          fotoUrl: prod.fotoUrl,
+                          categoria: "Kits & Combos",
+                          ativo: prod.ativo !== false,
+                          itens: prod.itensKit || [],
+                        });
+                        setModalKitOpen(true);
+                      }}
+                      className="w-full h-8 text-xs font-extrabold bg-purple-600 hover:bg-purple-700 text-white border border-purple-500/40 gap-1.5 flex items-center justify-center rounded-xl transition-all shadow-2xs"
+                    >
+                      <Box className="w-4 h-4 shrink-0" />
+                      <span>📦 Editar Composição do Kit</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={() => handleAbrirFichaTecnica(prod)}
+                      className="w-full h-8 text-xs font-extrabold bg-purple-600/10 hover:bg-purple-600/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 gap-1.5 flex items-center justify-center rounded-xl transition-all shadow-2xs"
+                    >
+                      <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span>🧮 Ficha Técnica &amp; Custos</span>
+                    </Button>
+                  )}
                 </div>
 
                   <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
@@ -1005,6 +1061,20 @@ export function ProductsView({
         estabelecimentoCodigo={estabelecimentoCodigo}
         onAplicarPrecoProduto={async (prodId, novoPreco) => {
           await onEditarProduto(prodId, { preco: novoPreco });
+        }}
+      />
+
+      {/* MODAL: MONTAGEM DE KITS */}
+      <MontarKitModal
+        open={modalKitOpen}
+        onOpenChange={setModalKitOpen}
+        produtosCardapio={produtos}
+        estabelecimentoCodigo={estabelecimentoCodigo}
+        kitEditing={kitEditing}
+        onSalvarKit={async (kit) => {
+          if (onSalvarKit) {
+            await onSalvarKit(kit);
+          }
         }}
       />
     </div>

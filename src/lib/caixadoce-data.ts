@@ -144,6 +144,30 @@ export function salvarClientesStorage(estabelecimentoCodigo: string, lista: Clie
 // PRODUTOS & CARDÁPIO (PRODUCTS)
 // ==============================================================================
 
+export interface KitItemComponente {
+  produtoId: string;
+  nomeProduto?: string;
+  quantidade: number;
+  custoUnitarioSnapshot?: number;
+  precoUnitarioSnapshot?: number;
+}
+
+export interface KitProduto {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  descricao?: string;
+  precoVenda: number;
+  custoTotalInsumos: number;
+  margemLucroPercentual: number;
+  prazoEntrega?: string; // ex: "2 dias úteis", "48h"
+  fotoUrl?: string;
+  categoria?: string;
+  ativo?: boolean;
+  itens: KitItemComponente[];
+  createdAt?: string;
+}
+
 export interface ProdutoCardapio {
   id: string;
   estabelecimentoCodigo: string;
@@ -159,6 +183,11 @@ export interface ProdutoCardapio {
   availability_type?: "pronta_entrega" | "encomenda";
   available_days?: number[]; // [0,1,2,3,4,5,6] (0 = Dom, 1 = Seg, 2 = Ter, etc.)
   min_lead_time_days?: number; // antecedência mínima em dias
+  isKit?: boolean;
+  custoTotalInsumos?: number;
+  margemLucroPercentual?: number;
+  prazoEntregaIndependente?: string;
+  itensKit?: KitItemComponente[];
 }
 
 export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [

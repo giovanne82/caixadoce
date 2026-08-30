@@ -651,8 +651,30 @@ export async function consolidarReceitasEncomendas(
       let receitaItens: FichaTecnicaItem[] = [];
 
       if (prodCardapio) {
-        // Tentar obter via Supabase
-        receitaItens = await obterFichaTecnicaProduto(code, prodCardapio.id);
+        // Se o produto for um Kit (isKit: true ou categoria Kits & Combos), expande cada componente unitário do kit
+        if (prodCardapio.isKit || Array.isArray(prodCardapio.itensKit)) {
+          const componentes = prodCardapio.itensKit || [];
+          for (const comp of componentes) {
+            const prodComp = produtosCardapio.find((p: any) => p.id === comp.produtoId);
+            const qtdCompProporcional = (Number(comp.quantidade) || 1) * qtdProduto;
+            if (prodComp) {
+              const recComp = await obterFichaTecnicaProduto(code, prodComp.id);
+              if (recComp && recComp.length > 0) {
+                receitaItens.push(
+                  ...recComp.map((r) => ({
+                    ...r,
+                    quantidadeUsada: (Number(r.quantidadeUsada) || 1) * (Number(comp.quantidade) || 1),
+                  }))
+                );
+              }
+            }
+          }
+        }
+
+        // Tentar obter via Supabase para produto padrão
+        if (receitaItens.length === 0) {
+          receitaItens = await obterFichaTecnicaProduto(code, prodCardapio.id);
+        }
         
         // Se vazia, tentar obter de prodCardapio.insumos (propriedade local do produto)
         if ((!receitaItens || receitaItens.length === 0) && Array.isArray(prodCardapio.insumos) && prodCardapio.insumos.length > 0) {

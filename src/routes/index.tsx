@@ -45,6 +45,12 @@ import {
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
 import {
+  obterKitsEstabelecimento,
+  salvarKitEstabelecimento,
+  converterKitParaProdutoCardapio,
+  expandirItensKitParaBaixaEstoque,
+} from "@/lib/kits-service";
+import {
   type TransacaoFinanceira,
   type StatusTransacao,
   type Encomenda,
@@ -52,6 +58,7 @@ import {
   type DespesaNotaFiscal,
   type Cliente,
   type ProdutoCardapio,
+  type KitProduto,
   type ItemListaCompra,
   type ListaCompras,
   normalizarNomeInsumo,
@@ -658,14 +665,16 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
-  // 5. Carrega Produtos do Cardápio do Supabase (Fonte Única da Verdade)
+  // 5. Carrega Produtos do Cardápio e Kits do Supabase (Fonte Única da Verdade)
   const fetchProdutos = useCallback(async () => {
     if (!profile) return;
     try {
       const data = await safeFetchSupabase("produtos", activeCode, "nome", true);
+      const kitsData = await obterKitsEstabelecimento(activeCode);
 
+      let mapeados: ProdutoCardapio[] = [];
       if (data && Array.isArray(data)) {
-        const mapeados: ProdutoCardapio[] = data.map((p: any) => ({
+        mapeados = data.map((p: any) => ({
           id: String(p.id),
           estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || activeCode,
           nome: p.nome || p.name,
@@ -677,12 +686,30 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
           tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
           ativo: (p.ativo ?? p.is_active) !== false,
           createdAt: p.created_at,
+          isKit: p.is_kit ?? false,
+          custoTotalInsumos: p.custo_total_insumos ? Number(p.custo_total_insumos) : undefined,
+          margemLucroPercentual: p.margem_lucro ? Number(p.margem_lucro) : undefined,
+          prazoEntregaIndependente: p.prazo_entrega,
+          itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
         }));
-        setProdutos(mapeados);
-        try {
-          localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(mapeados));
-        } catch {}
       }
+
+      if (kitsData && kitsData.length > 0) {
+        for (const k of kitsData) {
+          const prodKit = converterKitParaProdutoCardapio(k);
+          const index = mapeados.findIndex((p) => p.id === prodKit.id);
+          if (index >= 0) {
+            mapeados[index] = prodKit;
+          } else {
+            mapeados.push(prodKit);
+          }
+        }
+      }
+
+      setProdutos(mapeados);
+      try {
+        localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(mapeados));
+      } catch {}
     } catch {}
   }, [activeCode, profile, safeFetchSupabase]);
 
@@ -935,10 +962,55 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       const atualizados = produtos.filter((p) => p.id !== id);
       setProdutos(atualizados);
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
-      toast.success("Produto removido do cardápio.");
+      toast.success("Produto/Kit removido do cardápio.");
     } catch (e: any) {
       toast.error(`Erro ao excluir produto: ${e?.message || e}`);
     }
+  };
+
+  const salvarKit = async (kit: KitProduto) => {
+    const saved = await salvarKitEstabelecimento(kit);
+    const prodKit = converterKitParaProdutoCardapio(saved);
+
+    try {
+      await supabase.from("produtos").upsert([
+        {
+          id: prodKit.id,
+          user_id: getValidUuid(user?.id, profile?.ownerUserId),
+          estabelecimento_codigo: activeCode,
+          codigo: activeCode,
+          store_id: activeCode,
+          nome: prodKit.nome,
+          categoria: prodKit.categoria,
+          preco: Number(prodKit.preco) || 0,
+          descricao: prodKit.descricao || "",
+          foto_url: prodKit.fotoUrl || "",
+          ativo: prodKit.ativo !== false,
+          is_kit: true,
+          custo_total_insumos: prodKit.custoTotalInsumos,
+          margem_lucro: prodKit.margemLucroPercentual,
+          prazo_entrega: prodKit.prazoEntregaIndependente,
+          itens_kit: prodKit.itensKit,
+          updated_at: new Date().toISOString(),
+        },
+      ], { onConflict: "id" });
+    } catch (err) {
+      console.warn("[Supabase kit produtos sync warning]", err);
+    }
+
+    setProdutos((prev) => {
+      const idx = prev.findIndex((p) => p.id === prodKit.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = prodKit;
+        return copy;
+      }
+      return [prodKit, ...prev];
+    });
+
+    try {
+      localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify([prodKit, ...produtos]));
+    } catch {}
   };
 
   // Handlers de Encomendas
@@ -1927,6 +1999,7 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
                 onCriarProduto={criarProduto}
                 onEditarProduto={editarProduto}
                 onExcluirProduto={excluirProduto}
+                onSalvarKit={salvarKit}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
