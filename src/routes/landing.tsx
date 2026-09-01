@@ -507,7 +507,7 @@ export function LandingPageContent() {
               </Button>
             </Card>
 
-            {/* PLANO PRO (MENSAL COMPLETO - R$ 19,90 / MÊS) */}
+            {/* PLANO PRO (MENSAL COMPLETO - R$ 10,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15 transform lg:-translate-y-2">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-xs px-4 py-1 rounded-full shadow-md flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5 text-slate-950" /> 7 DIAS GRÁTIS DE TESTE
@@ -523,10 +523,10 @@ export function LandingPageContent() {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 29,90/mês</div>
+                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 19,90/mês</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-purple-700">
-                      R$ 19,90
+                      R$ 10,90
                     </span>
                     <span className="text-xs text-slate-600 font-semibold">/ mês (com 7 dias grátis)</span>
                   </div>

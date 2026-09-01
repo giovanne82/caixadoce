@@ -28,7 +28,7 @@ export async function processarPagamentoMercadoPago(
       formData,
       establishmentCode,
       planId,
-      amount: formData?.transaction_amount || 19.90,
+      amount: formData?.transaction_amount || 10.90,
       description: `Assinatura Plano Mensal PRO — CaixaDoce (${establishmentCode})`,
     }),
   });
