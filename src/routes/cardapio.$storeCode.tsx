@@ -185,24 +185,53 @@ function CardapioLojaView() {
           }
         }
 
-        if (estData) {
+        let insta = estData?.instagram || estData?.social_instagram || estData?.social_media?.instagram;
+        let tk = estData?.tiktok || estData?.social_tiktok || estData?.social_media?.tiktok;
+        let fb = estData?.facebook || estData?.social_facebook || estData?.social_media?.facebook;
+        let wa = estData?.whatsapp || estData?.telefone || estData?.social_media?.whatsapp;
+        let logo = estData?.logo_url || estData?.store_logo_url;
+        let title = estData?.titulo_cardapio || estData?.menu_title;
+        let slogan = estData?.slogan_cardapio || estData?.menu_slogan;
+        let name = estData?.nome;
+
+        // Fallback resiliente: se no Supabase não vierem preenchidos (por exemplo, se as colunas remota estivem nulas), recupera do localStorage do navegador
+        if (typeof window !== "undefined") {
+          try {
+            const savedProfileStr = localStorage.getItem("caixadoce_profile");
+            if (savedProfileStr) {
+              const p = JSON.parse(savedProfileStr);
+              if (p.establishmentCode === code || p.codigo === code || !estData) {
+                insta = insta || p.instagram || p.social_instagram || p.social_media?.instagram;
+                tk = tk || p.tiktok || p.social_tiktok || p.social_media?.tiktok;
+                fb = fb || p.facebook || p.social_facebook || p.social_media?.facebook;
+                wa = wa || p.whatsapp || p.telefone || p.social_media?.whatsapp;
+                logo = logo || p.logoUrl || p.store_logo_url;
+                title = title || p.tituloCardapio || p.menu_title;
+                slogan = slogan || p.sloganCardapio || p.menu_slogan;
+                name = name || p.establishmentName || p.nome;
+              }
+            }
+          } catch {}
+        }
+
+        if (estData || name || title || insta || tk || fb) {
           setLojaInfo({
-            whatsapp: estData.whatsapp || estData.telefone || estData.social_media?.whatsapp,
-            telefone: estData.telefone || estData.whatsapp || estData.social_media?.whatsapp,
-            user_id: estData.user_id,
-            nome: estData.nome,
-            logo_url: estData.logo_url || estData.store_logo_url,
-            store_logo_url: estData.store_logo_url || estData.logo_url,
-            titulo_cardapio: estData.titulo_cardapio || estData.menu_title,
-            menu_title: estData.menu_title || estData.titulo_cardapio,
-            slogan_cardapio: estData.slogan_cardapio || estData.menu_slogan,
-            menu_slogan: estData.menu_slogan || estData.slogan_cardapio,
-            chavePix: (estData.chave_pix || estData.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData.chave_pix || estData.chavePix || ""),
-            cidade: estData.cidade || "SAO PAULO",
-            instagram: estData.instagram || estData.social_instagram || estData.social_media?.instagram,
-            tiktok: estData.tiktok || estData.social_tiktok || estData.social_media?.tiktok,
-            facebook: estData.facebook || estData.social_facebook || estData.social_media?.facebook,
-            social_media: estData.social_media,
+            whatsapp: wa,
+            telefone: wa,
+            user_id: estData?.user_id,
+            nome: name || "Confeitaria Artesanal",
+            logo_url: logo,
+            store_logo_url: logo,
+            titulo_cardapio: title,
+            menu_title: title,
+            slogan_cardapio: slogan,
+            menu_slogan: slogan,
+            chavePix: (estData?.chave_pix || estData?.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData?.chave_pix || estData?.chavePix || ""),
+            cidade: estData?.cidade || "SAO PAULO",
+            instagram: insta,
+            tiktok: tk,
+            facebook: fb,
+            social_media: estData?.social_media || { instagram: insta, tiktok: tk, facebook: fb, whatsapp: wa },
           });
         }
       } catch (err) {
@@ -495,9 +524,46 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
               <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47] truncate max-w-[150px] sm:max-w-xs">
                 {lojaInfo?.nome || "Confeitaria Artesanal"}
               </h1>
-              <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
-                Código Loja: {code}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
+                  Código Loja: {code}
+                </span>
+
+                {/* Ícones de Redes Sociais no Topo Fixo */}
+                {(() => {
+                  const instaUrl = formatarLinkRedeSocial("instagram", lojaInfo?.instagram);
+                  const tiktokUrl = formatarLinkRedeSocial("tiktok", lojaInfo?.tiktok);
+                  const fbUrl = formatarLinkRedeSocial("facebook", lojaInfo?.facebook);
+                  const waUrl = formatarLinkRedeSocial("whatsapp", lojaInfo?.whatsapp || lojaInfo?.telefone);
+
+                  if (!instaUrl && !tiktokUrl && !fbUrl && !waUrl) return null;
+
+                  return (
+                    <div className="flex items-center gap-1">
+                      {instaUrl && (
+                        <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-pink-600 hover:bg-white/50 transition-all" title="Instagram">
+                          <Instagram className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {tiktokUrl && (
+                        <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-slate-900 hover:bg-white/50 transition-all" title="TikTok">
+                          <Music className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {fbUrl && (
+                        <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-blue-600 hover:bg-white/50 transition-all" title="Facebook">
+                          <Facebook className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {waUrl && (
+                        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-emerald-600 hover:bg-white/50 transition-all" title="WhatsApp">
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
