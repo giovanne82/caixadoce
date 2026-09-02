@@ -44,6 +44,7 @@ export const Route = createFileRoute("/landing")({
   head: () => ({
     meta: [
       { title: "CaixaDoce — Gestão Inteligente para Confeiteiras & Doceiras" },
+      { name: "google-site-verification", content: "9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" },
       {
         name: "description",
         content:
