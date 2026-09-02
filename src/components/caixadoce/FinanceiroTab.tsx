@@ -690,19 +690,31 @@ export function FinanceiroTab({
 
 
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Entrada (Vendas)</p>
-          <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatarMoeda(totalReceitas)}</p>
+      {/* Summary Cards (Side-by-side on Mobile with Grid & Smooth Overflow) */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="p-2.5 sm:p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 min-w-[95px] sm:min-w-0">
+          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-600 truncate" title="Entrada (Vendas)">
+            Entrada <span className="hidden min-[380px]:inline">(Vendas)</span>
+          </p>
+          <p className="text-xs min-[360px]:text-sm sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1 truncate" title={formatarMoeda(totalReceitas)}>
+            {formatarMoeda(totalReceitas)}
+          </p>
         </div>
-        <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Saída (Gastos)</p>
-          <p className="text-2xl font-extrabold text-rose-600 mt-1">{formatarMoeda(totalDespesas)}</p>
+        <div className="p-2.5 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 min-w-[95px] sm:min-w-0">
+          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-rose-600 truncate" title="Saída (Gastos)">
+            Saída <span className="hidden min-[380px]:inline">(Gastos)</span>
+          </p>
+          <p className="text-xs min-[360px]:text-sm sm:text-2xl font-extrabold text-rose-600 mt-0.5 sm:mt-1 truncate" title={formatarMoeda(totalDespesas)}>
+            {formatarMoeda(totalDespesas)}
+          </p>
         </div>
-        <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Saldo Resultante</p>
-          <p className="text-2xl font-extrabold text-foreground mt-1">{formatarMoeda(totalReceitas - totalDespesas)}</p>
+        <div className="p-2.5 sm:p-4 rounded-xl border border-primary/30 bg-primary/5 min-w-[95px] sm:min-w-0">
+          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-primary truncate" title="Saldo Resultante">
+            Saldo <span className="hidden min-[380px]:inline">Resultante</span>
+          </p>
+          <p className="text-xs min-[360px]:text-sm sm:text-2xl font-extrabold text-foreground mt-0.5 sm:mt-1 truncate" title={formatarMoeda(totalReceitas - totalDespesas)}>
+            {formatarMoeda(totalReceitas - totalDespesas)}
+          </p>
         </div>
       </div>
 
