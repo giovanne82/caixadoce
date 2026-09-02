@@ -75,7 +75,23 @@ export function LandingPageContent() {
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-200/50 rounded-full blur-3xl"></div>
         <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] bg-pink-200/40 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-amber-100/60 rounded-full blur-3xl"></div>
+      </div>
+
+      {/* BANNER PROMOCIONAL FIXO NO TOPO - 7 DIAS GRÁTIS */}
+      <div className="bg-gradient-to-r from-purple-900 via-pink-800 to-amber-700 text-white text-xs font-bold py-2.5 px-4 text-center flex flex-wrap items-center justify-center gap-2 shadow-md relative z-50">
+        <Crown className="w-4 h-4 text-amber-300 animate-bounce shrink-0" />
+        <span>
+          <strong>7 dias grátis para testar:</strong> Teste grátis por 7 dias sem compromisso e sem precisar de cartão!
+        </span>
+        <Button
+          onClick={irParaLogin}
+          size="sm"
+          className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-[11px] h-7 px-3.5 rounded-full shadow-md shrink-0 ml-1 flex items-center gap-1 transition-all transform hover:scale-105"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+          <span>Acessa e testa grátis</span>
+          <ArrowRight className="w-3 h-3" />
+        </Button>
       </div>
 
       {/* ========================================================================= */}
@@ -126,7 +142,7 @@ export function LandingPageContent() {
         {/* ========================================================================= */}
         {/* SEÇÃO 1: HERO */}
         {/* ========================================================================= */}
-        <section className="pt-12 sm:pt-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center space-y-8">
+        <section className="pt-8 sm:pt-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center space-y-8">
           <div className="inline-flex items-center justify-center gap-2 p-1.5 px-4 rounded-full bg-purple-100/90 border border-purple-200 shadow-xs">
             <Badge className="bg-purple-600 text-white font-extrabold text-[11px] px-2.5 py-0.5 rounded-full">
               NOVO
@@ -149,18 +165,39 @@ export function LandingPageContent() {
             </p>
           </div>
 
-          {/* CTA Principal Único */}
-          <div className="flex justify-center pt-2">
-            <Button
-              onClick={irParaLogin}
-              className="h-14 px-8 text-base font-extrabold bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl shadow-xl shadow-purple-600/25 border border-purple-400/30 transition-all transform hover:-translate-y-0.5"
-            >
-              <Zap className="w-5 h-5 mr-2 text-amber-300" /> Testar 7 Dias Grátis Agora
-            </Button>
+          {/* SELO DE DESTAQUE REFORÇADO — 7 DIAS GRÁTIS PARA TESTAR */}
+          <div className="mx-auto max-w-2xl p-1 sm:p-1.5 rounded-3xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 shadow-xl shadow-purple-600/20 transform hover:scale-[1.01] transition-all">
+            <div className="bg-white rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left border border-purple-100">
+              <div className="space-y-1">
+                <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                  <Badge className="bg-amber-400 text-slate-950 font-black text-[11px] px-3 py-0.5 rounded-full shadow-xs uppercase tracking-wider flex items-center gap-1">
+                    <Crown className="w-3.5 h-3.5 text-slate-950" /> 7 DIAS GRÁTIS PARA TESTAR
+                  </Badge>
+                  <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ✓ Sem Cartão de Crédito
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                  Teste grátis por 7 dias sem compromisso
+                </h3>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  Acesso ilimitado instantâneo a todas as ferramentas da sua confeitaria.
+                </p>
+              </div>
+
+              <Button
+                onClick={irParaLogin}
+                className="w-full sm:w-auto font-black bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs sm:text-sm h-12 px-6 rounded-2xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 shrink-0 transition-all transform active:scale-95"
+              >
+                <Zap className="w-4 h-4 text-amber-300" />
+                <span>Acessa e testa grátis</span>
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Selos de Confiança */}
-          <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-semibold">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-semibold">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Sem cartão de crédito para testar
             </div>
@@ -458,6 +495,31 @@ export function LandingPageContent() {
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">
               Escolha o plano ideal para a sua confeitaria
             </h2>
+          </div>
+
+          {/* BANNER DESTACADO DE DESTAQUE — 7 DIAS GRÁTIS */}
+          <div className="max-w-4xl mx-auto p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-900 via-pink-900 to-amber-800 border-2 border-amber-400/80 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shrink-0 shadow-md">
+                <Crown className="w-6 h-6 text-slate-950" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5 justify-center sm:justify-start">
+                  <span>7 dias grátis para testar</span>
+                  <span className="bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-[9px] px-2 py-0.2 rounded-full font-bold">Sem Cartão</span>
+                </div>
+                <div className="text-sm font-extrabold text-white">Teste grátis por 7 dias sem compromisso</div>
+                <div className="text-xs text-purple-200">Acesso completo liberado em menos de 1 minuto!</div>
+              </div>
+            </div>
+            <Button
+              onClick={irParaLogin}
+              className="w-full sm:w-auto font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs py-3 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 shrink-0 transition-all transform active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" />
+              <span>Acessa e testa grátis</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
