@@ -222,7 +222,7 @@ export function MeuPlanoTab() {
     toast.info("Código promocional removido.");
   };
 
-  const valorOriginalPlanoMensal = 19.90;
+  const valorOriginalPlanoMensal = 10.90;
   const valorPlanoMensalComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoMensal;
     const fator = (100 - cupomAplicado.percentualDesconto) / 100;
@@ -230,7 +230,7 @@ export function MeuPlanoTab() {
     return parseFloat(calc.toFixed(2));
   }, [cupomAplicado]);
 
-  const valorOriginalPlanoAnual = 149.90;
+  const valorOriginalPlanoAnual = 114.90;
   const valorPlanoAnualComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoAnual;
     const fator = (100 - cupomAplicado.percentualDesconto) / 100;
@@ -244,14 +244,14 @@ export function MeuPlanoTab() {
   }, [valorPlanoAnualComDesconto]);
 
   const percentualEconomiaAnual = useMemo(() => {
-    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const precoCheio12Meses = 10.90 * 12; // R$ 130,80
     if (precoCheio12Meses <= 0) return 0;
     const desconto = ((precoCheio12Meses - valorPlanoAnualComDesconto) / precoCheio12Meses) * 100;
     return Math.round(Math.max(0, desconto));
   }, [valorPlanoAnualComDesconto]);
 
   const economiaEmReaisAnual = useMemo(() => {
-    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const precoCheio12Meses = 10.90 * 12; // R$ 130,80
     const economizado = precoCheio12Meses - valorPlanoAnualComDesconto;
     return parseFloat(Math.max(0, economizado).toFixed(2));
   }, [valorPlanoAnualComDesconto]);
@@ -603,7 +603,7 @@ export function MeuPlanoTab() {
                         R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
                       </span>
                       <span className="text-sm line-through text-muted-foreground font-mono">
-                        R$ 19,90
+                        R$ 10,90
                       </span>
                       <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
                     </div>
@@ -616,7 +616,7 @@ export function MeuPlanoTab() {
                 </div>
               ) : (
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black text-[#7C3AED]">R$ 19,90</span>
+                  <span className="text-3xl font-black text-[#7C3AED]">R$ 10,90</span>
                   <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
                 </div>
               )}
@@ -697,7 +697,7 @@ export function MeuPlanoTab() {
                         R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")}
                       </span>
                       <span className="text-sm line-through text-muted-foreground font-mono">
-                        R$ 149,90
+                        R$ 114,90
                       </span>
                       <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
                     </div>
@@ -709,18 +709,18 @@ export function MeuPlanoTab() {
                   </Badge>
                   {cupomAplicado.tipoDesconto !== "dias_gratis" && (
                     <p className="text-[11px] text-muted-foreground font-mono mt-1">
-                      <span className="line-through">De R$ 238,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
+                      <span className="line-through">De R$ 130,80</span> por R$ {valorPlanoAnualComDesconto.toFixed(2).replace(".", ",")} (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
                     </p>
                   )}
                 </div>
               ) : (
                 <div className="space-y-0.5">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-black text-emerald-600">R$ 149,90</span>
+                    <span className="text-3xl font-black text-emerald-600">R$ 114,90</span>
                     <span className="text-xs text-muted-foreground font-semibold"> / ano</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    <span className="line-through">De R$ 238,80</span> por R$ 149,90 (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
+                    <span className="line-through">De R$ 130,80</span> por R$ 114,90 (Economia de R$ {economiaEmReaisAnual.toFixed(2).replace(".", ",")}!)
                   </p>
                 </div>
               )}

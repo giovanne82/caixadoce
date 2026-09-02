@@ -80,6 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "google-site-verification", content: "9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" },
       { title: "Caixa Doce" },
       { name: "application-name", content: "Caixa Doce" },
       { name: "apple-mobile-web-app-title", content: "Caixa Doce" },
@@ -121,6 +122,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
+        <meta name="google-site-verification" content="9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" />
         <HeadContent />
       </head>
       <body className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 selection:bg-purple-500 selection:text-white">

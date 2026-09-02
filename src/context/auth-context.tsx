@@ -52,6 +52,13 @@ export type UpdateEstablishmentDetailsInput = {
   sloganCardapio?: string;
   menu_slogan?: string;
   contasPix?: ContaPix[];
+  instagram?: string;
+  social_instagram?: string;
+  tiktok?: string;
+  social_tiktok?: string;
+  facebook?: string;
+  social_facebook?: string;
+  social_media?: any;
 };
 
 export type StaffProfile = {
@@ -80,6 +87,13 @@ export type StaffProfile = {
   sloganCardapio?: string;
   menu_slogan?: string;
   contasPix?: ContaPix[];
+  instagram?: string;
+  social_instagram?: string;
+  tiktok?: string;
+  social_tiktok?: string;
+  facebook?: string;
+  social_facebook?: string;
+  social_media?: any;
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -889,6 +903,38 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (slogan !== undefined) {
         updatePayload.slogan_cardapio = slogan || null;
         updatePayload.menu_slogan = slogan || null;
+      }
+
+      const instaVal = details.instagram || details.social_instagram;
+      if (instaVal !== undefined) {
+        updatePayload.instagram = instaVal || null;
+        updatePayload.social_instagram = instaVal || null;
+      }
+
+      const tiktokVal = details.tiktok || details.social_tiktok;
+      if (tiktokVal !== undefined) {
+        updatePayload.tiktok = tiktokVal || null;
+        updatePayload.social_tiktok = tiktokVal || null;
+      }
+
+      const fbVal = details.facebook || details.social_facebook;
+      if (fbVal !== undefined) {
+        updatePayload.facebook = fbVal || null;
+        updatePayload.social_facebook = fbVal || null;
+      }
+
+      if (
+        instaVal !== undefined ||
+        tiktokVal !== undefined ||
+        fbVal !== undefined ||
+        details.whatsapp !== undefined
+      ) {
+        updatePayload.social_media = {
+          instagram: instaVal || "",
+          tiktok: tiktokVal || "",
+          facebook: fbVal || "",
+          whatsapp: details.whatsapp || details.telefone || "",
+        };
       }
 
       const activeStoreCode = details.codigo || currentCode;

@@ -130,7 +130,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   paymentMethod?: string;
   amount?: number;
 }) {
-  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
+  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 10.90 } = params;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
@@ -694,7 +694,7 @@ export default {
           ).toUpperCase();
 
           const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
-          const amount = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 19.90);
+          const amount = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 10.90);
 
           const token = formData.token || payload.token;
           const installments = Number(formData.installments || payload.installments || 1);
@@ -849,7 +849,7 @@ export default {
 
           if (status === "approved" || status === "authorized") {
             const planId = paymentData.metadata?.plan_id || paymentData.metadata?.plano_id || "mensal";
-            const amount = Number(paymentData.transaction_amount || 19.90);
+            const amount = Number(paymentData.transaction_amount || 10.90);
             const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
             const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -1009,7 +1009,7 @@ export default {
           // Monta o payload conforme a API v1/payments do Mercado Pago
           const mpPayload: any = {
             ...formData,
-            transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 149.90 : 19.90)),
+            transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 114.90 : 10.90)),
             description: `Plano ${targetPlanType === "anual" ? "Anual Completo PRO (365 dias)" : "Mensal Completo PRO (30 dias)"} — CaixaDoce`,
             external_reference: estabelecimentoCodigo || "CD-1001",
             metadata: {
@@ -1107,7 +1107,7 @@ async function calcularNovaDataExpiracaoBackend(
               planId: targetPlanType,
               paymentId,
               paymentMethod: tipoPag,
-              amount: Number(valor || mpPayload.transaction_amount || (targetPlanType === "anual" ? 149.90 : 19.90)),
+              amount: Number(valor || mpPayload.transaction_amount || (targetPlanType === "anual" ? 114.90 : 10.90)),
             });
           }
 

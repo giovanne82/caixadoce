@@ -38,6 +38,9 @@ import {
   Share2,
   QrCode,
   CreditCard,
+  Instagram,
+  Facebook,
+  Music,
 } from "lucide-react";
 import {
   Select,
@@ -49,6 +52,7 @@ import {
 import {
   formatarMoeda,
   formatarWhatsappLink,
+  formatarLinkRedeSocial,
   aplicarMascaraTelefone,
   obterProdutosCardapio,
   obterRegrasAgendamento,
@@ -119,6 +123,10 @@ function CardapioLojaView() {
     menu_slogan?: string;
     chavePix?: string;
     cidade?: string;
+    instagram?: string;
+    tiktok?: string;
+    facebook?: string;
+    social_media?: any;
   } | null>(null);
 
   useEffect(() => {
@@ -135,6 +143,9 @@ function CardapioLojaView() {
             store_logo_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80",
             chavePix: "",
             cidade: "São Paulo / SP",
+            instagram: "@caixadoce",
+            tiktok: "@caixadoce",
+            facebook: "caixadoce",
           });
           return;
         }
@@ -174,20 +185,53 @@ function CardapioLojaView() {
           }
         }
 
-        if (estData) {
+        let insta = estData?.instagram || estData?.social_instagram || estData?.social_media?.instagram;
+        let tk = estData?.tiktok || estData?.social_tiktok || estData?.social_media?.tiktok;
+        let fb = estData?.facebook || estData?.social_facebook || estData?.social_media?.facebook;
+        let wa = estData?.whatsapp || estData?.telefone || estData?.social_media?.whatsapp;
+        let logo = estData?.logo_url || estData?.store_logo_url;
+        let title = estData?.titulo_cardapio || estData?.menu_title;
+        let slogan = estData?.slogan_cardapio || estData?.menu_slogan;
+        let name = estData?.nome;
+
+        // Fallback resiliente: se no Supabase não vierem preenchidos (por exemplo, se as colunas remota estivem nulas), recupera do localStorage do navegador
+        if (typeof window !== "undefined") {
+          try {
+            const savedProfileStr = localStorage.getItem("caixadoce_profile");
+            if (savedProfileStr) {
+              const p = JSON.parse(savedProfileStr);
+              if (p.establishmentCode === code || p.codigo === code || !estData) {
+                insta = insta || p.instagram || p.social_instagram || p.social_media?.instagram;
+                tk = tk || p.tiktok || p.social_tiktok || p.social_media?.tiktok;
+                fb = fb || p.facebook || p.social_facebook || p.social_media?.facebook;
+                wa = wa || p.whatsapp || p.telefone || p.social_media?.whatsapp;
+                logo = logo || p.logoUrl || p.store_logo_url;
+                title = title || p.tituloCardapio || p.menu_title;
+                slogan = slogan || p.sloganCardapio || p.menu_slogan;
+                name = name || p.establishmentName || p.nome;
+              }
+            }
+          } catch {}
+        }
+
+        if (estData || name || title || insta || tk || fb) {
           setLojaInfo({
-            whatsapp: estData.whatsapp || estData.telefone,
-            telefone: estData.telefone || estData.whatsapp,
-            user_id: estData.user_id,
-            nome: estData.nome,
-            logo_url: estData.logo_url || estData.store_logo_url,
-            store_logo_url: estData.store_logo_url || estData.logo_url,
-            titulo_cardapio: estData.titulo_cardapio || estData.menu_title,
-            menu_title: estData.menu_title || estData.titulo_cardapio,
-            slogan_cardapio: estData.slogan_cardapio || estData.menu_slogan,
-            menu_slogan: estData.menu_slogan || estData.slogan_cardapio,
-            chavePix: (estData.chave_pix || estData.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData.chave_pix || estData.chavePix || ""),
-            cidade: estData.cidade || "SAO PAULO",
+            whatsapp: wa,
+            telefone: wa,
+            user_id: estData?.user_id,
+            nome: name || "Confeitaria Artesanal",
+            logo_url: logo,
+            store_logo_url: logo,
+            titulo_cardapio: title,
+            menu_title: title,
+            slogan_cardapio: slogan,
+            menu_slogan: slogan,
+            chavePix: (estData?.chave_pix || estData?.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData?.chave_pix || estData?.chavePix || ""),
+            cidade: estData?.cidade || "SAO PAULO",
+            instagram: insta,
+            tiktok: tk,
+            facebook: fb,
+            social_media: estData?.social_media || { instagram: insta, tiktok: tk, facebook: fb, whatsapp: wa },
           });
         }
       } catch (err) {
@@ -480,9 +524,46 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
               <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47] truncate max-w-[150px] sm:max-w-xs">
                 {lojaInfo?.nome || "Confeitaria Artesanal"}
               </h1>
-              <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
-                Código Loja: {code}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
+                  Código Loja: {code}
+                </span>
+
+                {/* Ícones de Redes Sociais no Topo Fixo */}
+                {(() => {
+                  const instaUrl = formatarLinkRedeSocial("instagram", lojaInfo?.instagram);
+                  const tiktokUrl = formatarLinkRedeSocial("tiktok", lojaInfo?.tiktok);
+                  const fbUrl = formatarLinkRedeSocial("facebook", lojaInfo?.facebook);
+                  const waUrl = formatarLinkRedeSocial("whatsapp", lojaInfo?.whatsapp || lojaInfo?.telefone);
+
+                  if (!instaUrl && !tiktokUrl && !fbUrl && !waUrl) return null;
+
+                  return (
+                    <div className="flex items-center gap-1">
+                      {instaUrl && (
+                        <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-pink-600 hover:bg-white/50 transition-all" title="Instagram">
+                          <Instagram className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {tiktokUrl && (
+                        <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-slate-900 hover:bg-white/50 transition-all" title="TikTok">
+                          <Music className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {fbUrl && (
+                        <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-blue-600 hover:bg-white/50 transition-all" title="Facebook">
+                          <Facebook className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {waUrl && (
+                        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-emerald-600 hover:bg-white/50 transition-all" title="WhatsApp">
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
@@ -505,13 +586,75 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
       {/* Conteúdo do Cardápio */}
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Banner de Boas-Vindas */}
-        <div className="text-center space-y-2 py-2">
+        <div className="text-center space-y-3 py-2">
           <h2 className="text-2xl sm:text-3xl font-black text-foreground">
             {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
           </h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto">
             {lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."}
           </p>
+
+          {/* REDES SOCIAIS DA CONFEITARIA (CLICÁVEIS) */}
+          {(() => {
+            const instaUrl = formatarLinkRedeSocial("instagram", lojaInfo?.instagram);
+            const tiktokUrl = formatarLinkRedeSocial("tiktok", lojaInfo?.tiktok);
+            const fbUrl = formatarLinkRedeSocial("facebook", lojaInfo?.facebook);
+            const waUrl = formatarLinkRedeSocial("whatsapp", lojaInfo?.whatsapp || lojaInfo?.telefone);
+
+            if (!instaUrl && !tiktokUrl && !fbUrl && !waUrl) return null;
+
+            return (
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1.5">
+                {instaUrl && (
+                  <a
+                    href={instaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white shadow-xs hover:opacity-95 transition-all transform hover:scale-105"
+                  >
+                    <Instagram className="w-3.5 h-3.5 text-white" />
+                    <span>Instagram</span>
+                  </a>
+                )}
+
+                {tiktokUrl && (
+                  <a
+                    href={tiktokUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-slate-900 text-white shadow-xs hover:bg-black transition-all transform hover:scale-105"
+                  >
+                    <Music className="w-3.5 h-3.5 text-pink-400" />
+                    <span>TikTok</span>
+                  </a>
+                )}
+
+                {fbUrl && (
+                  <a
+                    href={fbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-blue-600 text-white shadow-xs hover:bg-blue-700 transition-all transform hover:scale-105"
+                  >
+                    <Facebook className="w-3.5 h-3.5 text-white" />
+                    <span>Facebook</span>
+                  </a>
+                )}
+
+                {waUrl && (
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 transition-all transform hover:scale-105"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-white" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Pílulas de Categorias */}
@@ -531,56 +674,56 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
           ))}
         </div>
 
-        {/* Grid de Produtos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+        {/* Grid de Produtos: 2 Colunas no Mobile (grid-cols-2), 2 na Tablet (sm:grid-cols-2), 3 na Desktop (lg:grid-cols-3) */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6 pt-2">
           {produtosFiltrados.map((prod) => (
             <Card
               key={prod.id}
-              className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group"
+              className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group rounded-2xl sm:rounded-3xl"
             >
               <div>
-                <div className="relative h-48 w-full overflow-hidden bg-muted">
+                <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
                   <img
                     src={prod.fotoUrl}
                     alt={prod.nome}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute top-2 left-2 flex gap-1">
-                    <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-bold">
+                  <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
+                    <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5">
                       {prod.categoria}
                     </Badge>
                     {prod.destaque && (
-                      <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold flex items-center gap-0.5">
+                      <Badge className="bg-amber-500 text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5 flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5" /> Destaque
                       </Badge>
                     )}
                   </div>
                 </div>
 
-                <CardHeader className="p-4 pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base font-extrabold text-foreground leading-tight">
+                <CardHeader className="p-2.5 sm:p-4 pb-1.5 sm:pb-2 space-y-1 sm:space-y-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2">
+                    <CardTitle className="text-xs sm:text-base font-extrabold text-foreground leading-tight line-clamp-2">
                       {prod.nome}
                     </CardTitle>
-                    <span className="text-lg font-black text-primary font-mono shrink-0">
+                    <span className="text-xs sm:text-lg font-black text-primary font-mono shrink-0">
                       {formatarMoeda(prod.preco)}
                     </span>
                   </div>
-                  <CardDescription className="text-xs text-muted-foreground line-clamp-3 mt-1.5">
+                  <CardDescription className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-3 mt-0.5 sm:mt-1.5">
                     {prod.descricao}
                   </CardDescription>
                 </CardHeader>
               </div>
 
-              <CardFooter className="p-4 pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+              <CardFooter className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
                 {(() => {
                   const disp = formatarBadgeDisponibilidadeProduto(prod);
                   return disp.isProntaEntrega ? (
-                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                    <span className="text-[9px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
                       {disp.texto}
                     </span>
                   ) : (
-                    <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 flex items-center gap-1">
+                    <span className="text-[9px] sm:text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md border border-purple-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
                       {disp.texto}
                     </span>
                   );
@@ -589,15 +732,63 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                 <Button
                   size="sm"
                   onClick={() => handleAdicionarAoCarrinho(prod)}
-                  className="font-bold text-xs shadow-xs h-8 px-3.5 shrink-0"
+                  className="font-bold text-[11px] sm:text-xs shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Pedir
+                  <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Pedir
                 </Button>
               </CardFooter>
             </Card>
           ))}
         </div>
       </main>
+
+      {/* Rodapé da Confeitaria com Redes Sociais */}
+      <footer className="mt-12 border-t border-border/60 bg-stone-100 dark:bg-stone-900 py-8 px-4 text-center space-y-4">
+        <div className="max-w-md mx-auto space-y-2">
+          <p className="text-xs font-bold text-foreground">
+            {lojaInfo?.nome || "Confeitaria Artesanal"} — Cardápio Digital
+          </p>
+
+          {/* Links Redes Sociais no Rodapé */}
+          {(() => {
+            const instaUrl = formatarLinkRedeSocial("instagram", lojaInfo?.instagram);
+            const tiktokUrl = formatarLinkRedeSocial("tiktok", lojaInfo?.tiktok);
+            const fbUrl = formatarLinkRedeSocial("facebook", lojaInfo?.facebook);
+            const waUrl = formatarLinkRedeSocial("whatsapp", lojaInfo?.whatsapp || lojaInfo?.telefone);
+
+            if (!instaUrl && !tiktokUrl && !fbUrl && !waUrl) return null;
+
+            return (
+              <div className="flex items-center justify-center gap-3 pt-1">
+                {instaUrl && (
+                  <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-all" title="Instagram">
+                    <Instagram className="w-4 h-4" />
+                  </a>
+                )}
+                {tiktokUrl && (
+                  <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-slate-800/10 dark:bg-white/10 text-slate-800 dark:text-white hover:bg-slate-800/20 transition-all" title="TikTok">
+                    <Music className="w-4 h-4" />
+                  </a>
+                )}
+                {fbUrl && (
+                  <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all" title="Facebook">
+                    <Facebook className="w-4 h-4" />
+                  </a>
+                )}
+                {waUrl && (
+                  <a href={waUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all" title="WhatsApp">
+                    <MessageCircle className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            );
+          })()}
+
+          <p className="text-[11px] text-muted-foreground pt-1">
+            Powered by <a href="/" target="_blank" rel="noopener noreferrer" className="font-extrabold text-purple-600 dark:text-purple-400 hover:underline">CaixaDoce</a> — Gestão para Confeiteiras
+          </p>
+        </div>
+      </footer>
 
       {/* Barra Flutuante Inferior se houver itens no Carrinho */}
       {carrinho.length > 0 && !cartOpen && (
