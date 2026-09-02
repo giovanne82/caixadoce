@@ -21,6 +21,15 @@ export interface Estabelecimento {
   logoUrl?: string;
   stripeAccountId?: string | null;
   repassarTaxaStripe?: boolean;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  social_media?: {
+    instagram?: string;
+    tiktok?: string;
+    facebook?: string;
+    whatsapp?: string;
+  };
 }
 
 export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
@@ -1748,3 +1757,31 @@ export function calcularRegrasAgendamentoCarrinho(
     diasSemanaDisponiveis: diasPermitidos,
   };
 }
+
+export function formatarLinkRedeSocial(tipo: "instagram" | "tiktok" | "facebook" | "whatsapp", valor?: string): string {
+  if (!valor) return "";
+  const v = valor.trim();
+  if (!v) return "";
+
+  if (v.startsWith("http://") || v.startsWith("https://")) {
+    return v;
+  }
+
+  const clean = v.replace(/^@/, "").trim();
+
+  switch (tipo) {
+    case "instagram":
+      return `https://instagram.com/${clean}`;
+    case "tiktok":
+      return `https://www.tiktok.com/@${clean}`;
+    case "facebook":
+      return v.includes("facebook.com") ? `https://${v}` : `https://facebook.com/${clean}`;
+    case "whatsapp":
+      const digits = v.replace(/\D/g, "");
+      const fullDigits = digits.length <= 11 ? `55${digits}` : digits;
+      return `https://wa.me/${fullDigits}`;
+    default:
+      return v;
+  }
+}
+

@@ -51,6 +51,11 @@ import {
   Users,
   Mail,
   Send,
+  Share2,
+  Instagram,
+  Facebook,
+  MessageCircle,
+  Music,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -285,6 +290,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [logoUrl, setLogoUrl] = useState(profile?.logoUrl || profile?.store_logo_url || "");
   const [tituloCardapio, setTituloCardapio] = useState(profile?.tituloCardapio || profile?.menu_title || "");
   const [sloganCardapio, setSloganCardapio] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
+  const [instagramEst, setInstagramEst] = useState(profile?.instagram || profile?.social_instagram || profile?.social_media?.instagram || "");
+  const [tiktokEst, setTiktokEst] = useState(profile?.tiktok || profile?.social_tiktok || profile?.social_media?.tiktok || "");
+  const [facebookEst, setFacebookEst] = useState(profile?.facebook || profile?.social_facebook || profile?.social_media?.facebook || "");
   const [enviandoLogo, setEnviandoLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -416,6 +424,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.logoUrl || profile.store_logo_url) setLogoUrl(profile.logoUrl || profile.store_logo_url || "");
       if (profile.tituloCardapio || profile.menu_title) setTituloCardapio(profile.tituloCardapio || profile.menu_title || "");
       if (profile.sloganCardapio || profile.menu_slogan) setSloganCardapio(profile.sloganCardapio || profile.menu_slogan || "");
+      if (profile.instagram || profile.social_instagram || profile.social_media?.instagram) setInstagramEst(profile.instagram || profile.social_instagram || profile.social_media?.instagram || "");
+      if (profile.tiktok || profile.social_tiktok || profile.social_media?.tiktok) setTiktokEst(profile.tiktok || profile.social_tiktok || profile.social_media?.tiktok || "");
+      if (profile.facebook || profile.social_facebook || profile.social_media?.facebook) setFacebookEst(profile.facebook || profile.social_facebook || profile.social_media?.facebook || "");
     }
 
     // 2. Busca os dados mais recentes diretamente da tabela 'estabelecimentos' do Supabase para garantir amnésia zero no F5
@@ -446,6 +457,13 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
           if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
           if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
+
+          const insta = d.instagram || d.social_instagram || d.social_media?.instagram;
+          if (insta) setInstagramEst(insta);
+          const tk = d.tiktok || d.social_tiktok || d.social_media?.tiktok;
+          if (tk) setTiktokEst(tk);
+          const fb = d.facebook || d.social_facebook || d.social_media?.facebook;
+          if (fb) setFacebookEst(fb);
 
           const rawPixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
             ? d.pix_accounts
@@ -568,6 +586,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         menu_title: tituloCardapio,
         sloganCardapio,
         menu_slogan: sloganCardapio,
+        instagram: instagramEst,
+        social_instagram: instagramEst,
+        tiktok: tiktokEst,
+        social_tiktok: tiktokEst,
+        facebook: facebookEst,
+        social_facebook: facebookEst,
       });
 
       // Garante sincronização imediata dos campos locais sem reversão
@@ -1145,6 +1169,75 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* 📱 REDES SOCIAIS NO CARDÁPIO PÚBLICO */}
+                <div className="pt-4 border-t space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
+                      <Share2 className="w-4 h-4" /> Redes Sociais no Cardápio Público
+                    </h4>
+                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
+                      Exibição Automática
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Cadastre os perfis da sua confeitaria para que seus clientes possam acessar seu Instagram, TikTok, Facebook ou WhatsApp diretamente do seu cardápio público.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-instagram" className="text-xs font-bold flex items-center gap-1.5">
+                        <Instagram className="w-3.5 h-3.5 text-pink-600" /> Instagram
+                      </Label>
+                      <Input
+                        id="est-instagram"
+                        placeholder="Ex: @suaconfeitaria ou link completo"
+                        value={instagramEst}
+                        onChange={(e) => setInstagramEst(e.target.value)}
+                        className="text-xs bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-tiktok" className="text-xs font-bold flex items-center gap-1.5">
+                        <Music className="w-3.5 h-3.5 text-slate-800 dark:text-slate-200" /> TikTok
+                      </Label>
+                      <Input
+                        id="est-tiktok"
+                        placeholder="Ex: @suaconfeitaria ou link completo"
+                        value={tiktokEst}
+                        onChange={(e) => setTiktokEst(e.target.value)}
+                        className="text-xs bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-facebook" className="text-xs font-bold flex items-center gap-1.5">
+                        <Facebook className="w-3.5 h-3.5 text-blue-600" /> Facebook
+                      </Label>
+                      <Input
+                        id="est-facebook"
+                        placeholder="Ex: facebook.com/suaconfeitaria"
+                        value={facebookEst}
+                        onChange={(e) => setFacebookEst(e.target.value)}
+                        className="text-xs bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-whatsapp-social" className="text-xs font-bold flex items-center gap-1.5">
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp de Atendimento
+                      </Label>
+                      <Input
+                        id="est-whatsapp-social"
+                        placeholder="Ex: (11) 99999-9999"
+                        value={telEst}
+                        onChange={(e) => setTelEst(e.target.value)}
+                        className="text-xs bg-background"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <Button type="submit" disabled={salvandoEst} className="font-semibold shadow-sm mt-2">

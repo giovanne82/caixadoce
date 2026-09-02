@@ -45,6 +45,11 @@ import {
   Calculator,
   Upload,
   Box,
+  Share2,
+  Instagram,
+  Facebook,
+  MessageCircle,
+  Music,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
@@ -106,6 +111,9 @@ export function ProductsView({
   const [logoUrlCustom, setLogoUrlCustom] = useState(profile?.logoUrl || profile?.store_logo_url || "");
   const [tituloCardapioCustom, setTituloCardapioCustom] = useState(profile?.tituloCardapio || profile?.menu_title || "");
   const [sloganCardapioCustom, setSloganCardapioCustom] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
+  const [instagramCustom, setInstagramCustom] = useState(profile?.instagram || profile?.social_instagram || profile?.social_media?.instagram || "");
+  const [tiktokCustom, setTiktokCustom] = useState(profile?.tiktok || profile?.social_tiktok || profile?.social_media?.tiktok || "");
+  const [facebookCustom, setFacebookCustom] = useState(profile?.facebook || profile?.social_facebook || profile?.social_media?.facebook || "");
   const [salvandoVisual, setSalvandoVisual] = useState(false);
   const [enviandoLogo, setEnviandoLogo] = useState(false);
 
@@ -120,6 +128,12 @@ export function ProductsView({
         menu_title: tituloCardapioCustom,
         sloganCardapio: sloganCardapioCustom,
         menu_slogan: sloganCardapioCustom,
+        instagram: instagramCustom,
+        social_instagram: instagramCustom,
+        tiktok: tiktokCustom,
+        social_tiktok: tiktokCustom,
+        facebook: facebookCustom,
+        social_facebook: facebookCustom,
       });
       toast.success("Personalização visual do Cardápio salva com sucesso!");
       setModalPersonalizarOpen(false);
@@ -1039,6 +1053,59 @@ export function ProductsView({
                 <p className="text-[11px] text-muted-foreground">
                   Exibido como mensagem de apresentação aos clientes.
                 </p>
+              </div>
+
+              {/* 3. Redes Sociais no Cardápio Público */}
+              <div className="pt-3 border-t space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-extrabold flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
+                    <Share2 className="w-3.5 h-3.5" /> Redes Sociais no Cardápio Público
+                  </Label>
+                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[9px] font-bold">
+                    Exibição Automática
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="custom-instagram" className="text-[11px] font-semibold flex items-center gap-1">
+                      <Instagram className="w-3 h-3 text-pink-600" /> Instagram
+                    </Label>
+                    <Input
+                      id="custom-instagram"
+                      placeholder="@suaconfeitaria"
+                      value={instagramCustom}
+                      onChange={(e) => setInstagramCustom(e.target.value)}
+                      className="text-xs h-8"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="custom-tiktok" className="text-[11px] font-semibold flex items-center gap-1">
+                      <Music className="w-3 h-3 text-slate-800 dark:text-slate-200" /> TikTok
+                    </Label>
+                    <Input
+                      id="custom-tiktok"
+                      placeholder="@suaconfeitaria"
+                      value={tiktokCustom}
+                      onChange={(e) => setTiktokCustom(e.target.value)}
+                      className="text-xs h-8"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="custom-facebook" className="text-[11px] font-semibold flex items-center gap-1">
+                      <Facebook className="w-3 h-3 text-blue-600" /> Facebook
+                    </Label>
+                    <Input
+                      id="custom-facebook"
+                      placeholder="facebook.com/..."
+                      value={facebookCustom}
+                      onChange={(e) => setFacebookCustom(e.target.value)}
+                      className="text-xs h-8"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
