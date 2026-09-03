@@ -60,6 +60,7 @@ import {
   type ProdutoCardapio,
   type KitProduto,
   type ItemListaCompra,
+  type ListaCompras,
   normalizarNomeInsumo,
 } from "@/lib/caixadoce-data";
 import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
