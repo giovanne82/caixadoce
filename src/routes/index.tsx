@@ -234,7 +234,7 @@ function Index() {
     try {
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao, mercadopago_pagamento_id, mercadopago_assinatura_id, stripe_subscription_id")
+        .select("*")
         .eq("codigo", cleanCode)
         .maybeSingle();
 
@@ -286,27 +286,10 @@ function Index() {
     }
   }, []);
 
-  // Executa a sincronização do plano apenas no mount, focus e alteração do código
+  // Executa a sincronização do plano apenas no mount e alteração do código (sem focus/polling)
   useEffect(() => {
     if (!activeCode) return;
-    
     sincronizarPlanoComSupabase(activeCode);
-
-    const handleFocus = () => {
-      if (document.visibilityState === "visible") {
-        sincronizarPlanoComSupabase(activeCode);
-      }
-    };
-
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("visibilitychange", handleFocus);
-    window.addEventListener("online", handleFocus);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("visibilitychange", handleFocus);
-      window.removeEventListener("online", handleFocus);
-    };
   }, [activeCode, sincronizarPlanoComSupabase]);
 
   const infoPlano = useMemo(
@@ -429,18 +412,15 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
 
         if (!res.error && res.data) return res.data;
 
-        if (res.error) {
+        // Se a ordenação falhou (ex: coluna inexistente), tenta sem a coluna de ordenação
+        if (res.error && orderColumn) {
           try {
-            let fallbackQuery = supabase
+            const fallbackRes = await supabase
               .from(tableName as any)
               .select("*")
-              .or(`estabelecimento_codigo.eq.${activeCode},estabelecimento_id.eq.${activeCode}`);
+              .eq("estabelecimento_codigo", activeCode);
 
-            if (orderColumn) {
-              fallbackQuery = fallbackQuery.order(orderColumn, { ascending });
-            }
-            const rawRes = await fallbackQuery;
-            if (!rawRes.error && rawRes.data) return rawRes.data;
+            if (!fallbackRes.error && fallbackRes.data) return fallbackRes.data;
           } catch {}
         }
       } catch (err: any) {
@@ -760,28 +740,6 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       supabase.removeChannel(channel);
     };
   }, [profile, activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
-
-  // Listener para re-fetch automático quando a janela ganha foco ou visibilidade no celular/PC
-  useEffect(() => {
-    const handleFocus = () => {
-      if (document.visibilityState === "visible" && activeCode) {
-        fetchTransacoes();
-        fetchEncomendasECalendario();
-        fetchDespesas();
-        fetchClientes();
-        fetchProdutos();
-        fetchListasCompras();
-      }
-    };
-
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [activeCode, fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const cleanWhatsapp = dados.whatsapp?.replace(/\D/g, "") || "";
