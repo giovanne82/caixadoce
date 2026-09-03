@@ -79,10 +79,23 @@ export function FichaTecnicaModal({
   const [salvando, setSalvando] = useState(false);
   const [itens, setItens] = useState<FichaTecnicaItem[]>([]);
 
-  // Parâmetros de Precificação
-  const [rendimentoQtd, setRendimentoQtd] = useState<number>(1);
-  const [custosOperacionaisPerc, setCustosOperacionaisPerc] = useState<number>(15);
-  const [margemLucroPerc, setMargemLucroPerc] = useState<number>(100);
+  // Parâmetros de Precificação (Com suporte a estado texto efêmero para edição fluida)
+  const [rendimentoQtdStr, setRendimentoQtdStr] = useState<string>("1");
+  const [custosOperacionaisStr, setCustosOperacionaisStr] = useState<string>("15");
+  const [margemLucroStr, setMargemLucroStr] = useState<string>("100");
+
+  const rendimentoQtd = useMemo(() => {
+    const parsed = parseNumberInput(rendimentoQtdStr);
+    return parsed > 0 ? parsed : 1;
+  }, [rendimentoQtdStr]);
+
+  const custosOperacionaisPerc = useMemo(() => {
+    return parseNumberInput(custosOperacionaisStr);
+  }, [custosOperacionaisStr]);
+
+  const margemLucroPerc = useMemo(() => {
+    return parseNumberInput(margemLucroStr);
+  }, [margemLucroStr]);
 
   // Preço de Venda Final
   const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
@@ -148,11 +161,11 @@ export function FichaTecnicaModal({
           setItens(dados);
           // Ajusta o rendimento padrão caso o nome contenha indício (ex: "100 un")
           if (produto.nome.toLowerCase().includes("100 un")) {
-            setRendimentoQtd(100);
+            setRendimentoQtdStr("100");
           } else if (produto.nome.toLowerCase().includes("50 un")) {
-            setRendimentoQtd(50);
+            setRendimentoQtdStr("50");
           } else {
-            setRendimentoQtd(1);
+            setRendimentoQtdStr("1");
           }
         })
         .finally(() => setCarregando(false));
@@ -861,8 +874,13 @@ export function FichaTecnicaModal({
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={rendimentoQtd}
-                  onChange={(e) => setRendimentoQtd(parseNumberInput(e.target.value) || 1)}
+                  value={rendimentoQtdStr}
+                  onChange={(e) => setRendimentoQtdStr(e.target.value)}
+                  onBlur={() => {
+                    if (!rendimentoQtdStr.trim() || parseNumberInput(rendimentoQtdStr) <= 0) {
+                      setRendimentoQtdStr("1");
+                    }
+                  }}
                 />
                 <span className="text-[10px] text-muted-foreground">Ex: 100 coxinhas, 50 brigadeiros</span>
               </div>
@@ -872,8 +890,13 @@ export function FichaTecnicaModal({
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={custosOperacionaisPerc}
-                  onChange={(e) => setCustosOperacionaisPerc(parseNumberInput(e.target.value))}
+                  value={custosOperacionaisStr}
+                  onChange={(e) => setCustosOperacionaisStr(e.target.value)}
+                  onBlur={() => {
+                    if (!custosOperacionaisStr.trim()) {
+                      setCustosOperacionaisStr("0");
+                    }
+                  }}
                 />
                 <span className="text-[10px] text-muted-foreground">Gás, energia, água e embalagem</span>
               </div>
@@ -883,8 +906,13 @@ export function FichaTecnicaModal({
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={margemLucroPerc}
-                  onChange={(e) => setMargemLucroPerc(parseNumberInput(e.target.value))}
+                  value={margemLucroStr}
+                  onChange={(e) => setMargemLucroStr(e.target.value)}
+                  onBlur={() => {
+                    if (!margemLucroStr.trim()) {
+                      setMargemLucroStr("0");
+                    }
+                  }}
                 />
                 <span className="text-[10px] text-muted-foreground">Ex: 100% de lucro sobre custos</span>
               </div>
