@@ -3,18 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PrivacidadeContent } from "@/components/caixadoce/PrivacidadeContent";
 
-export { PrivacidadeContent };
-
-export const Route = createFileRoute("/privacidade")({
-  head: () => ({
-    meta: [
-      { title: "Política de Privacidade — CaixaDoce" },
-      { name: "description", content: "Política de Privacidade e Proteção de Dados do CaixaDoce." },
-    ],
-  }),
-  component: PrivacidadeComponent,
-});
-
 function PrivacidadeComponent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 py-10 px-4">
@@ -33,3 +21,13 @@ function PrivacidadeComponent() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/privacidade")({
+  head: () => ({
+    meta: [
+      { title: "Política de Privacidade — CaixaDoce" },
+      { name: "description", content: "Política de Privacidade e Proteção de Dados do CaixaDoce." },
+    ],
+  }),
+  component: PrivacidadeComponent,
+});

@@ -3,18 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TermosDeUsoContent } from "@/components/caixadoce/TermosDeUsoContent";
 
-export { TermosDeUsoContent };
-
-export const Route = createFileRoute("/termos")({
-  head: () => ({
-    meta: [
-      { title: "Termos de Uso — CaixaDoce" },
-      { name: "description", content: "Termos de Uso e Condições do CaixaDoce." },
-    ],
-  }),
-  component: TermosDeUsoComponent,
-});
-
 function TermosDeUsoComponent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 py-10 px-4">
@@ -33,3 +21,13 @@ function TermosDeUsoComponent() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/termos")({
+  head: () => ({
+    meta: [
+      { title: "Termos de Uso — CaixaDoce" },
+      { name: "description", content: "Termos de Uso e Condições do CaixaDoce." },
+    ],
+  }),
+  component: TermosDeUsoComponent,
+});

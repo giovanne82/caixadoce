@@ -3,7 +3,18 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { LandingPageContent } from "@/components/caixadoce/LandingPageContent";
 
-export { LandingPageContent };
+function LandingPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate({ to: "/" });
+    }
+  }, [user, navigate]);
+
+  return <LandingPageContent />;
+}
 
 export const Route = createFileRoute("/landing")({
   head: () => ({
@@ -19,16 +30,3 @@ export const Route = createFileRoute("/landing")({
   }),
   component: LandingPage,
 });
-
-function LandingPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      navigate({ to: "/" });
-    }
-  }, [user, navigate]);
-
-  return <LandingPageContent />;
-}
