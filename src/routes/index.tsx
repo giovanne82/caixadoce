@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 // Components
 import { LoginView } from "@/components/auth/LoginView";
 import { ProfileSelectionView } from "@/components/auth/ProfileSelectionView";
-import { LandingPageContent } from "./landing";
+import { LandingPageContent } from "@/components/caixadoce/LandingPageContent";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { ScannerView } from "@/components/caixadoce/ScannerView";
 import { DespesasView } from "@/components/caixadoce/DespesasView";
