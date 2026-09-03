@@ -362,6 +362,13 @@ export async function processarNotinhaComOCR(
   scanMode: ScanMode = "produtos",
   onStepProgress?: (step: string) => void
 ): Promise<ResultadoOCRNotinha> {
+  const MAX_NOTINHA_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+  if (file && file.size > MAX_NOTINHA_SIZE_BYTES) {
+    const msg = "O arquivo é muito grande. Por favor, envie uma imagem ou PDF de no máximo 5 MB.";
+    toast.error(msg);
+    throw new Error(msg);
+  }
+
   onStepProgress?.("Otimizando e comprimindo imagem do documento...");
 
   const imageBase64 = await comprimirImagemParaBase64(file);

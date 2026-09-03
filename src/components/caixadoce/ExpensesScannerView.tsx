@@ -146,6 +146,14 @@ export function ExpensesScannerView({
   };
 
   const processarArquivo = async (file: File) => {
+    if (!file) return;
+
+    const MAX_NOTINHA_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+    if (file.size > MAX_NOTINHA_SIZE_BYTES) {
+      toast.error("O arquivo é muito grande. Por favor, envie uma imagem ou PDF de no máximo 5 MB.");
+      return;
+    }
+
     if (isScanning) {
       toast.warning("Já existe um escaneamento de notinha em andamento. Aguarde a conclusão.");
       return;

@@ -122,6 +122,13 @@ export function MontarKitModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const MAX_PRODUTO_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+    if (file.size > MAX_PRODUTO_SIZE_BYTES) {
+      toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
+      if (e.target) e.target.value = "";
+      return;
+    }
+
     setEnviandoFoto(true);
     try {
       const fileExt = file.name.split(".").pop() || "jpg";
