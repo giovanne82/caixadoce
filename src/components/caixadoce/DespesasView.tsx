@@ -63,7 +63,6 @@ import {
 } from "@/lib/ficha-tecnica-service";
 import {
   obterCatalogoInsumos,
-  LISTAS_COMPRAS_PADRAO,
   formatarMoeda,
   normalizarNomeInsumo,
   categorizarItemAutomatico,
@@ -75,6 +74,7 @@ import {
   type ProdutoCardapio,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
 import { toast } from "sonner";
 
 // Função para gerar nome padrão automático no formato: Lista DD/MM/AAAA - #XXXX

@@ -32,23 +32,24 @@ export interface Estabelecimento {
   };
 }
 
-export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
-  id: "est-1",
-  codigo: "CD-1001",
-  nome: "CaixaDoce Matriz",
-  endereco: "",
-  cidade: "",
-  estado: "",
-  tipoDocumento: "CNPJ",
-  numeroDocumento: "",
-  chavePix: "",
-  tipoChavePix: "email",
-  responsavel: "",
-  telefone: "",
-  whatsapp: "",
-  email: "",
-  stripeAccountId: null,
-  repassarTaxaStripe: true,
+import {
+  ESTABELECIMENTO_PADRAO,
+  CLIENTES_PADRAO,
+  CATALOGO_PRODUTOS_PADRAO,
+  ITENS_COMPRA_PADRAO,
+  LISTAS_COMPRAS_PADRAO,
+  CATEGORIAS_PADRAO,
+  REGRAS_AGENDAMENTO_PADRAO,
+} from "./constants";
+
+export {
+  ESTABELECIMENTO_PADRAO,
+  CLIENTES_PADRAO,
+  CATALOGO_PRODUTOS_PADRAO,
+  ITENS_COMPRA_PADRAO,
+  LISTAS_COMPRAS_PADRAO,
+  CATEGORIAS_PADRAO,
+  REGRAS_AGENDAMENTO_PADRAO,
 };
 
 export type TransacaoTipo = "receita" | "despesa";
@@ -97,35 +98,7 @@ export interface Cliente {
   createdAt?: string;
 }
 
-export const CLIENTES_PADRAO: Cliente[] = [
-  {
-    id: "cli-1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Mariana Silva",
-    whatsapp: "(11) 98765-4321",
-    endereco: "Rua das Flores, 120 - Apto 42 - Jardim Paulista, São Paulo/SP",
-    observacoes: "Cliente frequente de bolos decorados e brigadeiros.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "cli-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Camila Guimarães",
-    whatsapp: "(11) 97123-4567",
-    endereco: "Av. Brigadeiro Luís Antônio, 3400 - Cerqueira César, São Paulo/SP",
-    observacoes: "Prefere doces menos açucarados (Ninho e 50% Cacau).",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "cli-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Lucas Martins",
-    whatsapp: "(11) 99888-7766",
-    endereco: "Rua Augusta, 850 - Consolação, São Paulo/SP",
-    observacoes: "Pede bentô cakes personalizados para aniversários.",
-    createdAt: new Date().toISOString(),
-  },
-];
+
 
 export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
   if (!estabelecimentoCodigo) return [];
@@ -199,65 +172,7 @@ export interface ProdutoCardapio {
   itensKit?: KitItemComponente[];
 }
 
-export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
-  {
-    id: "prod_1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo de Aniversário 2kg",
-    descricao: "Massa pão de ló com recheio de brigadeiro gourmet e cobertura de chantininho.",
-    preco: 140.0,
-    categoria: "Bolos Decorados",
-    fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Caixa Brigadeiros Gourmet (12 un)",
-    descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
-    preco: 48.0,
-    categoria: "Doces & Brigadeiros",
-    fotoUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 12,
-    ativo: true,
-  },
-  {
-    id: "prod-4",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bentô Cake Personalizado",
-    descricao: "Mini bolo de 10cm com frase ou meme personalizado no topo. Ideal para presentes e comemorações intimistas.",
-    preco: 45.0,
-    categoria: "Bentô Cakes",
-    fotoUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-5",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Torta Holandesa Tradicional",
-    descricao: "Base crocante de biscoitos Calypso, creme holandês aerado e ganache de chocolate meio amargo brilhante.",
-    preco: 85.0,
-    categoria: "Tortas & Sobremesas",
-    fotoUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-6",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Cento de Docinhos para Festa (100 un)",
-    descricao: "Mix com 40 Brigadeiros, 30 Beijinhos de Coco e 30 Dois Amores. Enrolados na hora.",
-    preco: 160.0,
-    categoria: "Kits Festa",
-    fotoUrl: "https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 48,
-    ativo: true,
-  },
-];
+
 
 export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
   const code = (codigoLoja || "CD-1001").toUpperCase();
@@ -1181,27 +1096,7 @@ export function correlacionarInsumosComItensNota(
   return correspondencias;
 }
 
-export const CATEGORIAS_PADRAO = {
-  receitas: [
-    "Venda Direta / Balcão",
-    "Encomenda Especial",
-    "Assinatura / Mensalidade",
-    "Delivery",
-    "Eventos & Parcerias",
-    "Outras Receitas",
-  ],
-  despesas: [
-    "Insumos & Ingredientes (Produção)",
-    "Utensílios & Equipamentos",
-    "Embalagens",
-    "Equipe & Salários",
-    "Aluguel & Contas (Água/Luz/Gás)",
-    "Marketing & Anúncios",
-    "Taxas & Impostos",
-    "Manutenção de Equipamentos",
-    "Outras Despesas",
-  ],
-};
+
 
 // ==============================================================================
 // HELPERS DE MÁSCARA, FORMATAÇÃO & WHATSAPP
@@ -1407,43 +1302,9 @@ export interface ItemListaCompra {
   comprado: boolean;
   encomendaId?: string;
   encomendaClienteNome?: string;
-  clienteTags?: string[];
   categoria?: string;
   createdAt?: string;
 }
-
-export const ITENS_COMPRA_PADRAO: ItemListaCompra[] = [
-  {
-    id: "ic-1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Leite Condensado Moça 395g",
-    quantidade: 6,
-    unidade: "un",
-    comprado: false,
-    categoria: "Insumos",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "ic-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Cobertura Harald Melken Ao Leite 1kg",
-    quantidade: 2,
-    unidade: "kg",
-    comprado: false,
-    categoria: "Insumos",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "ic-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Embalagem para Bolo de Pote 250ml (caixa c/ 50)",
-    quantidade: 1,
-    unidade: "cx",
-    comprado: true,
-    categoria: "Embalagens",
-    createdAt: new Date().toISOString(),
-  },
-];
 
 export interface ListaCompras {
   id: string;
@@ -1460,67 +1321,7 @@ export interface ListaCompras {
   comprovanteUrl?: string;
 }
 
-export const LISTAS_COMPRAS_PADRAO: ListaCompras[] = [
-  {
-    id: "lc-1",
-    nome: "Compras de Sexta",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["Atacadão dos Confeiteiros S/A"],
-    status: "ativa",
-    itens: ITENS_COMPRA_PADRAO,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "lc-2",
-    nome: "Festa da Maria",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["ArtFesta Confeitaria & Embalagens"],
-    status: "ativa",
-    itens: [
-      {
-        id: "ic-201",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Chantilly Norcau 1L",
-        quantidade: 4,
-        unidade: "cx",
-        comprado: false,
-        clienteTags: ["Maria Silva"],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "ic-202",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Granulado Crocante Melken 500g",
-        quantidade: 2,
-        unidade: "pct",
-        comprado: true,
-        clienteTags: ["Maria Silva"],
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "lc-3",
-    nome: "Doces do Fim de Semana",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["Supermercado Doce Preço Ltda"],
-    status: "concluida",
-    concluidaEm: new Date().toISOString(),
-    itens: [
-      {
-        id: "ic-301",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Açúcar de Confeiteiro Impalpável 1kg",
-        quantidade: 3,
-        unidade: "kg",
-        comprado: true,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-];
+
 
 export function formatarCpfCnpj(val: string): string {
   if (!val) return "";
@@ -1576,13 +1377,7 @@ export interface RegrasAgendamento {
   horarioFechamento: string; // Ex: "18:00"
 }
 
-export const REGRAS_AGENDAMENTO_PADRAO: RegrasAgendamento = {
-  antecedenciaMinimaDias: 1,
-  diasSemanaDisponiveis: [1, 2, 3, 4, 5, 6], // Segunda a Sábado por padrão
-  datasBloqueadas: [],
-  horarioAbertura: "09:00",
-  horarioFechamento: "18:00",
-};
+
 
 export function obterRegrasAgendamento(estabelecimentoCodigo?: string): RegrasAgendamento {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();

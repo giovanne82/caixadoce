@@ -60,9 +60,9 @@ import {
   type ProdutoCardapio,
   type KitProduto,
   type ItemListaCompra,
-  type ListaCompras,
   normalizarNomeInsumo,
 } from "@/lib/caixadoce-data";
+import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
 
 function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
   if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
