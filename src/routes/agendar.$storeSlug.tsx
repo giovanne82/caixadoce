@@ -219,16 +219,6 @@ function PublicStoreView() {
 
           if (!err2 && d2) {
             estData = d2;
-          } else {
-            const { data: d3, error: err3 } = await supabase
-              .from("estabelecimentos")
-              .select("*")
-              .limit(1)
-              .maybeSingle();
-
-            if (!err3 && d3) {
-              estData = d3;
-            }
           }
         }
 

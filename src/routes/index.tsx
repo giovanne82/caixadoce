@@ -227,83 +227,57 @@ function Index() {
   const [planoTick, setPlanoTick] = useState(0);
 
   // Sincronização direta com a tabela 'estabelecimentos' do Supabase para invalidar o cache local no mobile
+  // Sincronização inteligente do plano com Supabase sem polling agressivo nem loops
   const sincronizarPlanoComSupabase = useCallback(async (code: string) => {
     if (!code) return;
     const cleanCode = code.toUpperCase();
     try {
-      // 1. Busca via Supabase SDK com select("*") seguro
-      let row: any = null;
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("*")
+        .select("status, status_assinatura, plano_status, plano, plano_id, plano_exp, plano_expira_em, data_expiracao, mercadopago_pagamento_id, mercadopago_assinatura_id, stripe_subscription_id")
         .eq("codigo", cleanCode)
         .maybeSingle();
 
       if (data && !error) {
-        row = data;
-      }
-
-      // 2. Fallback via REST API com No-Cache e select=*
-      if (!row) {
-        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-        const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-        const restRes = await fetch(
-          `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(cleanCode)}&select=*&_t=${Date.now()}`,
-          {
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-            },
-          }
-        );
-
-        if (restRes.ok) {
-          const restData = await restRes.json();
-          if (Array.isArray(restData) && restData.length > 0) {
-            row = restData[0];
-          }
-        }
-      }
-
-      if (row) {
+        const row = data;
         const statusBanco = row.status || row.status_assinatura || row.plano_status;
         const planoIdBanco = row.plano || row.plano_id || "mensal";
         const expBanco = row.plano_exp || row.plano_expira_em || row.data_expiracao;
         const expMs = expBanco ? new Date(expBanco).getTime() : 0;
         const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
 
+        let alterou = false;
         if (temDataExpiracao) {
           if (expMs > Date.now()) {
-            salvarDadosPlanoEstabelecimento(cleanCode, {
+            alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
               status: "ativo",
               planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
               dataExpiracao: expBanco,
               diasRestantesTrial: 0,
-            });
+            }));
           } else {
-            salvarDadosPlanoEstabelecimento(cleanCode, {
+            alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
               status: "expirado",
               planoId: "basico",
               dataExpiracao: expBanco,
               diasRestantesTrial: 0,
-            });
+            }));
           }
-          setPlanoTick((prev) => prev + 1);
         } else if (statusBanco === "ativo" && (row.mercadopago_pagamento_id || row.mercadopago_assinatura_id || row.stripe_subscription_id)) {
-          salvarDadosPlanoEstabelecimento(cleanCode, {
+          alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
             planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
             diasRestantesTrial: 0,
-          });
-          setPlanoTick((prev) => prev + 1);
+          }));
         } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
-          salvarDadosPlanoEstabelecimento(cleanCode, {
+          alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "expirado",
             planoId: "basico",
             diasRestantesTrial: 0,
-          });
+          }));
+        }
+
+        if (alterou) {
           setPlanoTick((prev) => prev + 1);
         }
       }
@@ -312,30 +286,26 @@ function Index() {
     }
   }, []);
 
-  // Refetch no Mount + Focus + VisibilityChange + Intervalo de 5s no mobile
+  // Executa a sincronização do plano apenas no mount, focus e alteração do código
   useEffect(() => {
     if (!activeCode) return;
     
-    // Execução imediata no mount
     sincronizarPlanoComSupabase(activeCode);
 
     const handleFocus = () => {
-      sincronizarPlanoComSupabase(activeCode);
+      if (document.visibilityState === "visible") {
+        sincronizarPlanoComSupabase(activeCode);
+      }
     };
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("visibilitychange", handleFocus);
     window.addEventListener("online", handleFocus);
 
-    const intervalId = setInterval(() => {
-      sincronizarPlanoComSupabase(activeCode);
-    }, 5000);
-
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("visibilitychange", handleFocus);
       window.removeEventListener("online", handleFocus);
-      clearInterval(intervalId);
     };
   }, [activeCode, sincronizarPlanoComSupabase]);
 
@@ -428,10 +398,23 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   return "00000000-0000-0000-0000-000000000000";
 }
 
+  const lastFetchMapRef = useRef<Record<string, number>>({});
+
+  const shouldFetch = useCallback((key: string, force = false): boolean => {
+    if (force) return true;
+    const now = Date.now();
+    const last = lastFetchMapRef.current[key] || 0;
+    if (now - last < 8000) {
+      return false;
+    }
+    lastFetchMapRef.current[key] = now;
+    return true;
+  }, []);
+
   // 1. Carrega dados do Supabase garantindo filtro estrito de isolamento por tenant/user e resiliência a RLS e colunas
   const safeFetchSupabase = useCallback(
     async (tableName: string, activeCode: string, orderColumn?: string, ascending = false): Promise<any[]> => {
-      if (!activeCode || authLoading) return [];
+      if (!activeCode) return [];
 
       try {
         let query = supabase
@@ -465,13 +448,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
       return [];
     },
-    [user?.id, authLoading]
+    []
   );
 
   // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
   // 1. Carrega Transações Financeiras do Supabase (Fonte Única da Verdade)
-  const fetchTransacoes = useCallback(async () => {
-    if (!profile) return;
+  const fetchTransacoes = useCallback(async (force = false) => {
+    if (!profile || !activeCode) return;
+    if (!shouldFetch(`transacoes_${activeCode}`, force)) return;
 
     try {
       const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
@@ -522,11 +506,12 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         }
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
 
   // 2. Carrega Encomendas e Datas Bloqueadas do Supabase (Fonte Única da Verdade)
-  const fetchEncomendasECalendario = useCallback(async () => {
-    if (!profile) return;
+  const fetchEncomendasECalendario = useCallback(async (force = false) => {
+    if (!profile || !activeCode) return;
+    if (!shouldFetch(`encomendas_${activeCode}`, force)) return;
 
     try {
       const data = await safeFetchSupabase("encomendas", activeCode, "data_entrega", true);
@@ -597,11 +582,12 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
 
   // 3. Carrega e Sincroniza Despesas (Notinhas) exclusivamente na tabela "despesas"
-  const fetchDespesas = useCallback(async () => {
-    if (!profile) return;
+  const fetchDespesas = useCallback(async (force = false) => {
+    if (!profile || !activeCode) return;
+    if (!shouldFetch(`despesas_${activeCode}`, force)) return;
 
     try {
       const data = await safeFetchSupabase("despesas", activeCode, "created_at", false);
@@ -639,11 +625,13 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
     } catch (err) {
       console.error("Erro ao carregar despesas:", err);
     }
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
 
   // 4. Carrega Clientes (Customers) do Supabase (Fonte Única da Verdade)
-  const fetchClientes = useCallback(async () => {
-    if (!profile) return;
+  const fetchClientes = useCallback(async (force = false) => {
+    if (!profile || !activeCode) return;
+    if (!shouldFetch(`clientes_${activeCode}`, force)) return;
+
     try {
       const data = await safeFetchSupabase("customers", activeCode, "name", true);
 
@@ -663,11 +651,13 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
 
   // 5. Carrega Produtos do Cardápio e Kits do Supabase (Fonte Única da Verdade)
-  const fetchProdutos = useCallback(async () => {
-    if (!profile) return;
+  const fetchProdutos = useCallback(async (force = false) => {
+    if (!profile || !activeCode) return;
+    if (!shouldFetch(`produtos_${activeCode}`, force)) return;
+
     try {
       const data = await safeFetchSupabase("produtos", activeCode, "nome", true);
       const kitsData = await obterKitsEstabelecimento(activeCode);
@@ -711,11 +701,13 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(mapeados));
       } catch {}
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
 
   // 6. Carrega Listas de Compras (ListasCompras) do Supabase (Fonte Única da Verdade)
-  const fetchListasCompras = useCallback(async () => {
-    if (!profile || authLoading) return;
+  const fetchListasCompras = useCallback(async (force = false) => {
+    if (!profile || !activeCode || authLoading) return;
+    if (!shouldFetch(`listas_${activeCode}`, force)) return;
+
     try {
       const data = await safeFetchSupabase("listas_compras", activeCode, "data", false);
 
@@ -738,40 +730,41 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase]);
+  }, [activeCode, profile, authLoading, safeFetchSupabase, shouldFetch]);
 
   useEffect(() => {
+    if (!activeCode) return;
     fetchTransacoes();
     fetchEncomendasECalendario();
     fetchDespesas();
     fetchClientes();
     fetchProdutos();
     fetchListasCompras();
-  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
+  }, [activeCode, fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
   // Listener Global em Tempo Real do Supabase para todas as tabelas (Sincronização Multidispositivo PC <-> Celular)
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !activeCode) return;
     const channel = supabase
-      .channel("global_realtime_sync_caixadoce")
-      .on("postgres_changes", { event: "*", schema: "public", table: "despesas" }, () => fetchDespesas())
-      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => fetchDespesas())
-      .on("postgres_changes", { event: "*", schema: "public", table: "encomendas" }, () => fetchEncomendasECalendario())
-      .on("postgres_changes", { event: "*", schema: "public", table: "produtos" }, () => fetchProdutos())
-      .on("postgres_changes", { event: "*", schema: "public", table: "transacoes_financeiras" }, () => fetchTransacoes())
-      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => fetchClientes())
-      .on("postgres_changes", { event: "*", schema: "public", table: "listas_compras" }, () => fetchListasCompras())
+      .channel(`global_realtime_sync_${activeCode}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "despesas" }, () => fetchDespesas(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => fetchDespesas(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "encomendas" }, () => fetchEncomendasECalendario(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "produtos" }, () => fetchProdutos(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "transacoes_financeiras" }, () => fetchTransacoes(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => fetchClientes(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "listas_compras" }, () => fetchListasCompras(true))
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
+  }, [profile, activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
 
   // Listener para re-fetch automático quando a janela ganha foco ou visibilidade no celular/PC
   useEffect(() => {
     const handleFocus = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && activeCode) {
         fetchTransacoes();
         fetchEncomendasECalendario();
         fetchDespesas();
@@ -781,11 +774,14 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
       }
     };
 
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleFocus);
     };
-  }, [fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
+  }, [activeCode, fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const cleanWhatsapp = dados.whatsapp?.replace(/\D/g, "") || "";

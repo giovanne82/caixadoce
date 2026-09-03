@@ -171,17 +171,6 @@ function CardapioLojaView() {
 
           if (!err2 && d2) {
             estData = d2;
-          } else {
-            // 3. Fallback: seleciona o primeiro estabelecimento cadastrado
-            const { data: d3, error: err3 } = await supabase
-              .from("estabelecimentos")
-              .select("*")
-              .limit(1)
-              .maybeSingle();
-
-            if (!err3 && d3) {
-              estData = d3;
-            }
           }
         }
 
