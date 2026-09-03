@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/pagar/$cobrancaId")({
 });
 
 function PagarRedirectView() {
-  const { cobrancaId } = Route.useParams();
+  const { cobrancaId } = useParams({ from: "/pagar/$cobrancaId" });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

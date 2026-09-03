@@ -4,14 +4,14 @@ import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Cake, ArrowRight, Store, Sparkles } from "lucide-react";
+import { Cake, ArrowRight, Store } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/cardapio/")({
   head: () => ({
     meta: [
       { title: "Cardápio Digital — CaixaDoce" },
-      { name: "description", content: "Acesse o cardápio da sua confeitaria favorita digitando o código da loja." },
+      { name: "description", content: "Acesse o cardápio da sua confeitaria preferida." },
     ],
   }),
   component: CardapioBuscaView,
@@ -69,22 +69,11 @@ function CardapioBuscaView() {
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </form>
-
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/cardapio/$storeCode", params: { storeCode: "CD-1001" } })}
-                className="text-xs text-primary font-semibold hover:underline flex items-center justify-center gap-1 mx-auto"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Testar com Confeitaria Modelo (CD-1001)</span>
-              </button>
-            </div>
           </CardContent>
         </Card>
 
         <p className="text-xs text-stone-400">
-          Você é confeiteira? <a href="/" className="text-amber-400 font-bold hover:underline">Entre no Painel CaixaDoce</a>
+          Você é confeiteira? <a href="/login" className="text-amber-400 font-bold hover:underline">Entre na sua conta</a> para gerenciar seu cardápio.
         </p>
       </div>
     </div>

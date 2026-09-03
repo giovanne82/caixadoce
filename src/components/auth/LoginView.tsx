@@ -19,8 +19,8 @@ import { toast } from "sonner";
 import { Lock, Mail, User, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, MailCheck, Shield } from "lucide-react";
 import { formatarCodigoLoja } from "@/lib/caixadoce-data";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TermosDeUsoContent } from "@/routes/termos";
-import { PrivacidadeContent } from "@/routes/privacidade";
+import { TermosDeUsoContent } from "@/components/caixadoce/TermosDeUsoContent";
+import { PrivacidadeContent } from "@/components/caixadoce/PrivacidadeContent";
 
 interface LoginViewProps {
   onSuccess?: () => void;

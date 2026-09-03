@@ -78,15 +78,7 @@ import {
 } from "@/lib/stripeFees";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/agendar/$storeSlug")({
-  head: () => ({
-    meta: [
-      { title: "Cardápio & Agendamento de Encomendas — CaixaDoce" },
-      { name: "description", content: "Escolha seus doces e bolos favoritos e agende a data de entrega ou retirada." },
-    ],
-  }),
-  component: PublicStoreView,
-});
+
 
 interface ItemCarrinho {
   produto: ProdutoCardapio;
@@ -219,16 +211,6 @@ function PublicStoreView() {
 
           if (!err2 && d2) {
             estData = d2;
-          } else {
-            const { data: d3, error: err3 } = await supabase
-              .from("estabelecimentos")
-              .select("*")
-              .limit(1)
-              .maybeSingle();
-
-            if (!err3 && d3) {
-              estData = d3;
-            }
           }
         }
 
@@ -952,3 +934,13 @@ function PublicStoreView() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/agendar/$storeSlug")({
+  head: () => ({
+    meta: [
+      { title: "Cardápio & Agendamento de Encomendas — CaixaDoce" },
+      { name: "description", content: "Escolha seus doces e bolos favoritos e agende a data de entrega ou retirada." },
+    ],
+  }),
+  component: PublicStoreView,
+});

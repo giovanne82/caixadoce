@@ -1,3 +1,22 @@
+import { generatePixPayload } from "./pix-utils";
+
+export {
+  formatarMoeda,
+  aplicarMascaraTelefone,
+  aplicarMascaraMoedaInput,
+  converterMoedaInputParaNumero,
+  formatarWhatsappLink,
+  formatarLinkRedeSocial,
+  obterProdutosCardapio,
+  salvarProdutosCardapio,
+  obterRegrasAgendamento,
+  salvarRegrasAgendamentoStorage,
+  validarDataEntrega,
+  validarHorarioEntrega,
+  formatarBadgeDisponibilidadeProduto,
+  calcularRegrasAgendamentoCarrinho,
+} from "./cardapio-helpers";
+
 export interface Estabelecimento {
   id: string;
   codigo: string;
@@ -32,23 +51,24 @@ export interface Estabelecimento {
   };
 }
 
-export const ESTABELECIMENTO_PADRAO: Estabelecimento = {
-  id: "est-1",
-  codigo: "CD-1001",
-  nome: "CaixaDoce Matriz",
-  endereco: "",
-  cidade: "",
-  estado: "",
-  tipoDocumento: "CNPJ",
-  numeroDocumento: "",
-  chavePix: "",
-  tipoChavePix: "email",
-  responsavel: "",
-  telefone: "",
-  whatsapp: "",
-  email: "",
-  stripeAccountId: null,
-  repassarTaxaStripe: true,
+import {
+  ESTABELECIMENTO_PADRAO,
+  CLIENTES_PADRAO,
+  CATALOGO_PRODUTOS_PADRAO,
+  ITENS_COMPRA_PADRAO,
+  LISTAS_COMPRAS_PADRAO,
+  CATEGORIAS_PADRAO,
+  REGRAS_AGENDAMENTO_PADRAO,
+} from "./constants";
+
+export {
+  ESTABELECIMENTO_PADRAO,
+  CLIENTES_PADRAO,
+  CATALOGO_PRODUTOS_PADRAO,
+  ITENS_COMPRA_PADRAO,
+  LISTAS_COMPRAS_PADRAO,
+  CATEGORIAS_PADRAO,
+  REGRAS_AGENDAMENTO_PADRAO,
 };
 
 export type TransacaoTipo = "receita" | "despesa";
@@ -97,35 +117,7 @@ export interface Cliente {
   createdAt?: string;
 }
 
-export const CLIENTES_PADRAO: Cliente[] = [
-  {
-    id: "cli-1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Mariana Silva",
-    whatsapp: "(11) 98765-4321",
-    endereco: "Rua das Flores, 120 - Apto 42 - Jardim Paulista, São Paulo/SP",
-    observacoes: "Cliente frequente de bolos decorados e brigadeiros.",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "cli-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Camila Guimarães",
-    whatsapp: "(11) 97123-4567",
-    endereco: "Av. Brigadeiro Luís Antônio, 3400 - Cerqueira César, São Paulo/SP",
-    observacoes: "Prefere doces menos açucarados (Ninho e 50% Cacau).",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "cli-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Lucas Martins",
-    whatsapp: "(11) 99888-7766",
-    endereco: "Rua Augusta, 850 - Consolação, São Paulo/SP",
-    observacoes: "Pede bentô cakes personalizados para aniversários.",
-    createdAt: new Date().toISOString(),
-  },
-];
+
 
 export function obterClientes(estabelecimentoCodigo?: string): Cliente[] {
   if (!estabelecimentoCodigo) return [];
@@ -199,85 +191,9 @@ export interface ProdutoCardapio {
   itensKit?: KitItemComponente[];
 }
 
-export const CATALOGO_PRODUTOS_PADRAO: ProdutoCardapio[] = [
-  {
-    id: "prod_1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bolo de Aniversário 2kg",
-    descricao: "Massa pão de ló com recheio de brigadeiro gourmet e cobertura de chantininho.",
-    preco: 140.0,
-    categoria: "Bolos Decorados",
-    fotoUrl: "https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Caixa Brigadeiros Gourmet (12 un)",
-    descricao: "Seleção com Brigadeiro Belga ao Leite, Ninho com Nutella, Churros com Doce de Leite e Pistache.",
-    preco: 48.0,
-    categoria: "Doces & Brigadeiros",
-    fotoUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=600&q=80",
-    destaque: true,
-    tempoPreparoHoras: 12,
-    ativo: true,
-  },
-  {
-    id: "prod-4",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Bentô Cake Personalizado",
-    descricao: "Mini bolo de 10cm com frase ou meme personalizado no topo. Ideal para presentes e comemorações intimistas.",
-    preco: 45.0,
-    categoria: "Bentô Cakes",
-    fotoUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-5",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Torta Holandesa Tradicional",
-    descricao: "Base crocante de biscoitos Calypso, creme holandês aerado e ganache de chocolate meio amargo brilhante.",
-    preco: 85.0,
-    categoria: "Tortas & Sobremesas",
-    fotoUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 24,
-    ativo: true,
-  },
-  {
-    id: "prod-6",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Cento de Docinhos para Festa (100 un)",
-    descricao: "Mix com 40 Brigadeiros, 30 Beijinhos de Coco e 30 Dois Amores. Enrolados na hora.",
-    preco: 160.0,
-    categoria: "Kits Festa",
-    fotoUrl: "https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=600&q=80",
-    tempoPreparoHoras: 48,
-    ativo: true,
-  },
-];
 
-export function obterProdutosCardapio(codigoLoja?: string): ProdutoCardapio[] {
-  const code = (codigoLoja || "CD-1001").toUpperCase();
-  try {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem(`caixadoce_cardapio_${code}`);
-      if (raw) return JSON.parse(raw);
-    }
-  } catch {}
-  return [];
-}
 
-export function salvarProdutosCardapio(codigoLoja: string, produtos: ProdutoCardapio[]) {
-  const code = (codigoLoja || "CD-1001").toUpperCase();
-  try {
-    localStorage.setItem(`caixadoce_cardapio_${code}`, JSON.stringify(produtos));
-  } catch (e) {
-    console.warn("Erro ao salvar produtos do cardápio:", e);
-  }
-}
+
 
 // ==============================================================================
 // CATÁLOGO DE INSUMOS (ARTFESTA & PERSONALIZADOS)
@@ -1181,98 +1097,13 @@ export function correlacionarInsumosComItensNota(
   return correspondencias;
 }
 
-export const CATEGORIAS_PADRAO = {
-  receitas: [
-    "Venda Direta / Balcão",
-    "Encomenda Especial",
-    "Assinatura / Mensalidade",
-    "Delivery",
-    "Eventos & Parcerias",
-    "Outras Receitas",
-  ],
-  despesas: [
-    "Insumos & Ingredientes (Produção)",
-    "Utensílios & Equipamentos",
-    "Embalagens",
-    "Equipe & Salários",
-    "Aluguel & Contas (Água/Luz/Gás)",
-    "Marketing & Anúncios",
-    "Taxas & Impostos",
-    "Manutenção de Equipamentos",
-    "Outras Despesas",
-  ],
-};
+
 
 // ==============================================================================
 // HELPERS DE MÁSCARA, FORMATAÇÃO & WHATSAPP
 // ==============================================================================
 
-export function formatarMoeda(valor: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(valor || 0);
-}
 
-export function aplicarMascaraTelefone(valor: string): string {
-  const limpo = (valor || "").replace(/\D/g, "").slice(0, 11);
-  if (!limpo) return "";
-  if (limpo.length <= 2) return `(${limpo}`;
-  if (limpo.length <= 6) return `(${limpo.slice(0, 2)}) ${limpo.slice(2)}`;
-  if (limpo.length <= 10) return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
-  return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
-}
-
-export function aplicarMascaraMoedaInput(valorInput: string): string {
-  const digitos = valorInput.replace(/\D/g, "");
-  if (!digitos) return "";
-  const centavos = (Number(digitos) / 100).toFixed(2);
-  return `R$ ${new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(centavos))}`;
-}
-
-export function converterMoedaInputParaNumero(valorFormatado: string | number): number {
-  if (typeof valorFormatado === "number") {
-    return isNaN(valorFormatado) ? 0 : valorFormatado;
-  }
-  if (!valorFormatado) return 0;
-
-  const str = String(valorFormatado).trim();
-  if (!str) return 0;
-
-  // Se a string já contiver vírgula decimal (ex: "R$ 470,00" ou "470,00"):
-  if (str.includes(",")) {
-    const limpo = str.replace(/[^\d,]/g, "").replace(",", ".");
-    const num = parseFloat(limpo);
-    return isNaN(num) ? 0 : num;
-  }
-
-  // Se a string contiver ponto decimal explícito com duas casas (ex: "470.00"):
-  if (str.includes(".")) {
-    const limpo = str.replace(/[^\d.]/g, "");
-    const num = parseFloat(limpo);
-    return isNaN(num) ? 0 : num;
-  }
-
-  // Caso seja apenas dígitos (ex: centavos brutos "47000"):
-  const apenasDigitos = str.replace(/\D/g, "");
-  if (!apenasDigitos) return 0;
-  return Number(apenasDigitos) / 100;
-}
-
-export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
-  const cleanPhone = (whatsapp || "").replace(/\D/g, "");
-  const textEncoded = mensagem ? encodeURIComponent(mensagem) : "";
-  if (!cleanPhone) {
-    return `https://api.whatsapp.com/send?text=${textEncoded}`;
-  }
-  const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
-  return `https://wa.me/${formattedPhone}${textEncoded ? `?text=${textEncoded}` : ""}`;
-}
-
-import { generatePixPayload } from "./pix-utils";
 
 export { generatePixPayload, calculateCRC16, formatPixKey, type ContaPix } from "./pix-utils";
 
@@ -1407,43 +1238,9 @@ export interface ItemListaCompra {
   comprado: boolean;
   encomendaId?: string;
   encomendaClienteNome?: string;
-  clienteTags?: string[];
   categoria?: string;
   createdAt?: string;
 }
-
-export const ITENS_COMPRA_PADRAO: ItemListaCompra[] = [
-  {
-    id: "ic-1",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Leite Condensado Moça 395g",
-    quantidade: 6,
-    unidade: "un",
-    comprado: false,
-    categoria: "Insumos",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "ic-2",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Cobertura Harald Melken Ao Leite 1kg",
-    quantidade: 2,
-    unidade: "kg",
-    comprado: false,
-    categoria: "Insumos",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "ic-3",
-    estabelecimentoCodigo: "CD-1001",
-    nome: "Embalagem para Bolo de Pote 250ml (caixa c/ 50)",
-    quantidade: 1,
-    unidade: "cx",
-    comprado: true,
-    categoria: "Embalagens",
-    createdAt: new Date().toISOString(),
-  },
-];
 
 export interface ListaCompras {
   id: string;
@@ -1460,67 +1257,7 @@ export interface ListaCompras {
   comprovanteUrl?: string;
 }
 
-export const LISTAS_COMPRAS_PADRAO: ListaCompras[] = [
-  {
-    id: "lc-1",
-    nome: "Compras de Sexta",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["Atacadão dos Confeiteiros S/A"],
-    status: "ativa",
-    itens: ITENS_COMPRA_PADRAO,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "lc-2",
-    nome: "Festa da Maria",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["ArtFesta Confeitaria & Embalagens"],
-    status: "ativa",
-    itens: [
-      {
-        id: "ic-201",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Chantilly Norcau 1L",
-        quantidade: 4,
-        unidade: "cx",
-        comprado: false,
-        clienteTags: ["Maria Silva"],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "ic-202",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Granulado Crocante Melken 500g",
-        quantidade: 2,
-        unidade: "pct",
-        comprado: true,
-        clienteTags: ["Maria Silva"],
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "lc-3",
-    nome: "Doces do Fim de Semana",
-    estabelecimentoCodigo: "CD-1001",
-    estabelecimentosVinculados: ["Supermercado Doce Preço Ltda"],
-    status: "concluida",
-    concluidaEm: new Date().toISOString(),
-    itens: [
-      {
-        id: "ic-301",
-        estabelecimentoCodigo: "CD-1001",
-        nome: "Açúcar de Confeiteiro Impalpável 1kg",
-        quantidade: 3,
-        unidade: "kg",
-        comprado: true,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-];
+
 
 export function formatarCpfCnpj(val: string): string {
   if (!val) return "";
@@ -1576,212 +1313,7 @@ export interface RegrasAgendamento {
   horarioFechamento: string; // Ex: "18:00"
 }
 
-export const REGRAS_AGENDAMENTO_PADRAO: RegrasAgendamento = {
-  antecedenciaMinimaDias: 1,
-  diasSemanaDisponiveis: [1, 2, 3, 4, 5, 6], // Segunda a Sábado por padrão
-  datasBloqueadas: [],
-  horarioAbertura: "09:00",
-  horarioFechamento: "18:00",
-};
 
-export function obterRegrasAgendamento(estabelecimentoCodigo?: string): RegrasAgendamento {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
-  try {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem(`caixadoce_regras_agendamento_${code}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return { ...REGRAS_AGENDAMENTO_PADRAO, ...parsed };
-      }
-    }
-  } catch {}
-  return REGRAS_AGENDAMENTO_PADRAO;
-}
 
-export function salvarRegrasAgendamentoStorage(estabelecimentoCodigo: string, regras: RegrasAgendamento) {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
-  try {
-    localStorage.setItem(`caixadoce_regras_agendamento_${code}`, JSON.stringify(regras));
-  } catch (e) {
-    console.warn("Erro ao salvar regras de agendamento:", e);
-  }
-}
 
-export function validarDataEntrega(
-  dataIso: string,
-  regras: RegrasAgendamento
-): { valida: boolean; motivo?: string } {
-  if (!dataIso) return { valida: false, motivo: "Selecione uma data para a encomenda." };
-
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
-  const parts = dataIso.split("-").map(Number);
-  if (parts.length !== 3) return { valida: false, motivo: "Data em formato inválido." };
-  const [ano, mes, dia] = parts;
-  const dataAlvo = new Date(ano, mes - 1, dia);
-  dataAlvo.setHours(0, 0, 0, 0);
-
-  // 1. Antecedência Mínima
-  const diffTime = dataAlvo.getTime() - hoje.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays < (regras.antecedenciaMinimaDias || 0)) {
-    if (regras.antecedenciaMinimaDias === 0) {
-      if (diffDays < 0) return { valida: false, motivo: "A data informada já passou." };
-    } else {
-      return {
-        valida: false,
-        motivo: `Encomendas devem ser feitas com no mínimo ${regras.antecedenciaMinimaDias} dia(s) de antecedência.`,
-      };
-    }
-  }
-
-  // 2. Dias da Semana Disponíveis
-  const diaSemana = dataAlvo.getDay(); // 0 = Dom, 1 = Seg, etc.
-  if (!regras.diasSemanaDisponiveis || !regras.diasSemanaDisponiveis.includes(diaSemana)) {
-    const NOMES_DIAS = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-    return {
-      valida: false,
-      motivo: `A loja não realiza entregas em ${NOMES_DIAS[diaSemana]}s.`,
-    };
-  }
-
-  // 3. Datas Bloqueadas Manualmente (Agenda Cheia / Recesso)
-  if (regras.datasBloqueadas && regras.datasBloqueadas.includes(dataIso)) {
-    return {
-      valida: false,
-      motivo: "Esta data está indisponível na agenda da loja (agenda cheia ou recesso).",
-    };
-  }
-
-  return { valida: true };
-}
-
-export function validarHorarioEntrega(
-  horario: string,
-  regras: RegrasAgendamento
-): { valido: boolean; motivo?: string } {
-  if (!horario) return { valido: true };
-
-  const hForm = horario.trim();
-  if (hForm < regras.horarioAbertura || hForm > regras.horarioFechamento) {
-    return {
-      valido: false,
-      motivo: `Horário fora do expediente da loja (${regras.horarioAbertura} às ${regras.horarioFechamento}).`,
-    };
-  }
-
-  return { valido: true };
-}
-
-export function formatarBadgeDisponibilidadeProduto(prod: ProdutoCardapio): {
-  texto: string;
-  isProntaEntrega: boolean;
-} {
-  const isPronta = prod.availability_type === "pronta_entrega";
-
-  if (isPronta) {
-    if (prod.available_days && prod.available_days.length > 0 && prod.available_days.length < 7) {
-      const DIAS_SIGLAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-      const ordenados = [...prod.available_days].sort((a, b) => a - b);
-      const primeiro = DIAS_SIGLAS[ordenados[0]];
-      const ultimo = DIAS_SIGLAS[ordenados[ordenados.length - 1]];
-      const diasTexto = ordenados.length === 1 ? primeiro : `${primeiro} a ${ultimo}`;
-      return {
-        texto: `⚡ Pronta Entrega (${diasTexto})`,
-        isProntaEntrega: true,
-      };
-    }
-    return {
-      texto: "⚡ Pronta Entrega",
-      isProntaEntrega: true,
-    };
-  }
-
-  // Sob Encomenda
-  const diasLead = prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1);
-  if (diasLead === 0) {
-    return {
-      texto: "🕒 Encomenda no mesmo dia",
-      isProntaEntrega: false,
-    };
-  } else if (diasLead === 1) {
-    return {
-      texto: "🕒 Antecedência: ~24h",
-      isProntaEntrega: false,
-    };
-  } else {
-    return {
-      texto: `🕒 Antecedência: ${diasLead} dia(s)`,
-      isProntaEntrega: false,
-    };
-  }
-}
-
-export function calcularRegrasAgendamentoCarrinho(
-  regrasLoja: RegrasAgendamento,
-  itensCarrinho: { produto: ProdutoCardapio; quantidade: number }[]
-): RegrasAgendamento {
-  if (!itensCarrinho || itensCarrinho.length === 0) return regrasLoja;
-
-  const todosProntaEntrega = itensCarrinho.every(
-    (item) => item.produto.availability_type === "pronta_entrega"
-  );
-
-  let maxLeadTime = todosProntaEntrega ? 0 : (regrasLoja.antecedenciaMinimaDias || 0);
-  let diasPermitidos = [...(regrasLoja.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6])];
-
-  itensCarrinho.forEach(({ produto }) => {
-    // 1. Maior prazo de antecedência exigido pelos produtos de encomenda
-    const isEncomenda = produto.availability_type !== "pronta_entrega";
-
-    if (isEncomenda) {
-      const leadTime =
-        produto.min_lead_time_days ??
-        (produto.tempoPreparoHoras ? Math.ceil(produto.tempoPreparoHoras / 24) : 1);
-      if (leadTime > maxLeadTime) {
-        maxLeadTime = leadTime;
-      }
-    }
-
-    // 2. Intersecção dos dias permitidos para pronta entrega
-    if (produto.availability_type === "pronta_entrega" && produto.available_days && produto.available_days.length > 0) {
-      diasPermitidos = diasPermitidos.filter((d) => produto.available_days!.includes(d));
-    }
-  });
-
-  return {
-    ...regrasLoja,
-    antecedenciaMinimaDias: maxLeadTime,
-    diasSemanaDisponiveis: diasPermitidos,
-  };
-}
-
-export function formatarLinkRedeSocial(tipo: "instagram" | "tiktok" | "facebook" | "whatsapp", valor?: string): string {
-  if (!valor) return "";
-  const v = valor.trim();
-  if (!v) return "";
-
-  if (v.startsWith("http://") || v.startsWith("https://")) {
-    return v;
-  }
-
-  const clean = v.replace(/^@/, "").trim();
-
-  switch (tipo) {
-    case "instagram":
-      return `https://instagram.com/${clean}`;
-    case "tiktok":
-      return `https://www.tiktok.com/@${clean}`;
-    case "facebook":
-      return v.includes("facebook.com") ? `https://${v}` : `https://facebook.com/${clean}`;
-    case "whatsapp":
-      const digits = v.replace(/\D/g, "");
-      const fullDigits = digits.length <= 11 ? `55${digits}` : digits;
-      return `https://wa.me/${fullDigits}`;
-    default:
-      return v;
-  }
-}
 

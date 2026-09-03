@@ -63,7 +63,6 @@ import {
 } from "@/lib/ficha-tecnica-service";
 import {
   obterCatalogoInsumos,
-  LISTAS_COMPRAS_PADRAO,
   formatarMoeda,
   normalizarNomeInsumo,
   categorizarItemAutomatico,
@@ -75,6 +74,7 @@ import {
   type ProdutoCardapio,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
 import { toast } from "sonner";
 
 // Função para gerar nome padrão automático no formato: Lista DD/MM/AAAA - #XXXX
@@ -281,43 +281,23 @@ export function DespesasView({
     toast.success(`⚡ Lista de Insumos com ${itensLista.length} item(ns) criada e salva na Lista de Compras!`);
   };
 
-  // Sincronizar com props externas e localStorage
+  // Sincronizar com props externas e localStorage sem loops de upsert
   useEffect(() => {
-    if (listasProp && listasProp.length > 0) {
-      setListas(listasProp);
+    if (listasProp && Array.isArray(listasProp)) {
+      setListas((prev) => {
+        const prevStr = JSON.stringify(prev);
+        const propStr = JSON.stringify(listasProp);
+        return prevStr !== propStr ? listasProp : prev;
+      });
     }
   }, [listasProp]);
 
   useEffect(() => {
     try {
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && estabelecimentoCodigo) {
         localStorage.setItem(`caixadoce_listas_compras_v2_${estabelecimentoCodigo}`, JSON.stringify(listas));
       }
     } catch {}
-    if (onAtualizarListasCompras) {
-      onAtualizarListasCompras(listas);
-    }
-    // Sincronização direta com a tabela listas_compras no Supabase
-    if (listas && listas.length > 0 && estabelecimentoCodigo) {
-      listas.forEach(async (item) => {
-        try {
-          await supabase
-            .from("listas_compras" as any)
-            .upsert([
-              {
-                id: item.id,
-                estabelecimento_codigo: estabelecimentoCodigo,
-                nome: item.nome,
-                data: item.data || item.createdAt,
-                status: item.status,
-                itens: item.itens,
-                valor_estimado: item.valorEstimado || 0,
-                comprovante_url: item.comprovanteUrl,
-              },
-            ]);
-        } catch {}
-      });
-    }
   }, [listas, estabelecimentoCodigo]);
 
   // Abrir Modal de Criação de Lista (Box Inicial)

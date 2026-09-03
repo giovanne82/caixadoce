@@ -491,7 +491,7 @@ export function MercadoPagoBrick({
       if (!aprovado && estabelecimentoCodigo) {
         const { data: dbData } = await supabase
           .from("estabelecimentos")
-          .select("status, status_assinatura, plano_exp, plano_expira_em")
+          .select("*")
           .eq("codigo", estabelecimentoCodigo.toUpperCase())
           .maybeSingle();
 

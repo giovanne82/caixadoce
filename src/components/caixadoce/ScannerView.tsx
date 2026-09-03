@@ -112,6 +112,7 @@ export function ScannerView({
     modalRevisaoOpen,
     setModalRevisaoOpen,
     processarArquivoOCR,
+    limparScanner,
   } = useScanner();
 
   const { profile } = useAuth();
@@ -212,8 +213,16 @@ export function ScannerView({
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && !isScanning) {
-      processarArquivoOCR(file, scanMode);
+    if (file) {
+      const MAX_NOTINHA_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+      if (file.size > MAX_NOTINHA_SIZE_BYTES) {
+        toast.error("O arquivo é muito grande. Por favor, envie uma imagem ou PDF de no máximo 5 MB.");
+        if (e.target) e.target.value = "";
+        return;
+      }
+      if (!isScanning) {
+        processarArquivoOCR(file, scanMode);
+      }
     }
     if (e.target) {
       e.target.value = "";
@@ -347,6 +356,7 @@ export function ScannerView({
       }
 
       setModalRevisaoOpen(false);
+      limparScanner();
       toast.success(`Despesa de ${fornNome} (${formatarMoeda(valNum)}) gravada com sucesso no Supabase! 🎉`);
     } catch (e: any) {
       toast.error(`Erro ao gravar despesa no banco: ${e.message || "Erro desconhecido"}`);
