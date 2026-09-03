@@ -62,10 +62,17 @@ import {
   type ItemListaCompra,
   type ListaCompras,
   normalizarNomeInsumo,
-  CLIENTES_PADRAO,
-  CATALOGO_PRODUTOS_PADRAO,
-  LISTAS_COMPRAS_PADRAO,
 } from "@/lib/caixadoce-data";
+
+function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return userId;
+  }
+  if (ownerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerUserId)) {
+    return ownerUserId;
+  }
+  return "00000000-0000-0000-0000-000000000000";
+}
 
 function RouteErrorFallback() {
   return (
@@ -354,15 +361,7 @@ function Index() {
     }
   }, [isPlanoPagoAtivo, isTrialExpirado, activeTab]);
 
-function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
-  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-    return userId;
-  }
-  if (ownerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerUserId)) {
-    return ownerUserId;
-  }
-  return "00000000-0000-0000-0000-000000000000";
-}
+
 
   const lastFetchMapRef = useRef<Record<string, number>>({});
 
