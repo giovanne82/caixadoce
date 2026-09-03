@@ -112,6 +112,7 @@ export function ScannerView({
     modalRevisaoOpen,
     setModalRevisaoOpen,
     processarArquivoOCR,
+    limparScanner,
   } = useScanner();
 
   const { profile } = useAuth();
@@ -355,6 +356,7 @@ export function ScannerView({
       }
 
       setModalRevisaoOpen(false);
+      limparScanner();
       toast.success(`Despesa de ${fornNome} (${formatarMoeda(valNum)}) gravada com sucesso no Supabase! 🎉`);
     } catch (e: any) {
       toast.error(`Erro ao gravar despesa no banco: ${e.message || "Erro desconhecido"}`);
