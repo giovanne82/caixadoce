@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import {
@@ -89,7 +89,7 @@ interface ItemCarrinho {
 }
 
 function CardapioLojaView() {
-  const { storeCode } = Route.useParams();
+  const { storeCode } = useParams({ from: "/cardapio/$storeCode" });
   const code = (storeCode || "CD-1001").toUpperCase();
 
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
