@@ -7,4 +7,15 @@ export default defineConfig({
   nitro: {
     preset: "vercel",
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/lucide-react")) {
+            return "lucide-icons";
+          }
+        },
+      },
+    },
+  },
 });

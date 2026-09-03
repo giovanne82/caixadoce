@@ -73,15 +73,7 @@ import {
 } from "@/lib/stripeFees";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/cardapio/$storeCode")({
-  head: ({ params }) => ({
-    meta: [
-      { title: `Cardápio Digital — ${params.storeCode}` },
-      { name: "description", content: "Faça sua encomenda online com os melhores bolos, doces e sobremesas artesanais." },
-    ],
-  }),
-  component: CardapioLojaView,
-});
+
 
 interface ItemCarrinho {
   produto: ProdutoCardapio;
@@ -1027,3 +1019,13 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
     </div>
   );
 }
+
+export const Route = createFileRoute("/cardapio/$storeCode")({
+  head: ({ params }) => ({
+    meta: [
+      { title: `Cardápio Digital — ${params.storeCode}` },
+      { name: "description", content: "Faça sua encomenda online com os melhores bolos, doces e sobremesas artesanais." },
+    ],
+  }),
+  component: CardapioLojaView,
+});

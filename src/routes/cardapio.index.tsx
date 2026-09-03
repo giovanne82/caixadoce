@@ -7,16 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Cake, ArrowRight, Store, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/cardapio/")({
-  head: () => ({
-    meta: [
-      { title: "Cardápio Digital — CaixaDoce" },
-      { name: "description", content: "Acesse o cardápio da sua confeitaria favorita digitando o código da loja." },
-    ],
-  }),
-  component: CardapioBuscaView,
-});
-
 function CardapioBuscaView() {
   const navigate = useNavigate();
   const [storeCode, setStoreCode] = useState("");
@@ -90,3 +80,13 @@ function CardapioBuscaView() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/cardapio/")({
+  head: () => ({
+    meta: [
+      { title: "Cardápio Digital — CaixaDoce" },
+      { name: "description", content: "Acesse o cardápio da sua confeitaria favorita digitando o código da loja." },
+    ],
+  }),
+  component: CardapioBuscaView,
+});

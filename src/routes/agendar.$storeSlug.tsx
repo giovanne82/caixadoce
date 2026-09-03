@@ -78,15 +78,7 @@ import {
 } from "@/lib/stripeFees";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/agendar/$storeSlug")({
-  head: () => ({
-    meta: [
-      { title: "Cardápio & Agendamento de Encomendas — CaixaDoce" },
-      { name: "description", content: "Escolha seus doces e bolos favoritos e agende a data de entrega ou retirada." },
-    ],
-  }),
-  component: PublicStoreView,
-});
+
 
 interface ItemCarrinho {
   produto: ProdutoCardapio;
@@ -942,3 +934,13 @@ function PublicStoreView() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/agendar/$storeSlug")({
+  head: () => ({
+    meta: [
+      { title: "Cardápio & Agendamento de Encomendas — CaixaDoce" },
+      { name: "description", content: "Escolha seus doces e bolos favoritos e agende a data de entrega ou retirada." },
+    ],
+  }),
+  component: PublicStoreView,
+});

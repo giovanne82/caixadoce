@@ -91,24 +91,7 @@ function RouteErrorFallback() {
   );
 }
 
-export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    error: search.error as string | undefined,
-    error_code: search.error_code as string | undefined,
-    error_description: search.error_description as string | undefined,
-    tab: search.tab as string | undefined,
-    code: search.code as string | undefined,
-  }),
-  head: () => ({
-    meta: [
-      { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
-      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos, encomendas e cardápio de confeitaria." },
-      { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
-    ],
-  }),
-  component: Index,
-  errorComponent: RouteErrorFallback,
-});
+
 
 function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
   return (
@@ -2086,3 +2069,22 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   </ScannerProvider>
 );
 }
+
+export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    error: search.error as string | undefined,
+    error_code: search.error_code as string | undefined,
+    error_description: search.error_description as string | undefined,
+    tab: search.tab as string | undefined,
+    code: search.code as string | undefined,
+  }),
+  head: () => ({
+    meta: [
+      { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
+      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos, encomendas e cardápio de confeitaria." },
+      { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
+    ],
+  }),
+  component: Index,
+  errorComponent: RouteErrorFallback,
+});
