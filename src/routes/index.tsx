@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { ScannerProvider, useScanner } from "@/context/scanner-context";
