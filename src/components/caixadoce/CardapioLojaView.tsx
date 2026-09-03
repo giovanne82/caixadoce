@@ -37,6 +37,9 @@ import {
   Instagram,
   Facebook,
   Music,
+  Check,
+  Copy,
+  AlertCircle,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -61,7 +64,16 @@ import {
 } from "@/lib/stripeFees";
 import { toast } from "sonner";
 
-interface SocialLinksProps {
+// ==========================================
+// 1. INTERFACES & TIPAGENS DO CARDÁPIO
+// ==========================================
+
+export interface ItemCarrinho {
+  produto: ProdutoCardapio;
+  quantidade: number;
+}
+
+export interface SocialLinksProps {
   instagram?: string;
   tiktok?: string;
   facebook?: string;
@@ -70,7 +82,37 @@ interface SocialLinksProps {
   variant?: "header" | "banner" | "footer";
 }
 
-function SocialLinks({ instagram, tiktok, facebook, whatsapp, telefone, variant = "header" }: SocialLinksProps) {
+export interface LojaInfoState {
+  whatsapp?: string;
+  telefone?: string;
+  user_id?: string;
+  nome?: string;
+  logo_url?: string;
+  store_logo_url?: string;
+  titulo_cardapio?: string;
+  menu_title?: string;
+  slogan_cardapio?: string;
+  menu_slogan?: string;
+  chave_pix?: string;
+  tipo_chave_pix?: string;
+  cidade?: string;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+}
+
+// ==========================================
+// 2. COMPONENTES AUXILIARES PUROS NO TOPO
+// ==========================================
+
+export function SocialLinks({
+  instagram,
+  tiktok,
+  facebook,
+  whatsapp,
+  telefone,
+  variant = "header",
+}: SocialLinksProps) {
   const instaUrl = formatarLinkRedeSocial("instagram", instagram);
   const tiktokUrl = formatarLinkRedeSocial("tiktok", tiktok);
   const fbUrl = formatarLinkRedeSocial("facebook", facebook);
@@ -82,25 +124,45 @@ function SocialLinks({ instagram, tiktok, facebook, whatsapp, telefone, variant 
     return (
       <div className="flex flex-wrap items-center justify-center gap-2 pt-1.5">
         {instaUrl && (
-          <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white shadow-xs hover:opacity-95 transition-all transform hover:scale-105">
+          <a
+            href={instaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white shadow-xs hover:opacity-95 transition-all transform hover:scale-105"
+          >
             <Instagram className="w-3.5 h-3.5 text-white" />
             <span>Instagram</span>
           </a>
         )}
         {tiktokUrl && (
-          <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-slate-900 text-white shadow-xs hover:bg-black transition-all transform hover:scale-105">
+          <a
+            href={tiktokUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-slate-900 text-white shadow-xs hover:bg-black transition-all transform hover:scale-105"
+          >
             <Music className="w-3.5 h-3.5 text-pink-400" />
             <span>TikTok</span>
           </a>
         )}
         {fbUrl && (
-          <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-blue-600 text-white shadow-xs hover:bg-blue-700 transition-all transform hover:scale-105">
+          <a
+            href={fbUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-blue-600 text-white shadow-xs hover:bg-blue-700 transition-all transform hover:scale-105"
+          >
             <Facebook className="w-3.5 h-3.5 text-white" />
             <span>Facebook</span>
           </a>
         )}
         {waUrl && (
-          <a href={waUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 transition-all transform hover:scale-105">
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 transition-all transform hover:scale-105"
+          >
             <MessageCircle className="w-3.5 h-3.5 text-white" />
             <span>WhatsApp</span>
           </a>
@@ -113,22 +175,46 @@ function SocialLinks({ instagram, tiktok, facebook, whatsapp, telefone, variant 
     return (
       <div className="flex items-center justify-center gap-3 pt-1">
         {instaUrl && (
-          <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-all" title="Instagram">
+          <a
+            href={instaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-all"
+            title="Instagram"
+          >
             <Instagram className="w-4 h-4" />
           </a>
         )}
         {tiktokUrl && (
-          <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-slate-800/10 dark:bg-white/10 text-slate-800 dark:text-white hover:bg-slate-800/20 transition-all" title="TikTok">
+          <a
+            href={tiktokUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-slate-800/10 dark:bg-white/10 text-slate-800 dark:text-white hover:bg-slate-800/20 transition-all"
+            title="TikTok"
+          >
             <Music className="w-4 h-4" />
           </a>
         )}
         {fbUrl && (
-          <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all" title="Facebook">
+          <a
+            href={fbUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all"
+            title="Facebook"
+          >
             <Facebook className="w-4 h-4" />
           </a>
         )}
         {waUrl && (
-          <a href={waUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all" title="WhatsApp">
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all"
+            title="WhatsApp"
+          >
             <MessageCircle className="w-4 h-4" />
           </a>
         )}
@@ -139,22 +225,46 @@ function SocialLinks({ instagram, tiktok, facebook, whatsapp, telefone, variant 
   return (
     <div className="flex items-center gap-1">
       {instaUrl && (
-        <a href={instaUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-pink-600 hover:bg-white/50 transition-all" title="Instagram">
+        <a
+          href={instaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1 rounded-full text-[#2E1A47] hover:text-pink-600 hover:bg-white/50 transition-all"
+          title="Instagram"
+        >
           <Instagram className="w-3.5 h-3.5" />
         </a>
       )}
       {tiktokUrl && (
-        <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-slate-900 hover:bg-white/50 transition-all" title="TikTok">
+        <a
+          href={tiktokUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1 rounded-full text-[#2E1A47] hover:text-slate-900 hover:bg-white/50 transition-all"
+          title="TikTok"
+        >
           <Music className="w-3.5 h-3.5" />
         </a>
       )}
       {fbUrl && (
-        <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-blue-600 hover:bg-white/50 transition-all" title="Facebook">
+        <a
+          href={fbUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1 rounded-full text-[#2E1A47] hover:text-blue-600 hover:bg-white/50 transition-all"
+          title="Facebook"
+        >
           <Facebook className="w-3.5 h-3.5" />
         </a>
       )}
       {waUrl && (
-        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-full text-[#2E1A47] hover:text-emerald-600 hover:bg-white/50 transition-all" title="WhatsApp">
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1 rounded-full text-[#2E1A47] hover:text-emerald-600 hover:bg-white/50 transition-all"
+          title="WhatsApp"
+        >
           <MessageCircle className="w-3.5 h-3.5" />
         </a>
       )}
@@ -162,23 +272,24 @@ function SocialLinks({ instagram, tiktok, facebook, whatsapp, telefone, variant 
   );
 }
 
-interface ItemCarrinho {
-  produto: ProdutoCardapio;
-  quantidade: number;
-}
+// ==========================================
+// 3. COMPONENTE PRINCIPAL DO CARDÁPIO
+// ==========================================
 
 export function CardapioLojaView() {
-  const params = useParams({ strict: false }) as Record<string, string>;
-  const storeCode = params?.storeCode;
-  const code = (storeCode || "CD-1001").toUpperCase();
+  // Leitura desacoplada e segura dos parâmetros de rota
+  const routeParams = useParams({ strict: false }) as Record<string, string> | undefined;
+  const storeCodeFromParam = routeParams?.storeCode;
+  const code = (storeCodeFromParam || "CD-1001").toUpperCase();
 
+  // Estados dos Produtos e Carrinho
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>("todas");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [pedidoConcluido, setPedidoConcluido] = useState(false);
 
-  // Formulário do Cliente no Checkout
+  // Estados do Formulário de Checkout do Cliente
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsapp, setClienteWhatsapp] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
@@ -190,26 +301,18 @@ export function CardapioLojaView() {
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-  const [lojaInfo, setLojaInfo] = useState<{
-    whatsapp?: string;
-    telefone?: string;
-    user_id?: string;
-    nome?: string;
-    logo_url?: string;
-    store_logo_url?: string;
-    titulo_cardapio?: string;
-    menu_title?: string;
-    slogan_cardapio?: string;
-    menu_slogan?: string;
-    chavePix?: string;
-    cidade?: string;
-    instagram?: string;
-    tiktok?: string;
-    facebook?: string;
-    social_media?: any;
-  } | null>(null);
+  // Dados da Loja
+  const [lojaInfo, setLojaInfo] = useState<LojaInfoState | null>(null);
 
+  // Dados de Conclusão do Pix
+  const [pixCopiaCola, setPixCopiaCola] = useState("");
+  const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
+  const [pixCopiado, setPixCopiado] = useState(false);
+
+  // 1. Carregamento de Dados da Confeitaria (Supabase + LocalStorage Fallback)
   useEffect(() => {
+    let cancelado = false;
+
     async function carregarDadosLoja() {
       try {
         if (code === "CD-DEMO" || code === "DEMO-01") {
