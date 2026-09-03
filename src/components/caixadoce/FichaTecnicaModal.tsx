@@ -68,6 +68,14 @@ interface FichaTecnicaModalProps {
   onAplicarPrecoProduto: (produtoId: string, novoPreco: number) => Promise<void>;
 }
 
+// Helper para leitura limpa de números em campos de texto livre (aceita "100", "0,5", "0.5")
+function parseNumberInput(val: string): number {
+  if (!val) return 0;
+  const clean = val.replace(",", ".").replace(/[^0-9.]/g, "");
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 export function FichaTecnicaModal({
   open,
   onOpenChange,
@@ -99,14 +107,6 @@ export function FichaTecnicaModal({
 
   // Preço de Venda Final
   const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
-
-  // Helper para leitura limpa de números em campos de texto livre (aceita "100", "0,5", "0.5")
-  const parseNumberInput = (val: string): number => {
-    if (!val) return 0;
-    const clean = val.replace(",", ".").replace(/[^0-9.]/g, "");
-    const parsed = parseFloat(clean);
-    return isNaN(parsed) ? 0 : parsed;
-  };
 
   // Form de Inserção de Novo Insumo na Ficha (Campos livres sem setas numéricas)
   const [novoInsumoNome, setNovoInsumoNome] = useState("");
