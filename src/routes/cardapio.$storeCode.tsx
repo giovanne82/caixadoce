@@ -60,9 +60,8 @@ import {
   formatarBadgeDisponibilidadeProduto,
   validarDataEntrega,
   validarHorarioEntrega,
-  generatePixPayload,
-  type ProdutoCardapio,
-} from "@/lib/caixadoce-data";
+} from "@/lib/cardapio-helpers";
+import { generatePixPayload, type ProdutoCardapio } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
