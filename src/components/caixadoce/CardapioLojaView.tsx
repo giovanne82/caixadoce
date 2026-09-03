@@ -168,7 +168,8 @@ interface ItemCarrinho {
 }
 
 export function CardapioLojaView() {
-  const { storeCode } = useParams({ from: "/cardapio/$storeCode" });
+  const params = useParams({ strict: false }) as Record<string, string>;
+  const storeCode = params?.storeCode;
   const code = (storeCode || "CD-1001").toUpperCase();
 
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
