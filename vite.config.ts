@@ -8,6 +8,7 @@ export default defineConfig({
     preset: "vercel",
   },
   build: {
+    minify: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
