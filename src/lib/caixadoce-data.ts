@@ -1,3 +1,5 @@
+import { generatePixPayload } from "./pix-utils";
+
 export interface Estabelecimento {
   id: string;
   codigo: string;
@@ -1166,8 +1168,6 @@ export function formatarWhatsappLink(whatsapp: string, mensagem?: string): strin
   const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
   return `https://wa.me/${formattedPhone}${textEncoded ? `?text=${textEncoded}` : ""}`;
 }
-
-import { generatePixPayload } from "./pix-utils";
 
 export { generatePixPayload, calculateCRC16, formatPixKey, type ContaPix } from "./pix-utils";
 
