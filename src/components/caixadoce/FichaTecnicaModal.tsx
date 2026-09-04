@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   Info,
   UtensilsCrossed,
+  Scale,
 } from "lucide-react";
 import {
   formatarMoeda,
