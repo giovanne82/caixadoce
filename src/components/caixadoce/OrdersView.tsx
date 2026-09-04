@@ -80,7 +80,9 @@ import {
   Flame,
   Sparkles,
   PlusCircle,
+  Users,
 } from "lucide-react";
+import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   obterFichaTecnicaProduto,
@@ -101,6 +103,7 @@ import {
   obterCatalogoInsumos,
   salvarNovoInsumoCatalogo,
   obterClientes,
+  salvarClientesStorage,
   obterProdutosCardapio,
   obterNotinhasVinculadasPorLista,
   salvarNotinhasVinculadasPorLista,
@@ -134,6 +137,9 @@ interface OrdersViewProps {
   onBloquearData: (data: string, motivo: string) => Promise<void>;
   onDesbloquearData: (id: string) => Promise<void>;
   onCriarClienteRapido?: (nome: string, whatsapp: string, endereco?: string) => Promise<void>;
+  onCriarCliente?: (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => Promise<void>;
+  onEditarCliente?: (id: string, dados: Partial<Cliente>) => Promise<void>;
+  onExcluirCliente?: (id: string) => Promise<void>;
 }
 
 function obterEstiloPilula(status: StatusEncomenda) {
@@ -164,9 +170,16 @@ export function OrdersView({
   onBloquearData,
   onDesbloquearData,
   onCriarClienteRapido,
+  onCriarCliente,
+  onEditarCliente,
+  onExcluirCliente,
 }: OrdersViewProps) {
   const { profile } = useAuth();
   const activeCode = profile?.establishmentCode || "";
+
+  // Aba Sub-View: 'pedidos' | 'clientes'
+  const [abaSubView, setAbaSubView] = useState<"pedidos" | "clientes">("pedidos");
+
   // Modos de Visualização: 'lista' | 'semana' | 'mes' | 'compras'
   const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("lista");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -1073,6 +1086,109 @@ export function OrdersView({
       pendentes,
     };
   }, [encomendas, abaCompras]);
+  const handleCriarClienteFallback = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
+    if (onCriarCliente) {
+      await onCriarCliente(dados);
+      return;
+    }
+    const novo: Cliente = {
+      ...dados,
+      id: crypto.randomUUID(),
+      estabelecimentoCodigo: activeCode,
+      createdAt: new Date().toISOString(),
+    };
+    const atualizados = [novo, ...listaClientes];
+    salvarClientesStorage(activeCode, atualizados);
+    try {
+      await supabase.from("customers").upsert([
+        {
+          id: novo.id,
+          user_id: profile?.ownerUserId || null,
+          estabelecimento_codigo: activeCode,
+          name: novo.nome,
+          whatsapp: novo.whatsapp,
+          address: novo.endereco || "",
+          notes: novo.observacoes || "",
+        },
+      ], { onConflict: "id" });
+    } catch {}
+    toast.success("Cliente cadastrado com sucesso.");
+  };
+
+  const handleEditarClienteFallback = async (id: string, dados: Partial<Cliente>) => {
+    if (onEditarCliente) {
+      await onEditarCliente(id, dados);
+      return;
+    }
+    const atualizados = listaClientes.map((c) => (c.id === id ? { ...c, ...dados } : c));
+    salvarClientesStorage(activeCode, atualizados);
+    try {
+      await supabase.from("customers").update({
+        name: dados.nome,
+        whatsapp: dados.whatsapp,
+        address: dados.endereco,
+        notes: dados.observacoes,
+      }).eq("id", id);
+    } catch {}
+    toast.success("Dados do cliente atualizados.");
+  };
+
+  const handleExcluirClienteFallback = async (id: string) => {
+    if (onExcluirCliente) {
+      await onExcluirCliente(id);
+      return;
+    }
+    const atualizados = listaClientes.filter((c) => c.id !== id);
+    salvarClientesStorage(activeCode, atualizados);
+    try {
+      await supabase.from("customers").delete().eq("id", id);
+    } catch {}
+    toast.success("Cliente removido.");
+  };
+
+  if (abaSubView === "clientes") {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
+              Meus Clientes <Users className="w-6 h-6 text-primary" />
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Consulte e gerencie a lista consolidada dos clientes que já realizaram pedidos pelo cardápio.
+            </p>
+          </div>
+
+          <div className="flex items-center bg-muted/80 p-1 rounded-xl border border-border/60">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAbaSubView("pedidos")}
+              className="h-8 text-xs font-bold rounded-lg px-3"
+            >
+              <Package className="w-3.5 h-3.5 mr-1.5" /> Pedidos
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setAbaSubView("clientes")}
+              className="h-8 text-xs font-bold rounded-lg px-3"
+            >
+              <Users className="w-3.5 h-3.5 mr-1.5" /> Clientes ({listaClientes.length})
+            </Button>
+          </div>
+        </div>
+
+        <CustomersView
+          clientes={listaClientes}
+          encomendas={encomendas}
+          onCriarCliente={handleCriarClienteFallback}
+          onEditarCliente={handleEditarClienteFallback}
+          onExcluirCliente={handleExcluirClienteFallback}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1088,6 +1204,26 @@ export function OrdersView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Seletor Seção: Pedidos vs Clientes */}
+          <div className="flex items-center bg-muted/80 p-1 rounded-xl border border-border/60">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setAbaSubView("pedidos")}
+              className="h-8 text-xs font-bold rounded-lg px-3"
+            >
+              <Package className="w-3.5 h-3.5 mr-1.5" /> Pedidos
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAbaSubView("clientes")}
+              className="h-8 text-xs font-bold rounded-lg px-3"
+            >
+              <Users className="w-3.5 h-3.5 mr-1.5" /> Clientes ({listaClientes.length})
+            </Button>
+          </div>
+
           <Button
             variant="outline"
             size="sm"
@@ -1106,8 +1242,7 @@ export function OrdersView({
           </Button>
         </div>
       </div>
-
-      {/* Barra de Controle de Visualização */}
+          {/* Barra de Controle de Visualização */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button

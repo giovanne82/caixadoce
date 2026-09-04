@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -50,11 +51,13 @@ import {
   Facebook,
   MessageCircle,
   Music,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
 import { MontarKitModal } from "./MontarKitModal";
+import { InsumosView } from "./InsumosView";
 import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
@@ -100,12 +103,40 @@ export function ProductsView({
   const [modalQrOpen, setModalQrOpen] = useState(false);
   const [modalNovaCatOpen, setModalNovaCatOpen] = useState(false);
   const [modalFichaOpen, setModalFichaOpen] = useState(false);
+  const [modalInsumosOpen, setModalInsumosOpen] = useState(false);
   const [produtoFichaAlvo, setProdutoFichaAlvo] = useState<ProdutoCardapio | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
   // Personalização Visual do Cardápio
   const { profile, updateEstablishmentDetails } = useAuth();
+  // Configuração da opção de Entrega (Delivery)
+  const [deliveryAtivo, setDeliveryAtivo] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && estabelecimentoCodigo) {
+      const localVal = localStorage.getItem(`caixadoce_delivery_${estabelecimentoCodigo}`);
+      if (localVal !== null) return localVal === "true";
+    }
+    return profile?.delivery_ativo !== false && profile?.aceita_delivery !== false;
+  });
+
+  const handleToggleDelivery = async (checked: boolean) => {
+    setDeliveryAtivo(checked);
+    if (typeof window !== "undefined" && estabelecimentoCodigo) {
+      localStorage.setItem(`caixadoce_delivery_${estabelecimentoCodigo}`, String(checked));
+    }
+    try {
+      await updateEstablishmentDetails({
+        delivery_ativo: checked,
+        aceita_delivery: checked,
+        deliveryHabilitado: checked,
+      });
+      toast.success(checked ? "Entrega (Delivery) ativada para seus clientes!" : "Delivery desativado (Apenas Retirada no Balcão).");
+    } catch (err: any) {
+      console.warn("[ProductsView] Erro ao atualizar status de delivery:", err);
+      toast.info("Configuração salva no navegador.");
+    }
+  };
+
   const fileInputRefLogo = useRef<HTMLInputElement>(null);
   const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false);
   const [logoUrlCustom, setLogoUrlCustom] = useState(profile?.logoUrl || profile?.store_logo_url || "");
@@ -410,6 +441,32 @@ export function ProductsView({
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Visualizar Cardápio
             </Button>
           </a>
+        </div>
+      </div>
+
+      {/* Opção de Delivery (Entrega a Domicílio) no Cardápio Digital */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-xs">
+        <div className="space-y-0.5">
+          <Label htmlFor="switch-delivery-cardapio" className="text-xs font-bold text-foreground flex items-center gap-2 cursor-pointer">
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            Habilitar opção de Entrega (Delivery) no Cardápio Digital
+          </Label>
+          <p className="text-[11px] text-muted-foreground">
+            {deliveryAtivo
+              ? "Seus clientes poderão escolher entre Entrega / Delivery e Retirada no Balcão ao fazer pedidos."
+              : "Delivery desativado. O Cardápio Digital aceitará apenas a modalidade de Retirada no Balcão."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Badge variant={deliveryAtivo ? "default" : "outline"} className="text-[10px] font-bold">
+            {deliveryAtivo ? "Delivery Ativo" : "Apenas Retirada"}
+          </Badge>
+          <Switch
+            id="switch-delivery-cardapio"
+            checked={deliveryAtivo}
+            onCheckedChange={handleToggleDelivery}
+          />
         </div>
       </div>
 
@@ -1158,6 +1215,13 @@ export function ProductsView({
           }
         }}
       />
+
+      {/* MODAL: GESTÃO DE INSUMOS */}
+      <Dialog open={modalInsumosOpen} onOpenChange={setModalInsumosOpen}>
+        <DialogContent className="w-[96vw] sm:w-[950px] max-w-[950px] h-[90vh] max-h-[850px] flex flex-col p-4 sm:p-6 overflow-hidden overflow-y-auto rounded-2xl">
+          <InsumosView estabelecimentoCodigo={estabelecimentoCodigo} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -46,12 +46,22 @@ import {
   ShoppingBag,
   Receipt,
   Zap,
+  Link2,
+  ChevronDown,
+  ChevronUp,
+  Check,
 } from "lucide-react";
 import {
   formatarMoeda,
   categorizarItemAutomatico,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
+  obterInsumosCadastrados,
+  salvarInsumosCadastradosStorage,
+  salvarMapeamentoDePara,
+  encontrarVinculoDeParaAutomatico,
+  atualizarCustoInsumoECascataFichas,
+  normalizarNomeInsumo,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
   type Encomenda,
@@ -59,12 +69,174 @@ import {
   type TransacaoFinanceira,
   type MetodoPagamento,
   type StatusTransacao,
+  type InsumoCadastrado,
 } from "@/lib/caixadoce-data";
 import { useScanner } from "@/context/scanner-context";
 import { useAuth } from "@/context/auth-context";
 import { type ScanMode } from "@/lib/ocr-service";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+interface CustomInsumoSelectProps {
+  value?: string;
+  placeholder?: string;
+  insumos: InsumoCadastrado[];
+  onSelect: (val: string) => void;
+  className?: string;
+}
+
+function CustomInsumoSelect({
+  value,
+  placeholder = "Vincular insumo...",
+  insumos,
+  onSelect,
+  className = "",
+}: CustomInsumoSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
+
+  const selectedInsumo = insumos.find((i) => i.id === value);
+  const selectedLabel = selectedInsumo
+    ? `${selectedInsumo.nome} (${formatarMoeda(selectedInsumo.custoAtual)})`
+    : value === "_none" || !value
+    ? "Sem vínculo"
+    : placeholder;
+
+  const insumosFiltrados = busca.trim()
+    ? insumos.filter((i) => i.nome.toLowerCase().includes(busca.toLowerCase()))
+    : insumos;
+
+  return (
+    <div className={cn("relative inline-block w-full text-left", className)} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+        className={cn(
+          "w-full h-7 px-2 text-xs bg-background border border-input rounded-md flex items-center justify-between gap-1 shadow-2xs hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors cursor-pointer text-foreground",
+          value && value !== "_none" && "border-purple-400 dark:border-purple-700 bg-purple-50/40 dark:bg-purple-950/20 font-medium"
+        )}
+      >
+        <span className="truncate text-left flex-1">
+          {selectedInsumo ? (
+            <span className="text-purple-900 dark:text-purple-300 font-semibold">{selectedInsumo.nome}</span>
+          ) : (
+            <span className="text-muted-foreground">{selectedLabel}</span>
+          )}
+        </span>
+        <ChevronDown className={cn("w-3.5 h-3.5 shrink-0 opacity-60 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 sm:left-0 top-full mt-1 w-[260px] sm:w-[320px] max-w-[90vw] bg-popover text-popover-foreground border border-purple-200 dark:border-purple-900/80 rounded-xl shadow-xl z-[9999] overflow-hidden animate-in fade-in-0 zoom-in-95"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* FIXO E EM DESTAQUE NO TOPO DA LISTA FLUTUANTE */}
+          <div className="p-1.5 bg-purple-100/90 dark:bg-purple-950/95 border-b border-purple-200 dark:border-purple-800/80 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                setBusca("");
+                onSelect("_novo_insumo");
+              }}
+              className="w-full text-left font-bold text-purple-700 dark:text-purple-300 bg-purple-200/90 hover:bg-purple-300 dark:bg-purple-900 dark:hover:bg-purple-800 p-2 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer active:scale-[0.99] border border-purple-300 dark:border-purple-700 shadow-2xs"
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <Plus className="w-4 h-4 text-purple-600 dark:text-purple-300 shrink-0" />
+                ＋ Cadastrar Novo Insumo
+              </span>
+              <span className="text-[10px] bg-purple-700 text-white px-1.5 py-0.5 rounded-md font-semibold">
+                Rápido
+              </span>
+            </button>
+          </div>
+
+          {insumos.length > 3 && (
+            <div className="p-1.5 border-b border-border bg-muted/20">
+              <input
+                type="text"
+                placeholder="Buscar insumo cadastrado..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full px-2 py-1 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                autoFocus
+              />
+            </div>
+          )}
+
+          <div className="max-h-[190px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setBusca("");
+                onSelect("_none");
+              }}
+              className={cn(
+                "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-accent",
+                (!value || value === "_none") && "bg-accent font-medium text-foreground"
+              )}
+            >
+              <span>Sem vínculo</span>
+              {(!value || value === "_none") && <Check className="w-3.5 h-3.5 text-purple-600" />}
+            </button>
+
+            {insumosFiltrados.map((ins) => (
+              <button
+                key={ins.id}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setBusca("");
+                  onSelect(ins.id);
+                }}
+                className={cn(
+                  "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-purple-50 dark:hover:bg-purple-950/50",
+                  value === ins.id && "bg-purple-100/70 dark:bg-purple-900/40 text-purple-900 dark:text-purple-200 font-semibold"
+                )}
+              >
+                <span className="truncate pr-2">{ins.nome}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
+                    {formatarMoeda(ins.custoAtual)}
+                  </span>
+                  {value === ins.id && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />}
+                </div>
+              </button>
+            ))}
+
+            {insumosFiltrados.length === 0 && (
+              <div className="p-3 text-center text-xs text-muted-foreground">
+                Nenhum insumo encontrado.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ScannerViewProps {
   despesas: DespesaNotaFiscal[];
@@ -189,6 +361,321 @@ export function ScannerView({
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  // Insumos Cadastrados da Loja & Memória de Vínculo De-Para
+  const [insumosCadastrados, setInsumosCadastrados] = useState<InsumoCadastrado[]>([]);
+  const [expandedReceipts, setExpandedReceipts] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (activeCode) {
+      setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+    }
+  }, [activeCode]);
+
+  useEffect(() => {
+    const handleInsumosUpdate = () => {
+      if (activeCode) {
+        setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+      }
+    };
+    window.addEventListener("insumosUpdated", handleInsumosUpdate);
+    return () => window.removeEventListener("insumosUpdated", handleInsumosUpdate);
+  }, [activeCode]);
+
+  const toggleExpandReceipt = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedReceipts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Modal de Cadastro Rápido de Insumo no Seletor De-Para
+  const [modalCadastroRapidoOpen, setModalCadastroRapidoOpen] = useState(false);
+  const [novoInsumoNome, setNovoInsumoNome] = useState("");
+  const [novoInsumoUnidade, setNovoInsumoUnidade] = useState("kg");
+  const [novoInsumoQtdEmb, setNovoInsumoQtdEmb] = useState("1");
+  const [novoInsumoCustoStr, setNovoInsumoCustoStr] = useState("");
+  const [novoInsumoFornecedor, setNovoInsumoFornecedor] = useState("");
+  const [salvandoRapidoInsumo, setSalvandoRapidoInsumo] = useState(false);
+
+  const [targetItemParaVincular, setTargetItemParaVincular] = useState<{
+    despesaId: string;
+    itemId: string;
+    itemNome: string;
+    fornecedorNome: string;
+    valorTotal: number;
+    quantidade: number;
+  } | null>(null);
+
+  const setInsumoParaCadastroRapido = (
+    data: {
+      nome: string;
+      valor?: number;
+      despesaId?: string;
+      itemId?: string;
+      fornecedorNome?: string;
+      quantidade?: number;
+    },
+    itemContext?: {
+      despesaId: string;
+      itemId: string;
+      itemNome: string;
+      fornecedorNome: string;
+      valorTotal: number;
+      quantidade: number;
+    }
+  ) => {
+    const despesaId = itemContext?.despesaId ?? data.despesaId ?? "";
+    const itemId = itemContext?.itemId ?? data.itemId ?? "";
+    const itemNome = itemContext?.itemNome ?? data.nome ?? "";
+    const fornecedorNome = itemContext?.fornecedorNome ?? data.fornecedorNome ?? "";
+    const qtd = itemContext?.quantidade ?? data.quantidade ?? 1;
+    const valTotal = itemContext?.valorTotal ?? ((data.valor || 0) * qtd);
+
+    if (itemNome || itemId) {
+      setTargetItemParaVincular({
+        despesaId,
+        itemId,
+        itemNome,
+        fornecedorNome,
+        valorTotal: valTotal,
+        quantidade: qtd,
+      });
+    }
+
+    const nomeLimpo = normalizarNomeInsumo(itemNome);
+    setNovoInsumoNome(nomeLimpo);
+    const valUnit = data.valor && data.valor > 0 ? data.valor : (valTotal > 0 ? valTotal / qtd : 0);
+    setNovoInsumoCustoStr(valUnit > 0 ? formatarMoeda(valUnit) : "");
+    setNovoInsumoQtdEmb(String(qtd));
+    setNovoInsumoUnidade("un");
+    setNovoInsumoFornecedor(fornecedorNome);
+    setModalCadastroRapidoOpen(true);
+  };
+  const setModalInsumoOpen = (open: boolean) => setModalCadastroRapidoOpen(open);
+
+  const handleAbrirCadastroRapidoInsumo = (itemContext: {
+    despesaId: string;
+    itemId: string;
+    itemNome: string;
+    fornecedorNome: string;
+    valorTotal: number;
+    quantidade: number;
+  }) => {
+    const qtd = itemContext.quantidade > 0 ? itemContext.quantidade : 1;
+    const valUnit = itemContext.valorTotal > 0 ? parseFloat((itemContext.valorTotal / qtd).toFixed(2)) : itemContext.valorTotal;
+
+    setInsumoParaCadastroRapido(
+      {
+        nome: itemContext.itemNome,
+        valor: valUnit,
+        quantidade: qtd,
+        fornecedorNome: itemContext.fornecedorNome,
+      },
+      itemContext
+    );
+  };
+
+  const handleSalvarCadastroRapidoInsumo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCode || !novoInsumoNome.trim()) {
+      toast.error("Informe o nome do insumo.");
+      return;
+    }
+
+    const valCusto = converterMoedaInputParaNumero(novoInsumoCustoStr);
+    const qtdEmb = parseFloat(novoInsumoQtdEmb.replace(",", ".")) || 1;
+
+    if (valCusto <= 0) {
+      toast.error("Informe o custo do insumo.");
+      return;
+    }
+
+    setSalvandoRapidoInsumo(true);
+    try {
+      const novoId = crypto.randomUUID();
+      const novoInsumoObj: InsumoCadastrado = {
+        id: novoId,
+        estabelecimentoCodigo: activeCode,
+        nome: novoInsumoNome.trim(),
+        unidadeMedida: novoInsumoUnidade,
+        custoAtual: valCusto,
+        qtdEmbalagemOriginal: qtdEmb,
+        unidadeEmbalagemOriginal: novoInsumoUnidade,
+        fornecedor: novoInsumoFornecedor.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const atuais = obterInsumosCadastrados(activeCode);
+      const novalista = [novoInsumoObj, ...atuais];
+      salvarInsumosCadastradosStorage(activeCode, novalista);
+
+      try {
+        await supabase.from("insumos").insert([
+          {
+            id: novoInsumoObj.id,
+            estabelecimento_codigo: activeCode,
+            user_id: profile?.ownerUserId || null,
+            nome: novoInsumoObj.nome,
+            unidade_medida: novoInsumoObj.unidadeMedida,
+            custo_atual: novoInsumoObj.custoAtual,
+            qtd_embalagem_original: novoInsumoObj.qtdEmbalagemOriginal,
+            unidade_embalagem_original: novoInsumoObj.unidadeMedida,
+            fornecedor: novoInsumoObj.fornecedor || "",
+          },
+        ]);
+      } catch (err) {
+        console.warn("[Scanner] Erro ao salvar insumo rápido no Supabase:", err);
+      }
+
+      if (targetItemParaVincular) {
+        const { despesaId, itemId, itemNome, fornecedorNome } = targetItemParaVincular;
+
+        salvarMapeamentoDePara(activeCode, itemNome, fornecedorNome, novoId, novoInsumoObj.nome);
+
+        await atualizarCustoInsumoECascataFichas(
+          activeCode,
+          novoId,
+          valCusto,
+          profile?.ownerUserId
+        );
+
+        const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+        if (targetDespesa) {
+          const novosItens = (targetDespesa.itens || []).map((it) => {
+            if (it.id === itemId || it.nome === itemNome) {
+              return {
+                ...it,
+                insumoVinculadoId: novoId,
+                insumoVinculadoNome: novoInsumoObj.nome,
+              };
+            }
+            return it;
+          });
+
+          try {
+            await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+          } catch {}
+          if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+
+          if (registroDetalhes && registroDetalhes.id === despesaId) {
+            setRegistroDetalhes({ ...registroDetalhes, itens: novosItens });
+          }
+        } else {
+          // Atualiza no modal de revisão OCR se for notinha nova
+          setItensExtraidos((prev) =>
+            prev.map((it) =>
+              it.id === itemId || it.nome === itemNome
+                ? { ...it, insumoVinculadoId: novoId, insumoVinculadoNome: novoInsumoObj.nome }
+                : it
+            )
+          );
+        }
+      }
+
+      setInsumosCadastrados(novalista);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("insumosUpdated", { detail: { insumoId: novoId, novoCusto: valCusto } }));
+      }
+
+      toast.success(`✨ Insumo "${novoInsumoObj.nome}" cadastrado e vinculado com sucesso!`);
+      setModalCadastroRapidoOpen(false);
+      setTargetItemParaVincular(null);
+    } catch (e: any) {
+      toast.error(`Erro ao cadastrar insumo: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setSalvandoRapidoInsumo(false);
+    }
+  };
+
+  const handleVincularInsumoNota = async (
+    despesaId: string,
+    itemId: string,
+    itemNome: string,
+    fornecedorNome: string,
+    insumoId: string,
+    itemValorTotal: number,
+    itemQtd: number
+  ) => {
+    if (!activeCode) return;
+
+    if (insumoId === "_novo_insumo") {
+      handleAbrirCadastroRapidoInsumo({
+        despesaId,
+        itemId,
+        itemNome,
+        fornecedorNome,
+        valorTotal: itemValorTotal,
+        quantidade: itemQtd,
+      });
+      return;
+    }
+
+    if (insumoId === "_none" || !insumoId) {
+      const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+      if (targetDespesa) {
+        const novosItens = (targetDespesa.itens || []).map((it) =>
+          it.id === itemId || it.nome === itemNome
+            ? { ...it, insumoVinculadoId: undefined, insumoVinculadoNome: undefined }
+            : it
+        );
+        try {
+          await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+        } catch {}
+        if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+      }
+      toast.info("Vínculo removido.");
+      return;
+    }
+
+    const insumoSel = insumosCadastrados.find((i) => i.id === insumoId);
+    if (!insumoSel) return;
+
+    salvarMapeamentoDePara(activeCode, itemNome, fornecedorNome, insumoSel.id, insumoSel.nome);
+
+    const qtd = itemQtd > 0 ? itemQtd : 1;
+    const valorUnitarioNota = itemValorTotal > 0 ? parseFloat((itemValorTotal / qtd).toFixed(2)) : 0;
+    const novoCusto = valorUnitarioNota > 0 ? valorUnitarioNota : insumoSel.custoAtual;
+
+    const resCascata = await atualizarCustoInsumoECascataFichas(
+      activeCode,
+      insumoSel.id,
+      novoCusto,
+      profile?.ownerUserId
+    );
+
+    const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+    if (targetDespesa) {
+      const novosItens = (targetDespesa.itens || []).map((it) => {
+        if (it.id === itemId || it.nome === itemNome) {
+          return {
+            ...it,
+            insumoVinculadoId: insumoSel.id,
+            insumoVinculadoNome: insumoSel.nome,
+          };
+        }
+        return it;
+      });
+
+      try {
+        await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+      } catch {}
+      if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+
+      if (registroDetalhes && registroDetalhes.id === despesaId) {
+        setRegistroDetalhes({ ...registroDetalhes, itens: novosItens });
+      }
+    }
+
+    setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+
+    const msgFichas =
+      resCascata.fichasAtualizadasCount > 0
+        ? ` e recalculado o custo de ${resCascata.fichasAtualizadasCount} ficha(s) técnica(s) em tempo real!`
+        : "!";
+
+    toast.success(
+      `✨ Item vinculado a "${insumoSel.nome}"! Custo do insumo atualizado para ${formatarMoeda(novoCusto)}${msgFichas}`
+    );
+  };
+
   // Sincronizar dados extraídos do contexto global com os campos editáveis locais
   useEffect(() => {
     if (extractedData) {
@@ -198,7 +685,23 @@ export function ScannerView({
       setNumeroPedido(extractedData.numeroPedido || "");
       setDataCompra(extractedData.dataCompra || new Date().toISOString().split("T")[0]);
       setHoraCompra(extractedData.horaCompra || "14:35:10");
-      setItensExtraidos(extractedData.itens || []);
+
+      const rawItens = extractedData.itens || [];
+      const forn = extractedData.fornecedorNome || "";
+
+      const itensComVinculo = rawItens.map((item) => {
+        const auto = encontrarVinculoDeParaAutomatico(activeCode, item.nome, forn);
+        if (auto) {
+          return {
+            ...item,
+            insumoVinculadoId: auto.insumoId,
+            insumoVinculadoNome: auto.insumoNome,
+          };
+        }
+        return item;
+      });
+
+      setItensExtraidos(itensComVinculo);
 
       if (extractedData.scanMode === "despesa") {
         if (extractedData.categoriaSugerida) {
@@ -208,7 +711,7 @@ export function ScannerView({
         setDespesaValorStr(val > 0 ? `R$ ${val.toFixed(2).replace(".", ",")}` : "");
       }
     }
-  }, [extractedData]);
+  }, [extractedData, activeCode]);
 
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,8 +975,24 @@ export function ScannerView({
         itens: itensComFallback,
       });
 
-      // Registra cada insumo no histórico individual de compras do usuário para cálculo de preço médio
+      // Registra cada insumo no histórico individual e atualiza de-para / fichas tecnicas se vinculado
       for (const item of itensComFallback) {
+        if (item.insumoVinculadoId) {
+          salvarMapeamentoDePara(
+            activeCode,
+            item.nome,
+            fornecedorNome,
+            item.insumoVinculadoId,
+            item.insumoVinculadoNome || ""
+          );
+          await atualizarCustoInsumoECascataFichas(
+            activeCode,
+            item.insumoVinculadoId,
+            item.valorUnitario,
+            profile?.ownerUserId
+          );
+        }
+
         try {
           await registrarCompraInsumo({
             estabelecimentoCodigo: activeCode,
@@ -495,8 +1014,28 @@ export function ScannerView({
         onSaveSuccess();
       }
 
+      if (onSalvarTransacaoFinanceira) {
+        try {
+          const rawData = dataCompra || new Date().toISOString().split("T")[0];
+          const [yyyy, mm, dd] = rawData.split("-");
+          const dataEmissaoFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : rawData;
+          await onSalvarTransacaoFinanceira({
+            descricao: `Compra: ${fornecedorNome || "Insumos / Notinha"}`,
+            valor: totaisNota.total,
+            tipo: "despesa",
+            categoria: "Insumos & Produção",
+            data: dataEmissaoFormatada,
+            metodoPagamento: "pix",
+            status: "concluida",
+            clienteOuFornecedor: fornecedorNome || "Fornecedor",
+            origem: "Scanner AI (Notinha Insumos)",
+          });
+        } catch {}
+      }
+
       setModalRevisaoOpen(false);
-      toast.success("Notinha salva no caixa com sucesso!");
+      limparScanner();
+      toast.success("✨ Notinha armazenada com sucesso no menu Financeiro para sua conferência!");
     } catch (e: any) {
       toast.error(`Erro ao salvar notinha: ${e.message}`);
     } finally {
@@ -520,14 +1059,19 @@ export function ScannerView({
         const isFromScanner = t.origem?.includes("Scanner") || t.descricao?.toLowerCase().includes("notinha") || isSaida;
 
         if (isFromScanner) {
+          const [dd, mm, yyyy] = (t.data || "").split("/");
+          const dataCompraIso = yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : new Date().toISOString().split("T")[0];
           lista.push({
             id: t.id,
-            fornecedorNome: t.clienteOuFornecedor || t.descricao,
-            dataCompra: t.data,
-            valorTotal: Number(t.valor) || 0,
-            categoria: t.categoria,
+            estabelecimentoCodigo: activeCode,
+            fornecedorNome: t.clienteOuFornecedor || t.descricao || "Conta / Fatura",
+            dataCompra: dataCompraIso,
+            valorTotal: Number(t.valor || 0),
+            valorProducao: 0,
+            valorUtensilios: 0,
+            valorConsumoProprio: 0,
+            valorOutros: Number(t.valor || 0),
             itens: [],
-            numeroNota: t.descricao.includes("Doc:") ? t.descricao.split("Doc:")[1]?.trim() : "",
             tipoOrigem: "despesa",
           });
         }
@@ -535,8 +1079,9 @@ export function ScannerView({
     }
 
     return lista.sort((a, b) => {
-      const parseDate = (dStr: string) => {
+      const parseDate = (dStr?: string) => {
         if (!dStr) return 0;
+        if (dStr.includes("-")) return new Date(dStr).getTime() || 0;
         const [dd, mm, yyyy] = dStr.split("/");
         if (dd && mm && yyyy) return new Date(`${yyyy}-${mm}-${dd}`).getTime();
         return new Date(dStr).getTime() || 0;
@@ -559,50 +1104,72 @@ export function ScannerView({
         </div>
       </div>
 
-      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (BOTÕES LADO A LADO - FLEX ROW) */}
-      <div className="flex flex-row gap-3">
+      {/* BANNER INFORMATIVO DE ENVIO DIRETO AO FINANCEIRO */}
+      <div className="p-3 bg-purple-500/10 border border-purple-500/25 rounded-2xl text-xs text-purple-950 dark:text-purple-200 flex items-center gap-2.5 shadow-2xs">
+        <Sparkles className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400 shrink-0" />
+        <span>
+          <strong>Envio Automático:</strong> Toda notinha ou conta escaneada é armazenada e enviada diretamente para o seu menu <strong>Financeiro</strong> para conferência.
+        </span>
+      </div>
+
+      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS COMPACTOS LADO A LADO) */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div
           onClick={() => setScanMode("produtos")}
-          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-2 sm:gap-3 ${
             scanMode === "produtos"
-              ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-md"
+              ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-            <ShoppingBag className="w-6 h-6" />
+          <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
-            Escanear Nota de Insumos/Produtos
-          </h3>
-          {scanMode === "produtos" && (
-            <Badge className="bg-primary text-white text-[10px] font-bold">Selecionado</Badge>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className="font-extrabold text-[11px] sm:text-xs md:text-sm text-foreground truncate">
+                Nota de Insumos / Produtos
+              </h3>
+              {scanMode === "produtos" && (
+                <Badge className="bg-primary text-white text-[8px] sm:text-[9px] font-bold py-0 px-1 shrink-0">Ativo</Badge>
+              )}
+            </div>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-0.5 hidden sm:block">
+              Cupons fiscais e compras de mercado
+            </p>
+          </div>
         </div>
 
         <div
           onClick={() => setScanMode("despesa")}
-          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-2 sm:gap-3 ${
             scanMode === "despesa"
-              ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-md"
+              ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-amber-500/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
-            <Receipt className="w-6 h-6" />
+          <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
+            <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
-            Escanear Conta/Despesa (Água, Luz, Boletos)
-          </h3>
-          {scanMode === "despesa" && (
-            <Badge className="bg-amber-600 text-white text-[10px] font-bold">Selecionado</Badge>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className="font-extrabold text-[11px] sm:text-xs md:text-sm text-foreground truncate">
+                Conta / Despesa Fixa
+              </h3>
+              {scanMode === "despesa" && (
+                <Badge className="bg-amber-600 text-white text-[8px] sm:text-[9px] font-bold py-0 px-1 shrink-0">Ativo</Badge>
+              )}
+            </div>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-0.5 hidden sm:block">
+              Água, luz, aluguel, boletos
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* 2. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
+      {/* 2. ÁREA DE UPLOAD CENTRALIZADA E COMPACTA */}
       <Card className="border-2 border-dashed border-primary/40 bg-card/80 shadow-md">
-        <CardContent className="p-8">
+        <CardContent className="p-3 sm:p-4">
           <input
             type="file"
             ref={fileInputRef}
@@ -613,34 +1180,34 @@ export function ScannerView({
           />
 
           {isScanning ? (
-            <div className="py-12 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="py-6 text-center flex flex-col items-center justify-center space-y-2">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
-                <Sparkles className="w-6 h-6 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
+                <Sparkles className="w-5 h-5 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">Capturando dados com IA.</h3>
-              <p className="text-xs text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
+              <h3 className="text-sm font-bold text-foreground">Capturando dados com IA.</h3>
+              <p className="text-[11px] text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
             </div>
           ) : (
             <div
               onClick={() => {
                 if (!isScanning) fileInputRef.current?.click();
               }}
-              className={`py-12 px-6 text-center border border-border/70 rounded-2xl bg-muted/20 transition-all flex flex-col items-center justify-center max-w-xl mx-auto ${
+              className={`py-4 px-3 sm:py-5 sm:px-6 text-center border border-border/70 rounded-2xl bg-muted/20 transition-all flex flex-col items-center justify-center max-w-xl mx-auto ${
                 isScanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/40 hover:border-primary/50"
               }`}
             >
-              <div className="p-4 rounded-2xl bg-primary/10 text-primary mb-3">
-                <UploadCloud className="w-10 h-10" />
+              <div className="p-2.5 rounded-xl bg-primary/10 text-primary mb-2">
+                <UploadCloud className="w-6 h-6 sm:w-8 sm:h-8" />
               </div>
-              <h4 className="text-base font-extrabold text-foreground">
+              <h4 className="text-xs sm:text-sm font-extrabold text-foreground">
                 Tirar foto ou selecionar PDF / Imagem da Notinha
               </h4>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 Formatos aceitos: JPG, PNG ou PDF (comprovantes fiscais de compras)
               </p>
-              <Button size="sm" disabled={isScanning} className="mt-5 font-bold shadow-sm px-6 h-9">
-                <Camera className="w-4 h-4 mr-2" /> Selecionar Arquivo da Notinha
+              <Button size="sm" disabled={isScanning} className="mt-3 font-bold shadow-sm px-4 h-8 text-xs">
+                <Camera className="w-3.5 h-3.5 mr-1.5" /> Selecionar Arquivo da Notinha
               </Button>
             </div>
           )}
@@ -710,6 +1277,20 @@ export function ScannerView({
 
                     {/* Botões de Ação Alinhados à Direita */}
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {d.itens && d.itens.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => toggleExpandReceipt(d.id, e)}
+                          className="h-8 text-[11px] gap-1 font-semibold border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          {d.itens.length} {d.itens.length === 1 ? "item" : "itens"}
+                          {expandedReceipts[d.id] ? <ChevronUp className="w-3.5 h-3.5 ml-0.5" /> : <ChevronDown className="w-3.5 h-3.5 ml-0.5" />}
+                        </Button>
+                      )}
+
                       <Button
                         type="button"
                         variant="ghost"
@@ -720,10 +1301,10 @@ export function ScannerView({
                             onReenviarFinanceiro(d);
                           }
                         }}
-                        className="h-10 w-10 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Reenviar para o Financeiro"
                       >
-                        <RefreshCw className="w-4.5 h-4.5" />
+                        <RefreshCw className="w-4 h-4" />
                       </Button>
 
                       <Button
@@ -734,10 +1315,10 @@ export function ScannerView({
                           e.stopPropagation();
                           compartilharNotinhaWhatsApp(d);
                         }}
-                        className="h-10 w-10 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-full inline-flex items-center justify-center shrink-0"
+                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Compartilhar no WhatsApp"
                       >
-                        <MessageCircle className="w-4.5 h-4.5" />
+                        <MessageCircle className="w-4 h-4" />
                       </Button>
 
                       <Button
@@ -749,13 +1330,48 @@ export function ScannerView({
                           setNotaParaExcluir(d);
                           setModalExcluirOpen(true);
                         }}
-                        className="h-10 w-10 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Excluir notinha"
                       >
-                        <Trash2 className="w-4.5 h-4.5" />
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
+
+                  {/* EXPANSAO DOS ITENS COM SELETOR DE-PARA */}
+                  {expandedReceipts[d.id] && d.itens && d.itens.length > 0 && (
+                    <div className="pt-2 border-t border-purple-100 dark:border-purple-900/30 space-y-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="text-[11px] font-bold text-purple-900 dark:text-purple-300">
+                        Itens Escaneados & Vínculo com Insumos Cadastrados (De-Para):
+                      </div>
+                      <div className="space-y-2">
+                        {d.itens.map((it, idx) => (
+                          <div key={it.id || idx} className="p-2.5 rounded-lg bg-muted/40 border border-border/60 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-semibold">
+                              <span className="text-foreground truncate max-w-[200px]">{it.nome}</span>
+                              <span className="font-bold text-emerald-600">{formatarMoeda(it.valorTotal)}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <Label className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">Vínculo:</Label>
+                              <CustomInsumoSelect
+                                value={it.insumoVinculadoId || "_none"}
+                                insumos={insumosCadastrados}
+                                onSelect={(val) => {
+                                  if (val === "_novo_insumo") {
+                                    setInsumoParaCadastroRapido({ despesaId: d.id, itemId: it.id, nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
+                                    setModalInsumoOpen(true);
+                                  } else {
+                                    handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             ))
@@ -768,84 +1384,150 @@ export function ScannerView({
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="text-xs font-bold w-36 whitespace-nowrap">Data</TableHead>
+                  <TableHead className="text-xs font-bold w-32 whitespace-nowrap">Data</TableHead>
                   <TableHead className="text-xs font-bold whitespace-nowrap">Nome do Estabelecimento</TableHead>
-                  <TableHead className="text-xs font-bold text-right w-36 whitespace-nowrap">Valor Total</TableHead>
+                  <TableHead className="text-xs font-bold whitespace-nowrap">Itens / Vínculo De-Para</TableHead>
+                  <TableHead className="text-xs font-bold text-right w-32 whitespace-nowrap">Valor Total</TableHead>
                   <TableHead className="text-xs font-bold text-center w-36 whitespace-nowrap">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {ultimosRegistros.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground whitespace-nowrap">
+                    <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground whitespace-nowrap">
                       Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
                     </TableCell>
                   </TableRow>
                 ) : (
                   ultimosRegistros.map((d) => (
-                    <TableRow
-                      key={d.id}
-                      onClick={() => abrirDetalhesRegistro(d)}
-                      className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
-                    >
-                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                        <div>{d.dataCompra}</div>
-                        {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
-                      </TableCell>
-                      <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors whitespace-nowrap">
-                        <div>{d.fornecedorNome}</div>
-                        {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
-                      </TableCell>
-                      <TableCell className="font-bold text-xs text-emerald-600 text-right whitespace-nowrap">
-                        {formatarMoeda(d.valorTotal)}
-                      </TableCell>
-                      <TableCell className="text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onReenviarFinanceiro) {
-                                onReenviarFinanceiro(d);
-                              }
-                            }}
-                            className="h-9 w-9 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
-                            title="Reenviar para o Financeiro"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              compartilharNotinhaWhatsApp(d);
-                            }}
-                            className="h-9 w-9 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center min-h-[44px] min-w-[44px]"
-                            title="Compartilhar no WhatsApp"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNotaParaExcluir(d);
-                              setModalExcluirOpen(true);
-                            }}
-                            className="h-9 w-9 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
-                            title="Excluir notinha"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow
+                        key={d.id}
+                        onClick={() => abrirDetalhesRegistro(d)}
+                        className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
+                      >
+                        <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                          <div>{d.dataCompra}</div>
+                          {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
+                        </TableCell>
+                        <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors whitespace-nowrap">
+                          <div>{d.fornecedorNome}</div>
+                          {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
+                          {d.itens && d.itens.length > 0 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => toggleExpandReceipt(d.id, e)}
+                              className="h-7 text-[11px] gap-1 border-purple-300 text-purple-800 dark:text-purple-200"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                              {d.itens.length} {d.itens.length === 1 ? "item" : "itens"}
+                              {expandedReceipts[d.id] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground italic text-[11px]">Sem itens</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-bold text-xs text-emerald-600 text-right whitespace-nowrap">
+                          {formatarMoeda(d.valorTotal)}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onReenviarFinanceiro) {
+                                  onReenviarFinanceiro(d);
+                                }
+                              }}
+                              className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center"
+                              title="Reenviar para o Financeiro"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                compartilharNotinhaWhatsApp(d);
+                              }}
+                              className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
+                              title="Compartilhar no WhatsApp"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNotaParaExcluir(d);
+                                setModalExcluirOpen(true);
+                              }}
+                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center"
+                              title="Excluir notinha"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+
+                      {expandedReceipts[d.id] && d.itens && d.itens.length > 0 && (
+                        <TableRow key={`${d.id}-items-expanded`} className="bg-purple-50/30 dark:bg-purple-950/10">
+                          <TableCell colSpan={5} className="p-3">
+                            <div className="p-3 bg-card border border-purple-200 dark:border-purple-900/40 rounded-xl space-y-2">
+                              <div className="text-xs font-bold text-purple-900 dark:text-purple-300">
+                                Itens da Nota de {d.fornecedorNome} & Vínculo com Insumos Cadastrados (De-Para):
+                              </div>
+                              <Table>
+                                <TableHeader className="bg-muted/50">
+                                  <TableRow>
+                                    <TableHead className="text-xs">Descrição do Item na Nota</TableHead>
+                                    <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                                    <TableHead className="text-xs w-24 text-right">Valor Total</TableHead>
+                                    <TableHead className="text-xs min-w-[220px]">Insumo Cadastrado (Vínculo De-Para)</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {d.itens.map((it, idx) => (
+                                    <TableRow key={it.id || idx}>
+                                      <TableCell className="text-xs font-medium">{it.nome}</TableCell>
+                                      <TableCell className="text-xs text-center">{it.quantidade}</TableCell>
+                                      <TableCell className="text-xs text-right font-bold text-emerald-600">
+                                        {formatarMoeda(it.valorTotal)}
+                                      </TableCell>
+                                      <TableCell>
+                                        <CustomInsumoSelect
+                                          value={it.insumoVinculadoId || "_none"}
+                                          insumos={insumosCadastrados}
+                                          onSelect={(val) => {
+                                            if (val === "_novo_insumo") {
+                                              setInsumoParaCadastroRapido({ despesaId: d.id, itemId: it.id, nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
+                                              setModalInsumoOpen(true);
+                                            } else {
+                                              handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
+                                            }
+                                          }}
+                                        />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   ))
                 )}
               </TableBody>
@@ -1112,8 +1794,9 @@ export function ScannerView({
                       <TableHeader className="bg-muted/40">
                         <TableRow>
                           <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
-                          <TableHead className="text-xs w-20 text-center">Qtd</TableHead>
-                          <TableHead className="text-xs w-28 text-right">Valor Total</TableHead>
+                          <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                          <TableHead className="text-xs w-24 text-right">Valor Total</TableHead>
+                          <TableHead className="text-xs min-w-[160px]">Insumo Cadastrado (Vínculo)</TableHead>
                           <TableHead className="text-xs text-right w-8"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1142,6 +1825,29 @@ export function ScannerView({
                                 value={item.valorTotal}
                                 onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
                                 className="h-7 text-xs text-right font-bold"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <CustomInsumoSelect
+                                value={item.insumoVinculadoId || "_none"}
+                                insumos={insumosCadastrados}
+                                onSelect={(val) => {
+                                  if (val === "_novo_insumo") {
+                                    setInsumoParaCadastroRapido({
+                                      despesaId: "",
+                                      itemId: item.id,
+                                      nome: item.nome,
+                                      valor: item.valorTotal / (item.quantidade || 1)
+                                    });
+                                    setModalInsumoOpen(true);
+                                  } else {
+                                    const insObj = insumosCadastrados.find((i) => i.id === val);
+                                    handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
+                                    if (insObj) {
+                                      handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
+                                    }
+                                  }
+                                }}
                               />
                             </TableCell>
                             <TableCell className="text-right">
@@ -1253,9 +1959,9 @@ export function ScannerView({
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead className="text-xs font-bold">Descrição do Item</TableHead>
-                        <TableHead className="text-xs font-bold text-center w-16">Qtd</TableHead>
-                        <TableHead className="text-xs font-bold text-right w-24">Unitário</TableHead>
-                        <TableHead className="text-xs font-bold text-right w-24">Total</TableHead>
+                        <TableHead className="text-xs font-bold text-center w-12">Qtd</TableHead>
+                        <TableHead className="text-xs font-bold text-right w-20">Total</TableHead>
+                        <TableHead className="text-xs font-bold min-w-[150px]">Vínculo De-Para (Insumo Cadastrado)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1270,11 +1976,25 @@ export function ScannerView({
                           <TableRow key={item.id || idx}>
                             <TableCell className="text-xs font-medium text-foreground">{item.nome}</TableCell>
                             <TableCell className="text-xs font-bold text-center">{item.quantidade}</TableCell>
-                            <TableCell className="text-xs text-right text-muted-foreground">
-                              {formatarMoeda(item.valorUnitario || 0)}
-                            </TableCell>
                             <TableCell className="text-xs font-bold text-right text-foreground">
                               {formatarMoeda(item.valorTotal)}
+                            </TableCell>
+                            <TableCell>
+                              <CustomInsumoSelect
+                                value={item.insumoVinculadoId || "_none"}
+                                insumos={insumosCadastrados}
+                                onSelect={(val) =>
+                                  handleVincularInsumoNota(
+                                    registroDetalhes.id,
+                                    item.id,
+                                    item.nome,
+                                    registroDetalhes.fornecedorNome,
+                                    val,
+                                    item.valorTotal,
+                                    item.quantidade
+                                  )
+                                }
+                              />
                             </TableCell>
                           </TableRow>
                         ))
@@ -1323,6 +2043,118 @@ export function ScannerView({
               </Button>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL DE CADASTRO RÁPIDO DE INSUMO NO VÍNCULO DE-PARA */}
+      <Dialog open={modalCadastroRapidoOpen} onOpenChange={setModalCadastroRapidoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-purple-700 dark:text-purple-300">
+              <Plus className="w-5 h-5" /> Cadastrar Novo Insumo & Vincular
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Cadastre o ingrediente na hora para que fique salvo na sua loja e vinculado a esta notinha fiscal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSalvarCadastroRapidoInsumo} className="space-y-3 pt-2">
+            <div className="space-y-1">
+              <Label htmlFor="req-nome" className="text-xs font-bold text-foreground">
+                Nome do Insumo / Ingrediente *
+              </Label>
+              <Input
+                id="req-nome"
+                value={novoInsumoNome}
+                onChange={(e) => setNovoInsumoNome(e.target.value)}
+                placeholder="Ex: Leite Condensado Moça 395g"
+                className="h-8 text-xs font-semibold"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="req-qtd" className="text-xs font-semibold">
+                  Qtd Embalagem *
+                </Label>
+                <Input
+                  id="req-qtd"
+                  value={novoInsumoQtdEmb}
+                  onChange={(e) => setNovoInsumoQtdEmb(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="req-unid" className="text-xs font-semibold">
+                  Unidade Medida *
+                </Label>
+                <Select value={novoInsumoUnidade} onValueChange={setNovoInsumoUnidade}>
+                  <SelectTrigger id="req-unid" className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="un">Unidade (un)</SelectItem>
+                    <SelectItem value="kg">Quilo (kg)</SelectItem>
+                    <SelectItem value="g">Grama (g)</SelectItem>
+                    <SelectItem value="l">Litro (L)</SelectItem>
+                    <SelectItem value="ml">Mililitro (ml)</SelectItem>
+                    <SelectItem value="cx">Caixa (cx)</SelectItem>
+                    <SelectItem value="pct">Pacote (pct)</SelectItem>
+                    <SelectItem value="bdj">Bandeja (bdj)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="req-custo" className="text-xs font-bold text-foreground">
+                Custo Pago na Embalagem (R$) *
+              </Label>
+              <Input
+                id="req-custo"
+                value={novoInsumoCustoStr}
+                onChange={(e) => setNovoInsumoCustoStr(aplicarMascaraMoedaInput(e.target.value))}
+                placeholder="R$ 0,00"
+                className="h-8 text-xs font-mono font-bold text-purple-700 dark:text-purple-300"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="req-fornec" className="text-xs font-semibold">
+                Fornecedor / Estabelecimento
+              </Label>
+              <Input
+                id="req-fornec"
+                value={novoInsumoFornecedor}
+                onChange={(e) => setNovoInsumoFornecedor(e.target.value)}
+                placeholder="Ex: Mercado Atacadão"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="pt-3 border-t gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalCadastroRapidoOpen(false)}
+                className="text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={salvandoRapidoInsumo}
+                size="sm"
+                className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {salvandoRapidoInsumo ? "Salvando..." : "Salvar e Vincular"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

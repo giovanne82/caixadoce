@@ -23,6 +23,14 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Cake,
   ShoppingCart,
   Plus,
@@ -40,6 +48,13 @@ import {
   Check,
   Copy,
   AlertCircle,
+  FileText,
+  Loader2,
+  User,
+  Calendar,
+  ShoppingBag,
+  CheckCircle2,
+  MapPin,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -96,6 +111,9 @@ export interface LojaInfoState {
   chave_pix?: string;
   tipo_chave_pix?: string;
   cidade?: string;
+  endereco?: string;
+  delivery_ativo?: boolean;
+  aceita_delivery?: boolean;
   instagram?: string;
   tiktok?: string;
   facebook?: string;
@@ -289,13 +307,33 @@ export function CardapioLojaView() {
   const [cartOpen, setCartOpen] = useState(false);
   const [pedidoConcluido, setPedidoConcluido] = useState(false);
 
+  // Modais de Resumo e Sucesso do Pedido
+  const [resumoModalOpen, setResumoModalOpen] = useState(false);
+  const [sucessoModalOpen, setSucessoModalOpen] = useState(false);
+  const [salvandoPedido, setSalvandoPedido] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
+  const [ultimoPedidoId, setUltimoPedidoId] = useState("");
+
   // Estados do Formulário de Checkout do Cliente
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsapp, setClienteWhatsapp] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
   const [horarioEntrega, setHorarioEntrega] = useState("15:00");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
-  const [enderecoEntrega, setEnderecoEntrega] = useState("");
+  const [endLogradouro, setEndLogradouro] = useState("");
+  const [endNumero, setEndNumero] = useState("");
+  const [endBairro, setEndBairro] = useState("");
+  const [endPontoRef, setEndPontoRef] = useState("");
+
+  const enderecoEntrega = useMemo(() => {
+    const partes = [];
+    if (endLogradouro.trim()) partes.push(endLogradouro.trim());
+    if (endNumero.trim()) partes.push(`nº ${endNumero.trim()}`);
+    if (endBairro.trim()) partes.push(`Bairro: ${endBairro.trim()}`);
+    if (endPontoRef.trim()) partes.push(`Ref: ${endPontoRef.trim()}`);
+    return partes.join(", ");
+  }, [endLogradouro, endNumero, endBairro, endPontoRef]);
+
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
@@ -307,7 +345,6 @@ export function CardapioLojaView() {
   // Dados de Conclusão do Pix
   const [pixCopiaCola, setPixCopiaCola] = useState("");
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
-  const [pixCopiado, setPixCopiado] = useState(false);
 
   // 1. Carregamento de Dados da Confeitaria (Supabase + LocalStorage Fallback)
   useEffect(() => {
@@ -365,6 +402,12 @@ export function CardapioLojaView() {
         let title = estData?.titulo_cardapio || estData?.menu_title;
         let slogan = estData?.slogan_cardapio || estData?.menu_slogan;
         let name = estData?.nome;
+        let endLoja = estData?.endereco;
+        if (!endLoja && (estData?.logradouro || estData?.cidade)) {
+          endLoja = `${estData.logradouro || ''}, ${estData.numero || ''} ${estData.complemento ? `- ${estData.complemento}` : ''} - ${estData.bairro || ''}, ${estData.cidade || ''}/${estData.estado || ''}`.replace(/^[\s,]+|[\s,]+$/g, '');
+        }
+
+        let delAtivoVal = estData?.delivery_ativo !== false && estData?.aceita_delivery !== false;
 
         // Fallback resiliente: se no Supabase não vierem preenchidos (por exemplo, se as colunas remota estivem nulas), recupera do localStorage do navegador
         if (typeof window !== "undefined") {
@@ -381,7 +424,12 @@ export function CardapioLojaView() {
                 title = title || p.tituloCardapio || p.menu_title;
                 slogan = slogan || p.sloganCardapio || p.menu_slogan;
                 name = name || p.establishmentName || p.nome;
+                endLoja = endLoja || p.establishmentAddress || p.endereco;
               }
+            }
+            const localDel = localStorage.getItem(`caixadoce_delivery_${code}`);
+            if (localDel !== null) {
+              delAtivoVal = localDel === "true";
             }
           } catch {}
         }
@@ -400,6 +448,9 @@ export function CardapioLojaView() {
             menu_slogan: slogan,
             chavePix: (estData?.chave_pix || estData?.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData?.chave_pix || estData?.chavePix || ""),
             cidade: estData?.cidade || "SAO PAULO",
+            endereco: endLoja || "",
+            delivery_ativo: delAtivoVal,
+            aceita_delivery: delAtivoVal,
             instagram: insta,
             tiktok: tk,
             facebook: fb,
@@ -413,6 +464,13 @@ export function CardapioLojaView() {
     carregarDadosLoja();
   }, [code]);
 
+  // Garante que se o lojista desativou o delivery, a modalidade seja forçada para "retirada"
+  useEffect(() => {
+    if (lojaInfo?.delivery_ativo === false || lojaInfo?.aceita_delivery === false) {
+      setTipoEntrega("retirada");
+    }
+  }, [lojaInfo]);
+
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
   const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
   const regras = useMemo(
@@ -420,34 +478,32 @@ export function CardapioLojaView() {
     [regrasBase, carrinho]
   );
 
+  // Calculo da data minima de seleção no calendario (apenas hoje em diante, sem bloqueio por antecedencia)
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + (regras.antecedenciaMinimaDias || 0));
-    let safety = 0;
-    const permitidos = regras.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6];
-    while (permitidos.length > 0 && !permitidos.includes(d.getDay()) && safety < 7) {
-      d.setDate(d.getDate() + 1);
-      safety++;
-    }
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
-  }, [regras]);
+  }, []);
 
   const handleDataEntregaChange = (val: string) => {
-    if (!val) {
-      setDataEntrega("");
-      return;
-    }
-    const valRes = validarDataEntrega(val, regras);
-    if (!valRes.valida) {
-      toast.error(valRes.motivo || "Data indisponível para encomenda.");
-      setDataEntrega("");
-      return;
-    }
     setDataEntrega(val);
   };
+
+  // Checagem dinêmica se a data escolhida e inferior ao prazo de antecedencia exigido pelos produtos
+  const necessitaConfirmacaoDisponibilidade = useMemo(() => {
+    if (!dataEntrega) return false;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const partes = dataEntrega.split("-").map(Number);
+    if (partes.length !== 3) return false;
+    const dataEscolhida = new Date(partes[0], partes[1] - 1, partes[2], 0, 0, 0, 0);
+    const diffTime = dataEscolhida.getTime() - hoje.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const antecedenciaMinima = regras.antecedenciaMinimaDias || 0;
+    return diffDays < antecedenciaMinima;
+  }, [dataEntrega, regras]);
 
   const handleHorarioEntregaChange = (val: string) => {
     setHorarioEntrega(val);
@@ -461,7 +517,7 @@ export function CardapioLojaView() {
     const list = obterProdutosCardapio(code);
     setProdutos(list.filter((p) => p.ativo !== false));
 
-    // Data mínima: amanhã
+    // Data mínima inicial: amanhã por padrão
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     setDataEntrega(amanha.toISOString().split("T")[0]);
@@ -530,141 +586,226 @@ export function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
 
-  // Finalizar Encomenda (Salvar no Supabase + WhatsApp/Stripe Dinâmico)
-  const handleFinalizarPedido = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clienteNome || !clienteWhatsapp || !dataEntrega || carrinho.length === 0) {
+  // 1. Gravação Automática na Base de Dados e Abertura do Modal de Confirmação & Pagamento
+  const handleConfirmarPedido = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!clienteNome.trim() || !clienteWhatsapp.trim() || !dataEntrega || carrinho.length === 0) {
       toast.error("Preencha seu nome, WhatsApp e data para entrega.");
       return;
     }
 
-    const pedidoId = crypto.randomUUID();
-    const resumoItensTexto = carrinho
-      .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
-      .join(", ");
-
-    const itensDetalhesJson = carrinho.map((item) => ({
-      id: item.produto.id,
-      nome: item.produto.nome,
-      quantidade: item.quantidade,
-      precoUnitario: item.produto.preco,
-      subtotal: item.produto.preco * item.quantidade,
-    }));
-
-    const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
-
-    const payloadInsert: Record<string, any> = {
-      id: pedidoId,
-      estabelecimento_codigo: code,
-      user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
-      cliente_nome: clienteNome,
-      cliente_whatsapp: clienteWhatsapp,
-      data_entrega: dataEntrega,
-      horario_entrega: horarioEntrega || "15:00",
-      tipo_entrega: tipoEntrega,
-      endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
-      status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-      status: "pendente",
-      itens: resumoItensTexto,
-      itens_detalhes: itensDetalhesJson,
-      valor_total: valTotalCarrinho,
-      total_amount: valTotalCarrinho,
-      total_price: valTotalCarrinho,
-      observacoes: observacoes || "",
-    };
-
-    let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
-
-    if (insertError) {
-      console.error("Erro ao registrar encomenda no Supabase:", insertError);
-      toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
-      return;
+    if (tipoEntrega === "delivery") {
+      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
+        toast.error("Preencha o logradouro, número e bairro para a entrega.");
+        return;
+      }
     }
 
-    if (metodoPagamento === "cartao") {
-      setProcessandoPagamento(true);
+    const horRes = validarHorarioEntrega(horarioEntrega, regras);
+    if (!horRes.valido) {
+      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
+    }
+
+    setSalvandoPedido(true);
+    try {
+      const pedidoId = crypto.randomUUID();
+      const resumoItensTexto = carrinho
+        .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
+        .join(", ");
+
+      const itensDetalhesJson = carrinho.map((item) => ({
+        id: item.produto.id,
+        nome: item.produto.nome,
+        quantidade: item.quantidade,
+        precoUnitario: item.produto.preco,
+        subtotal: item.produto.preco * item.quantidade,
+      }));
+
+      const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
+
+      const avisoTexto = "⚠️ Confirme a disponibilidade do produto com a loja.";
+      const obsFinal = necessitaConfirmacaoDisponibilidade
+        ? (observacoes.trim() ? `${observacoes.trim()} | ${avisoTexto}` : avisoTexto)
+        : (observacoes.trim() || "");
+
+      const payloadInsert: Record<string, any> = {
+        id: pedidoId,
+        estabelecimento_codigo: code,
+        user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+        cliente_nome: clienteNome,
+        cliente_whatsapp: clienteWhatsapp,
+        data_entrega: dataEntrega,
+        horario_entrega: horarioEntrega || "15:00",
+        tipo_entrega: tipoEntrega,
+        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+        status: "pendente",
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: valTotalCarrinho,
+        total_amount: valTotalCarrinho,
+        total_price: valTotalCarrinho,
+        observacoes: obsFinal,
+      };
+
+      let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
+
+      if (insertError) {
+        console.warn("Tentativa de insert em encomendas falhou com payload estendido, tentando fallback minimalista:", insertError.message);
+        
+        const payloadMinimal = {
+          id: pedidoId,
+          estabelecimento_codigo: code,
+          user_id: payloadInsert.user_id,
+          cliente_nome: clienteNome,
+          cliente_whatsapp: clienteWhatsapp,
+          data_entrega: dataEntrega,
+          horario_entrega: horarioEntrega || "15:00",
+          tipo_entrega: tipoEntrega,
+          endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          itens: resumoItensTexto,
+          valor_total: valTotalCarrinho,
+          total_amount: valTotalCarrinho,
+          status: "pendente",
+          status_pagamento: payloadInsert.status_pagamento,
+          observacoes: obsFinal,
+        };
+
+        const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
+        insertError = resMin.error;
+      }
+
+      if (insertError) {
+        console.error("Erro ao registrar encomenda no Supabase:", insertError);
+        toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
+        return;
+      }
+
+      // Gravação / Consolidação do Cliente no Banco e no Storage
       try {
-        const session = await createStripeSession({
-          orderId: pedidoId,
-          establishmentCode: code,
-          customerName: clienteNome,
-          customerWhatsapp: clienteWhatsapp,
-          items: carrinho.map((it) => ({
-            name: it.produto.nome,
-            quantity: it.quantidade,
-            unitPrice: it.produto.preco,
-          })),
-          subtotal: totalCarrinho,
-          installments: parcelasSelecionadas,
-          repassarTaxa: stripeConfig.repassarTaxaStripe,
-          stripeAccountId: stripeConfig.accountId,
+        const rawCust = typeof window !== "undefined" ? localStorage.getItem(`caixadoce_customers_${code}`) : null;
+        let listaCust: any[] = rawCust ? JSON.parse(rawCust) : [];
+        const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
+        const foundIndex = listaCust.findIndex((c: any) => {
+          const p = (c.whatsapp || "").replace(/\D/g, "");
+          return (cleanPhone && p && cleanPhone === p) || (c.nome || c.name || "").trim().toLowerCase() === clienteNome.trim().toLowerCase();
         });
 
-        toast.success(`Sessão no cartão criada! Total: ${feeResult.formattedTotalAmount}`);
-        setTimeout(() => {
-          window.open(session.checkoutUrl, "_blank");
-        }, 800);
-      } catch (err) {
-        toast.error("Erro ao iniciar pagamento no cartão.");
-      } finally {
-        setProcessandoPagamento(false);
-      }
-      return;
-    }
+        const custId = foundIndex >= 0 ? listaCust[foundIndex].id : crypto.randomUUID();
+        const novoCust = {
+          id: custId,
+          estabelecimentoCodigo: code,
+          nome: clienteNome,
+          whatsapp: clienteWhatsapp,
+          endereco: tipoEntrega === "delivery" ? enderecoEntrega : (foundIndex >= 0 ? (listaCust[foundIndex].endereco || "") : ""),
+          observacoes: "Cadastrado via Cardápio Digital",
+          createdAt: foundIndex >= 0 ? (listaCust[foundIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
+        };
 
-    const dataFormatada = dataEntrega.split("-").reverse().join("/");
+        if (foundIndex >= 0) {
+          listaCust[foundIndex] = { ...listaCust[foundIndex], ...novoCust };
+        } else {
+          listaCust = [novoCust, ...listaCust];
+        }
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`caixadoce_customers_${code}`, JSON.stringify(listaCust));
+        }
+
+        await supabase.from("customers").upsert(
+          [
+            {
+              id: custId,
+              user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+              estabelecimento_codigo: code,
+              name: clienteNome,
+              whatsapp: clienteWhatsapp,
+              address: tipoEntrega === "delivery" ? enderecoEntrega : "",
+              notes: "Cadastrado via Cardápio Digital",
+            },
+          ],
+          { onConflict: "id" }
+        );
+      } catch (custErr) {
+        console.warn("Aviso ao atualizar base de clientes do cardápio digital:", custErr);
+      }
+
+      // Tentar gerar Pix Payload para a chave Pix da loja
+      let pixPayloadGerado = "";
+      const pixKeyToUse = lojaInfo?.chavePix || "";
+      if (pixKeyToUse && valTotalCarrinho > 0) {
+        try {
+          pixPayloadGerado = generatePixPayload({
+            pixKey: pixKeyToUse,
+            merchantName: lojaInfo?.nome || "CaixaDoce",
+            merchantCity: lojaInfo?.cidade || "SAO PAULO",
+            amount: valTotalCarrinho,
+            txid: `PED${Date.now().toString().slice(-8)}`,
+            description: `Pedido ${clienteNome.slice(0, 15)}`,
+          });
+          setPixCopiaCola(pixPayloadGerado);
+
+          if (pixPayloadGerado && typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(pixPayloadGerado);
+            setPixCopiado(true);
+          }
+        } catch (e) {
+          console.warn("Aviso ao gerar QR Code / Pix Copia e Cola:", e);
+        }
+      }
+
+      setUltimoPedidoId(pedidoId);
+      setCartOpen(false);
+      setPedidoConcluido(true);
+      setSucessoModalOpen(true);
+      toast.success("Pedido gravado com sucesso no sistema!");
+    } catch (err: any) {
+      toast.error(`Erro ao finalizar pedido: ${err?.message || "Ocorreu uma falha na gravação."}`);
+    } finally {
+      setSalvandoPedido(false);
+    }
+  };
+
+  // 2. Envio Formatado no WhatsApp
+  const handleEnviarWhatsApp = () => {
+    const dataFormatada = dataEntrega ? dataEntrega.split("-").reverse().join("/") : "";
     const resumoItens = carrinho
       .map((item) => `• ${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
       .join("\n");
 
     const modalidade = tipoEntrega === "delivery"
       ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
-      : "🏬 Retirada no Balcão";
+      : `🏬 Retirada no Balcão\n📍 Endereço da Loja: ${lojaInfo?.endereco || "Consultar com a loja"}`;
 
-    let pixCopiadoComSucesso = false;
     let blocoPixInfo = "";
-
     if (lojaInfo?.chavePix && totalCarrinho > 0) {
-      blocoPixInfo = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
-      
-      try {
-        const pixPayload = generatePixPayload({
-          pixKey: lojaInfo.chavePix,
-          merchantName: lojaInfo.nome || "CaixaDoce",
-          merchantCity: (lojaInfo as any).cidade || "SAO PAULO",
-          amount: totalCarrinho,
-          txid: `PED${Date.now().toString().slice(-8)}`,
-          description: `Pedido ${clienteNome.slice(0, 15)}`,
-        });
-
-        if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
-          navigator.clipboard.writeText(pixPayload);
-          pixCopiadoComSucesso = true;
-        }
-      } catch {}
+      blocoPixInfo = `\n\n💳 *PAGAMENTO VIA PIX*\n💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
+      if (pixCopiaCola) {
+        blocoPixInfo += `\n📋 *Pix Copia e Cola:*\n${pixCopiaCola}`;
+      }
     }
 
-    const msg = `🎂 *NOVO PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
+    const blocoAvisoData = necessitaConfirmacaoDisponibilidade
+      ? "\n⚠️ *ATENÇÃO:* Confirme a disponibilidade do produto com a loja.\n"
+      : "";
 
-Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
+    const msg = `🎂 *CONFIRMAÇÃO DE PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
+
+Olá! Confirmei meu pedido pelo cardápio digital (Código: *${code}*):
 
 👤 *Cliente:* ${clienteNome}
-📱 *WhatsApp do Cliente:* ${clienteWhatsapp}
+📱 *WhatsApp:* ${clienteWhatsapp}
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
-📍 *Modalidade:* ${modalidade}
-${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
+📍 *Modalidade:* ${modalidade}${blocoAvisoData}
+${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
+🛒 *Itens do Pedido:*
 ${resumoItens}
 
-💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
+💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
 
-Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`;
-
-    if (pixCopiadoComSucesso) {
-      toast.info("Mensagem gerada! O Pix Copia e Cola foi copiado para sua área de transferência. Cole-o no WhatsApp após enviar o pedido.");
-    } else {
-      toast.success("Pedido enviado para a confeiteira com sucesso!");
-    }
+Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito obrigado(a)!`;
 
     const numTarget = lojaInfo?.whatsapp || lojaInfo?.telefone || "";
     const url = formatarWhatsappLink(numTarget, msg);
@@ -672,9 +813,13 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
     if (typeof window !== "undefined") {
       window.open(url, "_blank");
     }
+  };
 
-    setPedidoConcluido(true);
-    toast.success("Pedido enviado para a confeiteira com sucesso!");
+  const handleConcluirELimpar = () => {
+    setSucessoModalOpen(false);
+    setCarrinho([]);
+    setPixCopiado(false);
+    setPixCopiaCola("");
   };
 
   return (
@@ -954,7 +1099,7 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                 </div>
 
                 {/* Formulário do Cliente */}
-                <form id="form-checkout" onSubmit={handleFinalizarPedido} className="space-y-3 pt-2 border-t border-border/60">
+                <form id="form-checkout" onSubmit={handleConfirmarPedido} className="space-y-3 pt-2 border-t border-border/60">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
                     Dados para Encomenda
                   </h4>
@@ -1018,11 +1163,18 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                           : `Encomendas com no mínimo ${regras.antecedenciaMinimaDias} dia(s) de antecedência. Expediente: ${regras.horarioAbertura} às ${regras.horarioFechamento}.`}
                       </span>
                     </p>
+
+                    {necessitaConfirmacaoDisponibilidade && (
+                      <p className="text-xs text-amber-900 dark:text-amber-300 bg-amber-500/15 p-2 rounded-lg border border-amber-500/30 font-extrabold flex items-center gap-1.5 mt-1.5">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>⚠️ Confirme a disponibilidade do produto com a loja.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Como deseja receber?</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={lojaInfo?.delivery_ativo !== false ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
                       <Button
                         type="button"
                         variant={tipoEntrega === "retirada" ? "default" : "outline"}
@@ -1031,16 +1183,86 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                       >
                         <Store className="w-3.5 h-3.5 mr-1" /> Retirada no Balcão
                       </Button>
-                      <Button
-                        type="button"
-                        variant={tipoEntrega === "delivery" ? "default" : "outline"}
-                        onClick={() => setTipoEntrega("delivery")}
-                        className="h-7 text-xs font-semibold"
-                      >
-                        <Truck className="w-3.5 h-3.5 mr-1" /> Entrega / Delivery
-                      </Button>
+                      {lojaInfo?.delivery_ativo !== false && (
+                        <Button
+                          type="button"
+                          variant={tipoEntrega === "delivery" ? "default" : "outline"}
+                          onClick={() => setTipoEntrega("delivery")}
+                          className="h-7 text-xs font-semibold"
+                        >
+                          <Truck className="w-3.5 h-3.5 mr-1" /> Entrega / Delivery
+                        </Button>
+                      )}
                     </div>
                   </div>
+
+                  {tipoEntrega === "retirada" && (
+                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1">
+                      <p className="font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                        Endereço de Retirada no Balcão:
+                      </p>
+                      <p className="text-foreground font-medium pl-5 text-[11px] leading-snug">
+                        {lojaInfo?.endereco || "Endereço cadastrado no sistema da confeitaria."}
+                      </p>
+                    </div>
+                  )}
+
+                  {tipoEntrega === "delivery" && lojaInfo?.delivery_ativo !== false && (
+                    <div className="space-y-2.5 p-3 rounded-xl bg-muted/40 border border-border/60">
+                      <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Truck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        Endereço para Entrega em Domicílio
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2 space-y-1">
+                          <Label htmlFor="end-rua" className="text-[11px] font-semibold">Logradouro (Rua / Av) *</Label>
+                          <Input
+                            id="end-rua"
+                            placeholder="Ex: Rua das Flores"
+                            value={endLogradouro}
+                            onChange={(e) => setEndLogradouro(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="end-num" className="text-[11px] font-semibold">Número *</Label>
+                          <Input
+                            id="end-num"
+                            placeholder="Ex: 123"
+                            value={endNumero}
+                            onChange={(e) => setEndNumero(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro *</Label>
+                          <Input
+                            id="end-bairro"
+                            placeholder="Ex: Centro"
+                            value={endBairro}
+                            onChange={(e) => setEndBairro(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="end-ref" className="text-[11px] font-semibold">Ponto de Referência (Opcional)</Label>
+                          <Input
+                            id="end-ref"
+                            placeholder="Ex: Ao lado do mercado"
+                            value={endPontoRef}
+                            onChange={(e) => setEndPontoRef(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* FORMA DE PAGAMENTO */}
                   <div className="space-y-2 pt-2 border-t border-border/60">
@@ -1080,21 +1302,18 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
               <Button
                 type="submit"
                 form="form-checkout"
-                disabled={processandoPagamento}
-                className={`w-full font-black text-xs h-10 shadow-md ${
-                  metodoPagamento === "cartao"
-                    ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                }`}
+                disabled={salvandoPedido}
+                className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
               >
-                {metodoPagamento === "cartao" ? (
+                {salvandoPedido ? (
                   <>
-                    <CreditCard className="w-4 h-4 mr-1.5" />
-                    {processandoPagamento ? "Processando..." : `Pagar ${feeResult.installments}x de ${feeResult.formattedInstallmentValue}`}
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gravando Pedido...
                   </>
                 ) : (
                   <>
-                    <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar Encomenda no WhatsApp
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confirmar Pedido
                   </>
                 )}
               </Button>
@@ -1102,6 +1321,212 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
           )}
         </SheetContent>
       </Sheet>
+
+      {/* MODAL DE CONFIRMAÇÃO E PAGAMENTO */}
+      <Dialog
+        open={sucessoModalOpen}
+        onOpenChange={(open) => {
+          if (!open) handleConcluirELimpar();
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
+          {/* Cabeçalho de Sucesso */}
+          <DialogHeader className="text-center space-y-2 border-b border-border/60 pb-3">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-inner ring-4 ring-emerald-500/10">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <DialogTitle className="text-lg sm:text-xl font-black text-foreground">
+              🎉 Pedido Registrado com Sucesso!
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Sua encomenda foi gravada diretamente no sistema da confeitaria <strong>{lojaInfo?.nome || "CaixaDoce"}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* RESUMO COMPLETO DO PEDIDO */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold border-b border-border/40 pb-1">
+              <span className="flex items-center gap-1.5 text-foreground">
+                <FileText className="w-4 h-4 text-purple-600" />
+                Resumo do Pedido
+              </span>
+              <Badge variant="outline" className="font-mono text-[10px] bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200">
+                Loja {code}
+              </Badge>
+            </div>
+
+            {/* Dados do Cliente e Agendamento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 space-y-1">
+                <p className="font-bold text-foreground flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-purple-600" /> {clienteNome}
+                </p>
+                <p className="text-muted-foreground font-mono text-[11px]">{clienteWhatsapp}</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 space-y-1">
+                <p className="font-bold text-foreground flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  {dataEntrega ? dataEntrega.split("-").reverse().join("/") : ""} às {horarioEntrega}
+                </p>
+                <p className="text-muted-foreground text-[11px] truncate">
+                  {tipoEntrega === "delivery" ? `🚚 Delivery: ${enderecoEntrega || "A combinar"}` : "🏬 Retirada no Balcão"}
+                </p>
+              </div>
+            </div>
+
+            {/* Endereço da Loja para Retirada / Referência */}
+            {lojaInfo?.endereco && (
+              <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-900/50 text-xs space-y-0.5">
+                <p className="font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  Endereço da Loja:
+                </p>
+                <p className="text-foreground font-medium pl-5 text-[11px] leading-tight">
+                  {lojaInfo.endereco}
+                </p>
+              </div>
+            )}
+
+            {necessitaConfirmacaoDisponibilidade && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-extrabold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>⚠️ Confirme a disponibilidade do produto com a loja.</span>
+              </div>
+            )}
+
+            {observacoes && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-300">
+                <strong>Obs:</strong> {observacoes}
+              </div>
+            )}
+
+            {/* Itens do Pedido */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <ShoppingBag className="w-3.5 h-3.5 text-purple-600" />
+                Itens ({totalItensCarrinho})
+              </p>
+              <div className="space-y-1 max-h-36 overflow-y-auto p-1.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-border/60">
+                {carrinho.map((item) => (
+                  <div key={item.produto.id} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-background border border-border/40">
+                    <span className="font-semibold text-foreground truncate max-w-[220px]">
+                      {item.quantidade}x {item.produto.nome}
+                    </span>
+                    <span className="font-bold font-mono text-foreground shrink-0">
+                      {formatarMoeda(item.produto.preco * item.quantidade)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Valor Total */}
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-bold">
+              <span className="text-emerald-900 dark:text-emerald-300 font-bold">Valor Total a Pagar:</span>
+              <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                {formatarMoeda(totalCarrinho)}
+              </span>
+            </div>
+          </div>
+
+          {/* BLOCO PIX COPIA E COLA */}
+          <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                Pagamento via Pix Copia e Cola
+              </span>
+              {lojaInfo?.chavePix && (
+                <span className="text-[10px] font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded-full">
+                  Chave: {lojaInfo.chavePix}
+                </span>
+              )}
+            </div>
+
+            {pixCopiaCola ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={pixCopiaCola}
+                    className="font-mono text-[11px] h-9 bg-background select-all border-purple-300 focus-visible:ring-purple-400"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (typeof navigator !== "undefined" && navigator.clipboard) {
+                        navigator.clipboard.writeText(pixCopiaCola);
+                        setPixCopiado(true);
+                        toast.success("Código Pix Copia e Cola copiado!");
+                      }
+                    }}
+                    className="h-9 px-3 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1 shadow-xs"
+                  >
+                    {pixCopiado ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" /> Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" /> Copiar Pix
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-purple-700 dark:text-purple-300">
+                  Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> e cole o código acima para realizar o pagamento.
+                </p>
+              </div>
+            ) : lojaInfo?.chavePix ? (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
+                <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
+                  {lojaInfo.chavePix}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(lojaInfo.chavePix || "");
+                      setPixCopiado(true);
+                      toast.success("Chave Pix copiada!");
+                    }
+                  }}
+                  className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
+                >
+                  {pixCopiado ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {pixCopiado ? "Copiada!" : "Copiar Chave"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic">
+                Chave Pix não cadastrada no perfil da loja. Entre em contato pelo WhatsApp para obter os dados de pagamento.
+              </p>
+            )}
+          </div>
+
+          {/* BOTÕES DE AÇÃO */}
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <Button
+              onClick={handleEnviarWhatsApp}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-11 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Enviar resumo pelo WhatsApp
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={handleConcluirELimpar}
+              className="w-full text-xs font-bold text-muted-foreground hover:text-foreground h-9 rounded-xl"
+            >
+              Concluir e Limpar Carrinho
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

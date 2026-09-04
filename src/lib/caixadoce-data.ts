@@ -1,5 +1,7 @@
 import { generatePixPayload } from "./pix-utils";
 import { formatarMoeda } from "./cardapio-helpers";
+import { supabase } from "@/integrations/supabase/client";
+import { calcularCustoItemFichaTecnica } from "./ficha-tecnica-service";
 
 export {
   formatarMoeda,
@@ -206,6 +208,261 @@ export interface InsumoCatalogo {
   categoria: "Chocolates & Coberturas" | "Lácteos & Recheios" | "Confeitos & Açúcares" | "Embalagens & Descartáveis" | "Bases & Estruturas" | "Outros Insumos" | "Confeitaria & Insumos";
   marca?: string;
   unidadePadrao?: string;
+}
+
+export interface InsumoCadastrado {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  unidadeMedida: string; // e.g. "kg", "g", "l", "ml", "un", "cx", "pct", "bdj"
+  custoAtual: number; // preço pago pela embalagem/unidade padrão
+  qtdEmbalagemOriginal: number; // e.g. 1 (1kg) ou 1000 (1000g)
+  unidadeEmbalagemOriginal?: string; // e.g. "kg" ou "g" ou "un"
+  fornecedor?: string;
+  observacoes?: string;
+  createdAt?: string;
+}
+
+export function obterInsumosCadastrados(estabelecimentoCodigo?: string): InsumoCadastrado[] {
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
+  try {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_insumos_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch {}
+  return [];
+}
+
+export function salvarInsumosCadastradosStorage(estabelecimentoCodigo: string, lista: InsumoCadastrado[]) {
+  if (!estabelecimentoCodigo) return;
+  const code = estabelecimentoCodigo.toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_insumos_${code}`, JSON.stringify(lista));
+  } catch (e) {
+    console.warn("Erro ao salvar insumos no storage:", e);
+  }
+}
+
+// ==============================================================================
+// SISTEMA DE VÍNCULO (DE-PARA) & APRENDIZADO DE FORNECEDOR/ITEM DE NOTA
+// ==============================================================================
+
+export interface MapeamentoInsumoDePara {
+  id?: string;
+  itemNotaNome: string;
+  fornecedorNome: string;
+  insumoCadastradoId: string;
+  insumoCadastradoNome: string;
+  updatedAt?: string;
+}
+
+export function obterMapeamentosDePara(estabelecimentoCodigo?: string): MapeamentoInsumoDePara[] {
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
+  try {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_depara_insumos_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch {}
+  return [];
+}
+
+export function salvarMapeamentoDePara(
+  estabelecimentoCodigo: string,
+  itemNotaNome: string,
+  fornecedorNome: string,
+  insumoCadastradoId: string,
+  insumoCadastradoNome: string
+) {
+  if (!estabelecimentoCodigo || !itemNotaNome) return;
+  const code = estabelecimentoCodigo.toUpperCase();
+  const mapeamentos = obterMapeamentosDePara(code);
+
+  const keyItem = itemNotaNome.trim().toLowerCase();
+  const keyForn = (fornecedorNome || "").trim().toLowerCase();
+
+  const idx = mapeamentos.findIndex(
+    (m) => m.itemNotaNome.trim().toLowerCase() === keyItem && m.fornecedorNome.trim().toLowerCase() === keyForn
+  );
+
+  const novoMap: MapeamentoInsumoDePara = {
+    itemNotaNome: itemNotaNome.trim(),
+    fornecedorNome: fornecedorNome.trim(),
+    insumoCadastradoId,
+    insumoCadastradoNome,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (idx >= 0) {
+    mapeamentos[idx] = novoMap;
+  } else {
+    mapeamentos.push(novoMap);
+  }
+
+  try {
+    localStorage.setItem(`caixadoce_depara_insumos_${code}`, JSON.stringify(mapeamentos));
+  } catch (e) {
+    console.warn("Erro ao salvar mapeamento De-Para:", e);
+  }
+}
+
+export function encontrarVinculoDeParaAutomatico(
+  estabelecimentoCodigo: string,
+  itemNotaNome: string,
+  fornecedorNome: string
+): { insumoId: string; insumoNome: string } | null {
+  if (!estabelecimentoCodigo || !itemNotaNome) return null;
+  const code = estabelecimentoCodigo.toUpperCase();
+  const mapeamentos = obterMapeamentosDePara(code);
+  const keyItem = itemNotaNome.trim().toLowerCase();
+  const keyForn = (fornecedorNome || "").trim().toLowerCase();
+
+  let match = mapeamentos.find(
+    (m) =>
+      m.itemNotaNome.trim().toLowerCase() === keyItem &&
+      (m.fornecedorNome.trim().toLowerCase() === keyForn ||
+        m.fornecedorNome.trim().toLowerCase().includes(keyForn) ||
+        keyForn.includes(m.fornecedorNome.trim().toLowerCase()))
+  );
+
+  if (!match) {
+    match = mapeamentos.find((m) => m.itemNotaNome.trim().toLowerCase() === keyItem);
+  }
+
+  if (match) {
+    return { insumoId: match.insumoCadastradoId, insumoNome: match.insumoCadastradoNome };
+  }
+
+  return null;
+}
+
+/**
+  * Atualiza o custo do insumo cadastrado e dispara a atualizacao em cascata de todas as fichas tecnicas
+  */
+export async function atualizarCustoInsumoECascataFichas(
+  estabelecimentoCodigo: string,
+  insumoId: string,
+  novoCustoEmbalagemOuUnitario: number,
+  userId?: string | null
+): Promise<{ insumoNome: string; fichasAtualizadasCount: number }> {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  const insumosAtuais = obterInsumosCadastrados(code);
+  const target = insumosAtuais.find((i) => i.id === insumoId);
+  const insumoNome = target ? target.nome : "";
+
+  if (target) {
+    target.custoAtual = novoCustoEmbalagemOuUnitario;
+    salvarInsumosCadastradosStorage(code, insumosAtuais);
+
+    try {
+      const { error: updateErr } = await supabase
+        .from("insumos")
+        .update({
+          custo_atual: novoCustoEmbalagemOuUnitario,
+          qtd_embalagem_original: target.qtdEmbalagemOriginal || 1,
+          unidade_embalagem_original: target.unidadeEmbalagemOriginal || target.unidadeMedida,
+          fornecedor: target.fornecedor || "",
+          observacoes: target.observacoes || "",
+        })
+        .eq("id", target.id);
+
+      if (updateErr) {
+        await supabase.from("insumos").insert([
+          {
+            id: target.id,
+            estabelecimento_codigo: code,
+            user_id: userId || null,
+            nome: target.nome,
+            unidade_medida: target.unidadeMedida,
+            custo_atual: novoCustoEmbalagemOuUnitario,
+            qtd_embalagem_original: target.qtdEmbalagemOriginal || 1,
+            unidade_embalagem_original: target.unidadeEmbalagemOriginal || target.unidadeMedida,
+            fornecedor: target.fornecedor || "",
+            observacoes: target.observacoes || "",
+          },
+        ]);
+      }
+    } catch (e) {
+      console.warn("[De-Para] Aviso ao salvar insumo no Supabase:", e);
+    }
+  }
+
+  let fichasAtualizadasCount = 0;
+
+  if (insumoNome) {
+    try {
+      const { data: itensFicha, error } = await supabase
+        .from("ficha_tecnica_itens" as any)
+        .select("*")
+        .eq("estabelecimento_codigo", code);
+
+      if (!error && itensFicha && Array.isArray(itensFicha)) {
+        for (const item of itensFicha) {
+          const nomeMatch = (item.insumo_nome || "").trim().toLowerCase() === insumoNome.trim().toLowerCase();
+          if (nomeMatch || item.insumo_padrao_id === insumoId) {
+            const qtdUsada = Number(item.quantidade_usada || 0);
+            const unid = item.unidade_medida || "g";
+            const unidEmb = item.unidade_embalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
+            const qtdEmb = Number(item.qtd_embalagem_original || (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000));
+
+            const novoCustoTotalItem = calcularCustoItemFichaTecnica(
+              qtdUsada,
+              unid,
+              novoCustoEmbalagemOuUnitario,
+              qtdEmb,
+              unidEmb
+            );
+
+            await supabase
+              .from("ficha_tecnica_itens" as any)
+              .update({
+                preco_embalagem: novoCustoEmbalagemOuUnitario,
+                preco_unitario_aplicado: novoCustoEmbalagemOuUnitario,
+                custo_total_item: novoCustoTotalItem,
+              })
+              .eq("id", item.id);
+
+            fichasAtualizadasCount++;
+
+            if (typeof window !== "undefined" && item.produto_id) {
+              const localKey = `caixadoce_ficha_tecnica_${code}_${item.produto_id}`;
+              const localRaw = localStorage.getItem(localKey);
+              if (localRaw) {
+                const arr: any[] = JSON.parse(localRaw);
+                const updatedArr = arr.map((fItem) => {
+                  if (fItem.id === item.id || (fItem.insumoNome || "").toLowerCase() === insumoNome.toLowerCase()) {
+                    return {
+                      ...fItem,
+                      precoEmbalagem: novoCustoEmbalagemOuUnitario,
+                      precoUnitarioAplicado: novoCustoEmbalagemOuUnitario,
+                      custoTotalItem: novoCustoTotalItem,
+                    };
+                  }
+                  return fItem;
+                });
+                localStorage.setItem(localKey, JSON.stringify(updatedArr));
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[De-Para] Erro ao reciclar custo das fichas técnicas:", e);
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("insumosUpdated", {
+        detail: { insumoId, novoCusto: novoCustoEmbalagemOuUnitario },
+      })
+    );
+  }
+
+  return { insumoNome, fichasAtualizadasCount };
 }
 
 export const NOVOS_INSUMOS_SEED: string[] = [
@@ -930,6 +1187,8 @@ export interface ItemNotaFiscal {
   valorUnitario: number;
   valorTotal: number;
   categoria: CategoriaDespesaItem;
+  insumoVinculadoId?: string;
+  insumoVinculadoNome?: string;
 }
 
 export function normalizarNomeInsumo(nome: string): string {

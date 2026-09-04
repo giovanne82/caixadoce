@@ -18,6 +18,7 @@ import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
 import { ConfiguracoesTab } from "@/components/caixadoce/ConfiguracoesTab";
+import { InsumosView } from "@/components/caixadoce/InsumosView";
 import { NotificationBell } from "@/components/caixadoce/NotificationBell";
 
 // UI Components
@@ -41,6 +42,7 @@ import {
   Sparkles,
   Lock,
   AlertCircle,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
@@ -1848,7 +1850,7 @@ function Index() {
               )}
               {podeAcessarAba("despesas") && (
                 <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Layers className="w-4 h-4" /> Lista de Compras
+                  <Layers className="w-4 h-4" /> Compras
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -1900,7 +1902,7 @@ function Index() {
             )}
           </TabsContent>
 
-          {/* 2. Aba Dedicada: Compras (Lista de Compras Interativa - Sempre Gratuita!) */}
+          {/* 2. Aba Dedicada: Compras (Lista de Compras & Cadastro de Insumos Integrados) */}
           <TabsContent value="despesas">
             <DespesasView
               despesas={despesas}
@@ -1932,6 +1934,9 @@ function Index() {
                 onBloquearData={bloquearData}
                 onDesbloquearData={desbloquearData}
                 onCriarClienteRapido={criarClienteRapido}
+                onCriarCliente={criarCliente}
+                onEditarCliente={editarCliente}
+                onExcluirCliente={excluirCliente}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
