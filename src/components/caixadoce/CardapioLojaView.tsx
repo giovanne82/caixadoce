@@ -56,6 +56,7 @@ import {
   CheckCircle2,
   MapPin,
   ChevronDown,
+  X,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -375,7 +376,11 @@ export function CardapioLojaView() {
     const lista = freteConfig.regrasBairros.filter((b) => b.ativo);
     if (!endBairro.trim()) return lista;
     const q = endBairro.trim().toLowerCase();
-    return lista.filter((b) => b.bairro.toLowerCase().includes(q));
+    const isExactMatch = lista.some((b) => b.bairro.toLowerCase() === q);
+    // Se o usuário selecionou exatamente um bairro, ainda exibimos todos os bairros na lista para troca rápida
+    if (isExactMatch) return lista;
+    const filtrados = lista.filter((b) => b.bairro.toLowerCase().includes(q));
+    return filtrados.length > 0 ? filtrados : lista;
   }, [freteConfig.regrasBairros, endBairro]);
 
   // Dados da Loja
@@ -1362,6 +1367,11 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                   : "Ex: Centro"
                               }
                               value={endBairro}
+                              onClick={() => {
+                                if (freteConfig.regrasBairros.filter((b) => b.ativo).length > 0) {
+                                  setBairroDropdownOpen(true);
+                                }
+                              }}
                               onFocus={() => {
                                 if (freteConfig.regrasBairros.filter((b) => b.ativo).length > 0) {
                                   setBairroDropdownOpen(true);
@@ -1373,20 +1383,47 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                   setBairroDropdownOpen(true);
                                 }
                               }}
-                              className="h-8 text-xs font-medium pr-7"
+                              className={`h-8 text-xs font-medium ${
+                                endBairro.trim() && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0
+                                  ? "pr-14"
+                                  : "pr-7"
+                              }`}
                               required={tipoEntrega === "delivery"}
                               autoComplete="off"
                             />
-                            {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                onClick={() => setBairroDropdownOpen((prev) => !prev)}
-                                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
-                              >
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${bairroDropdownOpen ? "rotate-180" : ""}`} />
-                              </button>
-                            )}
+                            
+                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                              {endBairro.trim() && (
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEndBairro("");
+                                    setBairroDropdownOpen(true);
+                                  }}
+                                  className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/15 rounded-full transition-colors"
+                                  title="Limpar e escolher outro bairro"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+
+                              {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBairroDropdownOpen((prev) => !prev);
+                                  }}
+                                  className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                                  title="Ver lista de bairros atendidos"
+                                >
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${bairroDropdownOpen ? "rotate-180" : ""}`} />
+                                </button>
+                              )}
+                            </div>
 
                             {/* Dropdown de Sugestões de Bairros */}
                             {bairroDropdownOpen && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
@@ -1395,7 +1432,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                   className="fixed inset-0 z-40"
                                   onClick={() => setBairroDropdownOpen(false)}
                                 />
-                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-background border border-border/80 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 text-xs divide-y divide-border/30">
+                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-background border border-border/80 rounded-xl shadow-xl max-h-52 overflow-y-auto p-1 text-xs divide-y divide-border/30">
                                   {bairrosSugeridos.length > 0 ? (
                                     bairrosSugeridos.map((b) => {
                                       const isSelected = endBairro.trim().toLowerCase() === b.bairro.toLowerCase();
@@ -1447,19 +1484,29 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                             )}
                           </div>
 
-                          {/* Indicador Dinâmico de Frete para o Bairro */}
+                          {/* Indicador Dinâmico de Frete para o Bairro com Botão Trocar */}
                           {endBairro.trim() && (
-                            <div className="flex items-center gap-1.5 pt-0.5 text-[10px]">
+                            <div className="flex items-center justify-between pt-0.5 text-[10px]">
                               {freteCalculado.isGratis ? (
-                                <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 truncate">
                                   <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  Entrega Grátis para {endBairro.trim()}
+                                  Entrega Grátis ({endBairro.trim()})
                                 </span>
                               ) : (
-                                <span className="text-purple-700 dark:text-purple-300 font-bold flex items-center gap-1">
+                                <span className="text-purple-700 dark:text-purple-300 font-bold flex items-center gap-1 truncate">
                                   <Truck className="w-3 h-3 text-purple-600 shrink-0" />
-                                  Taxa de entrega: {formatarMoeda(freteCalculado.valorFrete)}
+                                  Taxa: {formatarMoeda(freteCalculado.valorFrete)} ({endBairro.trim()})
                                 </span>
+                              )}
+
+                              {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setBairroDropdownOpen(true)}
+                                  className="text-purple-600 hover:text-purple-800 dark:text-purple-400 font-bold hover:underline shrink-0 ml-1.5 cursor-pointer"
+                                >
+                                  Trocar
+                                </button>
                               )}
                             </div>
                           )}
