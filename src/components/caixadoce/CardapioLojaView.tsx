@@ -451,6 +451,13 @@ export function CardapioLojaView() {
     carregarDadosLoja();
   }, [code]);
 
+  // Garante que se o lojista desativou o delivery, a modalidade seja forçada para "retirada"
+  useEffect(() => {
+    if (lojaInfo?.delivery_ativo === false || lojaInfo?.aceita_delivery === false) {
+      setTipoEntrega("retirada");
+    }
+  }, [lojaInfo]);
+
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
   const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
   const regras = useMemo(
