@@ -440,34 +440,32 @@ export function CardapioLojaView() {
     [regrasBase, carrinho]
   );
 
+  // Calculo da data minima de seleção no calendario (apenas hoje em diante, sem bloqueio por antecedencia)
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + (regras.antecedenciaMinimaDias || 0));
-    let safety = 0;
-    const permitidos = regras.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6];
-    while (permitidos.length > 0 && !permitidos.includes(d.getDay()) && safety < 7) {
-      d.setDate(d.getDate() + 1);
-      safety++;
-    }
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
-  }, [regras]);
+  }, []);
 
   const handleDataEntregaChange = (val: string) => {
-    if (!val) {
-      setDataEntrega("");
-      return;
-    }
-    const valRes = validarDataEntrega(val, regras);
-    if (!valRes.valida) {
-      toast.error(valRes.motivo || "Data indisponível para encomenda.");
-      setDataEntrega("");
-      return;
-    }
     setDataEntrega(val);
   };
+
+  // Checagem dinêmica se a data escolhida e inferior ao prazo de antecedencia exigido pelos produtos
+  const necessitaConfirmacaoDisponibilidade = useMemo(() => {
+    if (!dataEntrega) return false;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const partes = dataEntrega.split("-").map(Number);
+    if (partes.length !== 3) return false;
+    const dataEscolhida = new Date(partes[0], partes[1] - 1, partes[2], 0, 0, 0, 0);
+    const diffTime = dataEscolhida.getTime() - hoje.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const antecedenciaMinima = regras.antecedenciaMinimaDias || 0;
+    return diffDays < antecedenciaMinima;
+  }, [dataEntrega, regras]);
 
   const handleHorarioEntregaChange = (val: string) => {
     setHorarioEntrega(val);
@@ -481,7 +479,7 @@ export function CardapioLojaView() {
     const list = obterProdutosCardapio(code);
     setProdutos(list.filter((p) => p.ativo !== false));
 
-    // Data mínima: amanhã
+    // Data mínima inicial: amanhã por padrão
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     setDataEntrega(amanha.toISOString().split("T")[0]);
@@ -564,12 +562,6 @@ export function CardapioLojaView() {
       return;
     }
 
-    const valRes = validarDataEntrega(dataEntrega, regras);
-    if (!valRes.valida) {
-      toast.error(valRes.motivo || "Data indisponível para encomenda.");
-      return;
-    }
-
     const horRes = validarHorarioEntrega(horarioEntrega, regras);
     if (!horRes.valido) {
       toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
@@ -592,6 +584,11 @@ export function CardapioLojaView() {
 
       const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
 
+      const avisoTexto = "⚠️ Confirme a disponibilidade do produto com a loja.";
+      const obsFinal = necessitaConfirmacaoDisponibilidade
+        ? (observacoes.trim() ? `${observacoes.trim()} | ${avisoTexto}` : avisoTexto)
+        : (observacoes.trim() || "");
+
       const payloadInsert: Record<string, any> = {
         id: pedidoId,
         estabelecimento_codigo: code,
@@ -609,7 +606,7 @@ export function CardapioLojaView() {
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         total_price: valTotalCarrinho,
-        observacoes: observacoes || "",
+        observacoes: obsFinal,
       };
 
       let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
@@ -632,7 +629,7 @@ export function CardapioLojaView() {
           total_amount: valTotalCarrinho,
           status: "pendente",
           status_pagamento: payloadInsert.status_pagamento,
-          observacoes: observacoes || "",
+          observacoes: obsFinal,
         };
 
         const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
@@ -700,6 +697,10 @@ export function CardapioLojaView() {
       }
     }
 
+    const blocoAvisoData = necessitaConfirmacaoDisponibilidade
+      ? "\n⚠️ *ATENÇÃO:* Confirme a disponibilidade do produto com a loja.\n"
+      : "";
+
     const msg = `🎂 *CONFIRMAÇÃO DE PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
 
 Olá! Confirmei meu pedido pelo cardápio digital (Código: *${code}*):
@@ -708,7 +709,7 @@ Olá! Confirmei meu pedido pelo cardápio digital (Código: *${code}*):
 📱 *WhatsApp:* ${clienteWhatsapp}
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
-📍 *Modalidade:* ${modalidade}
+📍 *Modalidade:* ${modalidade}${blocoAvisoData}
 ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
 🛒 *Itens do Pedido:*
 ${resumoItens}
@@ -1073,6 +1074,13 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           : `Encomendas com no mínimo ${regras.antecedenciaMinimaDias} dia(s) de antecedência. Expediente: ${regras.horarioAbertura} às ${regras.horarioFechamento}.`}
                       </span>
                     </p>
+
+                    {necessitaConfirmacaoDisponibilidade && (
+                      <p className="text-xs text-amber-900 dark:text-amber-300 bg-amber-500/15 p-2 rounded-lg border border-amber-500/30 font-extrabold flex items-center gap-1.5 mt-1.5">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>⚠️ Confirme a disponibilidade do produto com a loja.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -1221,6 +1229,13 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 </p>
               </div>
             </div>
+
+            {necessitaConfirmacaoDisponibilidade && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-extrabold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>⚠️ Confirme a disponibilidade do produto com a loja.</span>
+              </div>
+            )}
 
             {observacoes && (
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-300">
