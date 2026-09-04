@@ -1162,7 +1162,7 @@ export function FichaTecnicaModal({
         {/* Rodapé do Modal */}
         <DialogFooter className="p-3.5 sm:p-5 border-t border-border bg-card shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="text-xs text-muted-foreground text-center sm:text-left">
-            Preço Atual no Cardápio: <strong className="text-foreground font-mono">{formatarMoeda(produto.preco)}</strong>
+            Preço Atual no Cardápio: <strong className="text-foreground font-mono">{formatarMoeda(produto?.preco || 0)}</strong>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
