@@ -40,6 +40,8 @@ import {
   Scale,
   RefreshCw,
   AlertTriangle,
+  TriangleAlert,
+  AlertCircle,
 } from "lucide-react";
 import {
   formatarMoeda,
