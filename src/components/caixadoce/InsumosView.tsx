@@ -399,69 +399,144 @@ export function InsumosView({
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead className="text-xs font-bold">Insumo / Ingrediente</TableHead>
-                    <TableHead className="text-xs font-bold text-center">Qtd Embalagem</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Custo Atual (Embalagem)</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Custo Proporcional</TableHead>
-                    <TableHead className="text-xs font-bold">Fornecedor</TableHead>
-                    <TableHead className="text-xs font-bold text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {insumosFiltrados.map((ins) => {
-                    const custUnit =
-                      ins.qtdEmbalagemOriginal > 0
-                        ? ins.custoAtual / ins.qtdEmbalagemOriginal
-                        : ins.custoAtual;
+            <div>
+              {/* LAYOUT MOBILE (CARDS EMPILHADOS RESPONSIVOS - sm:hidden) */}
+              <div className="space-y-3 p-3 sm:hidden">
+                {insumosFiltrados.map((ins) => {
+                  const custUnit =
+                    ins.qtdEmbalagemOriginal > 0
+                      ? ins.custoAtual / ins.qtdEmbalagemOriginal
+                      : ins.custoAtual;
+                  const unidProp =
+                    ins.unidadeMedida === "kg"
+                      ? "g"
+                      : ins.unidadeMedida === "l"
+                      ? "ml"
+                      : ins.unidadeMedida;
 
-                    return (
-                      <TableRow key={ins.id} className="hover:bg-muted/30">
-                        <TableCell className="font-bold text-xs text-foreground">
-                          {ins.nome}
-                        </TableCell>
-                        <TableCell className="text-xs text-center font-mono">
-                          {ins.qtdEmbalagemOriginal} {ins.unidadeMedida}
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-mono font-bold text-purple-700 dark:text-purple-300">
-                          {formatarMoeda(ins.custoAtual)}
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-mono text-muted-foreground">
-                          {formatarMoeda(custUnit)} / {ins.unidadeMedida === "kg" ? "g" : ins.unidadeMedida === "l" ? "ml" : ins.unidadeMedida}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {ins.fornecedor || "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleAbrirEdicao(ins)}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-purple-600"
-                              title="Editar Insumo"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleExcluirInsumo(ins.id, ins.nome)}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
-                              title="Excluir Insumo"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                  return (
+                    <Card key={ins.id} className="p-3.5 border-border shadow-2xs space-y-2 bg-card rounded-xl">
+                      <div className="flex items-start justify-between gap-2 pb-2 border-b border-border/50">
+                        <div className="min-w-0 pr-1">
+                          <h4 className="font-extrabold text-sm text-foreground truncate">{ins.nome}</h4>
+                          {ins.fornecedor && (
+                            <span className="text-[11px] text-muted-foreground block truncate">
+                              Fornecedor: {ins.fornecedor}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAbrirEdicao(ins)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-purple-600 rounded-full"
+                            title="Editar Insumo"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleExcluirInsumo(ins.id, ins.nome)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 rounded-full"
+                            title="Excluir Insumo"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-xs pt-0.5">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Embalagem</span>
+                          <span className="font-semibold font-mono text-foreground">
+                            {ins.qtdEmbalagemOriginal} {ins.unidadeMedida}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Custo Pago</span>
+                          <span className="font-extrabold font-mono text-purple-700 dark:text-purple-300">
+                            {formatarMoeda(ins.custoAtual)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Proporcional</span>
+                          <span className="font-semibold font-mono text-muted-foreground text-[11px]">
+                            {formatarMoeda(custUnit)}/{unidProp}
+                          </span>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              {/* LAYOUT DESKTOP (TABELA FLUIDA - hidden sm:block) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="text-xs font-bold">Insumo / Ingrediente</TableHead>
+                      <TableHead className="text-xs font-bold text-center">Qtd Embalagem</TableHead>
+                      <TableHead className="text-xs font-bold text-right">Custo Atual (Embalagem)</TableHead>
+                      <TableHead className="text-xs font-bold text-right">Custo Proporcional</TableHead>
+                      <TableHead className="text-xs font-bold">Fornecedor</TableHead>
+                      <TableHead className="text-xs font-bold text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {insumosFiltrados.map((ins) => {
+                      const custUnit =
+                        ins.qtdEmbalagemOriginal > 0
+                          ? ins.custoAtual / ins.qtdEmbalagemOriginal
+                          : ins.custoAtual;
+
+                      return (
+                        <TableRow key={ins.id} className="hover:bg-muted/30">
+                          <TableCell className="font-bold text-xs text-foreground">
+                            {ins.nome}
+                          </TableCell>
+                          <TableCell className="text-xs text-center font-mono">
+                            {ins.qtdEmbalagemOriginal} {ins.unidadeMedida}
+                          </TableCell>
+                          <TableCell className="text-xs text-right font-mono font-bold text-purple-700 dark:text-purple-300">
+                            {formatarMoeda(ins.custoAtual)}
+                          </TableCell>
+                          <TableCell className="text-xs text-right font-mono text-muted-foreground">
+                            {formatarMoeda(custUnit)} / {ins.unidadeMedida === "kg" ? "g" : ins.unidadeMedida === "l" ? "ml" : ins.unidadeMedida}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {ins.fornecedor || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAbrirEdicao(ins)}
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-purple-600"
+                                title="Editar Insumo"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleExcluirInsumo(ins.id, ins.nome)}
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                                title="Excluir Insumo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

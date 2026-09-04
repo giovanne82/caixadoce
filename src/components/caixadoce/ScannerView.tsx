@@ -57,9 +57,11 @@ import {
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
   obterInsumosCadastrados,
+  salvarInsumosCadastradosStorage,
   salvarMapeamentoDePara,
   encontrarVinculoDeParaAutomatico,
   atualizarCustoInsumoECascataFichas,
+  normalizarNomeInsumo,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
   type Encomenda,
@@ -223,6 +225,162 @@ export function ScannerView({
     setExpandedReceipts((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // Modal de Cadastro Rápido de Insumo no Seletor De-Para
+  const [modalCadastroRapidoOpen, setModalCadastroRapidoOpen] = useState(false);
+  const [novoInsumoNome, setNovoInsumoNome] = useState("");
+  const [novoInsumoUnidade, setNovoInsumoUnidade] = useState("kg");
+  const [novoInsumoQtdEmb, setNovoInsumoQtdEmb] = useState("1");
+  const [novoInsumoCustoStr, setNovoInsumoCustoStr] = useState("");
+  const [novoInsumoFornecedor, setNovoInsumoFornecedor] = useState("");
+  const [salvandoRapidoInsumo, setSalvandoRapidoInsumo] = useState(false);
+
+  const [targetItemParaVincular, setTargetItemParaVincular] = useState<{
+    despesaId: string;
+    itemId: string;
+    itemNome: string;
+    fornecedorNome: string;
+    valorTotal: number;
+    quantidade: number;
+  } | null>(null);
+
+  const handleAbrirCadastroRapidoInsumo = (itemContext: {
+    despesaId: string;
+    itemId: string;
+    itemNome: string;
+    fornecedorNome: string;
+    valorTotal: number;
+    quantidade: number;
+  }) => {
+    setTargetItemParaVincular(itemContext);
+    const nomeLimpo = normalizarNomeInsumo(itemContext.itemNome);
+    setNovoInsumoNome(nomeLimpo);
+
+    const qtd = itemContext.quantidade > 0 ? itemContext.quantidade : 1;
+    const valUnit = itemContext.valorTotal > 0 ? parseFloat((itemContext.valorTotal / qtd).toFixed(2)) : itemContext.valorTotal;
+
+    setNovoInsumoQtdEmb(String(qtd));
+    setNovoInsumoUnidade("un");
+    setNovoInsumoCustoStr(valUnit > 0 ? formatarMoeda(valUnit) : "");
+    setNovoInsumoFornecedor(itemContext.fornecedorNome || "");
+
+    setModalCadastroRapidoOpen(true);
+  };
+
+  const handleSalvarCadastroRapidoInsumo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCode || !novoInsumoNome.trim()) {
+      toast.error("Informe o nome do insumo.");
+      return;
+    }
+
+    const valCusto = converterMoedaInputParaNumero(novoInsumoCustoStr);
+    const qtdEmb = parseFloat(novoInsumoQtdEmb.replace(",", ".")) || 1;
+
+    if (valCusto <= 0) {
+      toast.error("Informe o custo do insumo.");
+      return;
+    }
+
+    setSalvandoRapidoInsumo(true);
+    try {
+      const novoId = crypto.randomUUID();
+      const novoInsumoObj: InsumoCadastrado = {
+        id: novoId,
+        estabelecimentoCodigo: activeCode,
+        nome: novoInsumoNome.trim(),
+        unidadeMedida: novoInsumoUnidade,
+        custoAtual: valCusto,
+        qtdEmbalagemOriginal: qtdEmb,
+        unidadeEmbalagemOriginal: novoInsumoUnidade,
+        fornecedor: novoInsumoFornecedor.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const atuais = obterInsumosCadastrados(activeCode);
+      const novalista = [novoInsumoObj, ...atuais];
+      salvarInsumosCadastradosStorage(activeCode, novalista);
+
+      try {
+        await supabase.from("insumos").upsert(
+          [
+            {
+              id: novoInsumoObj.id,
+              estabelecimento_codigo: activeCode,
+              user_id: profile?.ownerUserId || null,
+              nome: novoInsumoObj.nome,
+              unidade_medida: novoInsumoObj.unidadeMedida,
+              custo_atual: novoInsumoObj.custoAtual,
+              qtd_embalagem_original: novoInsumoObj.qtdEmbalagemOriginal,
+              unidade_embalagem_original: novoInsumoObj.unidadeMedida,
+              fornecedor: novoInsumoObj.fornecedor || "",
+            },
+          ],
+          { onConflict: "id" }
+        );
+      } catch (err) {
+        console.warn("[Scanner] Erro ao salvar insumo rápido no Supabase:", err);
+      }
+
+      if (targetItemParaVincular) {
+        const { despesaId, itemId, itemNome, fornecedorNome } = targetItemParaVincular;
+
+        salvarMapeamentoDePara(activeCode, itemNome, fornecedorNome, novoId, novoInsumoObj.nome);
+
+        await atualizarCustoInsumoECascataFichas(
+          activeCode,
+          novoId,
+          valCusto,
+          profile?.ownerUserId
+        );
+
+        const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+        if (targetDespesa) {
+          const novosItens = (targetDespesa.itens || []).map((it) => {
+            if (it.id === itemId || it.nome === itemNome) {
+              return {
+                ...it,
+                insumoVinculadoId: novoId,
+                insumoVinculadoNome: novoInsumoObj.nome,
+              };
+            }
+            return it;
+          });
+
+          try {
+            await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+          } catch {}
+          if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+
+          if (registroDetalhes && registroDetalhes.id === despesaId) {
+            setRegistroDetalhes({ ...registroDetalhes, itens: novosItens });
+          }
+        } else {
+          // Atualiza no modal de revisão OCR se for notinha nova
+          setItensExtraidos((prev) =>
+            prev.map((it) =>
+              it.id === itemId || it.nome === itemNome
+                ? { ...it, insumoVinculadoId: novoId, insumoVinculadoNome: novoInsumoObj.nome }
+                : it
+            )
+          );
+        }
+      }
+
+      setInsumosCadastrados(novalista);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("insumosUpdated", { detail: { insumoId: novoId, novoCusto: valCusto } }));
+      }
+
+      toast.success(`✨ Insumo "${novoInsumoObj.nome}" cadastrado e vinculado com sucesso!`);
+      setModalCadastroRapidoOpen(false);
+      setTargetItemParaVincular(null);
+    } catch (e: any) {
+      toast.error(`Erro ao cadastrar insumo: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setSalvandoRapidoInsumo(false);
+    }
+  };
+
   const handleVincularInsumoNota = async (
     despesaId: string,
     itemId: string,
@@ -233,6 +391,18 @@ export function ScannerView({
     itemQtd: number
   ) => {
     if (!activeCode) return;
+
+    if (insumoId === "_novo_insumo") {
+      handleAbrirCadastroRapidoInsumo({
+        despesaId,
+        itemId,
+        itemNome,
+        fornecedorNome,
+        valorTotal: itemValorTotal,
+        quantidade: itemQtd,
+      });
+      return;
+    }
 
     if (insumoId === "_none" || !insumoId) {
       const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
@@ -1148,22 +1318,22 @@ export function ScannerView({
                                       <TableCell>
                                         <Select
                                           value={it.insumoVinculadoId || "_none"}
-                                          onValueChange={(val) =>
-                                            handleVincularInsumoNota(
-                                              d.id,
-                                              it.id,
-                                              it.nome,
-                                              d.fornecedorNome,
-                                              val,
-                                              it.valorTotal,
-                                              it.quantidade
-                                            )
-                                          }
+                                          onValueChange={(val) => {
+                                            if (val === "_novo_insumo") {
+                                              setInsumoParaCadastroRapido({ nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
+                                              setModalInsumoOpen(true);
+                                            } else {
+                                              handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
+                                            }
+                                          }}
                                         >
                                           <SelectTrigger className="h-7 text-xs bg-background">
                                             <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
                                           </SelectTrigger>
                                           <SelectContent>
+                                            <SelectItem value="_novo_insumo" className="font-bold text-purple-700 dark:text-purple-300 border-b border-purple-100 dark:border-purple-900/40">
+                                              ＋ Cadastrar Novo Insumo
+                                            </SelectItem>
                                             <SelectItem value="_none">Sem vínculo</SelectItem>
                                             {insumosCadastrados.map((ins) => (
                                               <SelectItem key={ins.id} value={ins.id}>
@@ -1709,6 +1879,118 @@ export function ScannerView({
               </Button>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL DE CADASTRO RÁPIDO DE INSUMO NO VÍNCULO DE-PARA */}
+      <Dialog open={modalCadastroRapidoOpen} onOpenChange={setModalCadastroRapidoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-purple-700 dark:text-purple-300">
+              <Plus className="w-5 h-5" /> Cadastrar Novo Insumo & Vincular
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Cadastre o ingrediente na hora para que fique salvo na sua loja e vinculado a esta notinha fiscal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSalvarCadastroRapidoInsumo} className="space-y-3 pt-2">
+            <div className="space-y-1">
+              <Label htmlFor="req-nome" className="text-xs font-bold text-foreground">
+                Nome do Insumo / Ingrediente *
+              </Label>
+              <Input
+                id="req-nome"
+                value={novoInsumoNome}
+                onChange={(e) => setNovoInsumoNome(e.target.value)}
+                placeholder="Ex: Leite Condensado Moça 395g"
+                className="h-8 text-xs font-semibold"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="req-qtd" className="text-xs font-semibold">
+                  Qtd Embalagem *
+                </Label>
+                <Input
+                  id="req-qtd"
+                  value={novoInsumoQtdEmb}
+                  onChange={(e) => setNovoInsumoQtdEmb(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="req-unid" className="text-xs font-semibold">
+                  Unidade Medida *
+                </Label>
+                <Select value={novoInsumoUnidade} onValueChange={setNovoInsumoUnidade}>
+                  <SelectTrigger id="req-unid" className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="un">Unidade (un)</SelectItem>
+                    <SelectItem value="kg">Quilo (kg)</SelectItem>
+                    <SelectItem value="g">Grama (g)</SelectItem>
+                    <SelectItem value="l">Litro (L)</SelectItem>
+                    <SelectItem value="ml">Mililitro (ml)</SelectItem>
+                    <SelectItem value="cx">Caixa (cx)</SelectItem>
+                    <SelectItem value="pct">Pacote (pct)</SelectItem>
+                    <SelectItem value="bdj">Bandeja (bdj)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="req-custo" className="text-xs font-bold text-foreground">
+                Custo Pago na Embalagem (R$) *
+              </Label>
+              <Input
+                id="req-custo"
+                value={novoInsumoCustoStr}
+                onChange={(e) => setNovoInsumoCustoStr(aplicarMascaraMoedaInput(e.target.value))}
+                placeholder="R$ 0,00"
+                className="h-8 text-xs font-mono font-bold text-purple-700 dark:text-purple-300"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="req-fornec" className="text-xs font-semibold">
+                Fornecedor / Estabelecimento
+              </Label>
+              <Input
+                id="req-fornec"
+                value={novoInsumoFornecedor}
+                onChange={(e) => setNovoInsumoFornecedor(e.target.value)}
+                placeholder="Ex: Mercado Atacadão"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="pt-3 border-t gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalCadastroRapidoOpen(false)}
+                className="text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={salvandoRapidoInsumo}
+                size="sm"
+                className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {salvandoRapidoInsumo ? "Salvando..." : "Salvar e Vincular"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
