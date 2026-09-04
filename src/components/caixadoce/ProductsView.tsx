@@ -483,14 +483,6 @@ export function ProductsView({
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
-            onClick={() => setModalInsumosOpen(true)}
-            className="font-bold border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 text-xs h-9"
-          >
-            <UtensilsCrossed className="w-4 h-4 mr-1.5" /> Cadastro de Insumos
-          </Button>
-
-          <Button
             onClick={() => {
               setKitEditing(null);
               setModalKitOpen(true);

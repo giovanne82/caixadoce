@@ -558,7 +558,7 @@ export function DespesasView({
         </div>
 
         {/* Sub-Aba Navigation Buttons */}
-        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-2xl border border-border w-full sm:w-fit shrink-0">
+        <div className="flex items-center gap-1.5 p-1.5 bg-muted/70 rounded-2xl border border-border w-full sm:w-fit shrink-0">
           <Button
             type="button"
             variant={subAba === "listas" ? "default" : "ghost"}
@@ -568,7 +568,7 @@ export function DespesasView({
             }`}
           >
             <ShoppingCart className="w-4 h-4 mr-1.5" />
-            <span>Listas de Compras</span>
+            <span>Lista de Compras / Notas Escaneadas</span>
           </Button>
 
           <Button
