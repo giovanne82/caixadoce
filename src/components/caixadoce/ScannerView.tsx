@@ -46,12 +46,20 @@ import {
   ShoppingBag,
   Receipt,
   Zap,
+  Link2,
+  ChevronDown,
+  ChevronUp,
+  Check,
 } from "lucide-react";
 import {
   formatarMoeda,
   categorizarItemAutomatico,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
+  obterInsumosCadastrados,
+  salvarMapeamentoDePara,
+  encontrarVinculoDeParaAutomatico,
+  atualizarCustoInsumoECascataFichas,
   type DespesaNotaFiscal,
   type ItemNotaFiscal,
   type Encomenda,
@@ -59,6 +67,7 @@ import {
   type TransacaoFinanceira,
   type MetodoPagamento,
   type StatusTransacao,
+  type InsumoCadastrado,
 } from "@/lib/caixadoce-data";
 import { useScanner } from "@/context/scanner-context";
 import { useAuth } from "@/context/auth-context";
@@ -189,6 +198,110 @@ export function ScannerView({
   const [itensExtraidos, setItensExtraidos] = useState<ItemNotaFiscal[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  // Insumos Cadastrados da Loja & Memória de Vínculo De-Para
+  const [insumosCadastrados, setInsumosCadastrados] = useState<InsumoCadastrado[]>([]);
+  const [expandedReceipts, setExpandedReceipts] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (activeCode) {
+      setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+    }
+  }, [activeCode]);
+
+  useEffect(() => {
+    const handleInsumosUpdate = () => {
+      if (activeCode) {
+        setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+      }
+    };
+    window.addEventListener("insumosUpdated", handleInsumosUpdate);
+    return () => window.removeEventListener("insumosUpdated", handleInsumosUpdate);
+  }, [activeCode]);
+
+  const toggleExpandReceipt = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedReceipts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleVincularInsumoNota = async (
+    despesaId: string,
+    itemId: string,
+    itemNome: string,
+    fornecedorNome: string,
+    insumoId: string,
+    itemValorTotal: number,
+    itemQtd: number
+  ) => {
+    if (!activeCode) return;
+
+    if (insumoId === "_none" || !insumoId) {
+      const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+      if (targetDespesa) {
+        const novosItens = (targetDespesa.itens || []).map((it) =>
+          it.id === itemId || it.nome === itemNome
+            ? { ...it, insumoVinculadoId: undefined, insumoVinculadoNome: undefined }
+            : it
+        );
+        try {
+          await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+        } catch {}
+        if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+      }
+      toast.info("Vínculo removido.");
+      return;
+    }
+
+    const insumoSel = insumosCadastrados.find((i) => i.id === insumoId);
+    if (!insumoSel) return;
+
+    salvarMapeamentoDePara(activeCode, itemNome, fornecedorNome, insumoSel.id, insumoSel.nome);
+
+    const qtd = itemQtd > 0 ? itemQtd : 1;
+    const valorUnitarioNota = itemValorTotal > 0 ? parseFloat((itemValorTotal / qtd).toFixed(2)) : 0;
+    const novoCusto = valorUnitarioNota > 0 ? valorUnitarioNota : insumoSel.custoAtual;
+
+    const resCascata = await atualizarCustoInsumoECascataFichas(
+      activeCode,
+      insumoSel.id,
+      novoCusto,
+      profile?.ownerUserId
+    );
+
+    const targetDespesa = ultimosRegistros.find((d) => d.id === despesaId);
+    if (targetDespesa) {
+      const novosItens = (targetDespesa.itens || []).map((it) => {
+        if (it.id === itemId || it.nome === itemNome) {
+          return {
+            ...it,
+            insumoVinculadoId: insumoSel.id,
+            insumoVinculadoNome: insumoSel.nome,
+          };
+        }
+        return it;
+      });
+
+      try {
+        await supabase.from("despesas").update({ itens: novosItens as any }).eq("id", despesaId);
+      } catch {}
+      if (onEditarDespesa) await onEditarDespesa(despesaId, { itens: novosItens });
+
+      if (registroDetalhes && registroDetalhes.id === despesaId) {
+        setRegistroDetalhes({ ...registroDetalhes, itens: novosItens });
+      }
+    }
+
+    setInsumosCadastrados(obterInsumosCadastrados(activeCode));
+
+    const msgFichas =
+      resCascata.fichasAtualizadasCount > 0
+        ? ` e recalculado o custo de ${resCascata.fichasAtualizadasCount} ficha(s) técnica(s) em tempo real!`
+        : "!";
+
+    toast.success(
+      `✨ Item vinculado a "${insumoSel.nome}"! Custo do insumo atualizado para ${formatarMoeda(novoCusto)}${msgFichas}`
+    );
+  };
+
   // Sincronizar dados extraídos do contexto global com os campos editáveis locais
   useEffect(() => {
     if (extractedData) {
@@ -198,7 +311,23 @@ export function ScannerView({
       setNumeroPedido(extractedData.numeroPedido || "");
       setDataCompra(extractedData.dataCompra || new Date().toISOString().split("T")[0]);
       setHoraCompra(extractedData.horaCompra || "14:35:10");
-      setItensExtraidos(extractedData.itens || []);
+
+      const rawItens = extractedData.itens || [];
+      const forn = extractedData.fornecedorNome || "";
+
+      const itensComVinculo = rawItens.map((item) => {
+        const auto = encontrarVinculoDeParaAutomatico(activeCode, item.nome, forn);
+        if (auto) {
+          return {
+            ...item,
+            insumoVinculadoId: auto.insumoId,
+            insumoVinculadoNome: auto.insumoNome,
+          };
+        }
+        return item;
+      });
+
+      setItensExtraidos(itensComVinculo);
 
       if (extractedData.scanMode === "despesa") {
         if (extractedData.categoriaSugerida) {
@@ -208,7 +337,7 @@ export function ScannerView({
         setDespesaValorStr(val > 0 ? `R$ ${val.toFixed(2).replace(".", ",")}` : "");
       }
     }
-  }, [extractedData]);
+  }, [extractedData, activeCode]);
 
   // Manipular Upload do Arquivo (Foto / PDF)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,8 +601,24 @@ export function ScannerView({
         itens: itensComFallback,
       });
 
-      // Registra cada insumo no histórico individual de compras do usuário para cálculo de preço médio
+      // Registra cada insumo no histórico individual e atualiza de-para / fichas tecnicas se vinculado
       for (const item of itensComFallback) {
+        if (item.insumoVinculadoId) {
+          salvarMapeamentoDePara(
+            activeCode,
+            item.nome,
+            fornecedorNome,
+            item.insumoVinculadoId,
+            item.insumoVinculadoNome || ""
+          );
+          await atualizarCustoInsumoECascataFichas(
+            activeCode,
+            item.insumoVinculadoId,
+            item.valorUnitario,
+            profile?.ownerUserId
+          );
+        }
+
         try {
           await registrarCompraInsumo({
             estabelecimentoCodigo: activeCode,
@@ -593,29 +738,29 @@ export function ScannerView({
         </span>
       </div>
 
-      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS COMPACTOS & LIMPOS - 2 COLUNAS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS COMPACTOS LADO A LADO) */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div
           onClick={() => setScanMode("produtos")}
-          className={`p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-3 ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-2 sm:gap-3 ${
             scanMode === "produtos"
               ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-2.5 rounded-xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-            <ShoppingBag className="w-5 h-5" />
+          <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-1">
-              <h3 className="font-extrabold text-xs sm:text-sm text-foreground truncate">
+              <h3 className="font-extrabold text-[11px] sm:text-xs md:text-sm text-foreground truncate">
                 Nota de Insumos / Produtos
               </h3>
               {scanMode === "produtos" && (
-                <Badge className="bg-primary text-white text-[9px] font-bold py-0 px-1.5 shrink-0">Ativo</Badge>
+                <Badge className="bg-primary text-white text-[8px] sm:text-[9px] font-bold py-0 px-1 shrink-0">Ativo</Badge>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-0.5 hidden sm:block">
               Cupons fiscais e compras de mercado
             </p>
           </div>
@@ -623,34 +768,34 @@ export function ScannerView({
 
         <div
           onClick={() => setScanMode("despesa")}
-          className={`p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-3 ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-2 sm:gap-3 ${
             scanMode === "despesa"
               ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-amber-500/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-2.5 rounded-xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
-            <Receipt className="w-5 h-5" />
+          <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
+            <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-1">
-              <h3 className="font-extrabold text-xs sm:text-sm text-foreground truncate">
+              <h3 className="font-extrabold text-[11px] sm:text-xs md:text-sm text-foreground truncate">
                 Conta / Despesa Fixa
               </h3>
               {scanMode === "despesa" && (
-                <Badge className="bg-amber-600 text-white text-[9px] font-bold py-0 px-1.5 shrink-0">Ativo</Badge>
+                <Badge className="bg-amber-600 text-white text-[8px] sm:text-[9px] font-bold py-0 px-1 shrink-0">Ativo</Badge>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-0.5 hidden sm:block">
               Água, luz, aluguel, boletos
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. ÁREA DE UPLOAD CENTRALIZADA E LIMPA */}
+      {/* 2. ÁREA DE UPLOAD CENTRALIZADA E COMPACTA */}
       <Card className="border-2 border-dashed border-primary/40 bg-card/80 shadow-md">
-        <CardContent className="p-8">
+        <CardContent className="p-3 sm:p-4">
           <input
             type="file"
             ref={fileInputRef}
@@ -661,34 +806,34 @@ export function ScannerView({
           />
 
           {isScanning ? (
-            <div className="py-12 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="py-6 text-center flex flex-col items-center justify-center space-y-2">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
-                <Sparkles className="w-6 h-6 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
+                <Sparkles className="w-5 h-5 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">Capturando dados com IA.</h3>
-              <p className="text-xs text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
+              <h3 className="text-sm font-bold text-foreground">Capturando dados com IA.</h3>
+              <p className="text-[11px] text-primary font-semibold animate-fade-in">{scanStepMessage}</p>
             </div>
           ) : (
             <div
               onClick={() => {
                 if (!isScanning) fileInputRef.current?.click();
               }}
-              className={`py-12 px-6 text-center border border-border/70 rounded-2xl bg-muted/20 transition-all flex flex-col items-center justify-center max-w-xl mx-auto ${
+              className={`py-4 px-3 sm:py-5 sm:px-6 text-center border border-border/70 rounded-2xl bg-muted/20 transition-all flex flex-col items-center justify-center max-w-xl mx-auto ${
                 isScanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/40 hover:border-primary/50"
               }`}
             >
-              <div className="p-4 rounded-2xl bg-primary/10 text-primary mb-3">
-                <UploadCloud className="w-10 h-10" />
+              <div className="p-2.5 rounded-xl bg-primary/10 text-primary mb-2">
+                <UploadCloud className="w-6 h-6 sm:w-8 sm:h-8" />
               </div>
-              <h4 className="text-base font-extrabold text-foreground">
+              <h4 className="text-xs sm:text-sm font-extrabold text-foreground">
                 Tirar foto ou selecionar PDF / Imagem da Notinha
               </h4>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 Formatos aceitos: JPG, PNG ou PDF (comprovantes fiscais de compras)
               </p>
-              <Button size="sm" disabled={isScanning} className="mt-5 font-bold shadow-sm px-6 h-9">
-                <Camera className="w-4 h-4 mr-2" /> Selecionar Arquivo da Notinha
+              <Button size="sm" disabled={isScanning} className="mt-3 font-bold shadow-sm px-4 h-8 text-xs">
+                <Camera className="w-3.5 h-3.5 mr-1.5" /> Selecionar Arquivo da Notinha
               </Button>
             </div>
           )}
@@ -758,6 +903,20 @@ export function ScannerView({
 
                     {/* Botões de Ação Alinhados à Direita */}
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {d.itens && d.itens.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => toggleExpandReceipt(d.id, e)}
+                          className="h-8 text-[11px] gap-1 font-semibold border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          {d.itens.length} {d.itens.length === 1 ? "item" : "itens"}
+                          {expandedReceipts[d.id] ? <ChevronUp className="w-3.5 h-3.5 ml-0.5" /> : <ChevronDown className="w-3.5 h-3.5 ml-0.5" />}
+                        </Button>
+                      )}
+
                       <Button
                         type="button"
                         variant="ghost"
@@ -768,10 +927,10 @@ export function ScannerView({
                             onReenviarFinanceiro(d);
                           }
                         }}
-                        className="h-10 w-10 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Reenviar para o Financeiro"
                       >
-                        <RefreshCw className="w-4.5 h-4.5" />
+                        <RefreshCw className="w-4 h-4" />
                       </Button>
 
                       <Button
@@ -782,10 +941,10 @@ export function ScannerView({
                           e.stopPropagation();
                           compartilharNotinhaWhatsApp(d);
                         }}
-                        className="h-10 w-10 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-full inline-flex items-center justify-center shrink-0"
+                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Compartilhar no WhatsApp"
                       >
-                        <MessageCircle className="w-4.5 h-4.5" />
+                        <MessageCircle className="w-4 h-4" />
                       </Button>
 
                       <Button
@@ -797,13 +956,62 @@ export function ScannerView({
                           setNotaParaExcluir(d);
                           setModalExcluirOpen(true);
                         }}
-                        className="h-10 w-10 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full inline-flex items-center justify-center transition-colors shrink-0"
+                        className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center shrink-0"
                         title="Excluir notinha"
                       >
-                        <Trash2 className="w-4.5 h-4.5" />
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
+
+                  {/* EXPANSAO DOS ITENS COM SELETOR DE-PARA */}
+                  {expandedReceipts[d.id] && d.itens && d.itens.length > 0 && (
+                    <div className="pt-2 border-t border-purple-100 dark:border-purple-900/30 space-y-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="text-[11px] font-bold text-purple-900 dark:text-purple-300">
+                        Itens Escaneados & Vínculo com Insumos Cadastrados (De-Para):
+                      </div>
+                      <div className="space-y-2">
+                        {d.itens.map((it, idx) => (
+                          <div key={it.id || idx} className="p-2.5 rounded-lg bg-muted/40 border border-border/60 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-semibold">
+                              <span className="text-foreground truncate max-w-[200px]">{it.nome}</span>
+                              <span className="font-bold text-emerald-600">{formatarMoeda(it.valorTotal)}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <Label className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">Vínculo:</Label>
+                              <Select
+                                value={it.insumoVinculadoId || "_none"}
+                                onValueChange={(val) =>
+                                  handleVincularInsumoNota(
+                                    d.id,
+                                    it.id,
+                                    it.nome,
+                                    d.fornecedorNome,
+                                    val,
+                                    it.valorTotal,
+                                    it.quantidade
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs bg-background">
+                                  <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none">Sem vínculo</SelectItem>
+                                  {insumosCadastrados.map((ins) => (
+                                    <SelectItem key={ins.id} value={ins.id}>
+                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             ))
@@ -816,84 +1024,164 @@ export function ScannerView({
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="text-xs font-bold w-36 whitespace-nowrap">Data</TableHead>
+                  <TableHead className="text-xs font-bold w-32 whitespace-nowrap">Data</TableHead>
                   <TableHead className="text-xs font-bold whitespace-nowrap">Nome do Estabelecimento</TableHead>
-                  <TableHead className="text-xs font-bold text-right w-36 whitespace-nowrap">Valor Total</TableHead>
+                  <TableHead className="text-xs font-bold whitespace-nowrap">Itens / Vínculo De-Para</TableHead>
+                  <TableHead className="text-xs font-bold text-right w-32 whitespace-nowrap">Valor Total</TableHead>
                   <TableHead className="text-xs font-bold text-center w-36 whitespace-nowrap">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {ultimosRegistros.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground whitespace-nowrap">
+                    <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground whitespace-nowrap">
                       Nenhuma notinha capturada ainda. Envie uma foto acima para começar!
                     </TableCell>
                   </TableRow>
                 ) : (
                   ultimosRegistros.map((d) => (
-                    <TableRow
-                      key={d.id}
-                      onClick={() => abrirDetalhesRegistro(d)}
-                      className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
-                    >
-                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                        <div>{d.dataCompra}</div>
-                        {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
-                      </TableCell>
-                      <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors whitespace-nowrap">
-                        <div>{d.fornecedorNome}</div>
-                        {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
-                      </TableCell>
-                      <TableCell className="font-bold text-xs text-emerald-600 text-right whitespace-nowrap">
-                        {formatarMoeda(d.valorTotal)}
-                      </TableCell>
-                      <TableCell className="text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onReenviarFinanceiro) {
-                                onReenviarFinanceiro(d);
-                              }
-                            }}
-                            className="h-9 w-9 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
-                            title="Reenviar para o Financeiro"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              compartilharNotinhaWhatsApp(d);
-                            }}
-                            className="h-9 w-9 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center min-h-[44px] min-w-[44px]"
-                            title="Compartilhar no WhatsApp"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNotaParaExcluir(d);
-                              setModalExcluirOpen(true);
-                            }}
-                            className="h-9 w-9 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center transition-colors min-h-[44px] min-w-[44px]"
-                            title="Excluir notinha"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow
+                        key={d.id}
+                        onClick={() => abrirDetalhesRegistro(d)}
+                        className="cursor-pointer hover:bg-purple-50/50 transition-colors group"
+                      >
+                        <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                          <div>{d.dataCompra}</div>
+                          {d.horaCompra && <div className="text-[10px] text-muted-foreground/70">{d.horaCompra}</div>}
+                        </TableCell>
+                        <TableCell className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors whitespace-nowrap">
+                          <div>{d.fornecedorNome}</div>
+                          {d.numeroNota && <div className="text-[10px] text-muted-foreground font-mono font-normal">Doc: {d.numeroNota}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
+                          {d.itens && d.itens.length > 0 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => toggleExpandReceipt(d.id, e)}
+                              className="h-7 text-[11px] gap-1 border-purple-300 text-purple-800 dark:text-purple-200"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                              {d.itens.length} {d.itens.length === 1 ? "item" : "itens"}
+                              {expandedReceipts[d.id] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground italic text-[11px]">Sem itens</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-bold text-xs text-emerald-600 text-right whitespace-nowrap">
+                          {formatarMoeda(d.valorTotal)}
+                        </TableCell>
+                        <TableCell className="text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onReenviarFinanceiro) {
+                                  onReenviarFinanceiro(d);
+                                }
+                              }}
+                              className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-full inline-flex items-center justify-center"
+                              title="Reenviar para o Financeiro"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                compartilharNotinhaWhatsApp(d);
+                              }}
+                              className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full inline-flex items-center justify-center"
+                              title="Compartilhar no WhatsApp"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNotaParaExcluir(d);
+                                setModalExcluirOpen(true);
+                              }}
+                              className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-full inline-flex items-center justify-center"
+                              title="Excluir notinha"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+
+                      {expandedReceipts[d.id] && d.itens && d.itens.length > 0 && (
+                        <TableRow key={`${d.id}-items-expanded`} className="bg-purple-50/30 dark:bg-purple-950/10">
+                          <TableCell colSpan={5} className="p-3">
+                            <div className="p-3 bg-card border border-purple-200 dark:border-purple-900/40 rounded-xl space-y-2">
+                              <div className="text-xs font-bold text-purple-900 dark:text-purple-300">
+                                Itens da Nota de {d.fornecedorNome} & Vínculo com Insumos Cadastrados (De-Para):
+                              </div>
+                              <Table>
+                                <TableHeader className="bg-muted/50">
+                                  <TableRow>
+                                    <TableHead className="text-xs">Descrição do Item na Nota</TableHead>
+                                    <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                                    <TableHead className="text-xs w-24 text-right">Valor Total</TableHead>
+                                    <TableHead className="text-xs min-w-[220px]">Insumo Cadastrado (Vínculo De-Para)</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {d.itens.map((it, idx) => (
+                                    <TableRow key={it.id || idx}>
+                                      <TableCell className="text-xs font-medium">{it.nome}</TableCell>
+                                      <TableCell className="text-xs text-center">{it.quantidade}</TableCell>
+                                      <TableCell className="text-xs text-right font-bold text-emerald-600">
+                                        {formatarMoeda(it.valorTotal)}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Select
+                                          value={it.insumoVinculadoId || "_none"}
+                                          onValueChange={(val) =>
+                                            handleVincularInsumoNota(
+                                              d.id,
+                                              it.id,
+                                              it.nome,
+                                              d.fornecedorNome,
+                                              val,
+                                              it.valorTotal,
+                                              it.quantidade
+                                            )
+                                          }
+                                        >
+                                          <SelectTrigger className="h-7 text-xs bg-background">
+                                            <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="_none">Sem vínculo</SelectItem>
+                                            {insumosCadastrados.map((ins) => (
+                                              <SelectItem key={ins.id} value={ins.id}>
+                                                {ins.nome} ({formatarMoeda(ins.custoAtual)})
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   ))
                 )}
               </TableBody>
@@ -1160,8 +1448,9 @@ export function ScannerView({
                       <TableHeader className="bg-muted/40">
                         <TableRow>
                           <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
-                          <TableHead className="text-xs w-20 text-center">Qtd</TableHead>
-                          <TableHead className="text-xs w-28 text-right">Valor Total</TableHead>
+                          <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
+                          <TableHead className="text-xs w-24 text-right">Valor Total</TableHead>
+                          <TableHead className="text-xs min-w-[160px]">Insumo Cadastrado (Vínculo)</TableHead>
                           <TableHead className="text-xs text-right w-8"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1191,6 +1480,30 @@ export function ScannerView({
                                 onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
                                 className="h-7 text-xs text-right font-bold"
                               />
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={item.insumoVinculadoId || "_none"}
+                                onValueChange={(val) => {
+                                  const insObj = insumosCadastrados.find((i) => i.id === val);
+                                  handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
+                                  if (insObj) {
+                                    handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-7 text-xs bg-background">
+                                  <SelectValue placeholder="Vincular insumo..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none">Sem vínculo</SelectItem>
+                                  {insumosCadastrados.map((ins) => (
+                                    <SelectItem key={ins.id} value={ins.id}>
+                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
@@ -1301,9 +1614,9 @@ export function ScannerView({
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead className="text-xs font-bold">Descrição do Item</TableHead>
-                        <TableHead className="text-xs font-bold text-center w-16">Qtd</TableHead>
-                        <TableHead className="text-xs font-bold text-right w-24">Unitário</TableHead>
-                        <TableHead className="text-xs font-bold text-right w-24">Total</TableHead>
+                        <TableHead className="text-xs font-bold text-center w-12">Qtd</TableHead>
+                        <TableHead className="text-xs font-bold text-right w-20">Total</TableHead>
+                        <TableHead className="text-xs font-bold min-w-[150px]">Vínculo De-Para (Insumo Cadastrado)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1318,11 +1631,36 @@ export function ScannerView({
                           <TableRow key={item.id || idx}>
                             <TableCell className="text-xs font-medium text-foreground">{item.nome}</TableCell>
                             <TableCell className="text-xs font-bold text-center">{item.quantidade}</TableCell>
-                            <TableCell className="text-xs text-right text-muted-foreground">
-                              {formatarMoeda(item.valorUnitario || 0)}
-                            </TableCell>
                             <TableCell className="text-xs font-bold text-right text-foreground">
                               {formatarMoeda(item.valorTotal)}
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={item.insumoVinculadoId || "_none"}
+                                onValueChange={(val) =>
+                                  handleVincularInsumoNota(
+                                    registroDetalhes.id,
+                                    item.id,
+                                    item.nome,
+                                    registroDetalhes.fornecedorNome,
+                                    val,
+                                    item.valorTotal,
+                                    item.quantidade
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs bg-background">
+                                  <SelectValue placeholder="Vincular a Insumo..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none">Sem vínculo</SelectItem>
+                                  {insumosCadastrados.map((ins) => (
+                                    <SelectItem key={ins.id} value={ins.id}>
+                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                           </TableRow>
                         ))
