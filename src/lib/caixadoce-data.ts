@@ -358,8 +358,19 @@ export async function atualizarCustoInsumoECascataFichas(
     salvarInsumosCadastradosStorage(code, insumosAtuais);
 
     try {
-      await supabase.from("insumos").upsert(
-        [
+      const { error: updateErr } = await supabase
+        .from("insumos")
+        .update({
+          custo_atual: novoCustoEmbalagemOuUnitario,
+          qtd_embalagem_original: target.qtdEmbalagemOriginal || 1,
+          unidade_embalagem_original: target.unidadeEmbalagemOriginal || target.unidadeMedida,
+          fornecedor: target.fornecedor || "",
+          observacoes: target.observacoes || "",
+        })
+        .eq("id", target.id);
+
+      if (updateErr) {
+        await supabase.from("insumos").insert([
           {
             id: target.id,
             estabelecimento_codigo: code,
@@ -372,9 +383,8 @@ export async function atualizarCustoInsumoECascataFichas(
             fornecedor: target.fornecedor || "",
             observacoes: target.observacoes || "",
           },
-        ],
-        { onConflict: "id" }
-      );
+        ]);
+      }
     } catch (e) {
       console.warn("[De-Para] Aviso ao salvar insumo no Supabase:", e);
     }

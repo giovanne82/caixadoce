@@ -282,10 +282,23 @@ export function InsumosView({
       salvarInsumosCadastradosStorage(estabelecimentoCodigo, novalista);
       if (onInsumosChange) onInsumosChange(novalista);
 
-      // Upsert no Supabase tabela insumos
+      // Persistência no Supabase (Insert puro para novos, Update para edições)
       try {
-        await supabase.from("insumos").upsert(
-          [
+        if (editingId) {
+          await supabase
+            .from("insumos")
+            .update({
+              nome: insumoObj.nome,
+              unidade_medida: insumoObj.unidadeMedida,
+              custo_atual: insumoObj.custoAtual,
+              qtd_embalagem_original: insumoObj.qtdEmbalagemOriginal,
+              unidade_embalagem_original: insumoObj.unidadeMedida,
+              fornecedor: insumoObj.fornecedor || "",
+              observacoes: insumoObj.observacoes || "",
+            })
+            .eq("id", editingId);
+        } else {
+          await supabase.from("insumos").insert([
             {
               id: insumoObj.id,
               estabelecimento_codigo: estabelecimentoCodigo,
@@ -298,9 +311,8 @@ export function InsumosView({
               fornecedor: insumoObj.fornecedor || "",
               observacoes: insumoObj.observacoes || "",
             },
-          ],
-          { onConflict: "id" }
-        );
+          ]);
+        }
       } catch (err) {
         console.warn("[InsumosView] Aviso ao salvar no Supabase:", err);
       }

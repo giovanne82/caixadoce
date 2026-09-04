@@ -508,22 +508,19 @@ export function ScannerView({
       salvarInsumosCadastradosStorage(activeCode, novalista);
 
       try {
-        await supabase.from("insumos").upsert(
-          [
-            {
-              id: novoInsumoObj.id,
-              estabelecimento_codigo: activeCode,
-              user_id: profile?.ownerUserId || null,
-              nome: novoInsumoObj.nome,
-              unidade_medida: novoInsumoObj.unidadeMedida,
-              custo_atual: novoInsumoObj.custoAtual,
-              qtd_embalagem_original: novoInsumoObj.qtdEmbalagemOriginal,
-              unidade_embalagem_original: novoInsumoObj.unidadeMedida,
-              fornecedor: novoInsumoObj.fornecedor || "",
-            },
-          ],
-          { onConflict: "id" }
-        );
+        await supabase.from("insumos").insert([
+          {
+            id: novoInsumoObj.id,
+            estabelecimento_codigo: activeCode,
+            user_id: profile?.ownerUserId || null,
+            nome: novoInsumoObj.nome,
+            unidade_medida: novoInsumoObj.unidadeMedida,
+            custo_atual: novoInsumoObj.custoAtual,
+            qtd_embalagem_original: novoInsumoObj.qtdEmbalagemOriginal,
+            unidade_embalagem_original: novoInsumoObj.unidadeMedida,
+            fornecedor: novoInsumoObj.fornecedor || "",
+          },
+        ]);
       } catch (err) {
         console.warn("[Scanner] Erro ao salvar insumo rápido no Supabase:", err);
       }
