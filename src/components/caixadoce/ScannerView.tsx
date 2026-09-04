@@ -495,8 +495,28 @@ export function ScannerView({
         onSaveSuccess();
       }
 
+      if (onSalvarTransacaoFinanceira) {
+        try {
+          const rawData = dataCompra || new Date().toISOString().split("T")[0];
+          const [yyyy, mm, dd] = rawData.split("-");
+          const dataEmissaoFormatada = yyyy && mm && dd ? `${dd}/${mm}/${yyyy}` : rawData;
+          await onSalvarTransacaoFinanceira({
+            descricao: `Compra: ${fornecedorNome || "Insumos / Notinha"}`,
+            valor: totaisNota.total,
+            tipo: "despesa",
+            categoria: "Insumos & Produção",
+            data: dataEmissaoFormatada,
+            metodoPagamento: "pix",
+            status: "concluida",
+            clienteOuFornecedor: fornecedorNome || "Fornecedor",
+            origem: "Scanner AI (Notinha Insumos)",
+          });
+        } catch {}
+      }
+
       setModalRevisaoOpen(false);
-      toast.success("Notinha salva no caixa com sucesso!");
+      limparScanner();
+      toast.success("✨ Notinha armazenada com sucesso no menu Financeiro para sua conferência!");
     } catch (e: any) {
       toast.error(`Erro ao salvar notinha: ${e.message}`);
     } finally {
@@ -520,14 +540,19 @@ export function ScannerView({
         const isFromScanner = t.origem?.includes("Scanner") || t.descricao?.toLowerCase().includes("notinha") || isSaida;
 
         if (isFromScanner) {
+          const [dd, mm, yyyy] = (t.data || "").split("/");
+          const dataCompraIso = yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : new Date().toISOString().split("T")[0];
           lista.push({
             id: t.id,
-            fornecedorNome: t.clienteOuFornecedor || t.descricao,
-            dataCompra: t.data,
-            valorTotal: Number(t.valor) || 0,
-            categoria: t.categoria,
+            estabelecimentoCodigo: activeCode,
+            fornecedorNome: t.clienteOuFornecedor || t.descricao || "Conta / Fatura",
+            dataCompra: dataCompraIso,
+            valorTotal: Number(t.valor || 0),
+            valorProducao: 0,
+            valorUtensilios: 0,
+            valorConsumoProprio: 0,
+            valorOutros: Number(t.valor || 0),
             itens: [],
-            numeroNota: t.descricao.includes("Doc:") ? t.descricao.split("Doc:")[1]?.trim() : "",
             tipoOrigem: "despesa",
           });
         }
@@ -535,8 +560,9 @@ export function ScannerView({
     }
 
     return lista.sort((a, b) => {
-      const parseDate = (dStr: string) => {
+      const parseDate = (dStr?: string) => {
         if (!dStr) return 0;
+        if (dStr.includes("-")) return new Date(dStr).getTime() || 0;
         const [dd, mm, yyyy] = dStr.split("/");
         if (dd && mm && yyyy) return new Date(`${yyyy}-${mm}-${dd}`).getTime();
         return new Date(dStr).getTime() || 0;
@@ -559,44 +585,66 @@ export function ScannerView({
         </div>
       </div>
 
-      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (BOTÕES LADO A LADO - FLEX ROW) */}
-      <div className="flex flex-row gap-3">
+      {/* BANNER INFORMATIVO DE ENVIO DIRETO AO FINANCEIRO */}
+      <div className="p-3 bg-purple-500/10 border border-purple-500/25 rounded-2xl text-xs text-purple-950 dark:text-purple-200 flex items-center gap-2.5 shadow-2xs">
+        <Sparkles className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400 shrink-0" />
+        <span>
+          <strong>Envio Automático:</strong> Toda notinha ou conta escaneada é armazenada e enviada diretamente para o seu menu <strong>Financeiro</strong> para conferência.
+        </span>
+      </div>
+
+      {/* 1. SELEÇÃO DO TIPO DE DOCUMENTO (CARDS COMPACTOS & LIMPOS - 2 COLUNAS) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div
           onClick={() => setScanMode("produtos")}
-          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
+          className={`p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-3 ${
             scanMode === "produtos"
-              ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-md"
+              ? "border-2 border-primary bg-primary/10 ring-2 ring-primary/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-primary/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-            <ShoppingBag className="w-6 h-6" />
+          <div className={`p-2.5 rounded-xl shrink-0 ${scanMode === "produtos" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
+            <ShoppingBag className="w-5 h-5" />
           </div>
-          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
-            Escanear Nota de Insumos/Produtos
-          </h3>
-          {scanMode === "produtos" && (
-            <Badge className="bg-primary text-white text-[10px] font-bold">Selecionado</Badge>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className="font-extrabold text-xs sm:text-sm text-foreground truncate">
+                Nota de Insumos / Produtos
+              </h3>
+              {scanMode === "produtos" && (
+                <Badge className="bg-primary text-white text-[9px] font-bold py-0 px-1.5 shrink-0">Ativo</Badge>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+              Cupons fiscais e compras de mercado
+            </p>
+          </div>
         </div>
 
         <div
           onClick={() => setScanMode("despesa")}
-          className={`flex-1 p-4 rounded-2xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center text-center gap-2 ${
+          className={`p-3 rounded-2xl border transition-all cursor-pointer select-none flex items-center gap-3 ${
             scanMode === "despesa"
-              ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-md"
+              ? "border-2 border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-xs"
               : "border border-border/70 bg-card hover:border-amber-500/40 hover:bg-muted/30"
           }`}
         >
-          <div className={`p-3 rounded-2xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
-            <Receipt className="w-6 h-6" />
+          <div className={`p-2.5 rounded-xl shrink-0 ${scanMode === "despesa" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
+            <Receipt className="w-5 h-5" />
           </div>
-          <h3 className="font-extrabold text-xs sm:text-sm text-foreground">
-            Escanear Conta/Despesa (Água, Luz, Boletos)
-          </h3>
-          {scanMode === "despesa" && (
-            <Badge className="bg-amber-600 text-white text-[10px] font-bold">Selecionado</Badge>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <h3 className="font-extrabold text-xs sm:text-sm text-foreground truncate">
+                Conta / Despesa Fixa
+              </h3>
+              {scanMode === "despesa" && (
+                <Badge className="bg-amber-600 text-white text-[9px] font-bold py-0 px-1.5 shrink-0">Ativo</Badge>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+              Água, luz, aluguel, boletos
+            </p>
+          </div>
         </div>
       </div>
 

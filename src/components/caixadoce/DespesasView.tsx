@@ -557,30 +557,30 @@ export function DespesasView({
           </p>
         </div>
 
-        {/* Sub-Aba Navigation Buttons */}
-        <div className="flex items-center gap-1.5 p-1.5 bg-muted/70 rounded-2xl border border-border w-full sm:w-fit shrink-0">
+        {/* Sub-Aba Navigation Buttons (Grid 2 Colunas Perfeitamente Alinhado) */}
+        <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-muted/70 rounded-2xl border border-border w-full sm:w-auto shrink-0 max-w-md">
           <Button
             type="button"
             variant={subAba === "listas" ? "default" : "ghost"}
             onClick={() => setSubAba("listas")}
-            className={`flex-1 sm:flex-initial font-extrabold text-xs h-9 px-4 rounded-xl transition-all ${
-              subAba === "listas" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            className={`font-extrabold text-xs h-10 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              subAba === "listas" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <ShoppingCart className="w-4 h-4 mr-1.5" />
-            <span>Lista de Compras / Notas Escaneadas</span>
+            <ShoppingCart className="w-4 h-4 shrink-0" />
+            <span className="truncate">Lista de Compras / Notinhas</span>
           </Button>
 
           <Button
             type="button"
             variant={subAba === "insumos" ? "default" : "ghost"}
             onClick={() => setSubAba("insumos")}
-            className={`flex-1 sm:flex-initial font-extrabold text-xs h-9 px-4 rounded-xl transition-all ${
-              subAba === "insumos" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            className={`font-extrabold text-xs h-10 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              subAba === "insumos" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm font-black" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <UtensilsCrossed className="w-4 h-4 mr-1.5" />
-            <span>Cadastro de Insumos</span>
+            <UtensilsCrossed className="w-4 h-4 shrink-0" />
+            <span className="truncate">Cadastro de Insumos</span>
           </Button>
         </div>
       </div>
@@ -590,36 +590,18 @@ export function DespesasView({
       ) : (
         <>
           {/* ========================================================================= */}
-          {/* 1. BOX SIMPLIFICADO NO INÍCIO: NOME DA LISTA E BOTÃO CRIAR LISTA */}
+          {/* 1. PAINEL DE AÇÕES DE COMPRAS: BOTÕES LADO A LADO (2 COLUNAS) */}
           {/* ========================================================================= */}
-          <Card className="border-2 border-primary/40 shadow-lg bg-card overflow-hidden">
-            <CardContent className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="nome-lista-box" className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-primary" /> Digite o Nome da Lista de Compras:
-                </Label>
-                <Input
-                  id="nome-lista-box"
-                  placeholder="Ex: Compras de Sexta, Festa da Maria, Estoque da Semana..."
-                  value={nomeNovaListaInput}
-                  onChange={(e) => setNomeNovaListaInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleIniciarCriacaoLista();
-                    }
-                  }}
-                  className="h-11 text-sm font-medium border-border"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <Card className="border-2 border-primary/40 shadow-md bg-card overflow-hidden">
+            <CardContent className="p-4 sm:p-5">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                 <Button
                   type="button"
                   onClick={handleIniciarCriacaoLista}
-                  className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
+                  className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm px-2 sm:px-4"
                 >
-                  <Plus className="w-5 h-5 mr-2" /> Criar Lista Manual
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 shrink-0" />
+                  <span className="truncate">Criar Lista Manual</span>
                 </Button>
 
                 <Button
@@ -629,10 +611,10 @@ export function DespesasView({
                     setModalConsolidarOpen(true);
                   }}
                   variant="outline"
-                  className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
+                  className="w-full h-11 font-extrabold shadow-xs border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-xs sm:text-sm px-2 sm:px-4 gap-1.5"
                 >
-                  <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
-                  <span>⚡ Ver Listas de Encomendas dos Clientes</span>
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span className="truncate">⚡ Listas de Encomendas</span>
                 </Button>
               </div>
             </CardContent>
