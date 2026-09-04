@@ -56,6 +56,7 @@ import {
   Facebook,
   MessageCircle,
   Music,
+  Truck,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
