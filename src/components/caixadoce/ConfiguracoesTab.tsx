@@ -56,7 +56,6 @@ import {
   Facebook,
   MessageCircle,
   Music,
-  Truck,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import { toast } from "sonner";
@@ -287,14 +286,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   };
 
-  // Personalização do Cardápio Público & Delivery
-  const [deliveryAtivo, setDeliveryAtivo] = useState<boolean>(() => {
-    if (typeof window !== "undefined" && activeCode) {
-      const localVal = localStorage.getItem(`caixadoce_delivery_${activeCode}`);
-      if (localVal !== null) return localVal === "true";
-    }
-    return profile?.delivery_ativo !== false && profile?.aceita_delivery !== false;
-  });
+  // Personalização do Cardápio Público
   const [logoUrl, setLogoUrl] = useState(profile?.logoUrl || profile?.store_logo_url || "");
   const [tituloCardapio, setTituloCardapio] = useState(profile?.tituloCardapio || profile?.menu_title || "");
   const [sloganCardapio, setSloganCardapio] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
@@ -607,14 +599,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         social_tiktok: tiktokEst,
         facebook: facebookEst,
         social_facebook: facebookEst,
-        delivery_ativo: deliveryAtivo,
-        aceita_delivery: deliveryAtivo,
-        deliveryHabilitado: deliveryAtivo,
       });
-
-      if (typeof window !== "undefined" && activeCode) {
-        localStorage.setItem(`caixadoce_delivery_${activeCode}`, String(deliveryAtivo));
-      }
 
       // Garante sincronização imediata dos campos locais sem reversão
       if (nomeEst) setNomeEst(nomeEst);
@@ -1259,26 +1244,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         className="text-xs bg-background"
                       />
                     </div>
-                  </div>
-                </div>
-
-                {/* 🚚 OPÇÃO DE DELIVERY / ENTREGAS */}
-                <div className="pt-4 border-t space-y-3">
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-500/5 border border-purple-500/20">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="switch-delivery" className="text-xs font-bold text-foreground flex items-center gap-1.5 cursor-pointer">
-                        <Truck className="w-4 h-4 text-purple-600" />
-                        Opção de Delivery (Entrega a Domicílio)
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Quando desativado, o Cardápio Digital ocultará a entrega em domicílio e aceitará apenas retirada no balcão.
-                      </p>
-                    </div>
-                    <Switch
-                      id="switch-delivery"
-                      checked={deliveryAtivo}
-                      onCheckedChange={(checked) => setDeliveryAtivo(checked)}
-                    />
                   </div>
                 </div>
 
