@@ -44,6 +44,7 @@ import {
   Sparkles,
   RefreshCw,
   Building2,
+  Tag,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -51,8 +52,10 @@ import {
   converterMoedaInputParaNumero,
   obterInsumosCadastrados,
   salvarInsumosCadastradosStorage,
+  NOVOS_INSUMOS_SEED,
   type InsumoCadastrado,
 } from "@/lib/caixadoce-data";
+import { INSUMOS_PADRAO_CATALOGO } from "@/lib/ficha-tecnica-service";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
@@ -83,6 +86,77 @@ export function InsumosView({
   const [observacoes, setObservacoes] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Lista unificada de sugestões (insumos da loja + catálogo padrão + seeds)
+  const todasSugestoes = useMemo(() => {
+    const map = new Map<string, { nome: string; insumoCadastrado?: InsumoCadastrado }>();
+
+    // 1. Insumos cadastrados pela loja prioritariamente
+    for (const ins of insumos) {
+      if (ins.nome) {
+        map.set(ins.nome.toLowerCase().trim(), {
+          nome: ins.nome.trim(),
+          insumoCadastrado: ins,
+        });
+      }
+    }
+
+    // 2. Insumos do catálogo mestre de confeitaria
+    if (Array.isArray(INSUMOS_PADRAO_CATALOGO)) {
+      for (const cat of INSUMOS_PADRAO_CATALOGO) {
+        if (cat.nome) {
+          const key = cat.nome.toLowerCase().trim();
+          if (!map.has(key)) {
+            map.set(key, { nome: cat.nome.trim() });
+          }
+        }
+      }
+    }
+
+    // 3. Insumos seeds de mercado e hortifruti
+    if (Array.isArray(NOVOS_INSUMOS_SEED)) {
+      for (const seed of NOVOS_INSUMOS_SEED) {
+        if (seed) {
+          const key = seed.toLowerCase().trim();
+          if (!map.has(key)) {
+            map.set(key, { nome: seed.trim() });
+          }
+        }
+      }
+    }
+
+    return Array.from(map.values());
+  }, [insumos]);
+
+  // Sugestões filtradas dinamicamente conforme digitação
+  const sugestoesFiltradas = useMemo(() => {
+    const termo = nome.trim().toLowerCase();
+    if (!termo) {
+      return todasSugestoes.slice(0, 10);
+    }
+    return todasSugestoes
+      .filter((s) => s.nome.toLowerCase().includes(termo))
+      .slice(0, 12);
+  }, [nome, todasSugestoes]);
+
+  const handleSelecionarSugestaoChip = (sugestao: { nome: string; insumoCadastrado?: InsumoCadastrado }) => {
+    setNome(sugestao.nome);
+    setShowSuggestions(false);
+
+    if (sugestao.insumoCadastrado) {
+      const ins = sugestao.insumoCadastrado;
+      setUnidadeMedida(ins.unidadeMedida || "kg");
+      setQtdEmbalagemStr(String(ins.qtdEmbalagemOriginal || 1));
+      if (ins.custoAtual > 0) {
+        setCustoAtualFormatado(formatarMoeda(ins.custoAtual));
+      }
+      if (ins.fornecedor) {
+        setFornecedor(ins.fornecedor);
+      }
+      toast.info(`Preenchido com dados de "${ins.nome}"`);
+    }
+  };
 
   // Carrega do Supabase e sincroniza no Mount
   useEffect(() => {
@@ -148,6 +222,7 @@ export function InsumosView({
     setCustoAtualFormatado("");
     setFornecedor("");
     setObservacoes("");
+    setShowSuggestions(true);
     setModalOpen(true);
   };
 
@@ -159,6 +234,7 @@ export function InsumosView({
     setCustoAtualFormatado(formatarMoeda(ins.custoAtual));
     setFornecedor(ins.fornecedor || "");
     setObservacoes(ins.observacoes || "");
+    setShowSuggestions(false);
     setModalOpen(true);
   };
 
@@ -405,18 +481,73 @@ export function InsumosView({
           </DialogHeader>
 
           <form onSubmit={handleSalvarInsumo} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <Label htmlFor="ins-nome" className="text-xs font-semibold">
-                Nome do Insumo / Ingrediente *
-              </Label>
+            <div className="space-y-1.5 relative">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="ins-nome" className="text-xs font-semibold">
+                  Nome do Insumo / Ingrediente *
+                </Label>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 font-normal">
+                  💡 Digite para filtrar chips
+                </span>
+              </div>
               <Input
                 id="ins-nome"
                 placeholder="Ex: Leite Condensado Moça, Farinha de Trigo..."
                 value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                className="h-8 text-xs"
+                onChange={(e) => {
+                  setNome(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                className="h-8 text-xs font-medium"
                 required
+                autoComplete="off"
               />
+
+              {/* LISTA SUSPENSA DE CHIPS/TAGS DE SUGESTÃO INTELIGENTE */}
+              {showSuggestions && sugestoesFiltradas.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-1.5 animate-fade-in shadow-xs">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-purple-900 dark:text-purple-200">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                      Sugestões inteligentes (Clique no chip para selecionar):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSuggestions(false)}
+                      className="text-purple-600 hover:text-purple-800 text-[10px] underline"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                    {sugestoesFiltradas.map((sug, idx) => {
+                      const isExactMatch = sug.nome.toLowerCase() === nome.trim().toLowerCase();
+                      return (
+                        <Badge
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelecionarSugestaoChip(sug)}
+                          className={`cursor-pointer font-medium text-xs py-1 px-2.5 rounded-full transition-all flex items-center gap-1 select-none ${
+                            isExactMatch
+                              ? "bg-purple-600 text-white shadow-xs"
+                              : "bg-background text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800 hover:bg-purple-600 hover:text-white hover:border-purple-600 shadow-2xs"
+                          }`}
+                        >
+                          <Tag className="w-3 h-3 opacity-70 shrink-0" />
+                          <span>{sug.nome}</span>
+                          {sug.insumoCadastrado && (
+                            <span className="text-[9px] opacity-75 font-mono ml-0.5">
+                              ({formatarMoeda(sug.insumoCadastrado.custoAtual)})
+                            </span>
+                          )}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
