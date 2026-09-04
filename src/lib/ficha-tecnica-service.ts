@@ -37,6 +37,7 @@ export interface FichaTecnicaItem {
   id: string;
   estabelecimentoCodigo: string;
   produtoId: string;
+  insumoId?: string; // ID do insumo na tabela 'insumos'
   insumoNome: string;
   insumoPadraoId?: string;
   precoEmbalagem: number; // Preço pago pela embalagem/produto (ex: R$ 34,90)
@@ -46,6 +47,7 @@ export interface FichaTecnicaItem {
   unidadeEmbalagem?: "g" | "kg" | "ml" | "l" | "un" | "bdj" | "pct" | "cx" | string; // Unidade de Compra
   precoUnitarioAplicado?: number; // Compatibilidade com precoEmbalagem
   custoTotalItem: number;
+  custoManual?: boolean; // Se o lojista cadastrou com valor manual avulso
   createdAt?: string;
 }
 
@@ -344,7 +346,7 @@ export async function salvarFichaTecnicaProduto(
 
   const itensFormatados: FichaTecnicaItem[] = itens.map((item) => ({
     ...item,
-    id: crypto.randomUUID(),
+    id: (item as any).id || crypto.randomUUID(),
     estabelecimentoCodigo: code,
     produtoId,
     createdAt: new Date().toISOString(),
@@ -368,11 +370,17 @@ export async function salvarFichaTecnicaProduto(
           id: item.id,
           estabelecimento_codigo: code,
           produto_id: produtoId,
+          insumo_id: item.insumoId || item.insumoPadraoId || null,
+          insumo_padrao_id: item.insumoId || item.insumoPadraoId || null,
           insumo_nome: item.insumoNome,
           quantidade_usada: item.quantidadeUsada,
           unidade_medida: item.unidadeMedida,
-          preco_unitario_aplicado: item.precoUnitarioAplicado,
+          preco_embalagem: item.precoEmbalagem,
+          qtd_embalagem_original: item.qtdEmbalagemOriginal,
+          unidade_embalagem: item.unidadeEmbalagem,
+          preco_unitario_aplicado: item.precoEmbalagem,
           custo_total_item: item.custoTotalItem,
+          custo_manual: item.custoManual || false,
         },
       ]);
     }
@@ -391,13 +399,101 @@ export async function salvarFichaTecnicaProduto(
 }
 
 /**
- * Carrega os itens da Ficha Técnica de um produto
+ * Carrega os itens da Ficha Técnica de um produto sincronizando dinamicamente com os custos mais recentes dos insumos
  */
 export async function obterFichaTecnicaProduto(
   estabelecimentoCodigo: string,
   produtoId: string
 ): Promise<FichaTecnicaItem[]> {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+
+  // 1. Busca catálogo central mais recente de insumos cadastrados
+  let listaInsumos: any[] = [];
+  try {
+    const { data: insData } = await supabase
+      .from("insumos")
+      .select("*")
+      .eq("estabelecimento_codigo", code);
+    if (insData && Array.isArray(insData) && insData.length > 0) {
+      listaInsumos = insData;
+    }
+  } catch {}
+
+  if (listaInsumos.length === 0 && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`caixadoce_insumos_${code}`);
+      if (raw) listaInsumos = JSON.parse(raw);
+    } catch {}
+  }
+
+  const sincronizarItemComInsumo = (itemRaw: any): FichaTecnicaItem => {
+    const unid = itemRaw.unidade_medida || itemRaw.unidadeMedida || "g";
+    let unidEmb = itemRaw.unidade_embalagem || itemRaw.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
+    let qtdEmb = Number(itemRaw.qtd_embalagem_original ?? itemRaw.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000));
+    let precoEmb = Number(itemRaw.preco_embalagem ?? itemRaw.precoUnitarioAplicado ?? itemRaw.precoEmbalagem ?? 0);
+    const qtdUsada = Number(itemRaw.quantidade_usada ?? itemRaw.quantidadeUsada ?? 0);
+    const insumoId = itemRaw.insumo_id || itemRaw.insumoId || itemRaw.insumo_padrao_id || itemRaw.insumoPadraoId;
+    const nome = itemRaw.insumo_nome || itemRaw.insumoNome || itemRaw.nome || "";
+    const isManual = itemRaw.custo_manual === true || itemRaw.custoManual === true;
+
+    // Se não for expressamente custo manual e houver insumos cadastrados, sincroniza o preço dinamicamente
+    if (!isManual && listaInsumos.length > 0) {
+      const insMatch = listaInsumos.find(
+        (i: any) =>
+          (insumoId && String(i.id) === String(insumoId)) ||
+          (nome && (i.nome || "").trim().toLowerCase() === nome.trim().toLowerCase())
+      );
+
+      if (insMatch) {
+        const custoCadastrado = Number(insMatch.custo_atual ?? insMatch.custoAtual ?? 0);
+        if (custoCadastrado > 0) {
+          precoEmb = custoCadastrado;
+        }
+        if (insMatch.qtd_embalagem_original || insMatch.qtdEmbalagemOriginal) {
+          qtdEmb = Number(insMatch.qtd_embalagem_original ?? insMatch.qtdEmbalagemOriginal);
+        }
+        if (insMatch.unidade_medida || insMatch.unidadeMedida) {
+          unidEmb = insMatch.unidade_medida || insMatch.unidadeMedida;
+        }
+
+        return {
+          id: String(itemRaw.id || crypto.randomUUID()),
+          estabelecimentoCodigo: code,
+          produtoId,
+          insumoId: String(insMatch.id),
+          insumoNome: insMatch.nome || nome,
+          precoEmbalagem: precoEmb,
+          qtdEmbalagemOriginal: qtdEmb,
+          quantidadeUsada: qtdUsada,
+          unidadeMedida: unid,
+          unidadeEmbalagem: unidEmb,
+          precoUnitarioAplicado: precoEmb,
+          custoTotalItem: calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
+          custoManual: false,
+          createdAt: itemRaw.created_at || itemRaw.createdAt,
+        };
+      }
+    }
+
+    return {
+      id: String(itemRaw.id || crypto.randomUUID()),
+      estabelecimentoCodigo: code,
+      produtoId,
+      insumoId: insumoId ? String(insumoId) : undefined,
+      insumoNome: nome,
+      precoEmbalagem: precoEmb,
+      qtdEmbalagemOriginal: qtdEmb,
+      quantidadeUsada: qtdUsada,
+      unidadeMedida: unid,
+      unidadeEmbalagem: unidEmb,
+      precoUnitarioAplicado: precoEmb,
+      custoTotalItem:
+        Number(itemRaw.custo_total_item ?? itemRaw.custoTotalItem) ||
+        calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
+      custoManual: isManual,
+      createdAt: itemRaw.created_at || itemRaw.createdAt,
+    };
+  };
 
   // 1. Busca no Supabase
   try {
@@ -408,32 +504,7 @@ export async function obterFichaTecnicaProduto(
       .eq("produto_id", produtoId);
 
     if (!error && data && data.length > 0) {
-      const mapeados: FichaTecnicaItem[] = data.map((d: any) => {
-        const precoEmb = Number(d.preco_embalagem ?? d.preco_unitario_aplicado ?? 0);
-        const unid = d.unidade_medida || "g";
-        const unidEmb = d.unidade_embalagem || d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
-        const qtdEmb = Number(
-          d.qtd_embalagem_original ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
-        );
-        const qtdUsada = Number(d.quantidade_usada ?? 0);
-
-        return {
-          id: String(d.id),
-          estabelecimentoCodigo: d.estabelecimento_codigo,
-          produtoId: d.produto_id,
-          insumoNome: d.insumo_nome,
-          precoEmbalagem: precoEmb,
-          qtdEmbalagemOriginal: qtdEmb,
-          quantidadeUsada: qtdUsada,
-          unidadeMedida: unid,
-          unidadeEmbalagem: unidEmb,
-          precoUnitarioAplicado: precoEmb,
-          custoTotalItem:
-            Number(d.custo_total_item) ||
-            calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
-          createdAt: d.created_at,
-        };
-      });
+      const mapeados: FichaTecnicaItem[] = data.map(sincronizarItemComInsumo);
       if (typeof window !== "undefined") {
         localStorage.setItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`, JSON.stringify(mapeados));
       }
@@ -447,32 +518,7 @@ export async function obterFichaTecnicaProduto(
       const raw = localStorage.getItem(`caixadoce_ficha_tecnica_${code}_${produtoId}`);
       if (raw) {
         const parsed: any[] = JSON.parse(raw);
-        return parsed.map((d) => {
-          const precoEmb = Number(d.precoEmbalagem ?? d.precoUnitarioAplicado ?? 0);
-          const unid = d.unidadeMedida || "g";
-          const unidEmb = d.unidadeEmbalagem || (unid === "g" || unid === "ml" ? "kg" : unid);
-          const qtdEmb = Number(
-            d.qtdEmbalagemOriginal ?? (unidEmb === "kg" || unidEmb === "l" ? 1 : 1000)
-          );
-          const qtdUsada = Number(d.quantidadeUsada ?? 0);
-
-          return {
-            id: String(d.id),
-            estabelecimentoCodigo: d.estabelecimentoCodigo || code,
-            produtoId: String(d.produtoId || produtoId),
-            insumoNome: d.insumoNome || d.nome,
-            precoEmbalagem: precoEmb,
-            qtdEmbalagemOriginal: qtdEmb,
-            quantidadeUsada: qtdUsada,
-            unidadeMedida: unid,
-            unidadeEmbalagem: unidEmb,
-            precoUnitarioAplicado: precoEmb,
-            custoTotalItem:
-              Number(d.custoTotalItem) ||
-              calcularCustoItemFichaTecnica(qtdUsada, unid, precoEmb, qtdEmb, unidEmb),
-            createdAt: d.createdAt,
-          };
-        });
+        return parsed.map(sincronizarItemComInsumo);
       }
     }
   } catch {}

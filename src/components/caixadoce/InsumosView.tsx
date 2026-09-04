@@ -52,6 +52,7 @@ import {
   converterMoedaInputParaNumero,
   obterInsumosCadastrados,
   salvarInsumosCadastradosStorage,
+  atualizarCustoInsumoECascataFichas,
   NOVOS_INSUMOS_SEED,
   type InsumoCadastrado,
 } from "@/lib/caixadoce-data";
@@ -282,7 +283,7 @@ export function InsumosView({
       salvarInsumosCadastradosStorage(estabelecimentoCodigo, novalista);
       if (onInsumosChange) onInsumosChange(novalista);
 
-      // Persistência no Supabase (Insert puro para novos, Update para edições)
+      // Persistência no Supabase (Insert puro para novos, Update para edições) e Cascata de Fichas Técnicas
       try {
         if (editingId) {
           await supabase
@@ -313,6 +314,14 @@ export function InsumosView({
             },
           ]);
         }
+
+        // Atualização em cascata nas fichas técnicas que utilizam este insumo
+        await atualizarCustoInsumoECascataFichas(
+          estabelecimentoCodigo,
+          insumoObj.id,
+          valorCusto,
+          profile?.ownerUserId
+        );
       } catch (err) {
         console.warn("[InsumosView] Aviso ao salvar no Supabase:", err);
       }

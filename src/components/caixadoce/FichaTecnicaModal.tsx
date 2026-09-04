@@ -134,7 +134,7 @@ export function FichaTecnicaModal({
   const [buscandoPrecoMedio, setBuscandoPrecoMedio] = useState(false);
   const [origemPrecoInfo, setOrigemPrecoInfo] = useState<string>("");
 
-  // Carrega insumos cadastrados ao abrir o modal
+  // Carrega insumos cadastrados ao abrir o modal e sincroniza os preços da Ficha Técnica
   useEffect(() => {
     if (open && estabelecimentoCodigo) {
       const locais = obterInsumosCadastrados(estabelecimentoCodigo);
@@ -159,6 +159,39 @@ export function FichaTecnicaModal({
               observacoes: d.observacoes || "",
             }));
             setInsumosCadastrados(mapeados);
+            salvarInsumosCadastradosStorage(estabelecimentoCodigo, mapeados);
+
+            // Sincroniza dinamicamente os itens da Ficha Técnica na memória com os insumos
+            setItens((prev) =>
+              prev.map((item) => {
+                if (item.custoManual) return item;
+                const insMatch = mapeados.find(
+                  (m) =>
+                    (item.insumoId && m.id === item.insumoId) ||
+                    (item.insumoNome && m.nome.trim().toLowerCase() === item.insumoNome.trim().toLowerCase())
+                );
+                if (!insMatch || insMatch.custoAtual <= 0) return item;
+                const precoEmb = insMatch.custoAtual;
+                const qtdEmb = insMatch.qtdEmbalagemOriginal || item.qtdEmbalagemOriginal || 1;
+                const unidEmb = insMatch.unidadeMedida || item.unidadeEmbalagem || item.unidadeMedida;
+                const custoTotal = calcularCustoItemFichaTecnica(
+                  item.quantidadeUsada,
+                  item.unidadeMedida,
+                  precoEmb,
+                  qtdEmb,
+                  unidEmb
+                );
+                return {
+                  ...item,
+                  insumoId: insMatch.id,
+                  precoEmbalagem: precoEmb,
+                  precoUnitarioAplicado: precoEmb,
+                  qtdEmbalagemOriginal: qtdEmb,
+                  unidadeEmbalagem: unidEmb,
+                  custoTotalItem: custoTotal,
+                };
+              })
+            );
           }
         });
     }
@@ -277,10 +310,19 @@ export function FichaTecnicaModal({
       novoInsumoUnidadeCompra
     );
 
+    const insumoCadastradoMatch = insumosCadastrados.find(
+      (i) =>
+        (modoInsumo === "cadastrado" && i.id === insumoSelecionadoId) ||
+        (modoInsumo !== "manual" && i.nome.trim().toLowerCase() === nomeLimpo.toLowerCase())
+    );
+
+    const isManual = modoInsumo === "manual" && !insumoCadastradoMatch;
+
     const novoItem: FichaTecnicaItem = {
       id: crypto.randomUUID(),
       estabelecimentoCodigo,
       produtoId: produto?.id || "",
+      insumoId: isManual ? undefined : (insumoCadastradoMatch?.id || (insumoSelecionadoId || undefined)),
       insumoNome: nomeLimpo,
       precoEmbalagem: precoEmb,
       qtdEmbalagemOriginal: qtdEmbOrig,
@@ -289,6 +331,7 @@ export function FichaTecnicaModal({
       unidadeEmbalagem: novoInsumoUnidadeCompra,
       precoUnitarioAplicado: precoEmb,
       custoTotalItem,
+      custoManual: isManual,
     };
 
     setItens((prev) => [...prev, novoItem]);
@@ -682,7 +725,18 @@ export function FichaTecnicaModal({
                   return (
                     <div key={item.id} className="p-4 rounded-xl border border-border bg-card space-y-3 shadow-2xs">
                       <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                        <span className="font-extrabold text-sm text-foreground truncate">{item.insumoNome}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap truncate">
+                          <span className="font-extrabold text-sm text-foreground truncate">{item.insumoNome}</span>
+                          {!item.custoManual ? (
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 font-bold" title="Preço vinculado dinamicamente ao Cadastro de Insumos">
+                              🔗 Dinâmico
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 text-muted-foreground font-semibold" title="Custo manual avulso">
+                              ✍️ Manual
+                            </Badge>
+                          )}
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -835,7 +889,18 @@ export function FichaTecnicaModal({
                         <TableRow key={item.id} className="border-b border-border/60 hover:bg-muted/30">
                           {/* Nome do Ingrediente com quebra de linha permitida */}
                           <TableCell className="py-2 px-2 text-xs font-semibold text-foreground whitespace-normal break-words leading-tight">
-                            {item.insumoNome}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{item.insumoNome}</span>
+                              {!item.custoManual ? (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 font-bold" title="Preço unitário sincronizado dinamicamente com o Cadastro de Insumos">
+                                  🔗 Dinâmico
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground font-semibold" title="Custo manual avulso">
+                                  ✍️ Manual
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
 
                           {/* Preço do produto */}
