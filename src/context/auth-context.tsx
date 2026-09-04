@@ -59,6 +59,9 @@ export type UpdateEstablishmentDetailsInput = {
   facebook?: string;
   social_facebook?: string;
   social_media?: any;
+  delivery_ativo?: boolean;
+  aceita_delivery?: boolean;
+  deliveryHabilitado?: boolean;
 };
 
 export type StaffProfile = {
@@ -94,6 +97,9 @@ export type StaffProfile = {
   facebook?: string;
   social_facebook?: string;
   social_media?: any;
+  delivery_ativo?: boolean;
+  aceita_delivery?: boolean;
+  deliveryHabilitado?: boolean;
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -921,6 +927,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (fbVal !== undefined) {
         updatePayload.facebook = fbVal || null;
         updatePayload.social_facebook = fbVal || null;
+      }
+
+      const delAtivo = details.delivery_ativo ?? details.aceita_delivery ?? details.deliveryHabilitado;
+      if (delAtivo !== undefined) {
+        updatePayload.delivery_ativo = delAtivo;
+        updatePayload.aceita_delivery = delAtivo;
       }
 
       if (

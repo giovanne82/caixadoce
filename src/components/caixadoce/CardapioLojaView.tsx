@@ -54,6 +54,7 @@ import {
   Calendar,
   ShoppingBag,
   CheckCircle2,
+  MapPin,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -110,6 +111,9 @@ export interface LojaInfoState {
   chave_pix?: string;
   tipo_chave_pix?: string;
   cidade?: string;
+  endereco?: string;
+  delivery_ativo?: boolean;
+  aceita_delivery?: boolean;
   instagram?: string;
   tiktok?: string;
   facebook?: string;
@@ -385,6 +389,12 @@ export function CardapioLojaView() {
         let title = estData?.titulo_cardapio || estData?.menu_title;
         let slogan = estData?.slogan_cardapio || estData?.menu_slogan;
         let name = estData?.nome;
+        let endLoja = estData?.endereco;
+        if (!endLoja && (estData?.logradouro || estData?.cidade)) {
+          endLoja = `${estData.logradouro || ''}, ${estData.numero || ''} ${estData.complemento ? `- ${estData.complemento}` : ''} - ${estData.bairro || ''}, ${estData.cidade || ''}/${estData.estado || ''}`.replace(/^[\s,]+|[\s,]+$/g, '');
+        }
+
+        let delAtivoVal = estData?.delivery_ativo !== false && estData?.aceita_delivery !== false;
 
         // Fallback resiliente: se no Supabase não vierem preenchidos (por exemplo, se as colunas remota estivem nulas), recupera do localStorage do navegador
         if (typeof window !== "undefined") {
@@ -401,7 +411,12 @@ export function CardapioLojaView() {
                 title = title || p.tituloCardapio || p.menu_title;
                 slogan = slogan || p.sloganCardapio || p.menu_slogan;
                 name = name || p.establishmentName || p.nome;
+                endLoja = endLoja || p.establishmentAddress || p.endereco;
               }
+            }
+            const localDel = localStorage.getItem(`caixadoce_delivery_${code}`);
+            if (localDel !== null) {
+              delAtivoVal = localDel === "true";
             }
           } catch {}
         }
@@ -420,6 +435,9 @@ export function CardapioLojaView() {
             menu_slogan: slogan,
             chavePix: (estData?.chave_pix || estData?.chavePix || "") === "contato@caixadoce.com.br" ? "" : (estData?.chave_pix || estData?.chavePix || ""),
             cidade: estData?.cidade || "SAO PAULO",
+            endereco: endLoja || "",
+            delivery_ativo: delAtivoVal,
+            aceita_delivery: delAtivoVal,
             instagram: insta,
             tiktok: tk,
             facebook: fb,
@@ -640,6 +658,55 @@ export function CardapioLojaView() {
         console.error("Erro ao registrar encomenda no Supabase:", insertError);
         toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
         return;
+      }
+
+      // Gravação / Consolidação do Cliente no Banco e no Storage
+      try {
+        const rawCust = typeof window !== "undefined" ? localStorage.getItem(`caixadoce_customers_${code}`) : null;
+        let listaCust: any[] = rawCust ? JSON.parse(rawCust) : [];
+        const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
+        const foundIndex = listaCust.findIndex((c: any) => {
+          const p = (c.whatsapp || "").replace(/\D/g, "");
+          return (cleanPhone && p && cleanPhone === p) || (c.nome || c.name || "").trim().toLowerCase() === clienteNome.trim().toLowerCase();
+        });
+
+        const custId = foundIndex >= 0 ? listaCust[foundIndex].id : crypto.randomUUID();
+        const novoCust = {
+          id: custId,
+          estabelecimentoCodigo: code,
+          nome: clienteNome,
+          whatsapp: clienteWhatsapp,
+          endereco: tipoEntrega === "delivery" ? enderecoEntrega : (foundIndex >= 0 ? (listaCust[foundIndex].endereco || "") : ""),
+          observacoes: "Cadastrado via Cardápio Digital",
+          createdAt: foundIndex >= 0 ? (listaCust[foundIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
+        };
+
+        if (foundIndex >= 0) {
+          listaCust[foundIndex] = { ...listaCust[foundIndex], ...novoCust };
+        } else {
+          listaCust = [novoCust, ...listaCust];
+        }
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`caixadoce_customers_${code}`, JSON.stringify(listaCust));
+        }
+
+        await supabase.from("customers").upsert(
+          [
+            {
+              id: custId,
+              user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+              estabelecimento_codigo: code,
+              name: clienteNome,
+              whatsapp: clienteWhatsapp,
+              address: tipoEntrega === "delivery" ? enderecoEntrega : "",
+              notes: "Cadastrado via Cardápio Digital",
+            },
+          ],
+          { onConflict: "id" }
+        );
+      } catch (custErr) {
+        console.warn("Aviso ao atualizar base de clientes do cardápio digital:", custErr);
       }
 
       // Tentar gerar Pix Payload para a chave Pix da loja
@@ -1085,7 +1152,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Como deseja receber?</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={lojaInfo?.delivery_ativo !== false ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
                       <Button
                         type="button"
                         variant={tipoEntrega === "retirada" ? "default" : "outline"}
@@ -1094,14 +1161,16 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       >
                         <Store className="w-3.5 h-3.5 mr-1" /> Retirada no Balcão
                       </Button>
-                      <Button
-                        type="button"
-                        variant={tipoEntrega === "delivery" ? "default" : "outline"}
-                        onClick={() => setTipoEntrega("delivery")}
-                        className="h-7 text-xs font-semibold"
-                      >
-                        <Truck className="w-3.5 h-3.5 mr-1" /> Entrega / Delivery
-                      </Button>
+                      {lojaInfo?.delivery_ativo !== false && (
+                        <Button
+                          type="button"
+                          variant={tipoEntrega === "delivery" ? "default" : "outline"}
+                          onClick={() => setTipoEntrega("delivery")}
+                          className="h-7 text-xs font-semibold"
+                        >
+                          <Truck className="w-3.5 h-3.5 mr-1" /> Entrega / Delivery
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -1229,6 +1298,19 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 </p>
               </div>
             </div>
+
+            {/* Endereço da Loja para Retirada / Referência */}
+            {lojaInfo?.endereco && (
+              <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-900/50 text-xs space-y-0.5">
+                <p className="font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  Endereço da Loja:
+                </p>
+                <p className="text-foreground font-medium pl-5 text-[11px] leading-tight">
+                  {lojaInfo.endereco}
+                </p>
+              </div>
+            )}
 
             {necessitaConfirmacaoDisponibilidade && (
               <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-extrabold flex items-center gap-1.5">

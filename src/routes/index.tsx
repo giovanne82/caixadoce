@@ -1932,6 +1932,9 @@ function Index() {
                 onBloquearData={bloquearData}
                 onDesbloquearData={desbloquearData}
                 onCriarClienteRapido={criarClienteRapido}
+                onCriarCliente={criarCliente}
+                onEditarCliente={editarCliente}
+                onExcluirCliente={excluirCliente}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
