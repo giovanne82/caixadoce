@@ -320,7 +320,20 @@ export function CardapioLojaView() {
   const [dataEntrega, setDataEntrega] = useState("");
   const [horarioEntrega, setHorarioEntrega] = useState("15:00");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
-  const [enderecoEntrega, setEnderecoEntrega] = useState("");
+  const [endLogradouro, setEndLogradouro] = useState("");
+  const [endNumero, setEndNumero] = useState("");
+  const [endBairro, setEndBairro] = useState("");
+  const [endPontoRef, setEndPontoRef] = useState("");
+
+  const enderecoEntrega = useMemo(() => {
+    const partes = [];
+    if (endLogradouro.trim()) partes.push(endLogradouro.trim());
+    if (endNumero.trim()) partes.push(`nº ${endNumero.trim()}`);
+    if (endBairro.trim()) partes.push(`Bairro: ${endBairro.trim()}`);
+    if (endPontoRef.trim()) partes.push(`Ref: ${endPontoRef.trim()}`);
+    return partes.join(", ");
+  }, [endLogradouro, endNumero, endBairro, endPontoRef]);
+
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
@@ -582,9 +595,11 @@ export function CardapioLojaView() {
       return;
     }
 
-    if (tipoEntrega === "delivery" && !enderecoEntrega.trim()) {
-      toast.error("Informe o endereço completo para entrega.");
-      return;
+    if (tipoEntrega === "delivery") {
+      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
+        toast.error("Preencha o logradouro, número e bairro para a entrega.");
+        return;
+      }
     }
 
     const horRes = validarHorarioEntrega(horarioEntrega, regras);
@@ -761,7 +776,7 @@ export function CardapioLojaView() {
 
     const modalidade = tipoEntrega === "delivery"
       ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
-      : "🏬 Retirada no Balcão";
+      : `🏬 Retirada no Balcão\n📍 Endereço da Loja: ${lojaInfo?.endereco || "Consultar com a loja"}`;
 
     let blocoPixInfo = "";
     if (lojaInfo?.chavePix && totalCarrinho > 0) {
@@ -1181,17 +1196,71 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     </div>
                   </div>
 
-                  {tipoEntrega === "delivery" && (
-                    <div className="space-y-1">
-                      <Label htmlFor="chk-end" className="text-xs">Endereço Completo de Entrega *</Label>
-                      <Input
-                        id="chk-end"
-                        placeholder="Rua, Número, Bairro, Ponto de Referência..."
-                        value={enderecoEntrega}
-                        onChange={(e) => setEnderecoEntrega(e.target.value)}
-                        className="h-8 text-xs font-medium"
-                        required={tipoEntrega === "delivery"}
-                      />
+                  {tipoEntrega === "retirada" && (
+                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1">
+                      <p className="font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                        Endereço de Retirada no Balcão:
+                      </p>
+                      <p className="text-foreground font-medium pl-5 text-[11px] leading-snug">
+                        {lojaInfo?.endereco || "Endereço cadastrado no sistema da confeitaria."}
+                      </p>
+                    </div>
+                  )}
+
+                  {tipoEntrega === "delivery" && lojaInfo?.delivery_ativo !== false && (
+                    <div className="space-y-2.5 p-3 rounded-xl bg-muted/40 border border-border/60">
+                      <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Truck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        Endereço para Entrega em Domicílio
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2 space-y-1">
+                          <Label htmlFor="end-rua" className="text-[11px] font-semibold">Logradouro (Rua / Av) *</Label>
+                          <Input
+                            id="end-rua"
+                            placeholder="Ex: Rua das Flores"
+                            value={endLogradouro}
+                            onChange={(e) => setEndLogradouro(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="end-num" className="text-[11px] font-semibold">Número *</Label>
+                          <Input
+                            id="end-num"
+                            placeholder="Ex: 123"
+                            value={endNumero}
+                            onChange={(e) => setEndNumero(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro *</Label>
+                          <Input
+                            id="end-bairro"
+                            placeholder="Ex: Centro"
+                            value={endBairro}
+                            onChange={(e) => setEndBairro(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="end-ref" className="text-[11px] font-semibold">Ponto de Referência (Opcional)</Label>
+                          <Input
+                            id="end-ref"
+                            placeholder="Ex: Ao lado do mercado"
+                            value={endPontoRef}
+                            onChange={(e) => setEndPontoRef(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 
