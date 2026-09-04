@@ -23,6 +23,14 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Cake,
   ShoppingCart,
   Plus,
@@ -41,6 +49,11 @@ import {
   Instagram,
   Facebook,
   Music,
+  FileText,
+  Loader2,
+  User,
+  Calendar,
+  ShoppingBag,
 } from "lucide-react";
 import {
   Select,
@@ -199,6 +212,13 @@ function CardapioLojaView() {
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [pedidoConcluido, setPedidoConcluido] = useState(false);
+
+  // Modais de Resumo e Sucesso do Pedido
+  const [resumoModalOpen, setResumoModalOpen] = useState(false);
+  const [sucessoModalOpen, setSucessoModalOpen] = useState(false);
+  const [salvandoPedido, setSalvandoPedido] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
+  const [ultimoPedidoId, setUltimoPedidoId] = useState("");
 
   // Formulário do Cliente no Checkout
   const [clienteNome, setClienteNome] = useState("");
@@ -449,88 +469,160 @@ function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
 
-  // Finalizar Encomenda (Salvar no Supabase + WhatsApp/Stripe Dinâmico)
-  const handleFinalizarPedido = async (e: React.FormEvent) => {
+  // 1. Etapa de Verificação: Valida formulário e abre o Modal de Resumo
+  const handleVerResumo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteNome || !clienteWhatsapp || !dataEntrega || carrinho.length === 0) {
       toast.error("Preencha seu nome, WhatsApp e data para entrega.");
       return;
     }
 
-    const pedidoId = crypto.randomUUID();
-    const resumoItensTexto = carrinho
-      .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
-      .join(", ");
-
-    const itensDetalhesJson = carrinho.map((item) => ({
-      id: item.produto.id,
-      nome: item.produto.nome,
-      quantidade: item.quantidade,
-      precoUnitario: item.produto.preco,
-      subtotal: item.produto.preco * item.quantidade,
-    }));
-
-    const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
-
-    const payloadInsert: Record<string, any> = {
-      id: pedidoId,
-      estabelecimento_codigo: code,
-      user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
-      cliente_nome: clienteNome,
-      cliente_whatsapp: clienteWhatsapp,
-      data_entrega: dataEntrega,
-      horario_entrega: horarioEntrega || "15:00",
-      tipo_entrega: tipoEntrega,
-      endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
-      status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
-      status: "pendente",
-      itens: resumoItensTexto,
-      itens_detalhes: itensDetalhesJson,
-      valor_total: valTotalCarrinho,
-      total_amount: valTotalCarrinho,
-      total_price: valTotalCarrinho,
-      observacoes: observacoes || "",
-    };
-
-    let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
-
-    if (insertError) {
-      console.error("Erro ao registrar encomenda no Supabase:", insertError);
-      toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
+    const valRes = validarDataEntrega(dataEntrega, regras);
+    if (!valRes.valida) {
+      toast.error(valRes.motivo || "Data indisponível para encomenda.");
       return;
     }
 
-    if (metodoPagamento === "cartao") {
-      setProcessandoPagamento(true);
-      try {
-        const session = await createStripeSession({
-          orderId: pedidoId,
-          establishmentCode: code,
-          customerName: clienteNome,
-          customerWhatsapp: clienteWhatsapp,
-          items: carrinho.map((it) => ({
-            name: it.produto.nome,
-            quantity: it.quantidade,
-            unitPrice: it.produto.preco,
-          })),
-          subtotal: totalCarrinho,
-          installments: parcelasSelecionadas,
-          repassarTaxa: stripeConfig.repassarTaxaStripe,
-          stripeAccountId: stripeConfig.accountId,
-        });
+    const horRes = validarHorarioEntrega(horarioEntrega, regras);
+    if (!horRes.valido) {
+      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
+    }
 
-        toast.success(`Sessão no cartão criada! Total: ${feeResult.formattedTotalAmount}`);
-        setTimeout(() => {
-          window.open(session.checkoutUrl, "_blank");
-        }, 800);
-      } catch (err) {
-        toast.error("Erro ao iniciar pagamento no cartão.");
-      } finally {
-        setProcessandoPagamento(false);
+    setResumoModalOpen(true);
+  };
+
+  // 2. Gravação Automática na Base de Dados ao Confirmar
+  const handleConfirmarPedido = async () => {
+    setSalvandoPedido(true);
+    try {
+      const pedidoId = crypto.randomUUID();
+      const resumoItensTexto = carrinho
+        .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
+        .join(", ");
+
+      const itensDetalhesJson = carrinho.map((item) => ({
+        id: item.produto.id,
+        nome: item.produto.nome,
+        quantidade: item.quantidade,
+        precoUnitario: item.produto.preco,
+        subtotal: item.produto.preco * item.quantidade,
+      }));
+
+      const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
+
+      const payloadInsert: Record<string, any> = {
+        id: pedidoId,
+        estabelecimento_codigo: code,
+        user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+        cliente_nome: clienteNome,
+        cliente_whatsapp: clienteWhatsapp,
+        data_entrega: dataEntrega,
+        horario_entrega: horarioEntrega || "15:00",
+        tipo_entrega: tipoEntrega,
+        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+        status: "pendente",
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: valTotalCarrinho,
+        total_amount: valTotalCarrinho,
+        total_price: valTotalCarrinho,
+        observacoes: observacoes || "",
+      };
+
+      let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
+
+      if (insertError) {
+        console.warn("Tentativa de insert em encomendas falhou com payload estendido, tentando fallback minimalista:", insertError.message);
+        
+        const payloadMinimal = {
+          id: pedidoId,
+          estabelecimento_codigo: code,
+          user_id: payloadInsert.user_id,
+          cliente_nome: clienteNome,
+          cliente_whatsapp: clienteWhatsapp,
+          data_entrega: dataEntrega,
+          horario_entrega: horarioEntrega || "15:00",
+          tipo_entrega: tipoEntrega,
+          endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          itens: resumoItensTexto,
+          valor_total: valTotalCarrinho,
+          total_amount: valTotalCarrinho,
+          status: "pendente",
+          status_pagamento: payloadInsert.status_pagamento,
+          observacoes: observacoes || "",
+        };
+
+        const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
+        insertError = resMin.error;
       }
-      return;
-    }
 
+      if (insertError) {
+        console.error("Erro ao registrar encomenda no Supabase:", insertError);
+        toast.error(`Falha ao registrar pedido: ${insertError.message || "Erro no servidor"}`);
+        return;
+      }
+
+      // Tentar gerar Pix Payload para a chave Pix da loja
+      if (lojaInfo?.chavePix && totalCarrinho > 0) {
+        try {
+          const pixPayload = generatePixPayload({
+            pixKey: lojaInfo.chavePix,
+            merchantName: lojaInfo.nome || "CaixaDoce",
+            merchantCity: (lojaInfo as any).cidade || "SAO PAULO",
+            amount: totalCarrinho,
+            txid: `PED${Date.now().toString().slice(-8)}`,
+            description: `Pedido ${clienteNome.slice(0, 15)}`,
+          });
+
+          if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(pixPayload);
+            setPixCopiado(true);
+          }
+        } catch {}
+      }
+
+      setUltimoPedidoId(pedidoId);
+      setResumoModalOpen(false);
+      setCartOpen(false);
+      setPedidoConcluido(true);
+      setSucessoModalOpen(true);
+      toast.success("Pedido gravado com sucesso no sistema!");
+
+      if (metodoPagamento === "cartao") {
+        try {
+          const session = await createStripeSession({
+            orderId: pedidoId,
+            establishmentCode: code,
+            customerName: clienteNome,
+            customerWhatsapp: clienteWhatsapp,
+            items: carrinho.map((it) => ({
+              name: it.produto.nome,
+              quantity: it.quantidade,
+              unitPrice: it.produto.preco,
+            })),
+            subtotal: totalCarrinho,
+            installments: parcelasSelecionadas,
+            repassarTaxa: stripeConfig.repassarTaxaStripe,
+            stripeAccountId: stripeConfig.accountId,
+          });
+
+          setTimeout(() => {
+            window.open(session.checkoutUrl, "_blank");
+          }, 1000);
+        } catch (err) {
+          console.warn("Aviso ao criar sessão do Stripe:", err);
+        }
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao finalizar pedido: ${err?.message || "Ocorreu uma falha na gravação."}`);
+    } finally {
+      setSalvandoPedido(false);
+    }
+  };
+
+  // 3. Envio Opcional no WhatsApp
+  const handleEnviarWhatsApp = () => {
     const dataFormatada = dataEntrega.split("-").reverse().join("/");
     const resumoItens = carrinho
       .map((item) => `• ${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
@@ -540,50 +632,26 @@ function CardapioLojaView() {
       ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
       : "🏬 Retirada no Balcão";
 
-    let pixCopiadoComSucesso = false;
     let blocoPixInfo = "";
-
     if (lojaInfo?.chavePix && totalCarrinho > 0) {
       blocoPixInfo = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
-      
-      try {
-        const pixPayload = generatePixPayload({
-          pixKey: lojaInfo.chavePix,
-          merchantName: lojaInfo.nome || "CaixaDoce",
-          merchantCity: (lojaInfo as any).cidade || "SAO PAULO",
-          amount: totalCarrinho,
-          txid: `PED${Date.now().toString().slice(-8)}`,
-          description: `Pedido ${clienteNome.slice(0, 15)}`,
-        });
-
-        if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
-          navigator.clipboard.writeText(pixPayload);
-          pixCopiadoComSucesso = true;
-        }
-      } catch {}
     }
 
-    const msg = `🎂 *NOVO PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
+    const msg = `🎂 *CONFIRMAÇÃO DE PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
 
-Olá! Acabei de montar meu pedido pelo cardápio digital (Código: *${code}*):
+Olá! Confirmei meu pedido pelo cardápio digital (Código: *${code}*):
 
 👤 *Cliente:* ${clienteNome}
-📱 *WhatsApp do Cliente:* ${clienteWhatsapp}
+📱 *WhatsApp:* ${clienteWhatsapp}
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
 📍 *Modalidade:* ${modalidade}
 ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
 ${resumoItens}
 
-💰 *Valor Total do Pedido:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
+💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
 
-Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`;
-
-    if (pixCopiadoComSucesso) {
-      toast.info("Mensagem gerada! O Pix Copia e Cola foi copiado para sua área de transferência. Cole-o no WhatsApp após enviar o pedido.");
-    } else {
-      toast.success("Pedido enviado para a confeiteira com sucesso!");
-    }
+Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito obrigado(a)!`;
 
     const numTarget = lojaInfo?.whatsapp || lojaInfo?.telefone || "";
     const url = formatarWhatsappLink(numTarget, msg);
@@ -591,9 +659,11 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
     if (typeof window !== "undefined") {
       window.open(url, "_blank");
     }
+  };
 
-    setPedidoConcluido(true);
-    toast.success("Pedido enviado para a confeiteira com sucesso!");
+  const handleConcluirELimpar = () => {
+    setSucessoModalOpen(false);
+    setCarrinho([]);
   };
 
   return (
@@ -873,7 +943,7 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                 </div>
 
                 {/* Formulário do Cliente */}
-                <form id="form-checkout" onSubmit={handleFinalizarPedido} className="space-y-3 pt-2 border-t border-border/60">
+                <form id="form-checkout" onSubmit={handleVerResumo} className="space-y-3 pt-2 border-t border-border/60">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
                     Dados para Encomenda
                   </h4>
@@ -961,6 +1031,20 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
                     </div>
                   </div>
 
+                  {tipoEntrega === "delivery" && (
+                    <div className="space-y-1">
+                      <Label htmlFor="chk-end" className="text-xs">Endereço Completo de Entrega *</Label>
+                      <Input
+                        id="chk-end"
+                        placeholder="Rua, Número, Bairro, Ponto de Referência..."
+                        value={enderecoEntrega}
+                        onChange={(e) => setEnderecoEntrega(e.target.value)}
+                        className="h-8 text-xs font-medium"
+                        required={tipoEntrega === "delivery"}
+                      />
+                    </div>
+                  )}
+
                   {/* FORMA DE PAGAMENTO */}
                   <div className="space-y-2 pt-2 border-t border-border/60">
                     <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
@@ -999,28 +1083,184 @@ Poderia confirmar a disponibilidade e os dados do pagamento? Muito obrigado(a)!`
               <Button
                 type="submit"
                 form="form-checkout"
-                disabled={processandoPagamento}
-                className={`w-full font-black text-xs h-10 shadow-md ${
-                  metodoPagamento === "cartao"
-                    ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                }`}
+                disabled={salvandoPedido}
+                className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
               >
-                {metodoPagamento === "cartao" ? (
-                  <>
-                    <CreditCard className="w-4 h-4 mr-1.5" />
-                    {processandoPagamento ? "Processando..." : `Pagar ${feeResult.installments}x de ${feeResult.formattedInstallmentValue}`}
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle className="w-4 h-4 mr-1.5" /> Enviar Encomenda no WhatsApp
-                  </>
-                )}
+                <FileText className="w-4 h-4" /> Ver dados do Pedido
               </Button>
             </SheetFooter>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* MODAL 1: RESUMO DO PEDIDO ANTES DE CONFIRMAR */}
+      <Dialog open={resumoModalOpen} onOpenChange={setResumoModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
+          <DialogHeader className="space-y-1 text-left border-b border-border pb-3">
+            <DialogTitle className="text-base sm:text-lg font-black text-foreground flex items-center gap-2">
+              <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+              Resumo e Confirmação da Encomenda
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Confira com atenção todos os detalhes do seu pedido antes de salvar na base de dados da confeitaria.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Bloco 1: Dados do Cliente */}
+            <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between font-bold text-purple-900 dark:text-purple-300">
+                <span className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-purple-600" />
+                  Dados do Cliente
+                </span>
+                <Badge variant="outline" className="text-[10px] uppercase border-purple-300">
+                  {code}
+                </Badge>
+              </div>
+              <p className="text-foreground font-medium"><strong>Nome:</strong> {clienteNome}</p>
+              <p className="text-foreground font-mono"><strong>WhatsApp:</strong> {clienteWhatsapp}</p>
+            </div>
+
+            {/* Bloco 2: Entrega e Agendamento */}
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-1.5 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
+                <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                Agendamento e Entrega
+              </div>
+              <p className="text-foreground font-medium">
+                <strong>Data Prevista:</strong> {dataEntrega ? dataEntrega.split("-").reverse().join("/") : ""} às {horarioEntrega}
+              </p>
+              <p className="text-foreground font-medium">
+                <strong>Modalidade:</strong> {tipoEntrega === "delivery" ? `🚚 Entrega (${enderecoEntrega || "A combinar"})` : "🏬 Retirada no Balcão"}
+              </p>
+              {observacoes && (
+                <p className="text-foreground font-medium italic">
+                  <strong>Obs:</strong> {observacoes}
+                </p>
+              )}
+            </div>
+
+            {/* Bloco 3: Itens do Pedido */}
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <ShoppingBag className="w-3.5 h-3.5 text-purple-600" />
+                Itens Selecionados ({totalItensCarrinho})
+              </h4>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto p-1 bg-stone-100 dark:bg-stone-900 rounded-xl border border-border/60">
+                {carrinho.map((item) => (
+                  <div key={item.produto.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/40">
+                    <span className="font-semibold text-foreground truncate max-w-[200px]">
+                      {item.quantidade}x {item.produto.nome}
+                    </span>
+                    <span className="font-bold font-mono text-foreground">
+                      {formatarMoeda(item.produto.preco * item.quantidade)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bloco 4: Total do Pedido */}
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-bold">
+              <span className="text-emerald-900 dark:text-emerald-300">Valor Total do Pedido:</span>
+              <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                {formatarMoeda(totalCarrinho)}
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setResumoModalOpen(false)}
+              disabled={salvandoPedido}
+              className="w-full sm:w-auto text-xs"
+            >
+              Voltar e Editar
+            </Button>
+
+            <Button
+              type="button"
+              onClick={handleConfirmarPedido}
+              disabled={salvandoPedido}
+              className="w-full sm:w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-10 shadow-md flex items-center justify-center gap-2"
+            >
+              {salvandoPedido ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Gravando Pedido...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Confirmar Pedido
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: CONFIRMAÇÃO E WHATSAPP OPCIONAL */}
+      <Dialog open={sucessoModalOpen} onOpenChange={(open) => {
+        if (!open) handleConcluirELimpar();
+      }}>
+        <DialogContent className="max-w-md p-6 rounded-2xl text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1">
+            <DialogTitle className="text-lg font-black text-foreground">
+              🎉 Pedido Confirmado com Sucesso!
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Sua encomenda foi gravada diretamente na base de dados da confeitaria <strong>{lojaInfo?.nome || "CaixaDoce"}</strong>.
+            </DialogDescription>
+          </div>
+
+          {pixCopiado && (
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-900 dark:text-purple-300 font-medium text-left space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <QrCode className="w-3.5 h-3.5 text-purple-600" />
+                Pix Copia e Cola Gerado!
+              </p>
+              <p>O código Pix foi copiado para a sua área de transferência. Cole-o no app do seu banco para pagamento.</p>
+            </div>
+          )}
+
+          <div className="p-3 rounded-xl bg-stone-100 dark:bg-stone-900 border border-border text-xs space-y-1 text-left">
+            <div className="flex justify-between font-mono font-bold text-muted-foreground text-[10px]">
+              <span>LOJA: {code}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">PENDENTE</span>
+            </div>
+            <p className="font-bold text-foreground">{clienteNome}</p>
+            <p className="font-mono text-emerald-600 dark:text-emerald-400 font-black text-sm">
+              Total: {formatarMoeda(totalCarrinho)}
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Button
+              onClick={handleEnviarWhatsApp}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Enviar Resumo no WhatsApp (Opcional)
+            </Button>
+
+            <Button
+              variant="ghost"
+              onClick={handleConcluirELimpar}
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+            >
+              Concluir e Voltar ao Cardápio
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
