@@ -77,6 +77,12 @@ import {
   calculateDynamicTotal,
   getInstallmentOptions,
 } from "@/lib/stripeFees";
+import {
+  obterConfiguracaoFrete,
+  calcularFretePedido,
+  type ConfiguracaoFrete,
+  CONFIG_FRETE_PADRAO,
+} from "@/lib/frete-service";
 import { toast } from "sonner";
 
 // ==========================================
@@ -339,6 +345,18 @@ export function CardapioLojaView() {
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
+  // Configurações de Frete & Entrega
+  const [freteConfig, setFreteConfig] = useState<ConfiguracaoFrete>(() => obterConfiguracaoFrete(code));
+
+  useEffect(() => {
+    setFreteConfig(obterConfiguracaoFrete(code));
+    const handleFreteUpdate = (e: any) => {
+      setFreteConfig(e.detail || obterConfiguracaoFrete(code));
+    };
+    window.addEventListener("freteConfigUpdated", handleFreteUpdate);
+    return () => window.removeEventListener("freteConfigUpdated", handleFreteUpdate);
+  }, [code]);
+
   // Dados da Loja
   const [lojaInfo, setLojaInfo] = useState<LojaInfoState | null>(null);
 
@@ -567,20 +585,35 @@ export function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
   }, [carrinho]);
 
+  // Cálculo Dinâmico do Frete do Pedido
+  const freteCalculado = useMemo(() => {
+    return calcularFretePedido(
+      freteConfig,
+      totalCarrinho,
+      endBairro,
+      tipoEntrega
+    );
+  }, [freteConfig, totalCarrinho, endBairro, tipoEntrega]);
+
+  // Valor Total do Pedido (Produtos + Frete)
+  const totalComFrete = useMemo(() => {
+    return totalCarrinho + (tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0);
+  }, [totalCarrinho, tipoEntrega, freteCalculado]);
+
   const feeResult = useMemo(() => {
     return calculateDynamicTotal(
-      totalCarrinho,
+      totalComFrete,
       parcelasSelecionadas,
       metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
     );
-  }, [totalCarrinho, parcelasSelecionadas, metodoPagamento, stripeConfig]);
+  }, [totalComFrete, parcelasSelecionadas, metodoPagamento, stripeConfig]);
 
   const installmentOptions = useMemo(() => {
     return getInstallmentOptions(
-      totalCarrinho,
+      totalComFrete,
       stripeConfig.repassarTaxaStripe
     );
-  }, [totalCarrinho, stripeConfig]);
+  }, [totalComFrete, stripeConfig]);
 
   const totalItensCarrinho = useMemo(() => {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
@@ -622,7 +655,7 @@ export function CardapioLojaView() {
         subtotal: item.produto.preco * item.quantidade,
       }));
 
-      const valTotalCarrinho = Math.max(0, Number(totalCarrinho) || 0);
+      const valTotalCarrinho = Math.max(0, Number(totalComFrete) || 0);
 
       const avisoTexto = "⚠️ Confirme a disponibilidade do produto com a loja.";
       const obsFinal = necessitaConfirmacaoDisponibilidade
@@ -639,6 +672,7 @@ export function CardapioLojaView() {
         horario_entrega: horarioEntrega || "15:00",
         tipo_entrega: tipoEntrega,
         endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
         status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
         status: "pendente",
         itens: resumoItensTexto,
@@ -664,6 +698,7 @@ export function CardapioLojaView() {
           horario_entrega: horarioEntrega || "15:00",
           tipo_entrega: tipoEntrega,
           endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
           itens: resumoItensTexto,
           valor_total: valTotalCarrinho,
           total_amount: valTotalCarrinho,
@@ -774,13 +809,13 @@ export function CardapioLojaView() {
       .map((item) => `• ${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
       .join("\n");
 
-    const modalidade = tipoEntrega === "delivery"
-      ? `🚚 Entrega no Endereço: ${enderecoEntrega || "A combinar"}`
-      : `🏬 Retirada no Balcão\n📍 Endereço da Loja: ${lojaInfo?.endereco || "Consultar com a loja"}`;
+    const taxaTexto = tipoEntrega === "delivery"
+      ? (freteCalculado.isGratis ? "Grátis (Cortesia/Promoção)" : formatarMoeda(freteCalculado.valorFrete))
+      : "R$ 0,00 (Retirada no Local)";
 
     let blocoPixInfo = "";
-    if (lojaInfo?.chavePix && totalCarrinho > 0) {
-      blocoPixInfo = `\n\n💳 *PAGAMENTO VIA PIX*\n💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
+    if (lojaInfo?.chavePix && totalComFrete > 0) {
+      blocoPixInfo = `\n\n💳 *PAGAMENTO VIA PIX*\n💰 *Valor Total do Pedido:* ${formatarMoeda(totalComFrete)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
       if (pixCopiaCola) {
         blocoPixInfo += `\n📋 *Pix Copia e Cola:*\n${pixCopiaCola}`;
       }
@@ -803,7 +838,9 @@ ${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
 🛒 *Itens do Pedido:*
 ${resumoItens}
 
-💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
+📦 *Subtotal dos Itens:* ${formatarMoeda(totalCarrinho)}
+🚚 *Taxa de Entrega:* ${taxaTexto}
+💰 *Total com Entrega:* ${formatarMoeda(totalComFrete)}${blocoPixInfo}
 
 Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito obrigado(a)!`;
 
@@ -1090,12 +1127,49 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   ))}
                 </div>
 
-                {/* Subtotal */}
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-bold">
-                  <span>Total do Pedido:</span>
-                  <span className="text-base font-black text-amber-900 dark:text-amber-300 font-mono">
-                    {formatarMoeda(totalCarrinho)}
-                  </span>
+                {/* BANNER PROMOCIONAL DE FRETE GRÁTIS */}
+                {freteConfig.freteGratisAtivo && tipoEntrega === "delivery" && (
+                  <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                    totalCarrinho >= freteConfig.valorMinimoFreteGratis
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                      : "bg-purple-500/10 border-purple-500/20 text-purple-800 dark:text-purple-300"
+                  }`}>
+                    <Sparkles className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span>
+                      {totalCarrinho >= freteConfig.valorMinimoFreteGratis ? (
+                        <strong>🎉 Parabéns! Você ganhou Frete Grátis neste pedido!</strong>
+                      ) : (
+                        <>
+                          Adicione mais <strong>{formatarMoeda(freteConfig.valorMinimoFreteGratis - totalCarrinho)}</strong> em doces para ganhar <strong>Frete Grátis</strong>!
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                {/* Subtotal & Taxa de Frete */}
+                <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-900/60 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Subtotal dos Itens:</span>
+                    <span className="font-mono font-bold text-foreground">{formatarMoeda(totalCarrinho)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-purple-600" />
+                      Taxa de Entrega:
+                    </span>
+                    <span className={`font-mono font-bold ${freteCalculado.isGratis ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+                      {tipoEntrega === "retirada" ? "Grátis (Retirada)" : freteCalculado.isGratis ? "Grátis" : formatarMoeda(freteCalculado.valorFrete)}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-purple-200/80 dark:border-purple-800/60 flex items-center justify-between font-bold text-sm">
+                    <span className="text-foreground">Total do Pedido:</span>
+                    <span className="text-base font-black text-purple-700 dark:text-purple-300 font-mono">
+                      {formatarMoeda(totalComFrete)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Formulário do Cliente */}
@@ -1210,10 +1284,18 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
                   {tipoEntrega === "delivery" && lojaInfo?.delivery_ativo !== false && (
                     <div className="space-y-2.5 p-3 rounded-xl bg-muted/40 border border-border/60">
-                      <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <Truck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                        Endereço para Entrega em Domicílio
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                          Endereço para Entrega em Domicílio
+                        </p>
+                        {freteCalculado.motivo && (
+                          <Badge variant="outline" className="text-[10px] text-purple-700 dark:text-purple-300 border-purple-300">
+                            {freteCalculado.motivo}
+                          </Badge>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="sm:col-span-2 space-y-1">
                           <Label htmlFor="end-rua" className="text-[11px] font-semibold">Logradouro (Rua / Av) *</Label>
@@ -1238,17 +1320,37 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           />
                         </div>
                       </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="space-y-1">
                           <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro *</Label>
-                          <Input
-                            id="end-bairro"
-                            placeholder="Ex: Centro"
-                            value={endBairro}
-                            onChange={(e) => setEndBairro(e.target.value)}
-                            className="h-8 text-xs font-medium"
-                            required={tipoEntrega === "delivery"}
-                          />
+                          {freteConfig.tipoFretePadrao === "bairros" && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 ? (
+                            <select
+                              id="end-bairro"
+                              value={endBairro}
+                              onChange={(e) => setEndBairro(e.target.value)}
+                              className="h-8 text-xs font-medium w-full rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              required={tipoEntrega === "delivery"}
+                            >
+                              <option value="">Selecione o Bairro...</option>
+                              {freteConfig.regrasBairros
+                                .filter((b) => b.ativo)
+                                .map((b) => (
+                                  <option key={b.id} value={b.bairro}>
+                                    {b.bairro} — {b.valor === 0 ? "Frete Grátis" : formatarMoeda(b.valor)}
+                                  </option>
+                                ))}
+                            </select>
+                          ) : (
+                            <Input
+                              id="end-bairro"
+                              placeholder="Ex: Centro"
+                              value={endBairro}
+                              onChange={(e) => setEndBairro(e.target.value)}
+                              className="h-8 text-xs font-medium"
+                              required={tipoEntrega === "delivery"}
+                            />
+                          )}
                         </div>
                         <div className="space-y-1">
                           <Label htmlFor="end-ref" className="text-[11px] font-semibold">Ponto de Referência (Opcional)</Label>
@@ -1421,12 +1523,26 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               </div>
             </div>
 
-            {/* Valor Total */}
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-bold">
-              <span className="text-emerald-900 dark:text-emerald-300 font-bold">Valor Total a Pagar:</span>
-              <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
-                {formatarMoeda(totalCarrinho)}
-              </span>
+            {/* Valores Detalhados (Subtotal + Frete = Total) */}
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Subtotal dos Itens:</span>
+                <span className="font-mono font-bold text-foreground">{formatarMoeda(totalCarrinho)}</span>
+              </div>
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-emerald-600" /> Taxa de Entrega:
+                </span>
+                <span className={`font-mono font-bold ${freteCalculado.isGratis ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+                  {tipoEntrega === "retirada" ? "Grátis (Retirada)" : freteCalculado.isGratis ? "Grátis (Promoção)" : formatarMoeda(freteCalculado.valorFrete)}
+                </span>
+              </div>
+              <div className="pt-1.5 border-t border-emerald-500/20 flex items-center justify-between font-bold">
+                <span className="text-emerald-900 dark:text-emerald-300">Valor Total a Pagar:</span>
+                <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                  {formatarMoeda(totalComFrete)}
+                </span>
+              </div>
             </div>
           </div>
 

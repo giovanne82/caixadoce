@@ -56,8 +56,10 @@ import {
   Facebook,
   MessageCircle,
   Music,
+  Truck,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
+import { FreteConfigView } from "./FreteConfigView";
 import { toast } from "sonner";
 import {
   formatarCpfCnpj,
@@ -724,12 +726,18 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
       <Tabs defaultValue="empresa" className="space-y-6">
         <div className="w-full overflow-x-auto scrollbar-none pb-1">
-          <TabsList className="grid grid-cols-4 w-full bg-muted/80 p-1 sm:p-1.5 rounded-2xl border border-border/50 gap-1">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full bg-muted/80 p-1 sm:p-1.5 rounded-2xl border border-border/50 gap-1 h-auto">
             <TabsTrigger
               value="empresa"
               className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
             >
               <Building2 className="w-4 h-4 text-primary shrink-0" /> Loja
+            </TabsTrigger>
+            <TabsTrigger
+              value="frete"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+            >
+              <Truck className="w-4 h-4 text-primary shrink-0" /> Frete &amp; Entrega
             </TabsTrigger>
             <TabsTrigger
               value="colaboradores"
@@ -745,12 +753,17 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </TabsTrigger>
             <TabsTrigger
               value="contato"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
+              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold col-span-2 sm:col-span-1"
             >
               <Mail className="w-4 h-4 text-primary shrink-0" /> Contato
             </TabsTrigger>
           </TabsList>
         </div>
+
+        {/* TAB: FRETE & REGRAS DE ENTREGA */}
+        <TabsContent value="frete" className="space-y-6">
+          <FreteConfigView estabelecimentoCodigo={activeCode} />
+        </TabsContent>
 
         {/* TAB: PERFIL & ESTABELECIMENTO */}
         <TabsContent value="empresa" className="space-y-6">
