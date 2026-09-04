@@ -22,6 +22,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Truck,
   MapPin,
   Gift,
@@ -36,6 +44,7 @@ import {
   Store,
   HelpCircle,
   Percent,
+  Pencil,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -74,6 +83,15 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
   const [novoBairroNome, setNovoBairroNome] = useState("");
   const [novoBairroValorStr, setNovoBairroValorStr] = useState("");
   const [novoBairroPrazo, setNovoBairroPrazo] = useState<string>("45");
+
+  // Estado para Edição de Bairro / Região
+  const [bairroEmEdicao, setBairroEmEdicao] = useState<RegraFreteBairro | null>(null);
+  const [modalEdicaoOpen, setModalEdicaoOpen] = useState(false);
+  const [editBairroNome, setEditBairroNome] = useState("");
+  const [editBairroValorStr, setEditBairroValorStr] = useState("");
+  const [editBairroPrazo, setEditBairroPrazo] = useState<string>("45");
+  const [editBairroAtivo, setEditBairroAtivo] = useState(true);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   useEffect(() => {
     const carregada = obterConfiguracaoFrete(code);
@@ -114,6 +132,62 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
     setNovoBairroNome("");
     setNovoBairroValorStr("");
     toast.success(`Bairro "${nomeLimpo}" adicionado à tabela de frete!`);
+  };
+
+  // Abrir Modal de Edição de Bairro
+  const handleAbrirEdicao = (bairro: RegraFreteBairro) => {
+    setBairroEmEdicao(bairro);
+    setEditBairroNome(bairro.bairro);
+    setEditBairroValorStr(formatarMoeda(bairro.valor));
+    setEditBairroPrazo(String(bairro.prazoMinutos || config.tempoMedioMinutos || 45));
+    setEditBairroAtivo(bairro.ativo);
+    setModalEdicaoOpen(true);
+  };
+
+  // Salvar Edição do Bairro diretamente no banco
+  const handleSalvarEdicaoBairro = async () => {
+    if (!bairroEmEdicao) return;
+    const nomeLimpo = editBairroNome.trim();
+    if (!nomeLimpo) {
+      toast.error("Informe o nome do bairro ou região.");
+      return;
+    }
+
+    setSalvandoEdicao(true);
+    try {
+      const valorNum = converterMoedaInputParaNumero(editBairroValorStr);
+      const prazoNum = parseInt(editBairroPrazo, 10) || config.tempoMedioMinutos || 45;
+
+      const novasRegras = config.regrasBairros.map((b) => {
+        if (b.id === bairroEmEdicao.id) {
+          return {
+            ...b,
+            bairro: nomeLimpo,
+            valor: valorNum,
+            prazoMinutos: prazoNum,
+            ativo: editBairroAtivo,
+          };
+        }
+        return b;
+      });
+
+      const configAtualizada: ConfiguracaoFrete = {
+        ...config,
+        valorFixoPadrao: converterMoedaInputParaNumero(valorFixoStr),
+        valorMinimoFreteGratis: converterMoedaInputParaNumero(valorMinimoFreteGratisStr),
+        regrasBairros: novasRegras,
+      };
+
+      await salvarConfiguracaoFrete(code, configAtualizada);
+      setConfig(configAtualizada);
+      setModalEdicaoOpen(false);
+      setBairroEmEdicao(null);
+      toast.success(`Bairro "${nomeLimpo}" atualizado com sucesso!`);
+    } catch (e) {
+      toast.error("Erro ao salvar alterações do bairro.");
+    } finally {
+      setSalvandoEdicao(false);
+    }
   };
 
   // Remover Bairro
@@ -482,15 +556,16 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead className="text-xs font-bold">Bairro / Região</TableHead>
-                  <TableHead className="text-xs font-bold w-32 text-right">Taxa (R$)</TableHead>
-                  <TableHead className="text-xs font-bold w-24 text-center">Status</TableHead>
-                  <TableHead className="text-xs font-bold w-16 text-center"></TableHead>
+                  <TableHead className="text-xs font-bold w-28 text-right">Taxa (R$)</TableHead>
+                  <TableHead className="text-xs font-bold w-24 text-center">Prazo Est.</TableHead>
+                  <TableHead className="text-xs font-bold w-20 text-center">Status</TableHead>
+                  <TableHead className="text-xs font-bold w-20 text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {config.regrasBairros.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">
                       Nenhum bairro cadastrado ainda. Use o formulário acima para adicionar os bairros da sua cidade.
                     </TableCell>
                   </TableRow>
@@ -503,6 +578,9 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                       <TableCell className="text-xs font-mono font-bold text-right text-emerald-600 dark:text-emerald-400">
                         {b.valor === 0 ? "Grátis" : formatarMoeda(b.valor)}
                       </TableCell>
+                      <TableCell className="text-center text-xs font-mono text-muted-foreground">
+                        {b.prazoMinutos ? `${b.prazoMinutos} min` : "-"}
+                      </TableCell>
                       <TableCell className="text-center">
                         <Switch
                           checked={b.ativo}
@@ -510,14 +588,26 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                         />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoverBairro(b.id)}
-                          className="h-7 w-7 text-rose-500 hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleAbrirEdicao(b)}
+                            className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-500/10"
+                            title="Editar Bairro / Taxa"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoverBairro(b.id)}
+                            className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                            title="Excluir Bairro"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -588,6 +678,100 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
           {salvando ? "Salvando..." : "Salvar Configurações de Frete"}
         </Button>
       </div>
+
+      {/* MODAL DE EDIÇÃO DE BAIRRO / REGIÃO */}
+      <Dialog open={modalEdicaoOpen} onOpenChange={setModalEdicaoOpen}>
+        <DialogContent className="max-w-md p-5 rounded-3xl space-y-4">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="text-base font-black text-foreground flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-purple-600" />
+              Editar Bairro / Região
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Altere o nome da localidade e a taxa de frete cobrada no cardápio online.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-foreground">
+                Nome do Bairro / Região *
+              </Label>
+              <Input
+                value={editBairroNome}
+                onChange={(e) => setEditBairroNome(e.target.value)}
+                placeholder="Ex: Lourdes"
+                className="h-9 text-xs font-semibold"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-foreground">
+                  Taxa de Frete (R$) *
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={editBairroValorStr}
+                  onChange={(e) => setEditBairroValorStr(aplicarMascaraMoedaInput(e.target.value))}
+                  placeholder="R$ 0,00"
+                  className="h-9 text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-foreground">
+                  Prazo Estimado (Minutos)
+                </Label>
+                <Input
+                  type="number"
+                  value={editBairroPrazo}
+                  onChange={(e) => setEditBairroPrazo(e.target.value)}
+                  placeholder="45"
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-2xl border border-border bg-muted/20">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-bold text-foreground">
+                  Bairro Ativo para Entregas
+                </Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Se desativado, o bairro não aparecerá no cardápio do cliente.
+                </p>
+              </div>
+              <Switch
+                checked={editBairroAtivo}
+                onCheckedChange={setEditBairroAtivo}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalEdicaoOpen(false)}
+              disabled={salvandoEdicao}
+              className="h-9 text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSalvarEdicaoBairro}
+              disabled={salvandoEdicao}
+              className="h-9 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {salvandoEdicao ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
