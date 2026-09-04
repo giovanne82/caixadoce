@@ -114,11 +114,19 @@ export interface LojaInfoState {
   nome?: string;
   logo_url?: string;
   store_logo_url?: string;
+  banner_url?: string;
+  store_banner_url?: string;
+  bannerUrl?: string;
+  theme_color?: string;
+  themeColor?: string;
+  cor_destaque?: string;
+  corTema?: string;
   titulo_cardapio?: string;
   menu_title?: string;
   slogan_cardapio?: string;
   menu_slogan?: string;
   chave_pix?: string;
+  chavePix?: string;
   tipo_chave_pix?: string;
   cidade?: string;
   endereco?: string;
@@ -127,6 +135,7 @@ export interface LojaInfoState {
   instagram?: string;
   tiktok?: string;
   facebook?: string;
+  social_media?: any;
 }
 
 // ==========================================
@@ -444,6 +453,8 @@ export function CardapioLojaView() {
         let fb = estData?.facebook || estData?.social_facebook || estData?.social_media?.facebook;
         let wa = estData?.whatsapp || estData?.telefone || estData?.social_media?.whatsapp;
         let logo = estData?.logo_url || estData?.store_logo_url;
+        let banner = estData?.banner_url || estData?.store_banner_url || estData?.bannerUrl;
+        let themeCol = estData?.theme_color || estData?.themeColor || estData?.cor_destaque || estData?.corTema || "#8E7CC3";
         let title = estData?.titulo_cardapio || estData?.menu_title;
         let slogan = estData?.slogan_cardapio || estData?.menu_slogan;
         let name = estData?.nome;
@@ -466,6 +477,8 @@ export function CardapioLojaView() {
                 fb = fb || p.facebook || p.social_facebook || p.social_media?.facebook;
                 wa = wa || p.whatsapp || p.telefone || p.social_media?.whatsapp;
                 logo = logo || p.logoUrl || p.store_logo_url;
+                banner = banner || p.bannerUrl || p.banner_url || p.store_banner_url;
+                themeCol = themeCol || p.themeColor || p.theme_color || p.corTema || p.cor_destaque || "#8E7CC3";
                 title = title || p.tituloCardapio || p.menu_title;
                 slogan = slogan || p.sloganCardapio || p.menu_slogan;
                 name = name || p.establishmentName || p.nome;
@@ -479,7 +492,7 @@ export function CardapioLojaView() {
           } catch {}
         }
 
-        if (estData || name || title || insta || tk || fb) {
+        if (estData || name || title || insta || tk || fb || banner || themeCol) {
           setLojaInfo({
             whatsapp: wa,
             telefone: wa,
@@ -487,6 +500,11 @@ export function CardapioLojaView() {
             nome: name || "Confeitaria Artesanal",
             logo_url: logo,
             store_logo_url: logo,
+            banner_url: banner,
+            store_banner_url: banner,
+            theme_color: themeCol,
+            themeColor: themeCol,
+            cor_destaque: themeCol,
             titulo_cardapio: title,
             menu_title: title,
             slogan_cardapio: slogan,
@@ -558,6 +576,20 @@ export function CardapioLojaView() {
     }
   };
 
+  const DIAS_SEMANA_KANBAN = [
+    { dia: 1, label: "Seg", nome: "Segunda" },
+    { dia: 2, label: "Ter", nome: "Terça" },
+    { dia: 3, label: "Qua", nome: "Quarta" },
+    { dia: 4, label: "Qui", nome: "Quinta" },
+    { dia: 5, label: "Sex", nome: "Sexta" },
+    { dia: 6, label: "Sáb", nome: "Sábado" },
+    { dia: 0, label: "Dom", nome: "Domingo" },
+  ];
+
+  const hojeDiaSemana = useMemo(() => new Date().getDay(), []);
+  const [diaSemanaSelecionado, setDiaSemanaSelecionado] = useState<number | "todos">(() => new Date().getDay());
+  const [tabModoHibrido, setTabModoHibrido] = useState<"todos" | "pronta_entrega" | "encomenda">("todos");
+
   useEffect(() => {
     const list = obterProdutosCardapio(code);
     setProdutos(list.filter((p) => p.ativo !== false));
@@ -568,17 +600,80 @@ export function CardapioLojaView() {
     setDataEntrega(amanha.toISOString().split("T")[0]);
   }, [code]);
 
+  // Identificação Dinâmica do Modelo de Negócio
+  const produtosProntaEntrega = useMemo(() => produtos.filter((p) => p.availability_type === "pronta_entrega"), [produtos]);
+  const produtosEncomenda = useMemo(() => produtos.filter((p) => p.availability_type !== "pronta_entrega"), [produtos]);
+
+  const modeloNegocio = useMemo<"pronta_entrega" | "encomendas" | "hibrido">(() => {
+    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length === 0) return "pronta_entrega";
+    if (produtosProntaEntrega.length === 0 && produtosEncomenda.length > 0) return "encomendas";
+    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length > 0) return "hibrido";
+    return "encomendas";
+  }, [produtosProntaEntrega, produtosEncomenda]);
+
+  // Cor de destaque da confeitaria
+  const corTemaDestaque = useMemo(() => {
+    return lojaInfo?.theme_color || lojaInfo?.themeColor || lojaInfo?.cor_destaque || lojaInfo?.corTema || "#8E7CC3";
+  }, [lojaInfo]);
+
+  // Imagem de capa / banner da confeitaria
+  const bannerUrlCapa = useMemo(() => {
+    return lojaInfo?.banner_url || lojaInfo?.store_banner_url || lojaInfo?.bannerUrl || "";
+  }, [lojaInfo]);
+
   // Categorias Únicas
   const categorias = useMemo(() => {
-    const cats = Array.from(new Set(produtos.map((p) => p.categoria)));
+    let base = produtos;
+    if (modeloNegocio === "pronta_entrega" || (modeloNegocio === "hibrido" && tabModoHibrido === "pronta_entrega")) {
+      base = produtosProntaEntrega;
+    } else if (modeloNegocio === "encomendas" || (modeloNegocio === "hibrido" && tabModoHibrido === "encomenda")) {
+      base = produtosEncomenda;
+    }
+    const cats = Array.from(new Set(base.map((p) => p.categoria))).filter(Boolean);
     return ["todas", ...cats];
-  }, [produtos]);
+  }, [produtos, modeloNegocio, tabModoHibrido, produtosProntaEntrega, produtosEncomenda]);
 
-  // Produtos Filtrados
+  // Produtos Filtrados Dinamicamente
   const produtosFiltrados = useMemo(() => {
-    if (categoriaAtiva === "todas") return produtos;
-    return produtos.filter((p) => p.categoria === categoriaAtiva);
-  }, [produtos, categoriaAtiva]);
+    let baseList = produtos;
+
+    if (modeloNegocio === "pronta_entrega") {
+      baseList = produtosProntaEntrega;
+      if (diaSemanaSelecionado !== "todos") {
+        baseList = baseList.filter(
+          (p) =>
+            !p.available_days ||
+            p.available_days.length === 0 ||
+            p.available_days.includes(diaSemanaSelecionado)
+        );
+      }
+    } else if (modeloNegocio === "encomendas") {
+      baseList = produtosEncomenda;
+    } else {
+      // Híbrido
+      if (tabModoHibrido === "pronta_entrega") {
+        baseList = produtosProntaEntrega;
+        if (diaSemanaSelecionado !== "todos") {
+          baseList = baseList.filter(
+            (p) =>
+              !p.available_days ||
+              p.available_days.length === 0 ||
+              p.available_days.includes(diaSemanaSelecionado)
+          );
+        }
+      } else if (tabModoHibrido === "encomenda") {
+        baseList = produtosEncomenda;
+      } else {
+        baseList = produtos;
+      }
+    }
+
+    if (categoriaAtiva !== "todas") {
+      baseList = baseList.filter((p) => p.categoria === categoriaAtiva);
+    }
+
+    return baseList;
+  }, [produtos, modeloNegocio, produtosProntaEntrega, produtosEncomenda, diaSemanaSelecionado, tabModoHibrido, categoriaAtiva]);
 
   // Adicionar ao Carrinho
   const handleAdicionarAoCarrinho = (prod: ProdutoCardapio) => {
@@ -888,26 +983,26 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-foreground pb-24">
-      {/* Header da Confeitaria em Lilás Suave #F3EEF9 com Botão #8E7CC3 */}
-      <header className="bg-[#F3EEF9] text-[#2E1A47] py-4 px-4 shadow-xs border-b border-[#E8E0F2] sticky top-0 z-30">
+      {/* Top Header Fixo / Sticky com Cor Dinâmica ou Lilás */}
+      <header className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md text-foreground py-3 px-4 shadow-xs border-b border-border sticky top-0 z-30">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {lojaInfo?.logo_url || lojaInfo?.store_logo_url ? (
               <img
                 src={lojaInfo.logo_url || lojaInfo.store_logo_url}
                 alt={lojaInfo.nome || "Logo"}
-                className="w-10 h-10 object-cover rounded-xl border border-[#8E7CC3]/30 shadow-xs shrink-0"
+                className="w-10 h-10 object-cover rounded-xl border border-border shadow-xs shrink-0"
               />
             ) : (
               <CaixaDoceLogo size="md" className="shrink-0" />
             )}
-            <div className="border-l border-[#8E7CC3]/30 pl-2.5 sm:pl-3 min-w-0">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2E1A47] truncate max-w-[150px] sm:max-w-xs">
+            <div className="border-l border-border pl-2.5 sm:pl-3 min-w-0">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-foreground truncate max-w-[150px] sm:max-w-xs">
                 {lojaInfo?.nome || "Confeitaria Artesanal"}
               </h1>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="inline-block bg-[#7C3AED]/10 text-[#6D28D9] border border-[#7C3AED]/25 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
-                  Código Loja: {code}
+                <span className="inline-block bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold whitespace-nowrap">
+                  Código: {code}
                 </span>
 
                 <SocialLinks
@@ -922,15 +1017,16 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             </div>
           </div>
 
-          {/* Botão do Carrinho Flutuante 'Meu Pedido' no Topo (Lilás da Marca #8E7CC3) */}
+          {/* Botão do Carrinho Flutuante 'Meu Pedido' no Topo */}
           <Button
             onClick={() => setCartOpen(true)}
-            className="font-extrabold shrink-0 relative bg-[#8E7CC3] hover:bg-[#7C69B3] text-white text-xs shadow-md rounded-2xl py-2 px-3.5 whitespace-nowrap"
+            style={{ backgroundColor: corTemaDestaque }}
+            className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity"
           >
             <ShoppingCart className="w-4 h-4 mr-1.5 shrink-0" />
             <span className="hidden sm:inline">Meu Pedido</span>
             {totalItensCarrinho > 0 && (
-              <span className="ml-1.5 bg-[#2E1A47] text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
+              <span className="ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
                 {totalItensCarrinho}
               </span>
             )}
@@ -938,10 +1034,61 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
         </div>
       </header>
 
-      {/* Conteúdo do Cardápio */}
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Banner de Boas-Vindas */}
-        <div className="text-center space-y-3 py-2">
+      {/* HERO BANNER DE CAPA (Caso Cadastrado pelo Lojista) */}
+      {bannerUrlCapa ? (
+        <div className="relative w-full h-44 sm:h-64 md:h-72 overflow-hidden bg-stone-900 shadow-md">
+          <img
+            src={bannerUrlCapa}
+            alt="Capa do Cardápio"
+            className="w-full h-full object-cover object-center transform scale-100 filter brightness-90"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20 flex flex-col justify-end p-4 sm:p-8">
+            <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row sm:items-end justify-between gap-3 text-white">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    style={{ backgroundColor: corTemaDestaque }}
+                    className="text-white border-0 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 shadow-sm"
+                  >
+                    {modeloNegocio === "pronta_entrega"
+                      ? "⚡ Apenas Pronta-Entrega"
+                      : modeloNegocio === "encomendas"
+                      ? "🎂 Apenas Sob Encomenda"
+                      : "✨ Pronta-Entrega & Encomendas"}
+                  </Badge>
+                </div>
+                <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight drop-shadow-md">
+                  {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
+                </h2>
+                <p className="text-xs sm:text-sm text-stone-200 max-w-xl drop-shadow-sm font-medium line-clamp-2">
+                  {lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos com ingredientes nobres e amor em cada detalhe."}
+                </p>
+              </div>
+
+              <div className="shrink-0 pt-1 sm:pt-0">
+                <SocialLinks
+                  instagram={lojaInfo?.instagram}
+                  tiktok={lojaInfo?.tiktok}
+                  facebook={lojaInfo?.facebook}
+                  whatsapp={lojaInfo?.whatsapp}
+                  telefone={lojaInfo?.telefone}
+                  variant="banner"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Banner de Boas-Vindas Padrão (Sem Foto de Capa) */
+        <div className="max-w-5xl mx-auto px-4 pt-6 pb-2 text-center space-y-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-primary/20 bg-primary/5 text-primary">
+            {modeloNegocio === "pronta_entrega"
+              ? "⚡ Vitrine de Pronta-Entrega Diária"
+              : modeloNegocio === "encomendas"
+              ? "🎂 Vitrine de Doces Sob Encomenda"
+              : "✨ Pronta-Entrega & Encomendas Especiais"}
+          </div>
+
           <h2 className="text-2xl sm:text-3xl font-black text-foreground">
             {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
           </h2>
@@ -958,90 +1105,238 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             variant="banner"
           />
         </div>
+      )}
 
-        {/* Pílulas de Categorias */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 justify-start sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {categorias.map((cat) => (
-            <Button
-              key={cat}
-              variant={categoriaAtiva === cat ? "default" : "outline"}
-              size="sm"
-              onClick={() => setCategoriaAtiva(cat)}
-              className={`h-8 text-xs font-bold rounded-full capitalize shrink-0 ${
-                categoriaAtiva === cat ? "shadow-md" : ""
+      {/* Conteúdo Principal do Cardápio */}
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* 1. SELETOR DE MODALIDADE HÍBRIDA (Apenas no Modo Híbrido) */}
+        {modeloNegocio === "hibrido" && (
+          <div className="p-1.5 rounded-2xl bg-muted/60 border border-border flex items-center justify-center gap-1 max-w-md mx-auto shadow-xs">
+            <button
+              type="button"
+              onClick={() => setTabModoHibrido("todos")}
+              style={tabModoHibrido === "todos" ? { backgroundColor: corTemaDestaque, color: "#fff" } : {}}
+              className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                tabModoHibrido === "todos"
+                  ? "shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
               }`}
             >
-              {cat === "todas" ? "Todos os Doces" : cat}
-            </Button>
-          ))}
-        </div>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Todos ({produtos.length})</span>
+            </button>
 
-        {/* Grid de Produtos */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6 pt-2">
-          {produtosFiltrados.map((prod) => (
-            <Card
-              key={prod.id}
-              className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group rounded-2xl sm:rounded-3xl"
+            <button
+              type="button"
+              onClick={() => setTabModoHibrido("pronta_entrega")}
+              style={tabModoHibrido === "pronta_entrega" ? { backgroundColor: corTemaDestaque, color: "#fff" } : {}}
+              className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                tabModoHibrido === "pronta_entrega"
+                  ? "shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              }`}
             >
-              <div>
-                <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
-                  <img
-                    src={prod.fotoUrl}
-                    alt={prod.nome}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
-                    <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5">
-                      {prod.categoria}
-                    </Badge>
-                    {prod.destaque && (
-                      <Badge className="bg-amber-500 text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5 flex items-center gap-0.5">
-                        <Sparkles className="w-2.5 h-2.5" /> Destaque
+              <span>⚡ Pronta-Entrega ({produtosProntaEntrega.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTabModoHibrido("encomenda")}
+              style={tabModoHibrido === "encomenda" ? { backgroundColor: corTemaDestaque, color: "#fff" } : {}}
+              className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                tabModoHibrido === "encomenda"
+                  ? "shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              }`}
+            >
+              <span>🎂 Encomendas ({produtosEncomenda.length})</span>
+            </button>
+          </div>
+        )}
+
+        {/* 2. KANBAN / SELETOR DE DIAS DA SEMANA (Para Modo Pronta-Entrega ou Aba Pronta-Entrega do Híbrido) */}
+        {(modeloNegocio === "pronta_entrega" || (modeloNegocio === "hibrido" && tabModoHibrido === "pronta_entrega")) && (
+          <div className="space-y-2.5 p-4 rounded-3xl bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/20 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h3 className="text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-300">
+                  ⚡ Cardápio do Dia — Pronta-Entrega
+                </h3>
+              </div>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                Selecione o dia da semana para ver os doces disponíveis:
+              </span>
+            </div>
+
+            {/* Carrossel de Dias da Semana */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                type="button"
+                onClick={() => setDiaSemanaSelecionado("todos")}
+                style={diaSemanaSelecionado === "todos" ? { backgroundColor: corTemaDestaque, color: "#fff" } : {}}
+                className={`py-2 px-3 rounded-2xl text-xs font-black transition-all shrink-0 border ${
+                  diaSemanaSelecionado === "todos"
+                    ? "border-transparent shadow-sm"
+                    : "bg-background border-border text-muted-foreground hover:border-emerald-300 hover:text-foreground"
+                }`}
+              >
+                ✨ Todos os Dias
+              </button>
+
+              {DIAS_SEMANA_KANBAN.map((item) => {
+                const isSelected = diaSemanaSelecionado === item.dia;
+                const isToday = hojeDiaSemana === item.dia;
+                return (
+                  <button
+                    key={item.dia}
+                    type="button"
+                    onClick={() => setDiaSemanaSelecionado(item.dia)}
+                    style={isSelected ? { backgroundColor: corTemaDestaque, color: "#fff" } : {}}
+                    className={`py-2 px-3 rounded-2xl text-xs font-black transition-all shrink-0 border flex items-center gap-1.5 ${
+                      isSelected
+                        ? "border-transparent shadow-sm"
+                        : isToday
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-900 dark:text-emerald-200"
+                        : "bg-background border-border text-muted-foreground hover:border-emerald-300 hover:text-foreground"
+                    }`}
+                  >
+                    <span>{item.nome}</span>
+                    {isToday && (
+                      <Badge className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0 h-4 border-0">
+                        Hoje
                       </Badge>
                     )}
-                  </div>
-                </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                <CardHeader className="p-2.5 sm:p-4 pb-1.5 sm:pb-2 space-y-1 sm:space-y-1.5">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2">
-                    <CardTitle className="text-xs sm:text-base font-extrabold text-foreground leading-tight line-clamp-2">
-                      {prod.nome}
-                    </CardTitle>
-                    <span className="text-xs sm:text-lg font-black text-primary font-mono shrink-0">
-                      {formatarMoeda(prod.preco)}
-                    </span>
-                  </div>
-                  <CardDescription className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-3 mt-0.5 sm:mt-1.5">
-                    {prod.descricao}
-                  </CardDescription>
-                </CardHeader>
-              </div>
+        {/* 3. AVISO EXPLICATIVO DO MODO ENCOMENDA (Apenas quando no Modo Encomenda) */}
+        {(modeloNegocio === "encomendas" || (modeloNegocio === "hibrido" && tabModoHibrido === "encomenda")) && (
+          <div className="p-3.5 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 flex items-center gap-2.5 text-xs text-purple-900 dark:text-purple-300">
+            <Clock className="w-4 h-4 shrink-0 text-purple-600 dark:text-purple-400" />
+            <span>
+              <strong>Doces Sob Encomenda:</strong> Cada produto possui um prazo mínimo de preparo. Escolha a data de entrega ideal no momento de fechar seu pedido.
+            </span>
+          </div>
+        )}
 
-              <CardFooter className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
-                {(() => {
-                  const disp = formatarBadgeDisponibilidadeProduto(prod);
-                  return disp.isProntaEntrega ? (
-                    <span className="text-[9px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
-                      {disp.texto}
-                    </span>
-                  ) : (
-                    <span className="text-[9px] sm:text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md border border-purple-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
-                      {disp.texto}
-                    </span>
-                  );
-                })()}
-
-                <Button
-                  size="sm"
-                  onClick={() => handleAdicionarAoCarrinho(prod)}
-                  className="font-bold text-[11px] sm:text-xs shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center"
-                >
-                  <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Pedir
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+        {/* 4. PÍLULAS DE CATEGORIAS */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 justify-start sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {categorias.map((cat) => {
+            const isSelected = categoriaAtiva === cat;
+            return (
+              <Button
+                key={cat}
+                variant={isSelected ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCategoriaAtiva(cat)}
+                style={isSelected ? { backgroundColor: corTemaDestaque, borderColor: corTemaDestaque, color: "#fff" } : {}}
+                className={`h-8 text-xs font-bold rounded-full capitalize shrink-0 transition-all ${
+                  isSelected ? "shadow-md" : ""
+                }`}
+              >
+                {cat === "todas" ? "Todos os Doces" : cat}
+              </Button>
+            );
+          })}
         </div>
+
+        {/* 5. GRID DE PRODUTOS */}
+        {produtosFiltrados.length === 0 ? (
+          <div className="text-center py-16 px-4 bg-muted/20 rounded-3xl border border-dashed border-border space-y-3">
+            <Cake className="w-12 h-12 text-muted-foreground/40 mx-auto" />
+            <h4 className="text-base font-bold text-foreground">Nenhum doce encontrado</h4>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Não encontramos produtos para os filtros selecionados neste momento. Experimente alternar a categoria ou o dia da semana.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCategoriaAtiva("todas");
+                setDiaSemanaSelecionado("todos");
+                setTabModoHibrido("todos");
+              }}
+              className="text-xs font-bold"
+            >
+              Limpar Filtros
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6 pt-2">
+            {produtosFiltrados.map((prod) => {
+              const disp = formatarBadgeDisponibilidadeProduto(prod);
+              return (
+                <Card
+                  key={prod.id}
+                  className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group rounded-2xl sm:rounded-3xl"
+                >
+                  <div>
+                    <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
+                      <img
+                        src={prod.fotoUrl}
+                        alt={prod.nome}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
+                        <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5">
+                          {prod.categoria}
+                        </Badge>
+                        {prod.destaque && (
+                          <Badge className="bg-amber-500 text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5 flex items-center gap-0.5 shadow-xs">
+                            <Sparkles className="w-2.5 h-2.5" /> Destaque
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <CardHeader className="p-2.5 sm:p-4 pb-1.5 sm:pb-2 space-y-1 sm:space-y-1.5">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-2">
+                        <CardTitle className="text-xs sm:text-base font-extrabold text-foreground leading-tight line-clamp-2">
+                          {prod.nome}
+                        </CardTitle>
+                        <span
+                          style={{ color: corTemaDestaque }}
+                          className="text-xs sm:text-lg font-black font-mono shrink-0"
+                        >
+                          {formatarMoeda(prod.preco)}
+                        </span>
+                      </div>
+                      <CardDescription className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-3 mt-0.5 sm:mt-1.5">
+                        {prod.descricao}
+                      </CardDescription>
+                    </CardHeader>
+                  </div>
+
+                  <CardFooter className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-2">
+                    {disp.isProntaEntrega ? (
+                      <span className="text-[9px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
+                        {disp.texto}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] sm:text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md border border-purple-500/20 flex items-center justify-center sm:justify-start gap-1 truncate">
+                        {disp.texto}
+                      </span>
+                    )}
+
+                    <Button
+                      size="sm"
+                      onClick={() => handleAdicionarAoCarrinho(prod)}
+                      style={{ backgroundColor: corTemaDestaque }}
+                      className="font-bold text-[11px] sm:text-xs text-white shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center hover:opacity-90 transition-opacity"
+                    >
+                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Pedir
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </main>
 
       {/* Rodapé da Confeitaria com Redes Sociais */}
@@ -1074,7 +1369,10 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             className="bg-stone-900 text-white p-3.5 rounded-2xl shadow-2xl border border-white/20 flex items-center justify-between cursor-pointer hover:bg-stone-850 transition-all"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold">
+              <div
+                style={{ backgroundColor: corTemaDestaque }}
+                className="w-9 h-9 rounded-xl text-white flex items-center justify-center font-black"
+              >
                 {totalItensCarrinho}
               </div>
               <div>
@@ -1083,7 +1381,11 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               </div>
             </div>
 
-            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-stone-950 font-extrabold text-xs h-8">
+            <Button
+              size="sm"
+              style={{ backgroundColor: corTemaDestaque }}
+              className="text-white hover:opacity-90 font-extrabold text-xs h-8"
+            >
               Continuar &gt;
             </Button>
           </div>

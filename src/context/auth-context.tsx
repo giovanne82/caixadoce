@@ -51,6 +51,13 @@ export type UpdateEstablishmentDetailsInput = {
   menu_title?: string;
   sloganCardapio?: string;
   menu_slogan?: string;
+  bannerUrl?: string;
+  banner_url?: string;
+  store_banner_url?: string;
+  themeColor?: string;
+  theme_color?: string;
+  corTema?: string;
+  cor_destaque?: string;
   contasPix?: ContaPix[];
   instagram?: string;
   social_instagram?: string;
@@ -85,6 +92,13 @@ export type StaffProfile = {
   whatsapp?: string;
   logoUrl?: string;
   store_logo_url?: string;
+  bannerUrl?: string;
+  banner_url?: string;
+  store_banner_url?: string;
+  themeColor?: string;
+  theme_color?: string;
+  corTema?: string;
+  cor_destaque?: string;
   tituloCardapio?: string;
   menu_title?: string;
   sloganCardapio?: string;
@@ -897,6 +911,18 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (logo !== undefined) {
         updatePayload.logo_url = logo || null;
         updatePayload.store_logo_url = logo || null;
+      }
+
+      const banner = details.bannerUrl || details.banner_url || details.store_banner_url;
+      if (banner !== undefined) {
+        updatePayload.banner_url = banner || null;
+        updatePayload.store_banner_url = banner || null;
+      }
+
+      const themeCol = details.themeColor || details.theme_color || details.corTema || details.cor_destaque;
+      if (themeCol !== undefined) {
+        updatePayload.theme_color = themeCol || null;
+        updatePayload.cor_destaque = themeCol || null;
       }
 
       const titulo = details.tituloCardapio || details.menu_title;

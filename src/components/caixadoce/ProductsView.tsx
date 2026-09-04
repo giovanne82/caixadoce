@@ -67,6 +67,7 @@ import {
   type ProdutoCardapio,
   type KitProduto,
 } from "@/lib/caixadoce-data";
+import { PALETAS_CORES_TEMA, type PaletaCorTema } from "@/lib/cardapio-helpers";
 import { toast } from "sonner";
 
 interface ProductsViewProps {
@@ -140,8 +141,11 @@ export function ProductsView({
   };
 
   const fileInputRefLogo = useRef<HTMLInputElement>(null);
+  const fileInputRefBanner = useRef<HTMLInputElement>(null);
   const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false);
   const [logoUrlCustom, setLogoUrlCustom] = useState(profile?.logoUrl || profile?.store_logo_url || "");
+  const [bannerUrlCustom, setBannerUrlCustom] = useState(profile?.bannerUrl || profile?.banner_url || profile?.store_banner_url || "");
+  const [themeColorCustom, setThemeColorCustom] = useState(profile?.themeColor || profile?.theme_color || profile?.corTema || "#8E7CC3");
   const [tituloCardapioCustom, setTituloCardapioCustom] = useState(profile?.tituloCardapio || profile?.menu_title || "");
   const [sloganCardapioCustom, setSloganCardapioCustom] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
   const [instagramCustom, setInstagramCustom] = useState(profile?.instagram || profile?.social_instagram || profile?.social_media?.instagram || "");
@@ -149,6 +153,7 @@ export function ProductsView({
   const [facebookCustom, setFacebookCustom] = useState(profile?.facebook || profile?.social_facebook || profile?.social_media?.facebook || "");
   const [salvandoVisual, setSalvandoVisual] = useState(false);
   const [enviandoLogo, setEnviandoLogo] = useState(false);
+  const [enviandoBanner, setEnviandoBanner] = useState(false);
 
   const handleSalvarVisual = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,6 +162,12 @@ export function ProductsView({
       await updateEstablishmentDetails({
         logoUrl: logoUrlCustom,
         store_logo_url: logoUrlCustom,
+        bannerUrl: bannerUrlCustom,
+        banner_url: bannerUrlCustom,
+        store_banner_url: bannerUrlCustom,
+        themeColor: themeColorCustom,
+        theme_color: themeColorCustom,
+        cor_destaque: themeColorCustom,
         tituloCardapio: tituloCardapioCustom,
         menu_title: tituloCardapioCustom,
         sloganCardapio: sloganCardapioCustom,
@@ -198,6 +209,31 @@ export function ProductsView({
     reader.onerror = () => {
       setEnviandoLogo(false);
       toast.error("Erro ao ler imagem.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadBannerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_BANNER_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+    if (file.size > MAX_BANNER_SIZE_BYTES) {
+      toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
+      if (e.target) e.target.value = "";
+      return;
+    }
+
+    setEnviandoBanner(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBannerUrlCustom(reader.result as string);
+      setEnviandoBanner(false);
+      toast.success("Banner de capa carregado! Clique em Salvar para aplicar no cardápio.");
+    };
+    reader.onerror = () => {
+      setEnviandoBanner(false);
+      toast.error("Erro ao ler imagem do banner.");
     };
     reader.readAsDataURL(file);
   };
@@ -1036,7 +1072,148 @@ export function ProductsView({
           </DialogHeader>
 
           <form onSubmit={handleSalvarVisual} className="space-y-4 py-2 font-sans">
-            {/* 1. Upload de Logo do Estabelecimento */}
+            {/* 1. Upload de Imagem de Capa (Banner) */}
+            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-purple-600" /> Imagem de Capa (Banner do Topo)
+                </Label>
+                <span className="text-[10px] text-muted-foreground">Recomendado: 1200x400</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Exibida como topo panorâmico da sua vitrine pública no cardápio.
+              </p>
+
+              <div className="relative w-full h-28 sm:h-32 rounded-xl overflow-hidden bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center group">
+                {bannerUrlCustom ? (
+                  <>
+                    <img src={bannerUrlCustom} alt="Capa" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => fileInputRefBanner.current?.click()}
+                        className="text-xs font-bold bg-white/90 hover:bg-white text-stone-900"
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1" /> Trocar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setBannerUrlCustom("")}
+                        className="text-xs font-bold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-3 space-y-1.5">
+                    <ImageIcon className="w-6 h-6 text-purple-400 mx-auto" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={enviandoBanner}
+                      onClick={() => fileInputRefBanner.current?.click()}
+                      className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                    >
+                      <Upload className="w-3.5 h-3.5 mr-1.5" />
+                      {enviandoBanner ? "Enviando..." : "Enviar Imagem de Capa"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRefBanner}
+                type="file"
+                accept="image/*"
+                onChange={handleUploadBannerFile}
+                className="hidden"
+              />
+
+              {bannerUrlCustom && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBannerUrlCustom("")}
+                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Capa
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Cor Principal de Destaque */}
+            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600" /> Cor Principal de Destaque
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold text-muted-foreground uppercase">{themeColorCustom}</span>
+                  <div
+                    className="w-5 h-5 rounded-full border border-black/20 shadow-xs shrink-0"
+                    style={{ backgroundColor: themeColorCustom }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                {PALETAS_CORES_TEMA.map((paleta) => {
+                  const isSelected = themeColorCustom.toLowerCase() === paleta.hex.toLowerCase();
+                  return (
+                    <button
+                      type="button"
+                      key={paleta.id}
+                      onClick={() => setThemeColorCustom(paleta.hex)}
+                      className={`flex items-center gap-2 p-1.5 rounded-xl border text-left transition-all ${
+                        isSelected
+                          ? "border-purple-600 ring-2 ring-purple-600/30 bg-purple-50 dark:bg-purple-950/40 font-bold"
+                          : "border-border hover:border-border/80 bg-background/60"
+                      }`}
+                    >
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0 flex items-center justify-center text-white"
+                        style={{ backgroundColor: paleta.hex }}
+                      >
+                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                      </span>
+                      <span className="text-[10px] text-foreground truncate">{paleta.nome.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] font-semibold text-muted-foreground shrink-0">
+                  Cor personalizada:
+                </Label>
+                <div className="flex items-center gap-1.5 flex-1 max-w-[160px]">
+                  <input
+                    type="color"
+                    value={themeColorCustom}
+                    onChange={(e) => setThemeColorCustom(e.target.value)}
+                    className="w-7 h-7 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
+                  />
+                  <Input
+                    value={themeColorCustom}
+                    onChange={(e) => setThemeColorCustom(e.target.value)}
+                    placeholder="#8E7CC3"
+                    className="h-7 text-xs font-mono uppercase"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Upload de Logo do Estabelecimento */}
             <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3">
               <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-purple-600" /> Logo do Estabelecimento

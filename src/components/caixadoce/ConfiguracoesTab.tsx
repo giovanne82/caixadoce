@@ -59,6 +59,11 @@ import {
   Truck,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
+import {
+  formatarMoeda,
+  PALETAS_CORES_TEMA,
+  type PaletaCorTema,
+} from "@/lib/cardapio-helpers";
 import { FreteConfigView } from "./FreteConfigView";
 import { toast } from "sonner";
 import {
@@ -131,6 +136,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         contasPix: novasContas,
         logoUrl,
         store_logo_url: logoUrl,
+        bannerUrl,
+        banner_url: bannerUrl,
+        store_banner_url: bannerUrl,
+        themeColor,
+        theme_color: themeColor,
+        cor_destaque: themeColor,
         tituloCardapio,
         menu_title: tituloCardapio,
         sloganCardapio,
@@ -290,13 +301,58 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   // Personalização do Cardápio Público
   const [logoUrl, setLogoUrl] = useState(profile?.logoUrl || profile?.store_logo_url || "");
+  const [bannerUrl, setBannerUrl] = useState(profile?.bannerUrl || profile?.banner_url || profile?.store_banner_url || "");
+  const [themeColor, setThemeColor] = useState(profile?.themeColor || profile?.theme_color || profile?.corTema || "#8E7CC3");
   const [tituloCardapio, setTituloCardapio] = useState(profile?.tituloCardapio || profile?.menu_title || "");
   const [sloganCardapio, setSloganCardapio] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
   const [instagramEst, setInstagramEst] = useState(profile?.instagram || profile?.social_instagram || profile?.social_media?.instagram || "");
   const [tiktokEst, setTiktokEst] = useState(profile?.tiktok || profile?.social_tiktok || profile?.social_media?.tiktok || "");
   const [facebookEst, setFacebookEst] = useState(profile?.facebook || profile?.social_facebook || profile?.social_media?.facebook || "");
   const [enviandoLogo, setEnviandoLogo] = useState(false);
+  const [enviandoBanner, setEnviandoBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputBannerRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadBannerFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_BANNER_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+    if (file.size > MAX_BANNER_SIZE_BYTES) {
+      toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
+      if (e.target) e.target.value = "";
+      return;
+    }
+
+    setEnviandoBanner(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `banners/${activeCode}_${Date.now()}.${fileExt}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("public")
+        .upload(filePath, file, { upsert: true });
+
+      let finalUrl = "";
+      if (!uploadError && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+        finalUrl = publicUrlData.publicUrl;
+      } else {
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setBannerUrl(finalUrl);
+      toast.success("Banner selecionado com sucesso! Clique em 'Salvar Dados do Estabelecimento' para confirmar.");
+    } catch {
+      toast.error("Erro ao carregar imagem do banner.");
+    } finally {
+      setEnviandoBanner(false);
+    }
+  };
 
   const handleUploadLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -431,6 +487,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.cidade) setCidadeEst(profile.cidade);
       if (profile.estado) setUfEst(profile.estado);
       if (profile.logoUrl || profile.store_logo_url) setLogoUrl(profile.logoUrl || profile.store_logo_url || "");
+      if (profile.bannerUrl || profile.banner_url || profile.store_banner_url) setBannerUrl(profile.bannerUrl || profile.banner_url || profile.store_banner_url || "");
+      if (profile.themeColor || profile.theme_color || profile.corTema || profile.cor_destaque) setThemeColor(profile.themeColor || profile.theme_color || profile.corTema || profile.cor_destaque || "#8E7CC3");
       if (profile.tituloCardapio || profile.menu_title) setTituloCardapio(profile.tituloCardapio || profile.menu_title || "");
       if (profile.sloganCardapio || profile.menu_slogan) setSloganCardapio(profile.sloganCardapio || profile.menu_slogan || "");
       if (profile.instagram || profile.social_instagram || profile.social_media?.instagram) setInstagramEst(profile.instagram || profile.social_instagram || profile.social_media?.instagram || "");
@@ -464,6 +522,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           else if (d.chave_pix === "contato@caixadoce.com.br") setChavePix("");
 
           if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
+          if (d.banner_url || d.store_banner_url) setBannerUrl(d.banner_url || d.store_banner_url);
+          if (d.theme_color || d.cor_destaque) setThemeColor(d.theme_color || d.cor_destaque);
           if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
           if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
 
@@ -591,6 +651,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         contasPix: contasPixValidas,
         logoUrl,
         store_logo_url: logoUrl,
+        bannerUrl,
+        banner_url: bannerUrl,
+        store_banner_url: bannerUrl,
+        themeColor,
+        theme_color: themeColor,
+        cor_destaque: themeColor,
         tituloCardapio,
         menu_title: tituloCardapio,
         sloganCardapio,
@@ -1255,6 +1321,255 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         value={telEst}
                         onChange={(e) => setTelEst(e.target.value)}
                         className="text-xs bg-background"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🎨 IDENTIDADE VISUAL & PERSONALIZAÇÃO DO CARDÁPIO */}
+                <div className="pt-4 border-t space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600" /> Identidade Visual &amp; Personalização do Cardápio
+                    </h4>
+                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
+                      Vitrine Pública
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Personalize a imagem de capa, logo, cor de destaque e títulos para deixar seu cardápio com a identidade única da sua marca.
+                  </p>
+
+                  {/* 1. IMAGEM DE CAPA (BANNER) */}
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                        <ImageIcon className="w-4 h-4 text-primary" /> Imagem de Capa (Banner do Topo)
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">Recomendado: 1200x400 (Máx. 2MB)</span>
+                    </div>
+
+                    <div className="relative w-full h-32 sm:h-40 rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 border border-dashed border-border flex items-center justify-center group">
+                      {bannerUrl ? (
+                        <>
+                          <img
+                            src={bannerUrl}
+                            alt="Capa do Cardápio"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => fileInputBannerRef.current?.click()}
+                              className="text-xs font-bold bg-white/90 hover:bg-white text-stone-900"
+                            >
+                              <Upload className="w-3.5 h-3.5 mr-1" /> Trocar Imagem
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => setBannerUrl("")}
+                              className="text-xs font-bold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center p-4 space-y-2">
+                          <ImageIcon className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Nenhuma capa selecionada. Será exibido o cabeçalho padrão com cor de destaque.
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={enviandoBanner}
+                            onClick={() => fileInputBannerRef.current?.click()}
+                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                          >
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            {enviandoBanner ? "Enviando..." : "Enviar Imagem de Capa"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputBannerRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadBannerFile}
+                      className="hidden"
+                    />
+
+                    {bannerUrl && (
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBannerUrl("")}
+                          className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Imagem de Capa
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. LOGO DO ESTABELECIMENTO */}
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                    <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                      <ImageIcon className="w-4 h-4 text-primary" /> Logo da Loja / Confeitaria
+                    </Label>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 dark:bg-stone-800 border-2 border-primary/20 flex items-center justify-center shrink-0 shadow-sm">
+                        {logoUrl ? (
+                          <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                        ) : (
+                          <CaixaDoceLogo size="sm" />
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-center sm:text-left flex-1">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadLogoFile}
+                          className="hidden"
+                        />
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={enviandoLogo}
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                          >
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
+                          </Button>
+                          {logoUrl && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLogoUrl("")}
+                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG (Máx. 2MB)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. COR PRINCIPAL DE DESTAQUE */}
+                  <div className="space-y-2.5 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                        <Sparkles className="w-4 h-4 text-primary" /> Cor Principal de Destaque
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono font-bold text-muted-foreground uppercase">{themeColor}</span>
+                        <div
+                          className="w-5 h-5 rounded-full border border-black/20 shadow-xs shrink-0"
+                          style={{ backgroundColor: themeColor }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Aplicada aos botões de ação, badges de disponibilidade, preços e elementos de destaque no cardápio.
+                    </p>
+
+                    {/* Paletas Predefinidas */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {PALETAS_CORES_TEMA.map((paleta) => {
+                        const isSelected = themeColor.toLowerCase() === paleta.hex.toLowerCase();
+                        return (
+                          <button
+                            type="button"
+                            key={paleta.id}
+                            onClick={() => setThemeColor(paleta.hex)}
+                            className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
+                              isSelected
+                                ? "border-primary ring-2 ring-primary/30 bg-primary/5 font-bold shadow-xs"
+                                : "border-border hover:border-border/80 bg-background/50 hover:bg-background"
+                            }`}
+                          >
+                            <span
+                              className="w-4 h-4 rounded-full border border-black/15 shrink-0 flex items-center justify-center text-white"
+                              style={{ backgroundColor: paleta.hex }}
+                            >
+                              {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </span>
+                            <span className="text-[11px] text-foreground truncate">{paleta.nome.split(" ")[0]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Cor Customizada */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground shrink-0">
+                        Ou escolha uma cor personalizada:
+                      </Label>
+                      <div className="flex items-center gap-1.5 flex-1 max-w-[180px]">
+                        <input
+                          type="color"
+                          value={themeColor}
+                          onChange={(e) => setThemeColor(e.target.value)}
+                          className="w-8 h-8 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
+                        />
+                        <Input
+                          value={themeColor}
+                          onChange={(e) => setThemeColor(e.target.value)}
+                          placeholder="#8E7CC3"
+                          className="h-8 text-xs font-mono uppercase"
+                          maxLength={7}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. TÍTULO E SLOGAN DO CARDÁPIO */}
+                  <div className="space-y-3 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cfg-menu-title" className="text-xs font-bold">
+                        Título do Cardápio (Público)
+                      </Label>
+                      <Input
+                        id="cfg-menu-title"
+                        value={tituloCardapio}
+                        onChange={(e) => setTituloCardapio(e.target.value)}
+                        placeholder="Cardápio de Bolos & Doces Especiais"
+                        className="text-xs"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Exibido no cabeçalho do seu cardápio público aos clientes.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cfg-menu-slogan" className="text-xs font-bold">
+                        Slogan / Mensagem de Apresentação
+                      </Label>
+                      <Textarea
+                        id="cfg-menu-slogan"
+                        rows={2}
+                        value={sloganCardapio}
+                        onChange={(e) => setSloganCardapio(e.target.value)}
+                        placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
+                        className="text-xs"
                       />
                     </div>
                   </div>

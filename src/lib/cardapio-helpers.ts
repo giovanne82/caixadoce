@@ -277,3 +277,63 @@ export function calcularRegrasAgendamentoCarrinho(
     diasSemanaDisponiveis: diasPermitidos,
   };
 }
+
+export interface PaletaCorTema {
+  id: string;
+  nome: string;
+  hex: string;
+  corClara: string;
+  texto: string;
+}
+
+export const PALETAS_CORES_TEMA: PaletaCorTema[] = [
+  {
+    id: "roxo_caixadoce",
+    nome: "Roxo / Lilás (Padrão)",
+    hex: "#8E7CC3",
+    corClara: "#F3EEF9",
+    texto: "#2E1A47",
+  },
+  {
+    id: "rosa_confeitaria",
+    nome: "Rosa Chiclete / Confeitaria",
+    hex: "#EC4899",
+    corClara: "#FDF2F8",
+    texto: "#831843",
+  },
+  {
+    id: "vermelho_morango",
+    nome: "Vermelho Morango & Cereja",
+    hex: "#E11D48",
+    corClara: "#FFF1F2",
+    texto: "#881337",
+  },
+  {
+    id: "chocolate_dourado",
+    nome: "Chocolate Gourmet & Caramelo",
+    hex: "#92400E",
+    corClara: "#FEF3C7",
+    texto: "#451A03",
+  },
+  {
+    id: "verde_menta",
+    nome: "Verde Menta / Pistache",
+    hex: "#059669",
+    corClara: "#ECFDF5",
+    texto: "#064E3B",
+  },
+  {
+    id: "azul_tiffany",
+    nome: "Azul Bebê / Tiffany",
+    hex: "#0284C7",
+    corClara: "#F0F9FF",
+    texto: "#0C4A6E",
+  },
+  {
+    id: "preto_elegante",
+    nome: "Preto / Grafite Moderno",
+    hex: "#18181B",
+    corClara: "#F4F4F5",
+    texto: "#09090B",
+  },
+];

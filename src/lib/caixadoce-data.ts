@@ -41,6 +41,14 @@ export interface Estabelecimento {
   whatsapp?: string;
   email?: string;
   logoUrl?: string;
+  store_logo_url?: string;
+  bannerUrl?: string;
+  banner_url?: string;
+  store_banner_url?: string;
+  themeColor?: string;
+  theme_color?: string;
+  corTema?: string;
+  cor_destaque?: string;
   stripeAccountId?: string | null;
   repassarTaxaStripe?: boolean;
   instagram?: string;
