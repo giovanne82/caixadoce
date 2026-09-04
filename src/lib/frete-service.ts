@@ -20,7 +20,7 @@ export interface ConfiguracaoFrete {
 }
 
 export const CONFIG_FRETE_PADRAO: ConfiguracaoFrete = {
-  tipoFretePadrao: "fixo",
+  tipoFretePadrao: "bairros",
   valorFixoPadrao: 10,
   permitirRetirada: true,
   freteGratisAtivo: false,
@@ -37,7 +37,7 @@ export const CONFIG_FRETE_PADRAO: ConfiguracaoFrete = {
 const STORAGE_PREFIX = "caixadoce_frete_config_";
 
 /**
- * Obtém a configuração de frete do estabelecimento (Cache local + Supabase)
+ * Obtém a configuração de frete do estabelecimento de forma síncrona (Cache Local com Fallback Seguro)
  */
 export function obterConfiguracaoFrete(estabelecimentoCodigo: string): ConfiguracaoFrete {
   const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
@@ -61,6 +61,42 @@ export function obterConfiguracaoFrete(estabelecimentoCodigo: string): Configura
 }
 
 /**
+ * Carrega a configuração de frete atualizada diretamente do Supabase e sincroniza no cache local
+ */
+export async function carregarConfiguracaoFreteAsync(estabelecimentoCodigo: string): Promise<ConfiguracaoFrete> {
+  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+  try {
+    const { data, error } = await supabase
+      .from("estabelecimentos")
+      .select("frete_config, taxa_entrega_padrao, aceita_delivery")
+      .eq("codigo", code)
+      .maybeSingle();
+
+    if (!error && data && data.frete_config) {
+      const configSupabase = typeof data.frete_config === "string" 
+        ? JSON.parse(data.frete_config) 
+        : data.frete_config;
+      
+      const configUnificada: ConfiguracaoFrete = {
+        ...CONFIG_FRETE_PADRAO,
+        ...configSupabase,
+        regrasBairros: Array.isArray(configSupabase.regrasBairros) ? configSupabase.regrasBairros : CONFIG_FRETE_PADRAO.regrasBairros,
+      };
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`${STORAGE_PREFIX}${code}`, JSON.stringify(configUnificada));
+        window.dispatchEvent(new CustomEvent("freteConfigUpdated", { detail: configUnificada }));
+      }
+      return configUnificada;
+    }
+  } catch (e) {
+    console.warn("Aviso ao buscar frete_config do Supabase:", e);
+  }
+
+  return obterConfiguracaoFrete(code);
+}
+
+/**
  * Salva a configuração de frete no LocalStorage e sincroniza com o Supabase
  */
 export async function salvarConfiguracaoFrete(
@@ -75,7 +111,6 @@ export async function salvarConfiguracaoFrete(
   }
 
   try {
-    // Tenta persistir no campo de metadados ou tabela estabelecimentos
     const { error } = await supabase
       .from("estabelecimentos")
       .update({
@@ -94,7 +129,7 @@ export async function salvarConfiguracaoFrete(
 }
 
 /**
- * Calcula o frete de um pedido com base nas regras ativas
+ * Calcula o frete de um pedido com base nas regras ativas e no bairro informado
  */
 export function calcularFretePedido(
   config: ConfiguracaoFrete,
@@ -106,6 +141,7 @@ export function calcularFretePedido(
   isGratis: boolean;
   motivo?: string;
   tempoEstimadoMinutos: number;
+  bairroIdentificado?: string;
 } {
   if (tipoEntrega === "retirada") {
     return {
@@ -116,7 +152,7 @@ export function calcularFretePedido(
     };
   }
 
-  // 1. Regra de Frete Grátis Total
+  // 1. Regra de Frete Grátis Total da Loja
   if (config.tipoFretePadrao === "gratis_total") {
     return {
       valorFrete: 0,
@@ -126,7 +162,7 @@ export function calcularFretePedido(
     };
   }
 
-  // 2. Regra de Frete Grátis Condicional por Valor Mínimo
+  // 2. Regra de Frete Grátis Condicional por Valor Mínimo de Pedido
   if (config.freteGratisAtivo && subtotal >= config.valorMinimoFreteGratis) {
     return {
       valorFrete: 0,
@@ -136,27 +172,39 @@ export function calcularFretePedido(
     };
   }
 
-  // 3. Regra por Bairros/Regiões
-  if (config.tipoFretePadrao === "bairros" && bairroEscolhido) {
-    const bairroFormatado = bairroEscolhido.trim().toLowerCase();
-    const regraEncontrada = config.regrasBairros.find(
-      (r) => r.ativo && (r.bairro.toLowerCase() === bairroFormatado || r.id === bairroEscolhido)
+  // 3. Busca e correspondência inteligente de Bairro / Região
+  if (bairroEscolhido && Array.isArray(config.regrasBairros) && config.regrasBairros.length > 0) {
+    const termoLimpo = bairroEscolhido.trim().toLowerCase();
+
+    // 3.1. Match exato ou por ID
+    let regraEncontrada = config.regrasBairros.find(
+      (r) => r.ativo && (r.bairro.toLowerCase() === termoLimpo || r.id === bairroEscolhido)
     );
 
+    // 3.2. Match parcial se não encontrou exato
+    if (!regraEncontrada && termoLimpo.length >= 3) {
+      regraEncontrada = config.regrasBairros.find(
+        (r) => r.ativo && (r.bairro.toLowerCase().includes(termoLimpo) || termoLimpo.includes(r.bairro.toLowerCase()))
+      );
+    }
+
     if (regraEncontrada) {
+      const valor = Number(regraEncontrada.valor) || 0;
       return {
-        valorFrete: Number(regraEncontrada.valor) || 0,
-        isGratis: Number(regraEncontrada.valor) === 0,
-        motivo: `Taxa do Bairro ${regraEncontrada.bairro}`,
+        valorFrete: valor,
+        isGratis: valor === 0,
+        motivo: valor === 0 ? `Frete Grátis (${regraEncontrada.bairro})` : `Taxa do Bairro ${regraEncontrada.bairro}`,
         tempoEstimadoMinutos: regraEncontrada.prazoMinutos || config.tempoMedioMinutos || 45,
+        bairroIdentificado: regraEncontrada.bairro,
       };
     }
   }
 
-  // 4. Fallback: Frete Fixo Padrão
+  // 4. Fallback: Frete Fixo Padrão ou Sob Consulta
+  const valorFixo = Number(config.valorFixoPadrao) || 0;
   return {
-    valorFrete: Number(config.valorFixoPadrao) || 0,
-    isGratis: Number(config.valorFixoPadrao) === 0,
+    valorFrete: valorFixo,
+    isGratis: valorFixo === 0,
     motivo: config.tipoFretePadrao === "consulta" ? "Frete a combinar" : "Taxa de Entrega Padrão",
     tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
   };
