@@ -184,11 +184,17 @@ export function DespesasView({
   const [insumosConsolidadosPreview, setInsumosConsolidadosPreview] = useState<InsumoConsolidado[]>([]);
   const [carregandoConsolidacao, setCarregandoConsolidacao] = useState(false);
 
-  // Encomendas Ativas (que não foram canceladas nem entregues)
+  // Encomendas Ativas (que não foram canceladas nem entregues/concluídas)
   const encomendasAtivas = useMemo(() => {
     return encomendas.filter((e) => {
       const st = (e.status || "").toLowerCase();
-      return st !== "entregue" && st !== "cancelado";
+      return (
+        st !== "entregue" &&
+        st !== "cancelado" &&
+        st !== "cancelada" &&
+        st !== "concluido" &&
+        st !== "concluida"
+      );
     });
   }, [encomendas]);
 

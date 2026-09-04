@@ -81,6 +81,8 @@ import {
   Sparkles,
   PlusCircle,
   Users,
+  CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -180,8 +182,8 @@ export function OrdersView({
   // Aba Sub-View: 'pedidos' | 'clientes'
   const [abaSubView, setAbaSubView] = useState<"pedidos" | "clientes">("pedidos");
 
-  // Modos de Visualização: 'lista' | 'semana' | 'mes' | 'compras'
-  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "compras">("lista");
+  // Modos de Visualização: 'lista' | 'concluidos' | 'semana' | 'mes' | 'compras'
+  const [viewMode, setViewMode] = useState<"mes" | "semana" | "lista" | "concluidos" | "compras">("lista");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
   // Aba dentro da Lista de Compras: 'hoje' | 'semana' | 'encomenda'
@@ -283,6 +285,7 @@ export function OrdersView({
   const [valorEntradaFormatado, setValorEntradaFormatado] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
+  const [statusEncomenda, setStatusEncomenda] = useState<StatusEncomenda>("pendente");
   const [observacoes, setObservacoes] = useState("");
 
   // Personalização Especial (Topo de Bolo & Vela)
@@ -681,6 +684,7 @@ export function OrdersView({
     setDropdownInsumosAberto(false);
     setTipoEntrega("retirada");
     setEnderecoEntrega("");
+    setStatusEncomenda("pendente");
     setObservacoes("");
     setTemTopoBolo(false);
     setDetalhesTopoBolo("");
@@ -705,6 +709,7 @@ export function OrdersView({
     setClienteWhatsapp(aplicarMascaraTelefone(ord.clienteWhatsapp));
     setDataEntrega(ord.dataEntrega);
     setHorarioEntrega(ord.horarioEntrega || "14:00");
+    setStatusEncomenda(ord.status || "pendente");
 
     if (ord.itensDetalhes && ord.itensDetalhes.length > 0) {
       setItensTags(ord.itensDetalhes);
@@ -796,7 +801,7 @@ export function OrdersView({
         historicoPagamentos,
         paymentsHistory: historicoPagamentos,
         statusPagamento: statusPag,
-        status: "pendente" as StatusEncomenda,
+        status: statusEncomenda,
         tipoEntrega,
         enderecoEntrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         observacoes,
@@ -956,9 +961,26 @@ export function OrdersView({
     return datasBloqueadas.find((b) => b.data === selectedDrawerDate) || null;
   }, [datasBloqueadas, selectedDrawerDate]);
 
+  // Encomendas Ativas (Pendentes / Em Produção / Prontas)
+  const encomendasAtivas = useMemo(() => {
+    return encomendas.filter((e) => {
+      const st = (e.status || "").toLowerCase();
+      return st !== "entregue" && st !== "cancelada" && st !== "cancelado" && st !== "concluido" && st !== "concluida";
+    });
+  }, [encomendas]);
+
+  // Encomendas Concluídas (Entregues)
+  const encomendasConcluidas = useMemo(() => {
+    return encomendas.filter((e) => {
+      const st = (e.status || "").toLowerCase();
+      return st === "entregue" || st === "concluido" || st === "concluida";
+    });
+  }, [encomendas]);
+
   // Lista Filtrada para a Tabela / Cards (Regra Matemática: valor_pago < valor_total -> Pendente)
   const encomendasFiltradas = useMemo(() => {
-    return encomendas.filter((e) => {
+    const listaBase = viewMode === "concluidos" ? encomendasConcluidas : (viewMode === "lista" ? encomendasAtivas : encomendas);
+    return listaBase.filter((e) => {
       const totalmentePaga = isEncomendaTotalmentePaga(e);
 
       let matchPagamento = true;
@@ -975,7 +997,7 @@ export function OrdersView({
         e.clienteWhatsapp.includes(busca);
       return matchPagamento && matchBusca;
     });
-  }, [encomendas, filtroPagamento, busca]);
+  }, [viewMode, encomendasAtivas, encomendasConcluidas, encomendas, filtroPagamento, busca]);
 
   // Navegação de Período
   const navegarPeriodo = (delta: number) => {
@@ -1242,7 +1264,7 @@ export function OrdersView({
           </Button>
         </div>
       </div>
-          {/* Barra de Controle de Visualização */}
+      {/* Barra de Controle de Visualização */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button
@@ -1251,7 +1273,16 @@ export function OrdersView({
             onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Lista Completa
+            Lista Completa ({encomendasAtivas.length})
+          </Button>
+          <Button
+            variant={viewMode === "concluidos" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("concluidos")}
+            className="h-7 text-xs font-semibold shrink-0 flex items-center gap-1.5"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            Pedidos Concluídos ({encomendasConcluidas.length})
           </Button>
           <Button
             variant={viewMode === "semana" ? "default" : "ghost"}
@@ -1303,10 +1334,19 @@ export function OrdersView({
           </div>
         )}
 
-        {viewMode === "lista" && (
+        {(viewMode === "lista" || viewMode === "concluidos") && (
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por cliente ou item..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="h-8 text-xs pl-8 w-44 sm:w-52 font-medium"
+              />
+            </div>
             <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-44 font-semibold">
+              <SelectTrigger className="h-8 text-xs w-40 font-semibold">
                 <SelectValue placeholder="Pagamento" />
               </SelectTrigger>
               <SelectContent>
@@ -1488,9 +1528,9 @@ export function OrdersView({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. VISUALIZAÇÃO EM LISTA COMPLETA (LIMPA & CLICÁVEL) */}
+      {/* 3. VISUALIZAÇÃO EM LISTA (ATIVAS & CONCLUÍDAS) (LIMPA & CLICÁVEL) */}
       {/* ========================================================================= */}
-      {viewMode === "lista" && (
+      {(viewMode === "lista" || viewMode === "concluidos") && (
         <div className="space-y-4">
           {/* VISUALIZAÇÃO DESKTOP (TABELA LIMPA DE 5 COLUNAS) */}
           <Card className="hidden md:block border-border shadow-xs overflow-hidden bg-card">
@@ -1501,14 +1541,16 @@ export function OrdersView({
                   <TableHead className="text-xs">Cliente</TableHead>
                   <TableHead className="text-xs">Valor Total</TableHead>
                   <TableHead className="text-xs">Status de Pagamento</TableHead>
-                  <TableHead className="text-xs text-right w-48">Ações</TableHead>
+                  <TableHead className="text-xs text-right w-64">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {encomendasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
-                      Nenhuma encomenda encontrada.
+                      {viewMode === "concluidos"
+                        ? "Nenhum pedido concluído / entregue encontrado."
+                        : "Nenhuma encomenda ativa encontrada."}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1564,6 +1606,38 @@ export function OrdersView({
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
+                            {ord.status === "entregue" ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditarEncomenda(ord.id, { status: "pendente" });
+                                  toast.success("Pedido reaberto como pendente!");
+                                }}
+                                title="Reabrir pedido para pendente"
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground font-semibold border-border"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                                Reabrir
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditarEncomenda(ord.id, { status: "entregue" });
+                                  toast.success("Pedido marcado como entregue!");
+                                }}
+                                title="Marcar pedido como Entregue"
+                                className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                                Entregue
+                              </Button>
+                            )}
+
                             <Button
                               variant="outline"
                               size="sm"
@@ -1617,7 +1691,9 @@ export function OrdersView({
           <div className="block md:hidden space-y-3">
             {encomendasFiltradas.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground bg-card border border-border rounded-xl">
-                Nenhuma encomenda encontrada.
+                {viewMode === "concluidos"
+                  ? "Nenhum pedido concluído / entregue encontrado."
+                  : "Nenhuma encomenda ativa encontrada."}
               </div>
             ) : (
               encomendasFiltradas.map((ord) => {
@@ -1631,7 +1707,14 @@ export function OrdersView({
                   >
                     <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-2">
                       <div>
-                        <div className="text-xs font-bold text-foreground">{ord.clienteNome}</div>
+                        <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <span>{ord.clienteNome}</span>
+                          {ord.status === "entregue" && (
+                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
+                              ✓ Entregue
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono mt-0.5">
                           <Clock className="w-3 h-3 text-primary" />
                           {ord.dataEntrega.split("-").reverse().join("/")} às {ord.horarioEntrega || "14:00"}
@@ -1660,6 +1743,36 @@ export function OrdersView({
                       <span className="text-[10px] text-primary font-bold">Ver todos os detalhes &gt;</span>
 
                       <div className="flex items-center gap-1">
+                        {ord.status === "entregue" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditarEncomenda(ord.id, { status: "pendente" });
+                              toast.success("Pedido reaberto como pendente!");
+                            }}
+                            className="h-7 px-2 text-xs text-muted-foreground font-semibold"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                            Reabrir
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditarEncomenda(ord.id, { status: "entregue" });
+                              toast.success("Pedido marcado como entregue!");
+                            }}
+                            className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                            Entregue
+                          </Button>
+                        )}
+
                         <Button
                           variant="outline"
                           size="sm"
@@ -2251,7 +2364,32 @@ export function OrdersView({
                           </span>
                         </div>
 
-                        <div className="flex justify-end gap-1 pt-1">
+                        <div className="flex justify-end items-center gap-1 pt-1">
+                          {ord.status === "entregue" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                onEditarEncomenda(ord.id, { status: "pendente" });
+                                toast.success("Pedido reaberto como pendente!");
+                              }}
+                              className="h-7 text-xs px-2 font-semibold text-muted-foreground"
+                            >
+                              <RotateCcw className="w-3 h-3 mr-1" /> Reabrir
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                onEditarEncomenda(ord.id, { status: "entregue" });
+                                toast.success("Pedido marcado como entregue!");
+                              }}
+                              className="h-7 text-xs px-2 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 font-bold border-emerald-500/30"
+                            >
+                              <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Entregue
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -2380,7 +2518,7 @@ export function OrdersView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="enc-data" className="text-xs font-semibold">Data da Entrega / Retirada *</Label>
                 <Input
@@ -2402,6 +2540,21 @@ export function OrdersView({
                   className="h-8 text-xs font-bold"
                   required
                 />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="enc-status" className="text-xs font-semibold">Status do Pedido</Label>
+                <Select value={statusEncomenda} onValueChange={(val: StatusEncomenda) => setStatusEncomenda(val)}>
+                  <SelectTrigger id="enc-status" className="h-8 text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">🟡 Pendente</SelectItem>
+                    <SelectItem value="em_producao">🔵 Em Produção</SelectItem>
+                    <SelectItem value="pronta">🟣 Pronta p/ Entrega</SelectItem>
+                    <SelectItem value="entregue">🟢 Entregue (Concluído)</SelectItem>
+                    <SelectItem value="cancelada">🔴 Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -3219,7 +3372,36 @@ export function OrdersView({
                 <Package className="w-5 h-5 text-primary" /> Detalhes do Pedido
               </span>
               {encomendaDetalhes && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  {encomendaDetalhes.status === "entregue" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await onEditarEncomenda(encomendaDetalhes.id, { status: "pendente" });
+                        setEncomendaDetalhes({ ...encomendaDetalhes, status: "pendente" });
+                        toast.success("Pedido reaberto como pendente!");
+                      }}
+                      className="h-7 px-2 text-xs font-semibold text-muted-foreground border-border"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reabrir
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await onEditarEncomenda(encomendaDetalhes.id, { status: "entregue" });
+                        setEncomendaDetalhes({ ...encomendaDetalhes, status: "entregue" });
+                        toast.success("Pedido marcado como entregue!");
+                      }}
+                      className="h-7 px-2 text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Marcar Entregue
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
