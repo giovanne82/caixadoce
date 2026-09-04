@@ -76,6 +76,167 @@ import { useAuth } from "@/context/auth-context";
 import { type ScanMode } from "@/lib/ocr-service";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+interface CustomInsumoSelectProps {
+  value?: string;
+  placeholder?: string;
+  insumos: InsumoCadastrado[];
+  onSelect: (val: string) => void;
+  className?: string;
+}
+
+function CustomInsumoSelect({
+  value,
+  placeholder = "Vincular insumo...",
+  insumos,
+  onSelect,
+  className = "",
+}: CustomInsumoSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
+
+  const selectedInsumo = insumos.find((i) => i.id === value);
+  const selectedLabel = selectedInsumo
+    ? `${selectedInsumo.nome} (${formatarMoeda(selectedInsumo.custoAtual)})`
+    : value === "_none" || !value
+    ? "Sem vínculo"
+    : placeholder;
+
+  const insumosFiltrados = busca.trim()
+    ? insumos.filter((i) => i.nome.toLowerCase().includes(busca.toLowerCase()))
+    : insumos;
+
+  return (
+    <div className={cn("relative inline-block w-full text-left", className)} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+        className={cn(
+          "w-full h-7 px-2 text-xs bg-background border border-input rounded-md flex items-center justify-between gap-1 shadow-2xs hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors cursor-pointer text-foreground",
+          value && value !== "_none" && "border-purple-400 dark:border-purple-700 bg-purple-50/40 dark:bg-purple-950/20 font-medium"
+        )}
+      >
+        <span className="truncate text-left flex-1">
+          {selectedInsumo ? (
+            <span className="text-purple-900 dark:text-purple-300 font-semibold">{selectedInsumo.nome}</span>
+          ) : (
+            <span className="text-muted-foreground">{selectedLabel}</span>
+          )}
+        </span>
+        <ChevronDown className={cn("w-3.5 h-3.5 shrink-0 opacity-60 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 sm:left-0 top-full mt-1 w-[260px] sm:w-[320px] max-w-[90vw] bg-popover text-popover-foreground border border-purple-200 dark:border-purple-900/80 rounded-xl shadow-xl z-[9999] overflow-hidden animate-in fade-in-0 zoom-in-95"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* FIXO E EM DESTAQUE NO TOPO DA LISTA FLUTUANTE */}
+          <div className="p-1.5 bg-purple-100/90 dark:bg-purple-950/95 border-b border-purple-200 dark:border-purple-800/80 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                setBusca("");
+                onSelect("_novo_insumo");
+              }}
+              className="w-full text-left font-bold text-purple-700 dark:text-purple-300 bg-purple-200/90 hover:bg-purple-300 dark:bg-purple-900 dark:hover:bg-purple-800 p-2 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer active:scale-[0.99] border border-purple-300 dark:border-purple-700 shadow-2xs"
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <Plus className="w-4 h-4 text-purple-600 dark:text-purple-300 shrink-0" />
+                ＋ Cadastrar Novo Insumo
+              </span>
+              <span className="text-[10px] bg-purple-700 text-white px-1.5 py-0.5 rounded-md font-semibold">
+                Rápido
+              </span>
+            </button>
+          </div>
+
+          {insumos.length > 3 && (
+            <div className="p-1.5 border-b border-border bg-muted/20">
+              <input
+                type="text"
+                placeholder="Buscar insumo cadastrado..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full px-2 py-1 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                autoFocus
+              />
+            </div>
+          )}
+
+          <div className="max-h-[190px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setBusca("");
+                onSelect("_none");
+              }}
+              className={cn(
+                "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-accent",
+                (!value || value === "_none") && "bg-accent font-medium text-foreground"
+              )}
+            >
+              <span>Sem vínculo</span>
+              {(!value || value === "_none") && <Check className="w-3.5 h-3.5 text-purple-600" />}
+            </button>
+
+            {insumosFiltrados.map((ins) => (
+              <button
+                key={ins.id}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setBusca("");
+                  onSelect(ins.id);
+                }}
+                className={cn(
+                  "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-purple-50 dark:hover:bg-purple-950/50",
+                  value === ins.id && "bg-purple-100/70 dark:bg-purple-900/40 text-purple-900 dark:text-purple-200 font-semibold"
+                )}
+              >
+                <span className="truncate pr-2">{ins.nome}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
+                    {formatarMoeda(ins.custoAtual)}
+                  </span>
+                  {value === ins.id && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />}
+                </div>
+              </button>
+            ))}
+
+            {insumosFiltrados.length === 0 && (
+              <div className="p-3 text-center text-xs text-muted-foreground">
+                Nenhum insumo encontrado.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ScannerViewProps {
   despesas: DespesaNotaFiscal[];
@@ -1196,32 +1357,18 @@ export function ScannerView({
 
                             <div className="flex items-center gap-2 pt-0.5">
                               <Label className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">Vínculo:</Label>
-                              <Select
+                              <CustomInsumoSelect
                                 value={it.insumoVinculadoId || "_none"}
-                                onValueChange={(val) =>
-                                  handleVincularInsumoNota(
-                                    d.id,
-                                    it.id,
-                                    it.nome,
-                                    d.fornecedorNome,
-                                    val,
-                                    it.valorTotal,
-                                    it.quantidade
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-7 text-xs bg-background">
-                                  <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="_none">Sem vínculo</SelectItem>
-                                  {insumosCadastrados.map((ins) => (
-                                    <SelectItem key={ins.id} value={ins.id}>
-                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                insumos={insumosCadastrados}
+                                onSelect={(val) => {
+                                  if (val === "_novo_insumo") {
+                                    setInsumoParaCadastroRapido({ despesaId: d.id, itemId: it.id, nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
+                                    setModalInsumoOpen(true);
+                                  } else {
+                                    handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
+                                  }
+                                }}
+                              />
                             </div>
                           </div>
                         ))}
@@ -1362,9 +1509,10 @@ export function ScannerView({
                                         {formatarMoeda(it.valorTotal)}
                                       </TableCell>
                                       <TableCell>
-                                        <Select
+                                        <CustomInsumoSelect
                                           value={it.insumoVinculadoId || "_none"}
-                                          onValueChange={(val) => {
+                                          insumos={insumosCadastrados}
+                                          onSelect={(val) => {
                                             if (val === "_novo_insumo") {
                                               setInsumoParaCadastroRapido({ despesaId: d.id, itemId: it.id, nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
                                               setModalInsumoOpen(true);
@@ -1372,25 +1520,7 @@ export function ScannerView({
                                               handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
                                             }
                                           }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs bg-background">
-                                            <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
-                                          </SelectTrigger>
-                                          <SelectContent className="max-h-[280px] w-full min-w-[220px] z-[100] p-1">
-                                            <SelectItem
-                                              value="_novo_insumo"
-                                              className="sticky top-0 z-30 bg-purple-100 dark:bg-purple-950 font-bold text-purple-700 dark:text-purple-300 border-b border-purple-200 dark:border-purple-800 shadow-xs py-2 text-xs cursor-pointer hover:bg-purple-200 dark:hover:bg-purple-900"
-                                            >
-                                              ＋ Cadastrar Novo Insumo
-                                            </SelectItem>
-                                            <SelectItem value="_none">Sem vínculo</SelectItem>
-                                            {insumosCadastrados.map((ins) => (
-                                              <SelectItem key={ins.id} value={ins.id}>
-                                                {ins.nome} ({formatarMoeda(ins.custoAtual)})
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
+                                        />
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1701,9 +1831,10 @@ export function ScannerView({
                               />
                             </TableCell>
                             <TableCell>
-                              <Select
+                              <CustomInsumoSelect
                                 value={item.insumoVinculadoId || "_none"}
-                                onValueChange={(val) => {
+                                insumos={insumosCadastrados}
+                                onSelect={(val) => {
                                   if (val === "_novo_insumo") {
                                     setInsumoParaCadastroRapido({
                                       despesaId: "",
@@ -1720,25 +1851,7 @@ export function ScannerView({
                                     }
                                   }
                                 }}
-                              >
-                                <SelectTrigger className="h-7 text-xs bg-background">
-                                  <SelectValue placeholder="Vincular insumo..." />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-[280px] w-full min-w-[220px] z-[100] p-1">
-                                  <SelectItem
-                                    value="_novo_insumo"
-                                    className="sticky top-0 z-30 bg-purple-100 dark:bg-purple-950 font-bold text-purple-700 dark:text-purple-300 border-b border-purple-200 dark:border-purple-800 shadow-xs py-2 text-xs cursor-pointer hover:bg-purple-200 dark:hover:bg-purple-900"
-                                  >
-                                    ＋ Cadastrar Novo Insumo
-                                  </SelectItem>
-                                  <SelectItem value="_none">Sem vínculo</SelectItem>
-                                  {insumosCadastrados.map((ins) => (
-                                    <SelectItem key={ins.id} value={ins.id}>
-                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              />
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
@@ -1870,9 +1983,10 @@ export function ScannerView({
                               {formatarMoeda(item.valorTotal)}
                             </TableCell>
                             <TableCell>
-                              <Select
+                              <CustomInsumoSelect
                                 value={item.insumoVinculadoId || "_none"}
-                                onValueChange={(val) =>
+                                insumos={insumosCadastrados}
+                                onSelect={(val) =>
                                   handleVincularInsumoNota(
                                     registroDetalhes.id,
                                     item.id,
@@ -1883,19 +1997,7 @@ export function ScannerView({
                                     item.quantidade
                                   )
                                 }
-                              >
-                                <SelectTrigger className="h-7 text-xs bg-background">
-                                  <SelectValue placeholder="Vincular a Insumo..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="_none">Sem vínculo</SelectItem>
-                                  {insumosCadastrados.map((ins) => (
-                                    <SelectItem key={ins.id} value={ins.id}>
-                                      {ins.nome} ({formatarMoeda(ins.custoAtual)})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              />
                             </TableCell>
                           </TableRow>
                         ))
