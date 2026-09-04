@@ -1,4 +1,5 @@
 import { generatePixPayload } from "./pix-utils";
+import { formatarMoeda } from "./cardapio-helpers";
 
 export {
   formatarMoeda,

@@ -60,6 +60,7 @@ import {
   type ProdutoCardapio,
   type KitProduto,
   type ItemListaCompra,
+  type ListaCompras,
   normalizarNomeInsumo,
 } from "@/lib/caixadoce-data";
 import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
@@ -74,26 +75,37 @@ function getValidUuid(userId?: string | null, ownerUserId?: string | null): stri
   return "00000000-0000-0000-0000-000000000000";
 }
 
-function RouteErrorFallback() {
+function RouteErrorFallback({ error, reset }: { error?: Error; reset?: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-center space-y-4">
       <div className="w-16 h-16 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto">
         <Shield className="w-8 h-8" />
       </div>
-      <h2 className="text-xl font-extrabold text-foreground">Sessão de Login Expirada</h2>
+      <h2 className="text-xl font-extrabold text-foreground">Ops! Não foi possível carregar a página</h2>
       <p className="text-xs text-muted-foreground max-w-md">
-        A tentativa de conexão com redes sociais expirou ou foi cancelada. Clique no botão abaixo para recarregar a tela inicial.
+        Ocorreu uma instabilidade momentânea ao carregar os dados. Clique no botão abaixo para recarregar o painel.
       </p>
-      <Button
-        onClick={() => {
-          if (typeof window !== "undefined") {
-            window.location.href = window.location.origin;
-          }
-        }}
-        className="font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white"
-      >
-        Voltar para a Tela Inicial
-      </Button>
+      <div className="flex items-center gap-2">
+        {reset && (
+          <Button
+            onClick={() => reset()}
+            variant="outline"
+            className="font-bold text-xs"
+          >
+            Tentar Novamente
+          </Button>
+        )}
+        <Button
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.location.href = window.location.origin;
+            }
+          }}
+          className="font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white"
+        >
+          Voltar para a Tela Inicial
+        </Button>
+      </div>
     </div>
   );
 }
