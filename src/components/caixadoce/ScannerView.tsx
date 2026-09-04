@@ -50,6 +50,9 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Search,
+  X,
+  Package,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -96,15 +99,21 @@ function CustomInsumoSelect({
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputBuscaRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setBusca("");
       }
     }
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
+      // Auto-focus no input de busca ao abrir
+      setTimeout(() => {
+        inputBuscaRef.current?.focus();
+      }, 50);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -118,9 +127,17 @@ function CustomInsumoSelect({
     ? "Sem vínculo"
     : placeholder;
 
-  const insumosFiltrados = busca.trim()
-    ? insumos.filter((i) => i.nome.toLowerCase().includes(busca.toLowerCase()))
-    : insumos;
+  // Filtragem inteligente multi-token (busca por qualquer parte do nome)
+  const insumosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return insumos;
+    const tokens = termo.split(/\s+/).filter(Boolean);
+    return insumos.filter((i) => {
+      const nomeLower = i.nome.toLowerCase();
+      const fornecedorLower = (i.fornecedor || "").toLowerCase();
+      return tokens.every((tok) => nomeLower.includes(tok) || fornecedorLower.includes(tok));
+    });
+  }, [insumos, busca]);
 
   return (
     <div className={cn("relative inline-block w-full text-left", className)} ref={dropdownRef}>
@@ -137,7 +154,12 @@ function CustomInsumoSelect({
       >
         <span className="truncate text-left flex-1">
           {selectedInsumo ? (
-            <span className="text-purple-900 dark:text-purple-300 font-semibold">{selectedInsumo.nome}</span>
+            <span className="text-purple-900 dark:text-purple-300 font-semibold flex items-center gap-1">
+              <span className="truncate">{selectedInsumo.nome}</span>
+              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 shrink-0">
+                ({formatarMoeda(selectedInsumo.custoAtual)})
+              </span>
+            </span>
           ) : (
             <span className="text-muted-foreground">{selectedLabel}</span>
           )}
@@ -147,11 +169,11 @@ function CustomInsumoSelect({
 
       {open && (
         <div
-          className="absolute right-0 sm:left-0 top-full mt-1 w-[260px] sm:w-[320px] max-w-[90vw] bg-popover text-popover-foreground border border-purple-200 dark:border-purple-900/80 rounded-xl shadow-xl z-[9999] overflow-hidden animate-in fade-in-0 zoom-in-95"
+          className="absolute right-0 sm:left-0 top-full mt-1 w-[280px] sm:w-[340px] max-w-[92vw] bg-popover text-popover-foreground border border-purple-200 dark:border-purple-900/80 rounded-2xl shadow-2xl z-[9999] overflow-hidden animate-in fade-in-0 zoom-in-95 font-sans"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* FIXO E EM DESTAQUE NO TOPO DA LISTA FLUTUANTE */}
-          <div className="p-1.5 bg-purple-100/90 dark:bg-purple-950/95 border-b border-purple-200 dark:border-purple-800/80 shrink-0">
+          {/* 1. TOPO FIXO: BOTAO EM DESTAQUE PARA CADASTRAR NOVO INSUMO */}
+          <div className="p-2 bg-gradient-to-r from-purple-50 to-indigo-50/70 dark:from-purple-950/90 dark:to-slate-900 border-b border-purple-200/80 dark:border-purple-800/60 shrink-0">
             <button
               type="button"
               onClick={(e) => {
@@ -160,32 +182,52 @@ function CustomInsumoSelect({
                 setBusca("");
                 onSelect("_novo_insumo");
               }}
-              className="w-full text-left font-bold text-purple-700 dark:text-purple-300 bg-purple-200/90 hover:bg-purple-300 dark:bg-purple-900 dark:hover:bg-purple-800 p-2 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer active:scale-[0.99] border border-purple-300 dark:border-purple-700 shadow-2xs"
+              className="w-full text-left font-bold text-white bg-purple-600 hover:bg-purple-700 p-2 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer active:scale-[0.99] shadow-sm"
             >
-              <span className="flex items-center gap-1.5 font-bold">
-                <Plus className="w-4 h-4 text-purple-600 dark:text-purple-300 shrink-0" />
-                ＋ Cadastrar Novo Insumo
+              <span className="flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-white shrink-0" />
+                <span>＋ Cadastrar Novo Insumo</span>
               </span>
-              <span className="text-[10px] bg-purple-700 text-white px-1.5 py-0.5 rounded-md font-semibold">
+              <span className="text-[10px] bg-white/20 text-white px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
                 Rápido
               </span>
             </button>
           </div>
 
-          {insumos.length > 3 && (
-            <div className="p-1.5 border-b border-border bg-muted/20">
+          {/* 2. CAMPO DE BUSCA INTELIGENTE (AUTOCOMPLETE INTERATIVO) */}
+          <div className="p-2 border-b border-border bg-card">
+            <div className="relative flex items-center">
+              <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 pointer-events-none" />
               <input
+                ref={inputBuscaRef}
                 type="text"
-                placeholder="Buscar insumo cadastrado..."
+                placeholder="Comece a digitar o nome do insumo..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="w-full px-2 py-1 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
-                autoFocus
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-muted/40 border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:bg-background text-foreground"
               />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  className="absolute right-2 text-muted-foreground hover:text-foreground p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          )}
 
-          <div className="max-h-[190px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+            <div className="flex items-center justify-between pt-1.5 px-0.5 text-[10px] text-muted-foreground">
+              <span>{insumosFiltrados.length} {insumosFiltrados.length === 1 ? "insumo disponível" : "insumos disponíveis"}</span>
+              {busca && (
+                <span className="text-purple-600 dark:text-purple-400 font-semibold">Filtrando por "{busca}"</span>
+              )}
+            </div>
+          </div>
+
+          {/* 3. LISTA DE INSUMOS ROLÁVEL */}
+          <div className="max-h-[220px] overflow-y-auto p-1.5 space-y-1 scrollbar-thin">
+            {/* Opção Sem Vínculo */}
             <button
               type="button"
               onClick={() => {
@@ -194,11 +236,11 @@ function CustomInsumoSelect({
                 onSelect("_none");
               }}
               className={cn(
-                "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-accent",
-                (!value || value === "_none") && "bg-accent font-medium text-foreground"
+                "w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-muted",
+                (!value || value === "_none") && "bg-muted font-bold text-foreground"
               )}
             >
-              <span>Sem vínculo</span>
+              <span className="text-muted-foreground italic">Sem vínculo (Não mapear)</span>
               {(!value || value === "_none") && <Check className="w-3.5 h-3.5 text-purple-600" />}
             </button>
 
@@ -212,23 +254,44 @@ function CustomInsumoSelect({
                   onSelect(ins.id);
                 }}
                 className={cn(
-                  "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-between hover:bg-purple-50 dark:hover:bg-purple-950/50",
-                  value === ins.id && "bg-purple-100/70 dark:bg-purple-900/40 text-purple-900 dark:text-purple-200 font-semibold"
+                  "w-full text-left px-2.5 py-2 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-between border border-transparent hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:border-purple-200 dark:hover:border-purple-800",
+                  value === ins.id && "bg-purple-100/80 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700 text-purple-900 dark:text-purple-200 font-semibold"
                 )}
               >
-                <span className="truncate pr-2">{ins.nome}</span>
+                <div className="min-w-0 pr-2">
+                  <div className="truncate font-semibold text-foreground text-xs">{ins.nome}</div>
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Package className="w-2.5 h-2.5 shrink-0" />
+                    <span>Embalagem: {ins.qtdEmbalagemOriginal || 1} {ins.unidadeMedida}</span>
+                    {ins.fornecedor && <span>• {ins.fornecedor}</span>}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
+                  <span className="font-extrabold font-mono text-emerald-600 dark:text-emerald-400 text-xs bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
                     {formatarMoeda(ins.custoAtual)}
                   </span>
-                  {value === ins.id && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />}
+                  {value === ins.id && <Check className="w-4 h-4 text-purple-600 dark:text-purple-300 shrink-0" />}
                 </div>
               </button>
             ))}
 
             {insumosFiltrados.length === 0 && (
-              <div className="p-3 text-center text-xs text-muted-foreground">
-                Nenhum insumo encontrado.
+              <div className="p-3 text-center space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Nenhum insumo encontrado para "<strong>{busca}</strong>".
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setBusca("");
+                    onSelect("_novo_insumo");
+                  }}
+                  className="w-full py-1.5 px-2 bg-purple-100 dark:bg-purple-950/60 hover:bg-purple-200 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-bold transition-colors"
+                >
+                  ＋ Cadastrar "{busca}" agora
+                </button>
               </div>
             )}
           </div>
