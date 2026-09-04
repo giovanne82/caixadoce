@@ -550,11 +550,17 @@ export function CardapioLojaView() {
     return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
   }, [carrinho]);
 
-  // 1. Etapa de Verificação: Valida formulário e abre o Modal de Resumo
-  const handleVerResumo = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clienteNome || !clienteWhatsapp || !dataEntrega || carrinho.length === 0) {
+  // 1. Gravação Automática na Base de Dados e Abertura do Modal de Confirmação & Pagamento
+  const handleConfirmarPedido = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!clienteNome.trim() || !clienteWhatsapp.trim() || !dataEntrega || carrinho.length === 0) {
       toast.error("Preencha seu nome, WhatsApp e data para entrega.");
+      return;
+    }
+
+    if (tipoEntrega === "delivery" && !enderecoEntrega.trim()) {
+      toast.error("Informe o endereço completo para entrega.");
       return;
     }
 
@@ -569,11 +575,6 @@ export function CardapioLojaView() {
       toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
     }
 
-    setResumoModalOpen(true);
-  };
-
-  // 2. Gravação Automática na Base de Dados ao Confirmar
-  const handleConfirmarPedido = async () => {
     setSalvandoPedido(true);
     try {
       const pedidoId = crypto.randomUUID();
@@ -645,56 +646,34 @@ export function CardapioLojaView() {
       }
 
       // Tentar gerar Pix Payload para a chave Pix da loja
-      if (lojaInfo?.chavePix && totalCarrinho > 0) {
+      let pixPayloadGerado = "";
+      const pixKeyToUse = lojaInfo?.chavePix || "";
+      if (pixKeyToUse && valTotalCarrinho > 0) {
         try {
-          const pixPayload = generatePixPayload({
-            pixKey: lojaInfo.chavePix,
-            merchantName: lojaInfo.nome || "CaixaDoce",
-            merchantCity: (lojaInfo as any).cidade || "SAO PAULO",
-            amount: totalCarrinho,
+          pixPayloadGerado = generatePixPayload({
+            pixKey: pixKeyToUse,
+            merchantName: lojaInfo?.nome || "CaixaDoce",
+            merchantCity: lojaInfo?.cidade || "SAO PAULO",
+            amount: valTotalCarrinho,
             txid: `PED${Date.now().toString().slice(-8)}`,
             description: `Pedido ${clienteNome.slice(0, 15)}`,
           });
+          setPixCopiaCola(pixPayloadGerado);
 
-          if (pixPayload && typeof navigator !== "undefined" && navigator.clipboard) {
-            navigator.clipboard.writeText(pixPayload);
+          if (pixPayloadGerado && typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(pixPayloadGerado);
             setPixCopiado(true);
           }
-        } catch {}
+        } catch (e) {
+          console.warn("Aviso ao gerar QR Code / Pix Copia e Cola:", e);
+        }
       }
 
       setUltimoPedidoId(pedidoId);
-      setResumoModalOpen(false);
       setCartOpen(false);
       setPedidoConcluido(true);
       setSucessoModalOpen(true);
       toast.success("Pedido gravado com sucesso no sistema!");
-
-      if (metodoPagamento === "cartao") {
-        try {
-          const session = await createStripeSession({
-            orderId: pedidoId,
-            establishmentCode: code,
-            customerName: clienteNome,
-            customerWhatsapp: clienteWhatsapp,
-            items: carrinho.map((it) => ({
-              name: it.produto.nome,
-              quantity: it.quantidade,
-              unitPrice: it.produto.preco,
-            })),
-            subtotal: totalCarrinho,
-            installments: parcelasSelecionadas,
-            repassarTaxa: stripeConfig.repassarTaxaStripe,
-            stripeAccountId: stripeConfig.accountId,
-          });
-
-          setTimeout(() => {
-            window.open(session.checkoutUrl, "_blank");
-          }, 1000);
-        } catch (err) {
-          console.warn("Aviso ao criar sessão do Stripe:", err);
-        }
-      }
     } catch (err: any) {
       toast.error(`Erro ao finalizar pedido: ${err?.message || "Ocorreu uma falha na gravação."}`);
     } finally {
@@ -702,9 +681,9 @@ export function CardapioLojaView() {
     }
   };
 
-  // 3. Envio Opcional no WhatsApp
+  // 2. Envio Formatado no WhatsApp
   const handleEnviarWhatsApp = () => {
-    const dataFormatada = dataEntrega.split("-").reverse().join("/");
+    const dataFormatada = dataEntrega ? dataEntrega.split("-").reverse().join("/") : "";
     const resumoItens = carrinho
       .map((item) => `• ${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
       .join("\n");
@@ -715,7 +694,10 @@ export function CardapioLojaView() {
 
     let blocoPixInfo = "";
     if (lojaInfo?.chavePix && totalCarrinho > 0) {
-      blocoPixInfo = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
+      blocoPixInfo = `\n\n💳 *PAGAMENTO VIA PIX*\n💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
+      if (pixCopiaCola) {
+        blocoPixInfo += `\n📋 *Pix Copia e Cola:*\n${pixCopiaCola}`;
+      }
     }
 
     const msg = `🎂 *CONFIRMAÇÃO DE PEDIDO ONLINE - CARDÁPIO DIGITAL* 🎂
@@ -727,7 +709,8 @@ Olá! Confirmei meu pedido pelo cardápio digital (Código: *${code}*):
 
 📅 *Data Prevista:* ${dataFormatada} às ${horarioEntrega}
 📍 *Modalidade:* ${modalidade}
-${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}🛒 *Itens do Pedido:*
+${observacoes ? `📝 *Observações:* ${observacoes}\n` : ""}
+🛒 *Itens do Pedido:*
 ${resumoItens}
 
 💰 *Valor Total:* ${formatarMoeda(totalCarrinho)}${blocoPixInfo}
@@ -745,6 +728,8 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
   const handleConcluirELimpar = () => {
     setSucessoModalOpen(false);
     setCarrinho([]);
+    setPixCopiado(false);
+    setPixCopiaCola("");
   };
 
   return (
@@ -1024,7 +1009,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 </div>
 
                 {/* Formulário do Cliente */}
-                <form id="form-checkout" onSubmit={handleVerResumo} className="space-y-3 pt-2 border-t border-border/60">
+                <form id="form-checkout" onSubmit={handleConfirmarPedido} className="space-y-3 pt-2 border-t border-border/60">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
                     Dados para Encomenda
                   </h4>
@@ -1167,74 +1152,95 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 disabled={salvandoPedido}
                 className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
               >
-                <FileText className="w-4 h-4" /> Ver dados do Pedido
+                {salvandoPedido ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gravando Pedido...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confirmar Pedido
+                  </>
+                )}
               </Button>
             </SheetFooter>
           )}
         </SheetContent>
       </Sheet>
 
-      {/* MODAL 1: RESUMO DO PEDIDO ANTES DE CONFIRMAR */}
-      <Dialog open={resumoModalOpen} onOpenChange={setResumoModalOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
-          <DialogHeader className="space-y-1 text-left border-b border-border pb-3">
-            <DialogTitle className="text-base sm:text-lg font-black text-foreground flex items-center gap-2">
-              <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
-              Resumo e Confirmação da Encomenda
+      {/* MODAL DE CONFIRMAÇÃO E PAGAMENTO */}
+      <Dialog
+        open={sucessoModalOpen}
+        onOpenChange={(open) => {
+          if (!open) handleConcluirELimpar();
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
+          {/* Cabeçalho de Sucesso */}
+          <DialogHeader className="text-center space-y-2 border-b border-border/60 pb-3">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-inner ring-4 ring-emerald-500/10">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <DialogTitle className="text-lg sm:text-xl font-black text-foreground">
+              🎉 Pedido Registrado com Sucesso!
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Confira com atenção todos os detalhes do seu pedido antes de salvar na base de dados da confeitaria.
+            <DialogDescription className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Sua encomenda foi gravada diretamente no sistema da confeitaria <strong>{lojaInfo?.nome || "CaixaDoce"}</strong>.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Bloco 1: Dados do Cliente */}
-            <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between font-bold text-purple-900 dark:text-purple-300">
-                <span className="flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-purple-600" />
-                  Dados do Cliente
-                </span>
-                <Badge variant="outline" className="text-[10px] uppercase border-purple-300">
-                  {code}
-                </Badge>
-              </div>
-              <p className="text-foreground font-medium"><strong>Nome:</strong> {clienteNome}</p>
-              <p className="text-foreground font-mono"><strong>WhatsApp:</strong> {clienteWhatsapp}</p>
+          {/* RESUMO COMPLETO DO PEDIDO */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold border-b border-border/40 pb-1">
+              <span className="flex items-center gap-1.5 text-foreground">
+                <FileText className="w-4 h-4 text-purple-600" />
+                Resumo do Pedido
+              </span>
+              <Badge variant="outline" className="font-mono text-[10px] bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200">
+                Loja {code}
+              </Badge>
             </div>
 
-            {/* Bloco 2: Entrega e Agendamento */}
-            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-1.5 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-300">
-                <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                Agendamento e Entrega
-              </div>
-              <p className="text-foreground font-medium">
-                <strong>Data Prevista:</strong> {dataEntrega ? dataEntrega.split("-").reverse().join("/") : ""} às {horarioEntrega}
-              </p>
-              <p className="text-foreground font-medium">
-                <strong>Modalidade:</strong> {tipoEntrega === "delivery" ? `🚚 Entrega (${enderecoEntrega || "A combinar"})` : "🏬 Retirada no Balcão"}
-              </p>
-              {observacoes && (
-                <p className="text-foreground font-medium italic">
-                  <strong>Obs:</strong> {observacoes}
+            {/* Dados do Cliente e Agendamento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 space-y-1">
+                <p className="font-bold text-foreground flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-purple-600" /> {clienteNome}
                 </p>
-              )}
+                <p className="text-muted-foreground font-mono text-[11px]">{clienteWhatsapp}</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 space-y-1">
+                <p className="font-bold text-foreground flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  {dataEntrega ? dataEntrega.split("-").reverse().join("/") : ""} às {horarioEntrega}
+                </p>
+                <p className="text-muted-foreground text-[11px] truncate">
+                  {tipoEntrega === "delivery" ? `🚚 Delivery: ${enderecoEntrega || "A combinar"}` : "🏬 Retirada no Balcão"}
+                </p>
+              </div>
             </div>
 
-            {/* Bloco 3: Itens do Pedido */}
+            {observacoes && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-300">
+                <strong>Obs:</strong> {observacoes}
+              </div>
+            )}
+
+            {/* Itens do Pedido */}
             <div className="space-y-1.5">
-              <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <ShoppingBag className="w-3.5 h-3.5 text-purple-600" />
-                Itens Selecionados ({totalItensCarrinho})
-              </h4>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto p-1 bg-stone-100 dark:bg-stone-900 rounded-xl border border-border/60">
+                Itens ({totalItensCarrinho})
+              </p>
+              <div className="space-y-1 max-h-36 overflow-y-auto p-1.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-border/60">
                 {carrinho.map((item) => (
-                  <div key={item.produto.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/40">
-                    <span className="font-semibold text-foreground truncate max-w-[200px]">
+                  <div key={item.produto.id} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-background border border-border/40">
+                    <span className="font-semibold text-foreground truncate max-w-[220px]">
                       {item.quantidade}x {item.produto.nome}
                     </span>
-                    <span className="font-bold font-mono text-foreground">
+                    <span className="font-bold font-mono text-foreground shrink-0">
                       {formatarMoeda(item.produto.preco * item.quantidade)}
                     </span>
                   </div>
@@ -1242,102 +1248,108 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               </div>
             </div>
 
-            {/* Bloco 4: Total do Pedido */}
+            {/* Valor Total */}
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-bold">
-              <span className="text-emerald-900 dark:text-emerald-300">Valor Total do Pedido:</span>
+              <span className="text-emerald-900 dark:text-emerald-300 font-bold">Valor Total a Pagar:</span>
               <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
                 {formatarMoeda(totalCarrinho)}
               </span>
             </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setResumoModalOpen(false)}
-              disabled={salvandoPedido}
-              className="w-full sm:w-auto text-xs"
-            >
-              Voltar e Editar
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleConfirmarPedido}
-              disabled={salvandoPedido}
-              className="w-full sm:w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-10 shadow-md flex items-center justify-center gap-2"
-            >
-              {salvandoPedido ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Gravando Pedido...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Confirmar Pedido
-                </>
+          {/* BLOCO PIX COPIA E COLA */}
+          <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                Pagamento via Pix Copia e Cola
+              </span>
+              {lojaInfo?.chavePix && (
+                <span className="text-[10px] font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded-full">
+                  Chave: {lojaInfo.chavePix}
+                </span>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </div>
 
-      {/* MODAL 2: CONFIRMAÇÃO E WHATSAPP OPCIONAL */}
-      <Dialog open={sucessoModalOpen} onOpenChange={(open) => {
-        if (!open) handleConcluirELimpar();
-      }}>
-        <DialogContent className="max-w-md p-6 rounded-2xl text-center space-y-4">
-          <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-            <CheckCircle2 className="w-8 h-8" />
-          </div>
-
-          <div className="space-y-1">
-            <DialogTitle className="text-lg font-black text-foreground">
-              🎉 Pedido Confirmado com Sucesso!
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Sua encomenda foi gravada diretamente na base de dados da confeitaria <strong>{lojaInfo?.nome || "CaixaDoce"}</strong>.
-            </DialogDescription>
-          </div>
-
-          {pixCopiado && (
-            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-900 dark:text-purple-300 font-medium text-left space-y-1">
-              <p className="font-bold flex items-center gap-1">
-                <QrCode className="w-3.5 h-3.5 text-purple-600" />
-                Pix Copia e Cola Gerado!
+            {pixCopiaCola ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={pixCopiaCola}
+                    className="font-mono text-[11px] h-9 bg-background select-all border-purple-300 focus-visible:ring-purple-400"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (typeof navigator !== "undefined" && navigator.clipboard) {
+                        navigator.clipboard.writeText(pixCopiaCola);
+                        setPixCopiado(true);
+                        toast.success("Código Pix Copia e Cola copiado!");
+                      }
+                    }}
+                    className="h-9 px-3 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1 shadow-xs"
+                  >
+                    {pixCopiado ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" /> Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" /> Copiar Pix
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-purple-700 dark:text-purple-300">
+                  Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> e cole o código acima para realizar o pagamento.
+                </p>
+              </div>
+            ) : lojaInfo?.chavePix ? (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
+                <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
+                  {lojaInfo.chavePix}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(lojaInfo.chavePix || "");
+                      setPixCopiado(true);
+                      toast.success("Chave Pix copiada!");
+                    }
+                  }}
+                  className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
+                >
+                  {pixCopiado ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {pixCopiado ? "Copiada!" : "Copiar Chave"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic">
+                Chave Pix não cadastrada no perfil da loja. Entre em contato pelo WhatsApp para obter os dados de pagamento.
               </p>
-              <p>O código Pix foi copiado para a sua área de transferência. Cole-o no app do seu banco para pagamento.</p>
-            </div>
-          )}
-
-          <div className="p-3 rounded-xl bg-stone-100 dark:bg-stone-900 border border-border text-xs space-y-1 text-left">
-            <div className="flex justify-between font-mono font-bold text-muted-foreground text-[10px]">
-              <span>LOJA: {code}</span>
-              <span className="text-emerald-600 dark:text-emerald-400">PENDENTE</span>
-            </div>
-            <p className="font-bold text-foreground">{clienteNome}</p>
-            <p className="font-mono text-emerald-600 dark:text-emerald-400 font-black text-sm">
-              Total: {formatarMoeda(totalCarrinho)}
-            </p>
+            )}
           </div>
 
-          <div className="space-y-2 pt-2">
+          {/* BOTÕES DE AÇÃO */}
+          <div className="space-y-2 pt-2 border-t border-border/60">
             <Button
               onClick={handleEnviarWhatsApp}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-11 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm"
             >
               <MessageCircle className="w-4 h-4" />
-              Enviar Resumo no WhatsApp (Opcional)
+              Enviar resumo pelo WhatsApp
             </Button>
 
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={handleConcluirELimpar}
-              className="w-full text-xs text-muted-foreground hover:text-foreground"
+              className="w-full text-xs font-bold text-muted-foreground hover:text-foreground h-9 rounded-xl"
             >
-              Concluir e Voltar ao Cardápio
+              Concluir e Limpar Carrinho
             </Button>
           </div>
         </DialogContent>
