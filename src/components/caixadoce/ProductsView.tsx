@@ -52,6 +52,8 @@ import {
   MessageCircle,
   Music,
   UtensilsCrossed,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";

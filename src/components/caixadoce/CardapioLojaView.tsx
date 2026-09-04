@@ -57,6 +57,7 @@ import {
   MapPin,
   ChevronDown,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import {
   formatarMoeda,
