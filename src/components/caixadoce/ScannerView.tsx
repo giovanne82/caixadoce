@@ -243,6 +243,53 @@ export function ScannerView({
     quantidade: number;
   } | null>(null);
 
+  const setInsumoParaCadastroRapido = (
+    data: {
+      nome: string;
+      valor?: number;
+      despesaId?: string;
+      itemId?: string;
+      fornecedorNome?: string;
+      quantidade?: number;
+    },
+    itemContext?: {
+      despesaId: string;
+      itemId: string;
+      itemNome: string;
+      fornecedorNome: string;
+      valorTotal: number;
+      quantidade: number;
+    }
+  ) => {
+    const despesaId = itemContext?.despesaId ?? data.despesaId ?? "";
+    const itemId = itemContext?.itemId ?? data.itemId ?? "";
+    const itemNome = itemContext?.itemNome ?? data.nome ?? "";
+    const fornecedorNome = itemContext?.fornecedorNome ?? data.fornecedorNome ?? "";
+    const qtd = itemContext?.quantidade ?? data.quantidade ?? 1;
+    const valTotal = itemContext?.valorTotal ?? ((data.valor || 0) * qtd);
+
+    if (itemNome || itemId) {
+      setTargetItemParaVincular({
+        despesaId,
+        itemId,
+        itemNome,
+        fornecedorNome,
+        valorTotal: valTotal,
+        quantidade: qtd,
+      });
+    }
+
+    const nomeLimpo = normalizarNomeInsumo(itemNome);
+    setNovoInsumoNome(nomeLimpo);
+    const valUnit = data.valor && data.valor > 0 ? data.valor : (valTotal > 0 ? valTotal / qtd : 0);
+    setNovoInsumoCustoStr(valUnit > 0 ? formatarMoeda(valUnit) : "");
+    setNovoInsumoQtdEmb(String(qtd));
+    setNovoInsumoUnidade("un");
+    setNovoInsumoFornecedor(fornecedorNome);
+    setModalCadastroRapidoOpen(true);
+  };
+  const setModalInsumoOpen = (open: boolean) => setModalCadastroRapidoOpen(open);
+
   const handleAbrirCadastroRapidoInsumo = (itemContext: {
     despesaId: string;
     itemId: string;
@@ -251,19 +298,18 @@ export function ScannerView({
     valorTotal: number;
     quantidade: number;
   }) => {
-    setTargetItemParaVincular(itemContext);
-    const nomeLimpo = normalizarNomeInsumo(itemContext.itemNome);
-    setNovoInsumoNome(nomeLimpo);
-
     const qtd = itemContext.quantidade > 0 ? itemContext.quantidade : 1;
     const valUnit = itemContext.valorTotal > 0 ? parseFloat((itemContext.valorTotal / qtd).toFixed(2)) : itemContext.valorTotal;
 
-    setNovoInsumoQtdEmb(String(qtd));
-    setNovoInsumoUnidade("un");
-    setNovoInsumoCustoStr(valUnit > 0 ? formatarMoeda(valUnit) : "");
-    setNovoInsumoFornecedor(itemContext.fornecedorNome || "");
-
-    setModalCadastroRapidoOpen(true);
+    setInsumoParaCadastroRapido(
+      {
+        nome: itemContext.itemNome,
+        valor: valUnit,
+        quantidade: qtd,
+        fornecedorNome: itemContext.fornecedorNome,
+      },
+      itemContext
+    );
   };
 
   const handleSalvarCadastroRapidoInsumo = async (e: React.FormEvent) => {
@@ -1320,7 +1366,7 @@ export function ScannerView({
                                           value={it.insumoVinculadoId || "_none"}
                                           onValueChange={(val) => {
                                             if (val === "_novo_insumo") {
-                                              setInsumoParaCadastroRapido({ nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
+                                              setInsumoParaCadastroRapido({ despesaId: d.id, itemId: it.id, nome: it.nome, valor: it.valorTotal / (it.quantidade || 1) });
                                               setModalInsumoOpen(true);
                                             } else {
                                               handleVincularInsumoNota(d.id, it.id, it.nome, d.fornecedorNome, val, it.valorTotal, it.quantidade);
@@ -1655,10 +1701,20 @@ export function ScannerView({
                               <Select
                                 value={item.insumoVinculadoId || "_none"}
                                 onValueChange={(val) => {
-                                  const insObj = insumosCadastrados.find((i) => i.id === val);
-                                  handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
-                                  if (insObj) {
-                                    handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
+                                  if (val === "_novo_insumo") {
+                                    setInsumoParaCadastroRapido({
+                                      despesaId: "",
+                                      itemId: item.id,
+                                      nome: item.nome,
+                                      valor: item.valorTotal / (item.quantidade || 1)
+                                    });
+                                    setModalInsumoOpen(true);
+                                  } else {
+                                    const insObj = insumosCadastrados.find((i) => i.id === val);
+                                    handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
+                                    if (insObj) {
+                                      handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
+                                    }
                                   }
                                 }}
                               >
@@ -1666,6 +1722,9 @@ export function ScannerView({
                                   <SelectValue placeholder="Vincular insumo..." />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value="_novo_insumo" className="font-bold text-purple-700 dark:text-purple-300 border-b border-purple-100 dark:border-purple-900/40">
+                                    ＋ Cadastrar Novo Insumo
+                                  </SelectItem>
                                   <SelectItem value="_none">Sem vínculo</SelectItem>
                                   {insumosCadastrados.map((ins) => (
                                     <SelectItem key={ins.id} value={ins.id}>
