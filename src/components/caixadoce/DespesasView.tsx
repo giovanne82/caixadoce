@@ -75,6 +75,7 @@ import {
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
 import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
+import { InsumosView } from "./InsumosView";
 import { toast } from "sonner";
 
 // Função para gerar nome padrão automático no formato: Lista DD/MM/AAAA - #XXXX
@@ -113,6 +114,9 @@ export function DespesasView({
   listasCompras: listasProp,
   onAtualizarListasCompras,
 }: DespesasViewProps) {
+  // Sub-Aba Interna do Módulo de Compras (Listas de Compras vs Cadastro de Insumos)
+  const [subAba, setSubAba] = useState<"listas" | "insumos">("listas");
+
   // Estado local das Listas de Compras
   const [listas, setListas] = useState<ListaCompras[]>(() => {
     if (listasProp && listasProp.length > 0) return listasProp;
@@ -546,239 +550,268 @@ export function DespesasView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Lista de Compras <ShoppingCart className="w-6 h-6 text-primary" />
+            Gestão de Compras &amp; Insumos <ShoppingCart className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Crie novas listas, inclua insumos e vincule notinhas fiscais direto em cada card.
+            Crie listas de compras, controle matérias-primas e gerencie seus insumos em um só lugar.
           </p>
+        </div>
+
+        {/* Sub-Aba Navigation Buttons */}
+        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-2xl border border-border w-full sm:w-fit shrink-0">
+          <Button
+            type="button"
+            variant={subAba === "listas" ? "default" : "ghost"}
+            onClick={() => setSubAba("listas")}
+            className={`flex-1 sm:flex-initial font-extrabold text-xs h-9 px-4 rounded-xl transition-all ${
+              subAba === "listas" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4 mr-1.5" />
+            <span>Listas de Compras</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant={subAba === "insumos" ? "default" : "ghost"}
+            onClick={() => setSubAba("insumos")}
+            className={`flex-1 sm:flex-initial font-extrabold text-xs h-9 px-4 rounded-xl transition-all ${
+              subAba === "insumos" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <UtensilsCrossed className="w-4 h-4 mr-1.5" />
+            <span>Cadastro de Insumos</span>
+          </Button>
         </div>
       </div>
 
+      {subAba === "insumos" ? (
+        <InsumosView estabelecimentoCodigo={estabelecimentoCodigo} />
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* 1. BOX SIMPLIFICADO NO INÍCIO: NOME DA LISTA E BOTÃO CRIAR LISTA */}
+          {/* ========================================================================= */}
+          <Card className="border-2 border-primary/40 shadow-lg bg-card overflow-hidden">
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="nome-lista-box" className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-primary" /> Digite o Nome da Lista de Compras:
+                </Label>
+                <Input
+                  id="nome-lista-box"
+                  placeholder="Ex: Compras de Sexta, Festa da Maria, Estoque da Semana..."
+                  value={nomeNovaListaInput}
+                  onChange={(e) => setNomeNovaListaInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleIniciarCriacaoLista();
+                    }
+                  }}
+                  className="h-11 text-sm font-medium border-border"
+                />
+              </div>
 
-
-      {/* ========================================================================= */}
-      {/* 1. BOX SIMPLIFICADO NO INÍCIO: NOME DA LISTA E BOTÃO CRIAR LISTA */}
-      {/* ========================================================================= */}
-      <Card className="border-2 border-primary/40 shadow-lg bg-card overflow-hidden">
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="nome-lista-box" className="text-sm font-extrabold text-foreground flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-primary" /> Digite o Nome da Lista de Compras:
-            </Label>
-            <Input
-              id="nome-lista-box"
-              placeholder="Ex: Compras de Sexta, Festa da Maria, Estoque da Semana..."
-              value={nomeNovaListaInput}
-              onChange={(e) => setNomeNovaListaInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleIniciarCriacaoLista();
-                }
-              }}
-              className="h-11 text-sm font-medium border-border"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <Button
-              type="button"
-              onClick={handleIniciarCriacaoLista}
-              className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
-            >
-              <Plus className="w-5 h-5 mr-2" /> Criar Lista Manual
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => {
-                setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
-                setModalConsolidarOpen(true);
-              }}
-              variant="outline"
-              className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
-            >
-              <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
-              <span>⚡ Ver Listas de Encomendas dos Clientes</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ========================================================================= */}
-      {/* 2. EXIBIÇÃO DAS LISTAS DE COMPRAS (CARDS INDIVIDUAIS COM RECURSOS INTEGRADOS) */}
-      {/* ========================================================================= */}
-      <div className="space-y-4">
-        {listasFiltradas.length === 0 ? (
-          <Card className="border-dashed border-2 p-10 text-center text-muted-foreground space-y-2">
-            <p className="text-sm font-semibold">Nenhuma lista de compras encontrada.</p>
-            <p className="text-xs">Digite o nome no box acima para criar sua primeira lista!</p>
-          </Card>
-        ) : (
-          listasFiltradas.map((lista) => {
-            const isExpanded = expandedListaId === lista.id;
-            const totalItens = lista.itens.length;
-            const compradosCount = lista.itens.filter((i) => i.comprado).length;
-            const percentual = totalItens > 0 ? Math.round((compradosCount / totalItens) * 100) : 0;
-
-            return (
-              <Card
-                key={lista.id}
-                className={`border-2 transition-all shadow-md bg-card overflow-hidden ${
-                  isExpanded ? "border-primary/50 ring-2 ring-primary/20" : "border-border hover:border-primary/30"
-                }`}
-              >
-                {/* CABEÇALHO DO CARD (CLICÁVEL PARA EXPANDIR E MOSTRAR DETALHES) */}
-                <div
-                  onClick={() => setExpandedListaId(isExpanded ? null : lista.id)}
-                  className="p-4 cursor-pointer select-none flex flex-wrap items-center justify-between gap-3 bg-muted/20 hover:bg-muted/40 transition-colors border-b border-border/50"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <Button
+                  type="button"
+                  onClick={handleIniciarCriacaoLista}
+                  className="w-full h-11 font-extrabold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-xl text-white ${lista.status === "ativa" ? "bg-primary" : "bg-emerald-600"}`}>
-                      <Receipt className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-black text-foreground">{lista.nome}</h3>
-                        <Badge
-                          variant={lista.status === "ativa" ? "default" : "secondary"}
-                          className={
-                            lista.status === "ativa"
-                              ? "bg-[#F3EEF9] text-[#5B478E] border border-[#8E7CC3]/30 font-extrabold text-[10px]"
-                              : "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-extrabold text-[10px]"
-                          }
-                        >
-                          {lista.status === "ativa" ? "Ativa" : "Concluída"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-                        {compradosCount} de {totalItens} itens comprados ({percentual}%) • Criada em {new Date(lista.createdAt).toLocaleDateString("pt-BR")}
-                      </p>
-                    </div>
-                  </div>
+                  <Plus className="w-5 h-5 mr-2" /> Criar Lista Manual
+                </Button>
 
-                  <div className="flex items-center gap-3">
-                    <div className="hidden sm:block w-28">
-                      <Progress value={percentual} className="h-2" />
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
-                      {isExpanded ? <ChevronUp className="w-5 h-5 text-primary" /> : <ChevronDown className="w-5 h-5" />}
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setPedidosSelecionadosIds(encomendasAtivas.map((e) => e.id));
+                    setModalConsolidarOpen(true);
+                  }}
+                  variant="outline"
+                  className="w-full h-11 font-extrabold shadow-sm border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-sm gap-2"
+                >
+                  <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>⚡ Ver Listas de Encomendas dos Clientes</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-                {/* DETALHES EXPANDIDOS DA LISTA */}
-                {isExpanded && (
-                  <CardContent className="p-5 space-y-4 bg-card animate-fade-in">
-                    {/* BARRA DE AÇÕES DA LISTA */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAbrirEdicaoLista(lista);
-                          }}
-                          className="h-8 text-xs font-bold border-primary/40 text-primary hover:bg-primary/10"
-                        >
-                          <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Editar Lista
-                        </Button>
+          {/* ========================================================================= */}
+          {/* 2. EXIBIÇÃO DAS LISTAS DE COMPRAS (CARDS INDIVIDUAIS COM RECURSOS INTEGRADOS) */}
+          {/* ========================================================================= */}
+          <div className="space-y-4">
+            {listasFiltradas.length === 0 ? (
+              <Card className="border-dashed border-2 p-10 text-center text-muted-foreground space-y-2">
+                <p className="text-sm font-semibold">Nenhuma lista de compras encontrada.</p>
+                <p className="text-xs">Digite o nome no box acima para criar sua primeira lista!</p>
+              </Card>
+            ) : (
+              listasFiltradas.map((lista) => {
+                const isExpanded = expandedListaId === lista.id;
+                const totalItens = lista.itens.length;
+                const compradosCount = lista.itens.filter((i) => i.comprado).length;
+                const percentual = totalItens > 0 ? Math.round((compradosCount / totalItens) * 100) : 0;
 
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEnviarWhatsAppLista(lista);
-                          }}
-                          className="h-8 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 mr-1.5 fill-white text-emerald-600" /> Enviar por WhatsApp
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {lista.status === "ativa" ? (
-                          <Button
-                            size="sm"
-                            onClick={() => handleConcluirLista(lista.id)}
-                            className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Concluir Lista
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleReabrirLista(lista.id)}
-                            className="h-8 text-xs font-bold"
-                          >
-                            <ArchiveRestore className="w-3.5 h-3.5 mr-1" /> Reabrir Lista
-                          </Button>
-                        )}
-
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            if (confirm(`Deseja excluir a lista "${lista.nome}"?`)) {
-                              handleExcluirLista(lista.id);
-                            }
-                          }}
-                          className="h-8 text-xs text-rose-600 hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* LISTAGEM DOS ITENS DA LISTA */}
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        Itens da Lista ({totalItens}):
-                      </Label>
-
-                      {lista.itens.length === 0 ? (
-                        <p className="text-xs text-muted-foreground py-4 text-center italic">
-                          Nenhum produto nesta lista. Clique em "Editar Lista" para adicionar!
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {lista.itens.map((it) => (
-                            <div
-                              key={it.id}
-                              onClick={() => handleToggleItemComprado(lista.id, it.id)}
-                              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none group ${
-                                it.comprado
-                                  ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 line-through opacity-80"
-                                  : "bg-muted/30 text-foreground border-border hover:border-primary/40 shadow-2xs"
-                              }`}
+                return (
+                  <Card
+                    key={lista.id}
+                    className={`border-2 transition-all shadow-md bg-card overflow-hidden ${
+                      isExpanded ? "border-primary/50 ring-2 ring-primary/20" : "border-border hover:border-primary/30"
+                    }`}
+                  >
+                    {/* CABEÇALHO DO CARD (CLICÁVEL PARA EXPANDIR E MOSTRAR DETALHES) */}
+                    <div
+                      onClick={() => setExpandedListaId(isExpanded ? null : lista.id)}
+                      className="p-4 cursor-pointer select-none flex flex-wrap items-center justify-between gap-3 bg-muted/20 hover:bg-muted/40 transition-colors border-b border-border/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl text-white ${lista.status === "ativa" ? "bg-primary" : "bg-emerald-600"}`}>
+                          <Receipt className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-black text-foreground">{lista.nome}</h3>
+                            <Badge
+                              variant={lista.status === "ativa" ? "default" : "secondary"}
+                              className={
+                                lista.status === "ativa"
+                                  ? "bg-[#F3EEF9] text-[#5B478E] border border-[#8E7CC3]/30 font-extrabold text-[10px]"
+                                  : "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-extrabold text-[10px]"
+                              }
                             >
-                              <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
-                                <span
-                                  className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
-                                    it.comprado ? "bg-emerald-600 text-white" : "border-2 border-primary"
+                              {lista.status === "ativa" ? "Ativa" : "Concluída"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            {compradosCount} de {totalItens} itens comprados ({percentual}%) • Criada em {new Date(lista.createdAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="hidden sm:block w-28">
+                          <Progress value={percentual} className="h-2" />
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+                          {isExpanded ? <ChevronUp className="w-5 h-5 text-primary" /> : <ChevronDown className="w-5 h-5" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* DETALHES EXPANDIDOS DA LISTA */}
+                    {isExpanded && (
+                      <CardContent className="p-5 space-y-4 bg-card animate-fade-in">
+                        {/* BARRA DE AÇÕES DA LISTA */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAbrirEdicaoLista(lista);
+                              }}
+                              className="h-8 text-xs font-bold border-primary/40 text-primary hover:bg-primary/10"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Editar Lista
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnviarWhatsAppLista(lista);
+                              }}
+                              className="h-8 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 mr-1.5 fill-white text-emerald-600" /> Enviar por WhatsApp
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {lista.status === "ativa" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleConcluirLista(lista.id)}
+                                className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Concluir Lista
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleReabrirLista(lista.id)}
+                                className="h-8 text-xs font-bold"
+                              >
+                                <ArchiveRestore className="w-3.5 h-3.5 mr-1" /> Reabrir Lista
+                              </Button>
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                if (confirm(`Deseja excluir a lista "${lista.nome}"?`)) {
+                                  handleExcluirLista(lista.id);
+                                }
+                              }}
+                              className="h-8 text-xs text-rose-600 hover:bg-rose-500/10"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* LISTAGEM DOS ITENS DA LISTA */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Itens da Lista ({totalItens}):
+                          </Label>
+
+                          {lista.itens.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-4 text-center italic">
+                              Nenhum produto nesta lista. Clique em "Editar Lista" para adicionar!
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {lista.itens.map((it) => (
+                                <div
+                                  key={it.id}
+                                  onClick={() => handleToggleItemComprado(lista.id, it.id)}
+                                  className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all select-none group ${
+                                    it.comprado
+                                      ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 line-through opacity-80"
+                                      : "bg-muted/30 text-foreground border-border hover:border-primary/40 shadow-2xs"
                                   }`}
                                 >
-                                  {it.comprado ? <Check className="w-3 h-3" /> : null}
-                                </span>
-                                <span className="truncate font-bold">
-                                  {it.quantidade} {it.unidade || "un"} x {it.nome}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleExcluirItemLista(lista.id, it.id);
-                                }}
-                                className="p-1 rounded-lg hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors shrink-0 opacity-80 hover:opacity-100"
-                                title="Excluir este item da lista"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
+                                  <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
+                                    <span
+                                      className={`w-4 h-4 rounded-md flex items-center justify-center text-[10px] shrink-0 ${
+                                        it.comprado ? "bg-emerald-600 text-white" : "border-2 border-primary"
+                                      }`}
+                                    >
+                                      {it.comprado && <Check className="w-3 h-3 stroke-[3]" />}
+                                    </span>
+                                    <span className="truncate font-bold">
+                                      {it.quantidade} {it.unidade || "un"} x {it.nome}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExcluirItemLista(lista.id, it.id);
+                                    }}
+                                    className="p-1 rounded-lg hover:bg-rose-500/20 text-muted-foreground hover:text-rose-600 transition-colors shrink-0 opacity-80 hover:opacity-100"
+                                    title="Excluir este item da lista"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
                         </div>
                       )}
                     </div>
@@ -789,6 +822,8 @@ export function DespesasView({
           })
         )}
       </div>
+    </>
+  )}
 
       {/* ========================================================================= */}
       {/* MODAL: CRIAR NOVA LISTA COM INCLUSÃO DE PRODUTOS */}

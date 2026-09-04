@@ -1850,12 +1850,7 @@ function Index() {
               )}
               {podeAcessarAba("despesas") && (
                 <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Layers className="w-4 h-4" /> Lista de Compras
-                </TabsTrigger>
-              )}
-              {podeAcessarAba("insumos") && (
-                <TabsTrigger value="insumos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <UtensilsCrossed className="w-4 h-4" /> Cadastro de Insumos
+                  <Layers className="w-4 h-4" /> Compras
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -1907,7 +1902,7 @@ function Index() {
             )}
           </TabsContent>
 
-          {/* 2. Aba Dedicada: Compras (Lista de Compras Interativa - Sempre Gratuita!) */}
+          {/* 2. Aba Dedicada: Compras (Lista de Compras & Cadastro de Insumos Integrados) */}
           <TabsContent value="despesas">
             <DespesasView
               despesas={despesas}
@@ -1921,11 +1916,6 @@ function Index() {
               listasCompras={listasCompras}
               onAtualizarListasCompras={setListasCompras}
             />
-          </TabsContent>
-
-          {/* 2b. Aba Dedicada: Gestão e Cadastro de Insumos */}
-          <TabsContent value="insumos">
-            <InsumosView estabelecimentoCodigo={activeCode} />
           </TabsContent>
 
           {/* 3. Encomendas & Calendário (com Histórico Permanente) */}
