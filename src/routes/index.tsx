@@ -18,6 +18,7 @@ import { FinanceiroTab } from "@/components/caixadoce/FinanceiroTab";
 import { ColaboradoresTab } from "@/components/caixadoce/ColaboradoresTab";
 import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
 import { ConfiguracoesTab } from "@/components/caixadoce/ConfiguracoesTab";
+import { InsumosView } from "@/components/caixadoce/InsumosView";
 import { NotificationBell } from "@/components/caixadoce/NotificationBell";
 
 // UI Components
@@ -41,6 +42,7 @@ import {
   Sparkles,
   Lock,
   AlertCircle,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
@@ -1851,6 +1853,11 @@ function Index() {
                   <Layers className="w-4 h-4" /> Lista de Compras
                 </TabsTrigger>
               )}
+              {podeAcessarAba("insumos") && (
+                <TabsTrigger value="insumos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <UtensilsCrossed className="w-4 h-4" /> Cadastro de Insumos
+                </TabsTrigger>
+              )}
               {podeAcessarAba("produtos") && (
                 <TabsTrigger value="produtos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                   <Cake className="w-4 h-4" /> Cardápio
@@ -1914,6 +1921,11 @@ function Index() {
               listasCompras={listasCompras}
               onAtualizarListasCompras={setListasCompras}
             />
+          </TabsContent>
+
+          {/* 2b. Aba Dedicada: Gestão e Cadastro de Insumos */}
+          <TabsContent value="insumos">
+            <InsumosView estabelecimentoCodigo={activeCode} />
           </TabsContent>
 
           {/* 3. Encomendas & Calendário (com Histórico Permanente) */}

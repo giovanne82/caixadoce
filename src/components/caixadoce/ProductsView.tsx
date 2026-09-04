@@ -51,11 +51,13 @@ import {
   Facebook,
   MessageCircle,
   Music,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
 import { MontarKitModal } from "./MontarKitModal";
+import { InsumosView } from "./InsumosView";
 import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
@@ -101,6 +103,7 @@ export function ProductsView({
   const [modalQrOpen, setModalQrOpen] = useState(false);
   const [modalNovaCatOpen, setModalNovaCatOpen] = useState(false);
   const [modalFichaOpen, setModalFichaOpen] = useState(false);
+  const [modalInsumosOpen, setModalInsumosOpen] = useState(false);
   const [produtoFichaAlvo, setProdutoFichaAlvo] = useState<ProdutoCardapio | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -479,6 +482,14 @@ export function ProductsView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setModalInsumosOpen(true)}
+            className="font-bold border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 text-xs h-9"
+          >
+            <UtensilsCrossed className="w-4 h-4 mr-1.5" /> Cadastro de Insumos
+          </Button>
+
           <Button
             onClick={() => {
               setKitEditing(null);
@@ -1212,6 +1223,13 @@ export function ProductsView({
           }
         }}
       />
+
+      {/* MODAL: GESTÃO DE INSUMOS */}
+      <Dialog open={modalInsumosOpen} onOpenChange={setModalInsumosOpen}>
+        <DialogContent className="w-[96vw] sm:w-[950px] max-w-[950px] h-[90vh] max-h-[850px] flex flex-col p-4 sm:p-6 overflow-hidden overflow-y-auto rounded-2xl">
+          <InsumosView estabelecimentoCodigo={estabelecimentoCodigo} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

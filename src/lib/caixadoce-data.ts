@@ -208,6 +208,41 @@ export interface InsumoCatalogo {
   unidadePadrao?: string;
 }
 
+export interface InsumoCadastrado {
+  id: string;
+  estabelecimentoCodigo: string;
+  nome: string;
+  unidadeMedida: string; // e.g. "kg", "g", "l", "ml", "un", "cx", "pct", "bdj"
+  custoAtual: number; // preço pago pela embalagem/unidade padrão
+  qtdEmbalagemOriginal: number; // e.g. 1 (1kg) ou 1000 (1000g)
+  unidadeEmbalagemOriginal?: string; // e.g. "kg" ou "g" ou "un"
+  fornecedor?: string;
+  observacoes?: string;
+  createdAt?: string;
+}
+
+export function obterInsumosCadastrados(estabelecimentoCodigo?: string): InsumoCadastrado[] {
+  if (!estabelecimentoCodigo) return [];
+  const code = estabelecimentoCodigo.toUpperCase();
+  try {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(`caixadoce_insumos_${code}`);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch {}
+  return [];
+}
+
+export function salvarInsumosCadastradosStorage(estabelecimentoCodigo: string, lista: InsumoCadastrado[]) {
+  if (!estabelecimentoCodigo) return;
+  const code = estabelecimentoCodigo.toUpperCase();
+  try {
+    localStorage.setItem(`caixadoce_insumos_${code}`, JSON.stringify(lista));
+  } catch (e) {
+    console.warn("Erro ao salvar insumos no storage:", e);
+  }
+}
+
 export const NOVOS_INSUMOS_SEED: string[] = [
   // Itens de Mercado e Hortifruti Solicitados
   "Pão",

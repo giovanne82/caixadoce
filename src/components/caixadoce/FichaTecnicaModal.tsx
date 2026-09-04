@@ -37,17 +37,19 @@ import {
   PieChart,
   CheckCircle2,
   Info,
-  Scale,
-  RefreshCw,
-  AlertTriangle,
+  UtensilsCrossed,
 } from "lucide-react";
 import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
+  obterInsumosCadastrados,
   type ProdutoCardapio,
+  type InsumoCadastrado,
   LISTA_SUGESTOES_INSUMOS,
 } from "@/lib/caixadoce-data";
+import { InsumosView } from "@/components/caixadoce/InsumosView";
+import { supabase } from "@/integrations/supabase/client";
 import {
   INSUMOS_PADRAO_CATALOGO,
   obterFichaTecnicaProduto,
@@ -108,6 +110,12 @@ export function FichaTecnicaModal({
   // Preço de Venda Final
   const [precoPersonalizadoFormatado, setPrecoPersonalizadoFormatado] = useState("");
 
+  // Insumos Cadastrados & Modos de Seleção
+  const [insumosCadastrados, setInsumosCadastrados] = useState<InsumoCadastrado[]>([]);
+  const [modoInsumo, setModoInsumo] = useState<"cadastrado" | "manual">("cadastrado");
+  const [insumoSelecionadoId, setInsumoSelecionadoId] = useState<string>("");
+  const [modalGerenciarInsumosOpen, setModalGerenciarInsumosOpen] = useState(false);
+
   // Form de Inserção de Novo Insumo na Ficha (Campos livres sem setas numéricas)
   const [novoInsumoNome, setNovoInsumoNome] = useState("");
   const [novoInsumoQtdStr, setNovoInsumoQtdStr] = useState<string>("100");
@@ -120,6 +128,50 @@ export function FichaTecnicaModal({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [buscandoPrecoMedio, setBuscandoPrecoMedio] = useState(false);
   const [origemPrecoInfo, setOrigemPrecoInfo] = useState<string>("");
+
+  // Carrega insumos cadastrados ao abrir o modal
+  useEffect(() => {
+    if (open && estabelecimentoCodigo) {
+      const locais = obterInsumosCadastrados(estabelecimentoCodigo);
+      setInsumosCadastrados(locais);
+
+      supabase
+        .from("insumos")
+        .select("*")
+        .eq("estabelecimento_codigo", estabelecimentoCodigo)
+        .order("nome", { ascending: true })
+        .then(({ data }) => {
+          if (data && Array.isArray(data) && data.length > 0) {
+            const mapeados: InsumoCadastrado[] = data.map((d: any) => ({
+              id: String(d.id),
+              estabelecimentoCodigo: d.estabelecimento_codigo || estabelecimentoCodigo,
+              nome: d.nome,
+              unidadeMedida: d.unidade_medida || "kg",
+              custoAtual: Number(d.custo_atual) || 0,
+              qtdEmbalagemOriginal: Number(d.qtd_embalagem_original) || 1,
+              unidadeEmbalagemOriginal: d.unidade_embalagem_original || d.unidade_medida || "kg",
+              fornecedor: d.fornecedor || "",
+              observacoes: d.observacoes || "",
+            }));
+            setInsumosCadastrados(mapeados);
+          }
+        });
+    }
+  }, [open, estabelecimentoCodigo]);
+
+  const handleSelecionarInsumoCadastrado = (insId: string) => {
+    setInsumoSelecionadoId(insId);
+    const ins = insumosCadastrados.find((i) => i.id === insId);
+    if (ins) {
+      setNovoInsumoNome(ins.nome);
+      setNovoInsumoPrecoFormatado(formatarMoeda(ins.custoAtual));
+      setNovoInsumoQtdOriginalStr(String(ins.qtdEmbalagemOriginal || 1));
+      setNovoInsumoQtdOriginal(ins.qtdEmbalagemOriginal || 1);
+      setNovoInsumoUnidadeCompra(ins.unidadeMedida || "kg");
+      setNovoInsumoUnidade(ins.unidadeMedida === "kg" ? "g" : ins.unidadeMedida === "l" ? "ml" : ins.unidadeMedida);
+      setOrigemPrecoInfo(`📍 Insumo Cadastrado: ${ins.nome} (${formatarMoeda(ins.custoAtual)} / ${ins.qtdEmbalagemOriginal}${ins.unidadeMedida})`);
+    }
+  };
 
   // Sugestões para o Autocomplete (Order-independent token search: "harald top", "top harald", etc.)
   const sugestoesFiltradas = useMemo(() => {
@@ -357,188 +409,257 @@ export function FichaTecnicaModal({
   if (!produto) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] sm:w-[900px] max-w-[900px] h-[95vh] sm:h-[850px] max-h-[850px] flex flex-col p-0 overflow-hidden rounded-2xl border-purple-500/30">
-        {/* Conteúdo Central Rolável (Incluindo Cabeçalho Estático) */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-5 sm:space-y-6 min-h-0">
-          {/* Cabeçalho do Modal (Estático / Rola junto com a página) */}
-          <DialogHeader className="p-3.5 sm:p-5 -mx-3.5 sm:-mx-6 -mt-3.5 sm:-mt-6 border-b border-border bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold shrink-0 border border-purple-500/30">
-                <Calculator className="w-5 h-5" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-[96vw] sm:w-[900px] max-w-[900px] h-[95vh] sm:h-[850px] max-h-[850px] flex flex-col p-0 overflow-hidden rounded-2xl border-purple-500/30">
+          {/* Conteúdo Central Rolável (Incluindo Cabeçalho Estático) */}
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-5 sm:space-y-6 min-h-0">
+            {/* Cabeçalho do Modal (Estático / Rola junto com a página) */}
+            <DialogHeader className="p-3.5 sm:p-5 -mx-3.5 sm:-mx-6 -mt-3.5 sm:-mt-6 border-b border-border bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold shrink-0 border border-purple-500/30">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle className="text-base sm:text-xl font-extrabold text-foreground truncate">
+                    Ficha Técnica &amp; Precificação: {produto.nome}
+                  </DialogTitle>
+                  <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
+                    Soma de insumos, margem de lucro e preço de venda sugerido baseado no seu histórico de notas.
+                  </DialogDescription>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-base sm:text-xl font-extrabold text-foreground truncate">
-                  Ficha Técnica &amp; Precificação: {produto.nome}
-                </DialogTitle>
-                <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
-                  Soma de insumos, margem de lucro e preço de venda sugerido baseado no seu histórico de notas.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
+            </DialogHeader>
 
-          {/* FORMULÁRIO RÁPIDO DE INSERÇÃO DE INSUMO NA FICHA */}
-          <Card className="border-border bg-muted/30">
-            <CardContent className="p-3.5 sm:p-4 space-y-3">
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                    <Plus className="w-4 h-4 text-purple-600" /> Adicionar Insumo à Receita
-                  </span>
-                  {origemPrecoInfo && (
-                    <span className="text-[10px] sm:text-[11px] font-mono text-purple-600 dark:text-purple-300 font-semibold truncate max-w-[200px] sm:max-w-none">
-                      {origemPrecoInfo}
+            {/* FORMULÁRIO RÁPIDO DE INSERÇÃO DE INSUMO NA FICHA */}
+            <Card className="border-border bg-muted/30">
+              <CardContent className="p-3.5 sm:p-4 space-y-3">
+                <div className="flex flex-col space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                      <Plus className="w-4 h-4 text-purple-600" /> Adicionar Insumo à Receita
                     </span>
-                  )}
-                </div>
 
-                <p className="text-[11px] leading-relaxed text-purple-900 dark:text-purple-200 bg-purple-500/10 p-2.5 rounded-xl border border-purple-500/20">
-                  💡 <strong>Dica:</strong> Selecione o ingrediente como você comprou no mercado (ex: o pacote fechado de 1kg ou a caixa de 395g) e o valor pago. Depois, na tabela abaixo, basta informar o quanto usou na receita!
-                </p>
-              </div>
-
-              <div className="space-y-4 pt-1">
-                {/* LINHA 1: Ingrediente / Insumo (100% de largura) */}
-                <div className="w-full relative">
-                  <Label className="text-xs font-bold whitespace-nowrap block mb-1.5">
-                    Ingrediente / Insumo
-                  </Label>
-                  <Input
-                    placeholder="Ex: Chocolate Melken, Leite Condensado..."
-                    value={novoInsumoNome}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setNovoInsumoNome(val);
-                      setDropdownOpen(val.trim().length > 0);
-                    }}
-                    onFocus={() => {
-                      if (novoInsumoNome.trim().length > 0) {
-                        setDropdownOpen(true);
-                      }
-                    }}
-                    className="h-10 text-xs w-full"
-                  />
-
-                  {dropdownOpen && novoInsumoNome.trim().length > 0 && sugestoesFiltradas.length > 0 && (
-                    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 max-h-48 overflow-y-auto bg-popover text-popover-foreground border border-border rounded-xl shadow-xl py-1">
-                      {sugestoesFiltradas.map((sug) => (
-                        <div
-                          key={sug}
-                          onMouseDown={() => handleSelecionarSugestao(sug)}
-                          className="px-3 py-2 text-xs hover:bg-purple-500/10 hover:text-purple-600 cursor-pointer font-medium flex items-center justify-between"
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Botões de Seleção de Modo */}
+                      <div className="flex items-center bg-background p-0.5 rounded-lg border border-border">
+                        <Button
+                          type="button"
+                          variant={modoInsumo === "cadastrado" ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setModoInsumo("cadastrado")}
+                          className="h-6 text-[10px] font-bold px-2"
                         >
-                          <span>{sug}</span>
-                          <Badge variant="outline" className="text-[9px]">Sugerido</Badge>
-                        </div>
-                      ))}
+                          📌 Insumo Cadastrado
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={modoInsumo === "manual" ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setModoInsumo("manual")}
+                          className="h-6 text-[10px] font-bold px-2"
+                        >
+                          ✍️ Custo Manual
+                        </Button>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setModalGerenciarInsumosOpen(true)}
+                        className="h-6 text-[10px] font-bold text-purple-700 dark:text-purple-300 border-purple-300 hover:bg-purple-50 px-2"
+                      >
+                        + Gerenciar Insumos
+                      </Button>
                     </div>
+                  </div>
+
+                  {origemPrecoInfo && (
+                    <p className="text-[10px] sm:text-[11px] font-mono text-purple-700 dark:text-purple-300 font-semibold">
+                      {origemPrecoInfo}
+                    </p>
                   )}
+
+                  <p className="text-[11px] leading-relaxed text-purple-900 dark:text-purple-200 bg-purple-500/10 p-2.5 rounded-xl border border-purple-500/20">
+                    💡 <strong>Dica:</strong> {modoInsumo === "cadastrado" ? "Selecione um insumo da sua lista oficial abaixo ou clique em Custo Manual para digitar livremente." : "Digite o nome e valor manualmente para total liberdade."}
+                  </p>
                 </div>
 
-                {/* LINHA 2: Valores - Preço do produto / Qtd Embalagem / Qtd Receita em Grid 3 Colunas */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 items-end w-full">
-                  {/* Preço do produto */}
-                  <div className="min-w-0">
-                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Valor pago no produto/embalagem">
-                      Preço do produto
+                {modoInsumo === "cadastrado" && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-xs font-bold text-foreground">
+                      Selecione o Insumo do seu Cadastro
+                    </Label>
+                    {insumosCadastrados.length > 0 ? (
+                      <Select value={insumoSelecionadoId} onValueChange={handleSelecionarInsumoCadastrado}>
+                        <SelectTrigger className="h-9 text-xs font-semibold bg-background border-purple-300">
+                          <SelectValue placeholder="Escolha um insumo cadastrado..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {insumosCadastrados.map((ins) => (
+                            <SelectItem key={ins.id} value={ins.id} className="text-xs font-medium">
+                              {ins.nome} — {formatarMoeda(ins.custoAtual)} ({ins.qtdEmbalagemOriginal} {ins.unidadeMedida})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 text-xs">
+                        <span className="text-muted-foreground text-[11px]">Nenhum insumo cadastrado ainda.</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setModalGerenciarInsumosOpen(true)}
+                          className="h-6 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          + Cadastrar Insumos
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-4 pt-1">
+                  {/* LINHA 1: Ingrediente / Insumo (100% de largura) */}
+                  <div className="w-full relative">
+                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5">
+                      Ingrediente / Insumo
                     </Label>
                     <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="R$ 0,00"
-                      className="h-10 text-xs font-mono font-bold w-full"
-                      value={novoInsumoPrecoFormatado}
-                      onChange={(e) => setNovoInsumoPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                      placeholder="Ex: Chocolate Melken, Leite Condensado..."
+                      value={novoInsumoNome}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNovoInsumoNome(val);
+                        setDropdownOpen(val.trim().length > 0);
+                      }}
+                      onFocus={() => {
+                        if (novoInsumoNome.trim().length > 0) {
+                          setDropdownOpen(true);
+                        }
+                      }}
+                      className="h-10 text-xs w-full"
                     />
+
+                    {dropdownOpen && novoInsumoNome.trim().length > 0 && sugestoesFiltradas.length > 0 && (
+                      <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 max-h-48 overflow-y-auto bg-popover text-popover-foreground border border-border rounded-xl shadow-xl py-1">
+                        {sugestoesFiltradas.map((sug) => (
+                          <div
+                            key={sug}
+                            onMouseDown={() => handleSelecionarSugestao(sug)}
+                            className="px-3 py-2 text-xs hover:bg-purple-500/10 hover:text-purple-600 cursor-pointer font-medium flex items-center justify-between"
+                          >
+                            <span>{sug}</span>
+                            <Badge variant="outline" className="text-[9px]">Sugerido</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Qtd Embalagem com dropdown de Unidade de Compra */}
-                  <div className="min-w-0">
-                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Quantidade contida na embalagem original de compra">
-                      Qtd Embalagem
-                    </Label>
-                    <div className="flex items-center gap-2">
+                  {/* LINHA 2: Valores - Preço do produto / Qtd Embalagem / Qtd Receita em Grid 3 Colunas */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 items-end w-full">
+                    {/* Preço do produto */}
+                    <div className="min-w-0">
+                      <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Valor pago no produto/embalagem">
+                        Preço do produto
+                      </Label>
                       <Input
                         type="text"
                         inputMode="decimal"
-                        placeholder="1"
-                        className="h-10 text-xs font-semibold text-center flex-1 min-w-[70px]"
-                        value={novoInsumoQtdOriginalStr}
-                        onChange={(e) => {
-                          setNovoInsumoQtdOriginalStr(e.target.value);
-                          setNovoInsumoQtdOriginal(parseNumberInput(e.target.value));
-                        }}
+                        placeholder="R$ 0,00"
+                        className="h-10 text-xs font-mono font-bold w-full"
+                        value={novoInsumoPrecoFormatado}
+                        onChange={(e) => setNovoInsumoPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
                       />
-                      <Select
-                        value={novoInsumoUnidadeCompra}
-                        onValueChange={(val: any) => setNovoInsumoUnidadeCompra(val)}
-                      >
-                        <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kg">Kg</SelectItem>
-                          <SelectItem value="g">g</SelectItem>
-                          <SelectItem value="l">L</SelectItem>
-                          <SelectItem value="ml">ml</SelectItem>
-                          <SelectItem value="un">Unid.</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    </div>
+
+                    {/* Qtd Embalagem com dropdown de Unidade de Compra */}
+                    <div className="min-w-0">
+                      <Label className="text-xs font-bold whitespace-nowrap block mb-1.5" title="Quantidade contida na embalagem original de compra">
+                        Qtd Embalagem
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="1"
+                          className="h-10 text-xs font-semibold text-center flex-1 min-w-[70px]"
+                          value={novoInsumoQtdOriginalStr}
+                          onChange={(e) => {
+                            setNovoInsumoQtdOriginalStr(e.target.value);
+                            setNovoInsumoQtdOriginal(parseNumberInput(e.target.value));
+                          }}
+                        />
+                        <Select
+                          value={novoInsumoUnidadeCompra}
+                          onValueChange={(val: any) => setNovoInsumoUnidadeCompra(val)}
+                        >
+                          <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="kg">Kg</SelectItem>
+                            <SelectItem value="g">g</SelectItem>
+                            <SelectItem value="l">L</SelectItem>
+                            <SelectItem value="ml">ml</SelectItem>
+                            <SelectItem value="un">Unid.</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Qtd Receita com dropdown de Unidade de Uso */}
+                    <div className="min-w-0">
+                      <Label className="text-xs font-bold whitespace-nowrap block mb-1.5 text-purple-700 dark:text-purple-300" title="Quantidade utilizada nesta receita">
+                        Qtd na Receita
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="100"
+                          className="h-10 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40 flex-1 min-w-[70px]"
+                          value={novoInsumoQtdStr}
+                          onChange={(e) => {
+                            setNovoInsumoQtdStr(e.target.value);
+                            setNovoInsumoQtd(parseNumberInput(e.target.value));
+                          }}
+                        />
+                        <Select
+                          value={novoInsumoUnidade}
+                          onValueChange={(val: any) => setNovoInsumoUnidade(val)}
+                        >
+                          <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background text-purple-600 dark:text-purple-300 border-purple-500/40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="kg">Kg</SelectItem>
+                            <SelectItem value="g">g</SelectItem>
+                            <SelectItem value="l">L</SelectItem>
+                            <SelectItem value="ml">ml</SelectItem>
+                            <SelectItem value="un">Unid.</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Qtd Receita com dropdown de Unidade de Uso */}
-                  <div className="min-w-0">
-                    <Label className="text-xs font-bold whitespace-nowrap block mb-1.5 text-purple-700 dark:text-purple-300" title="Quantidade utilizada nesta receita">
-                      Qtd na Receita
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="100"
-                        className="h-10 text-xs font-bold text-center text-purple-700 dark:text-purple-300 border-purple-500/40 flex-1 min-w-[70px]"
-                        value={novoInsumoQtdStr}
-                        onChange={(e) => {
-                          setNovoInsumoQtdStr(e.target.value);
-                          setNovoInsumoQtd(parseNumberInput(e.target.value));
-                        }}
-                      />
-                      <Select
-                        value={novoInsumoUnidade}
-                        onValueChange={(val: any) => setNovoInsumoUnidade(val)}
-                      >
-                        <SelectTrigger className="h-10 w-24 shrink-0 text-xs px-2.5 font-bold bg-background text-purple-600 dark:text-purple-300 border-purple-500/40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kg">Kg</SelectItem>
-                          <SelectItem value="g">g</SelectItem>
-                          <SelectItem value="l">L</SelectItem>
-                          <SelectItem value="ml">ml</SelectItem>
-                          <SelectItem value="un">Unid.</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  {/* LINHA 3: Botão de Adicionar Insumo isolado abaixo */}
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      onClick={handleAdicionarInsumo}
+                      className="w-full sm:w-auto h-10 bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-6 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Adicionar Insumo à Receita</span>
+                    </Button>
                   </div>
                 </div>
-
-                {/* LINHA 3: Botão de Adicionar Insumo isolado abaixo */}
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    onClick={handleAdicionarInsumo}
-                    className="w-full sm:w-auto h-10 bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-6 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Adicionar Insumo à Receita</span>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+              </CardContent>
+            </Card>
           {/* LISTA DE INSUMOS RESPONSIVA (CARDS NO CELULAR / TABELA NO DESKTOP) */}
           <div className="space-y-3">
             {/* VISTA MOBILE: CARDS EMPILHADOS */}
@@ -1055,5 +1176,18 @@ export function FichaTecnicaModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+
+    {/* MODAL DE GESTÃO DE INSUMOS */}
+    <Dialog open={modalGerenciarInsumosOpen} onOpenChange={setModalGerenciarInsumosOpen}>
+      <DialogContent className="w-[96vw] sm:w-[950px] max-w-[950px] h-[90vh] max-h-[850px] flex flex-col p-4 sm:p-6 overflow-hidden overflow-y-auto rounded-2xl">
+        <InsumosView
+          estabelecimentoCodigo={estabelecimentoCodigo}
+          onInsumosChange={(novosInsumos) => {
+            setInsumosCadastrados(novosInsumos);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  </>
+);
 }
