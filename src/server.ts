@@ -119,6 +119,64 @@ async function seedInitialCouponInSupabase() {
 }
 seedInitialCouponInSupabase();
 
+// Injeção de Inicialização da Tabela insumos no Supabase
+async function seedInsumosTableInSupabase() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    const createTableSql = `
+      CREATE TABLE IF NOT EXISTS public.insumos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        estabelecimento_codigo TEXT NOT NULL,
+        user_id TEXT,
+        nome TEXT NOT NULL,
+        unidade_medida TEXT NOT NULL DEFAULT 'kg',
+        custo_atual NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+        qtd_embalagem_original NUMERIC(12, 3) NOT NULL DEFAULT 1.000,
+        unidade_embalagem_original TEXT DEFAULT 'kg',
+        fornecedor TEXT DEFAULT '',
+        observacoes TEXT DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE public.insumos ADD COLUMN IF NOT EXISTS unidade_embalagem_original TEXT DEFAULT 'kg';
+      ALTER TABLE public.insumos ADD COLUMN IF NOT EXISTS user_id TEXT;
+      ALTER TABLE public.insumos ADD COLUMN IF NOT EXISTS fornecedor TEXT DEFAULT '';
+      ALTER TABLE public.insumos ADD COLUMN IF NOT EXISTS observacoes TEXT DEFAULT '';
+      ALTER TABLE public.insumos ADD COLUMN IF NOT EXISTS qtd_embalagem_original NUMERIC(12, 3) DEFAULT 1.000;
+      CREATE INDEX IF NOT EXISTS idx_insumos_estabelecimento ON public.insumos(estabelecimento_codigo);
+      CREATE INDEX IF NOT EXISTS idx_insumos_nome ON public.insumos(nome);
+      ALTER TABLE public.insumos ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em insumos" ON public.insumos;
+      CREATE POLICY "Permitir leitura total em insumos" ON public.insumos FOR SELECT USING (true);
+      DROP POLICY IF EXISTS "Permitir insercao em insumos" ON public.insumos;
+      CREATE POLICY "Permitir insercao em insumos" ON public.insumos FOR INSERT WITH CHECK (true);
+      DROP POLICY IF EXISTS "Permitir atualizacao em insumos" ON public.insumos;
+      CREATE POLICY "Permitir atualizacao em insumos" ON public.insumos FOR UPDATE USING (true);
+      DROP POLICY IF EXISTS "Permitir exclusao em insumos" ON public.insumos;
+      CREATE POLICY "Permitir exclusao em insumos" ON public.insumos FOR DELETE USING (true);
+      GRANT ALL ON TABLE public.insumos TO anon, authenticated, service_role;
+    `;
+
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: createTableSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed Insumos Table Log]", err);
+  }
+}
+seedInsumosTableInSupabase();
+
 // Cache global em memória para trava de idempotência de pagamentos processados
 const processedPaymentsSet = new Set<string>();
 
