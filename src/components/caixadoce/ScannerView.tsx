@@ -1376,8 +1376,11 @@ export function ScannerView({
                                           <SelectTrigger className="h-7 text-xs bg-background">
                                             <SelectValue placeholder="Vincular a Insumo Cadastrado..." />
                                           </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="_novo_insumo" className="font-bold text-purple-700 dark:text-purple-300 border-b border-purple-100 dark:border-purple-900/40">
+                                          <SelectContent className="max-h-[280px] w-full min-w-[220px] z-[100] p-1">
+                                            <SelectItem
+                                              value="_novo_insumo"
+                                              className="sticky top-0 z-30 bg-purple-100 dark:bg-purple-950 font-bold text-purple-700 dark:text-purple-300 border-b border-purple-200 dark:border-purple-800 shadow-xs py-2 text-xs cursor-pointer hover:bg-purple-200 dark:hover:bg-purple-900"
+                                            >
                                               ＋ Cadastrar Novo Insumo
                                             </SelectItem>
                                             <SelectItem value="_none">Sem vínculo</SelectItem>
@@ -1721,8 +1724,11 @@ export function ScannerView({
                                 <SelectTrigger className="h-7 text-xs bg-background">
                                   <SelectValue placeholder="Vincular insumo..." />
                                 </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="_novo_insumo" className="font-bold text-purple-700 dark:text-purple-300 border-b border-purple-100 dark:border-purple-900/40">
+                                <SelectContent className="max-h-[280px] w-full min-w-[220px] z-[100] p-1">
+                                  <SelectItem
+                                    value="_novo_insumo"
+                                    className="sticky top-0 z-30 bg-purple-100 dark:bg-purple-950 font-bold text-purple-700 dark:text-purple-300 border-b border-purple-200 dark:border-purple-800 shadow-xs py-2 text-xs cursor-pointer hover:bg-purple-200 dark:hover:bg-purple-900"
+                                  >
                                     ＋ Cadastrar Novo Insumo
                                   </SelectItem>
                                   <SelectItem value="_none">Sem vínculo</SelectItem>
