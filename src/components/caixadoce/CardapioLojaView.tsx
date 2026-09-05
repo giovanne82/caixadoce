@@ -1145,28 +1145,39 @@ export function CardapioLojaView() {
 
       try {
         const phoneFilter = cleanPhone.length >= 8 ? cleanPhone.slice(-8) : cleanPhone;
-        let query = supabase
-          .from("clientes_loja")
-          .select("id, nome, telefone, total_pedidos, total_gasto");
+        let clienteExistenteRow: any = null;
 
-        if (estDbId) {
-          query = query.or(`estabelecimento_id.eq.${estDbId},estabelecimento_codigo.eq.${code}`);
-        } else {
-          query = query.eq("estabelecimento_codigo", code);
+        // 1. Busca prévia por telefone exato ou substring no estabelecimento
+        if (estDbId && cleanPhone) {
+          const { data: byEstPhone } = await supabase
+            .from("clientes_loja")
+            .select("id, total_pedidos, total_gasto, telefone")
+            .eq("estabelecimento_id", estDbId)
+            .or(`telefone.eq.${clienteWhatsapp},telefone.eq.${cleanPhone},telefone.ilike.%${phoneFilter}%`)
+            .limit(1);
+
+          if (byEstPhone && byEstPhone.length > 0) {
+            clienteExistenteRow = byEstPhone[0];
+          }
         }
 
-        if (phoneFilter) {
-          query = query.ilike("telefone", `%${phoneFilter}%`);
-        } else {
-          query = query.eq("nome", clienteNome);
+        if (!clienteExistenteRow && cleanPhone) {
+          const { data: byCodePhone } = await supabase
+            .from("clientes_loja")
+            .select("id, total_pedidos, total_gasto, telefone")
+            .eq("estabelecimento_codigo", code)
+            .or(`telefone.eq.${clienteWhatsapp},telefone.eq.${cleanPhone},telefone.ilike.%${phoneFilter}%`)
+            .limit(1);
+
+          if (byCodePhone && byCodePhone.length > 0) {
+            clienteExistenteRow = byCodePhone[0];
+          }
         }
 
-        const { data: clienteExistente } = await query.limit(1);
-
-        if (clienteExistente && clienteExistente.length > 0 && clienteExistente[0]?.id) {
-          clienteId = clienteExistente[0].id;
-          const novoTotal = (Number(clienteExistente[0].total_pedidos) || 0) + 1;
-          const novoGasto = (Number(clienteExistente[0].total_gasto) || 0) + valTotalCarrinho;
+        if (clienteExistenteRow?.id) {
+          clienteId = clienteExistenteRow.id;
+          const novoTotal = (Number(clienteExistenteRow.total_pedidos) || 0) + 1;
+          const novoGasto = (Number(clienteExistenteRow.total_gasto) || 0) + valTotalCarrinho;
 
           await supabase
             .from("clientes_loja")
@@ -1181,29 +1192,58 @@ export function CardapioLojaView() {
             })
             .eq("id", clienteId);
         } else {
+          // 2. Novo cliente: Realiza UPSERT com onConflict para evitar 409 em condições de corrida ou chaves únicas
           const novoClienteId = crypto.randomUUID();
-          const { data: criado, error: errInsertCli } = await supabase
+          const clientePayload: Record<string, any> = {
+            id: novoClienteId,
+            estabelecimento_id: estDbId,
+            estabelecimento_codigo: code,
+            nome: clienteNome,
+            telefone: clienteWhatsapp,
+            endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
+            total_pedidos: 1,
+            total_gasto: valTotalCarrinho,
+            ultimo_pedido_em: new Date().toISOString(),
+          };
+
+          const { data: criado, error: errUpsertCli } = await supabase
             .from("clientes_loja")
-            .insert([
-              {
-                id: novoClienteId,
-                estabelecimento_id: estDbId,
-                estabelecimento_codigo: code,
-                nome: clienteNome,
-                telefone: clienteWhatsapp,
-                endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
-                total_pedidos: 1,
-                total_gasto: valTotalCarrinho,
-                ultimo_pedido_em: new Date().toISOString(),
-              },
-            ])
+            .upsert(clientePayload, {
+              onConflict: estDbId ? "estabelecimento_id,telefone" : undefined,
+            })
             .select("id")
             .maybeSingle();
 
-          if (errInsertCli) {
-            console.warn("Aviso ao criar em clientes_loja:", errInsertCli.message);
+          if (errUpsertCli) {
+            console.warn("[Clientes Loja] Conflito ou erro no upsert, recuperando ID existente:", errUpsertCli.message);
+            // Fallback imediato: recupera ID existente por telefone
+            if (estDbId) {
+              const { data: fallbackCli } = await supabase
+                .from("clientes_loja")
+                .select("id")
+                .eq("estabelecimento_id", estDbId)
+                .eq("telefone", clienteWhatsapp)
+                .maybeSingle();
+              if (fallbackCli?.id) {
+                clienteId = fallbackCli.id;
+              }
+            }
+            if (!clienteId) {
+              const { data: fallbackCode } = await supabase
+                .from("clientes_loja")
+                .select("id")
+                .eq("estabelecimento_codigo", code)
+                .eq("telefone", clienteWhatsapp)
+                .maybeSingle();
+              if (fallbackCode?.id) {
+                clienteId = fallbackCode.id;
+              }
+            }
           }
-          clienteId = criado?.id || novoClienteId;
+
+          if (!clienteId) {
+            clienteId = criado?.id || novoClienteId;
+          }
         }
       } catch (eCli) {
         console.warn("Aviso ao processar tabela clientes_loja:", eCli);
