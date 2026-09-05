@@ -159,6 +159,95 @@ function obterEstiloPilula(status: StatusEncomenda) {
   }
 }
 
+function renderizarBadgePagamento(ord: Encomenda) {
+  const totalPago = calcularTotalPagoEncomenda(ord);
+  const isMercadoPago =
+    ord.metodoPagamento === "Mercado Pago" ||
+    (ord as any).metodo_pagamento === "Mercado Pago" ||
+    (ord as any).origem_pagamento === "mercadopago" ||
+    ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
+
+  const isPagoIntegral = (totalPago >= ord.valorTotal && ord.valorTotal > 0) || ord.statusPagamento === "pago_integral";
+
+  if (isMercadoPago || (isPagoIntegral && isMercadoPago)) {
+    return (
+      <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
+        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span>Pago • Mercado Pago</span>
+      </Badge>
+    );
+  }
+
+  if (isPagoIntegral) {
+    return (
+      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+        <Check className="w-3 h-3 text-emerald-600" />
+        <span>100% Pago ({formatarMoeda(totalPago)})</span>
+      </Badge>
+    );
+  }
+
+  if (totalPago > 0) {
+    const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+    return (
+      <div className="space-y-0.5">
+        <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
+          Pago: {formatarMoeda(totalPago)}
+        </Badge>
+        <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[10px]">
+      Pendente (0%)
+    </Badge>
+  );
+}
+
+function renderizarBadgePagamentoMobile(ord: Encomenda) {
+  const totalPago = calcularTotalPagoEncomenda(ord);
+  const isMercadoPago =
+    ord.metodoPagamento === "Mercado Pago" ||
+    (ord as any).metodo_pagamento === "Mercado Pago" ||
+    (ord as any).origem_pagamento === "mercadopago" ||
+    ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
+
+  const isPagoIntegral = (totalPago >= ord.valorTotal && ord.valorTotal > 0) || ord.statusPagamento === "pago_integral";
+
+  if (isMercadoPago || (isPagoIntegral && isMercadoPago)) {
+    return (
+      <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+        <span>Pago • Mercado Pago</span>
+      </Badge>
+    );
+  }
+
+  if (isPagoIntegral) {
+    return (
+      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+        100% Pago
+      </Badge>
+    );
+  }
+
+  if (totalPago > 0) {
+    return (
+      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+        Pago: {formatarMoeda(totalPago)}
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+      Pendente (0%)
+    </Badge>
+  );
+}
+
 export function OrdersView({
   encomendas,
   datasBloqueadas,
@@ -1586,22 +1675,7 @@ export function OrdersView({
                         </TableCell>
 
                         <TableCell className="text-xs">
-                          {totalPago >= ord.valorTotal && ord.valorTotal > 0 ? (
-                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
-                              100% Pago ({formatarMoeda(totalPago)})
-                            </Badge>
-                          ) : totalPago > 0 ? (
-                            <div className="space-y-0.5">
-                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                                Pago: {formatarMoeda(totalPago)}
-                              </Badge>
-                              <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
-                            </div>
-                          ) : (
-                            <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[10px]">
-                              Pendente (0%)
-                            </Badge>
-                          )}
+                          {renderizarBadgePagamento(ord)}
                         </TableCell>
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -1723,19 +1797,7 @@ export function OrdersView({
 
                       <div className="text-right">
                         <div className="text-xs font-extrabold text-foreground">{formatarMoeda(ord.valorTotal)}</div>
-                        {totalPago >= ord.valorTotal && ord.valorTotal > 0 ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5">
-                            100% Pago
-                          </Badge>
-                        ) : totalPago > 0 ? (
-                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5">
-                            Pago: {formatarMoeda(totalPago)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[9px] px-1.5 py-0 mt-0.5">
-                            Pendente (0%)
-                          </Badge>
-                        )}
+                        {renderizarBadgePagamentoMobile(ord)}
                       </div>
                     </div>
 
@@ -2286,13 +2348,16 @@ export function OrdersView({
                   return (
                     <Card key={ord.id} className="border-border shadow-xs bg-card overflow-hidden">
                       <div className="p-3.5 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="font-mono text-xs font-black text-primary flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
                           </span>
-                          <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
-                            {statusCfg?.label || ord.status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            {renderizarBadgePagamentoMobile(ord)}
+                            <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
+                              {statusCfg?.label || ord.status}
+                            </Badge>
+                          </div>
                         </div>
 
                         <div>
@@ -3565,9 +3630,12 @@ export function OrdersView({
               <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-foreground">Valor Total do Pedido:</span>
-                  <span className="font-mono font-extrabold text-base text-foreground">
-                    {formatarMoeda(encomendaDetalhes.valorTotal)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {renderizarBadgePagamento(encomendaDetalhes)}
+                    <span className="font-mono font-extrabold text-base text-foreground">
+                      {formatarMoeda(encomendaDetalhes.valorTotal)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* HISTÓRICO DE PAGAMENTOS */}

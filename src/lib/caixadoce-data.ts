@@ -1140,6 +1140,9 @@ export interface Encomenda {
   historicoPagamentos?: PagamentoItem[];
   paymentsHistory?: PagamentoItem[];
   statusPagamento: StatusPagamentoEncomenda;
+  metodoPagamento?: string;
+  metodo_pagamento?: string;
+  origem_pagamento?: string;
   status: StatusEncomenda;
   observacoes?: string;
   enderecoEntrega?: string;

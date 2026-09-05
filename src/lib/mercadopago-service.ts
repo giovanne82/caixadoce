@@ -252,3 +252,47 @@ export async function gerarPixMercadoPago(params: {
   return data;
 }
 
+/**
+ * Consulta o status de um pagamento Pix específico no Mercado Pago
+ */
+export async function consultarStatusPagamentoPix(params: {
+  paymentId: string | number;
+  mpAccessToken?: string;
+  establishmentCode?: string;
+}): Promise<{
+  success: boolean;
+  approved: boolean;
+  status: string;
+  status_detail?: string;
+  payment_id?: string | number;
+  transaction_amount?: number;
+}> {
+  const query = new URLSearchParams({
+    payment_id: String(params.paymentId),
+    ...(params.mpAccessToken ? { mp_access_token: params.mpAccessToken } : {}),
+    ...(params.establishmentCode ? { estabelecimentoCodigo: params.establishmentCode } : {}),
+  });
+
+  const res = await fetch(`/api/check-payment-status?${query.toString()}`);
+  const data = await res.json();
+
+  if (!res.ok || data.error) {
+    return {
+      success: false,
+      approved: false,
+      status: data.status || "error",
+      status_detail: data.error || "Erro ao consultar status.",
+      payment_id: params.paymentId,
+    };
+  }
+
+  return {
+    success: true,
+    approved: data.status === "approved" || data.status === "authorized" || Boolean(data.approved),
+    status: data.status,
+    status_detail: data.status_detail,
+    payment_id: data.payment_id || params.paymentId,
+    transaction_amount: data.transaction_amount,
+  };
+}
+

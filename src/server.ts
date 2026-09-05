@@ -1252,6 +1252,106 @@ export default {
       }
 
       // =========================================================================
+      // MERCADO PAGO: CONSULTA DE STATUS DE PAGAMENTO PIX/CARDÁPIO (/api/check-payment-status)
+      // =========================================================================
+      if (
+        (url.pathname === "/api/check-payment-status" || url.pathname === "/api/mercadopago/check-payment-status") &&
+        (request.method === "GET" || request.method === "POST")
+      ) {
+        try {
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          let paymentId = url.searchParams.get("payment_id") || url.searchParams.get("paymentId") || url.searchParams.get("id");
+          let tokenUso = url.searchParams.get("mp_access_token") || url.searchParams.get("accessToken") || url.searchParams.get("token");
+          let codeTarget = (
+            url.searchParams.get("estabelecimentoCodigo") ||
+            url.searchParams.get("establishmentCode") ||
+            url.searchParams.get("codigo") ||
+            ""
+          ).toUpperCase();
+
+          if (request.method === "POST") {
+            try {
+              const body = await request.json();
+              paymentId = paymentId || body.payment_id || body.paymentId || body.id;
+              tokenUso = tokenUso || body.mp_access_token || body.accessToken || body.access_token || body.token;
+              codeTarget = codeTarget || (body.establishmentCode || body.estabelecimentoCodigo || body.codigo || "").toUpperCase();
+            } catch {}
+          }
+
+          if (!paymentId) {
+            return new Response(
+              JSON.stringify({ error: "Parâmetro payment_id é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          if (!tokenUso && codeTarget) {
+            const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token`, {
+              headers: {
+                "apikey": supabaseKey,
+                "authorization": `Bearer ${supabaseKey}`,
+              },
+            });
+
+            if (estRes.ok) {
+              const data = await estRes.json();
+              if (data[0] && data[0].mp_access_token) {
+                tokenUso = data[0].mp_access_token;
+              }
+            }
+          }
+
+          if (!tokenUso) {
+            tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+          }
+
+          const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: {
+              Authorization: `Bearer ${tokenUso}`,
+            },
+          });
+
+          const mpData = await mpRes.json();
+
+          if (!mpRes.ok || mpData.error) {
+            console.error("[MercadoPago Check Payment Error]", mpData);
+            return new Response(
+              JSON.stringify({
+                error: mpData.message || mpData.error || "Erro ao consultar status no Mercado Pago.",
+                status: "error",
+                approved: false,
+              }),
+              { status: mpRes.status || 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const status = mpData.status;
+          const isApproved = status === "approved" || status === "authorized";
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              approved: isApproved,
+              status: status,
+              status_detail: mpData.status_detail,
+              id: mpData.id,
+              payment_id: mpData.id,
+              payment_method_id: mpData.payment_method_id,
+              transaction_amount: mpData.transaction_amount,
+              date_approved: mpData.date_approved,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago Check Payment Exception]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro interno ao consultar pagamento." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
       // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
       // =========================================================================
       if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {

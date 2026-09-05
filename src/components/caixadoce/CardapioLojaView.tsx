@@ -472,6 +472,8 @@ export function CardapioLojaView() {
   const [pixCopiaCola, setPixCopiaCola] = useState("");
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
+  const [mpPaymentId, setMpPaymentId] = useState<string | number | null>(null);
+  const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
 
   // 1. Carregamento de Dados da Confeitaria (Supabase + LocalStorage Fallback)
   useEffect(() => {
@@ -625,6 +627,108 @@ export function CardapioLojaView() {
   }, [lojaInfo]);
 
   const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
+  // =========================================================================
+  // POLLING EM TEMPO REAL DO STATUS DO PAGAMENTO PIX NO MERCADO PAGO (3 em 3 segundos)
+  // =========================================================================
+  useEffect(() => {
+    if (!sucessoModalOpen || !mpPaymentId || pagamentoAprovadoMp) {
+      return;
+    }
+
+    const tokenLojista = lojaInfo?.mp_access_token;
+    const targetCode = lojaInfo?.codigo || code;
+    let isCancelled = false;
+
+    console.log(`[Polling Pix MP] Iniciando monitoramento a cada 3s para payment_id=${mpPaymentId}...`);
+
+    const timer = setInterval(async () => {
+      if (isCancelled || pagamentoAprovadoMp) return;
+
+      try {
+        let statusResult: any = null;
+
+        // 1. Consulta rota dedicada /api/check-payment-status
+        try {
+          const queryParams = new URLSearchParams({
+            payment_id: String(mpPaymentId),
+            ...(tokenLojista ? { mp_access_token: tokenLojista } : {}),
+            ...(targetCode ? { estabelecimentoCodigo: targetCode } : {}),
+          });
+          const res = await fetch(`/api/check-payment-status?${queryParams.toString()}`);
+          if (res.ok) {
+            statusResult = await res.json();
+          }
+        } catch (errApi) {
+          console.warn("[Polling Pix MP] Falha na consulta /api/check-payment-status:", errApi);
+        }
+
+        // 2. Fallback para Edge Function do Supabase
+        if (!statusResult || (!statusResult.status && !statusResult.approved)) {
+          try {
+            const { data: edgeData, error: edgeErr } = await supabase.functions.invoke("check-payment-status", {
+              body: {
+                payment_id: mpPaymentId,
+                mp_access_token: tokenLojista,
+                establishmentCode: targetCode,
+              },
+            });
+            if (!edgeErr && edgeData) {
+              statusResult = edgeData;
+            }
+          } catch (edgeEx) {
+            console.warn("[Polling Pix MP] Falha na consulta Edge Function:", edgeEx);
+          }
+        }
+
+        const isApproved =
+          statusResult?.status === "approved" ||
+          statusResult?.status === "authorized" ||
+          Boolean(statusResult?.approved);
+
+        if (isApproved && !isCancelled) {
+          clearInterval(timer);
+          setPagamentoAprovadoMp(true);
+          toast.success("🎉 Pagamento via Pix confirmado com sucesso pelo Mercado Pago!");
+
+          // Update no Supabase na tabela encomendas
+          const targetPedidoId = ultimoPedidoId || pedidoCriadoId;
+          if (targetPedidoId) {
+            try {
+              await supabase
+                .from("encomendas")
+                .update({
+                  status_pagamento: "pago_integral",
+                  metodo_pagamento: "Mercado Pago",
+                  valor_entrada: totalComFrete,
+                  historico_pagamentos: [
+                    {
+                      id: `mp_${mpPaymentId}`,
+                      data: new Date().toISOString().split("T")[0],
+                      valor: totalComFrete,
+                      observacao: "Pagamento aprovado via Mercado Pago (Pix Automático)",
+                    },
+                  ],
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", targetPedidoId);
+
+              console.log(`[Polling Pix MP] Encomenda ${targetPedidoId} atualizada no Supabase como 100% Paga via Mercado Pago!`);
+            } catch (supErr) {
+              console.error("[Polling Pix MP] Erro ao atualizar status no Supabase:", supErr);
+            }
+          }
+        }
+      } catch (cycleErr) {
+        console.warn("[Polling Pix MP] Erro no ciclo de verificação:", cycleErr);
+      }
+    }, 3000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(timer);
+    };
+  }, [sucessoModalOpen, mpPaymentId, pagamentoAprovadoMp, lojaInfo, code, ultimoPedidoId, pedidoCriadoId, totalComFrete]);
+
   const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
   const regras = useMemo(
     () => calcularRegrasAgendamentoCarrinho(regrasBase, carrinho),
@@ -1248,6 +1352,12 @@ export function CardapioLojaView() {
               const pointOfInteraction = mpData.point_of_interaction;
               const qrBase64 = mpData.qr_code_base64 || pointOfInteraction?.transaction_data?.qr_code_base64;
               const qrCode = mpData.qr_code || pointOfInteraction?.transaction_data?.qr_code;
+              const payId = mpData.payment_id || mpData.id;
+
+              if (payId) {
+                setMpPaymentId(payId);
+                setPagamentoAprovadoMp(false);
+              }
 
               if (qrBase64 || qrCode) {
                 if (qrBase64) setPixQrCodeBase64(qrBase64);
@@ -1259,7 +1369,7 @@ export function CardapioLojaView() {
                   }
                 }
                 gerouMp = true;
-                console.log("[Checkout Cardápio] Pix Mercado Pago gerado com sucesso via Backend Proxy!");
+                console.log(`[Checkout Cardápio] Pix Mercado Pago gerado com sucesso via Backend Proxy! Payment ID: ${payId}`);
               }
             }
           } catch (mpErr: any) {
@@ -1366,6 +1476,9 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
     setCarrinho([]);
     setPixCopiado(false);
     setPixCopiaCola("");
+    setPixQrCodeBase64(null);
+    setMpPaymentId(null);
+    setPagamentoAprovadoMp(false);
   };
 
   return (
@@ -2219,14 +2332,20 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
           {/* Cabeçalho de Sucesso */}
           <DialogHeader className="text-center space-y-2 border-b border-border/60 pb-3">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-inner ring-4 ring-emerald-500/10">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto shadow-inner ring-4 transition-all duration-300 ${
+              pagamentoAprovadoMp
+                ? "bg-emerald-500 text-white ring-emerald-500/20 shadow-emerald-500/30 scale-105"
+                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-emerald-500/10"
+            }`}>
+              <CheckCircle2 className={`w-8 h-8 ${pagamentoAprovadoMp ? "animate-pulse stroke-[2.5]" : ""}`} />
             </div>
             <DialogTitle className="text-lg sm:text-xl font-black text-foreground">
-              🎉 Pedido Registrado com Sucesso!
+              {pagamentoAprovadoMp ? "🎉 Pagamento Aprovado com Sucesso!" : "🎉 Pedido Registrado com Sucesso!"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Sua encomenda foi gravada diretamente no sistema da confeitaria <strong>{lojaInfo?.nome || "CaixaDoce"}</strong>.
+              {pagamentoAprovadoMp
+                ? `Seu pagamento via Mercado Pago foi confirmado! O pedido já está aprovado na confeitaria ${lojaInfo?.nome || "CaixaDoce"}.`
+                : `Sua encomenda foi gravada diretamente no sistema da confeitaria ${lojaInfo?.nome || "CaixaDoce"}.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -2332,98 +2451,127 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           </div>
 
           {/* BLOCO PIX DE PAGAMENTO (AUTOMÁTICO OU MANUAL) */}
-          <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                Pagamento via Pix {pixQrCodeBase64 ? "(Mercado Pago)" : lojaInfo?.usar_mercadopago ? "(Mercado Pago)" : "(Manual)"}
-              </span>
-              <Badge className={`text-[10px] font-mono font-bold border-0 ${pixQrCodeBase64 ? "bg-blue-600 text-white" : lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
-                {pixQrCodeBase64 ? "Pix Automático" : lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
-              </Badge>
+          {pagamentoAprovadoMp ? (
+            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/60 text-center space-y-3 animate-in fade-in zoom-in duration-300 shadow-xs">
+              <div className="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/30 animate-bounce">
+                <Check className="w-8 h-8 stroke-[3]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-emerald-950 dark:text-emerald-200">
+                  Pagamento Confirmado no Mercado Pago!
+                </h3>
+                <p className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                  Identificamos seu pagamento via Pix automaticamente. Seu pedido foi atualizado para 100% Pago e o lojista já foi notificado.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold text-xs px-3 py-1 flex items-center gap-1 shadow-xs border-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  Status: Pago • Mercado Pago
+                </Badge>
+              </div>
             </div>
-
-            {/* SE TEM IMAGEM QR CODE BASE64 */}
-            {pixQrCodeBase64 && (
-              <div className="flex flex-col items-center justify-center p-3 bg-white dark:bg-stone-900 rounded-2xl border border-purple-200 shadow-inner">
-                <img
-                  src={pixQrCodeBase64.startsWith("data:") ? pixQrCodeBase64 : `data:image/png;base64,${pixQrCodeBase64}`}
-                  alt="QR Code Pix Mercado Pago"
-                  className="w-48 h-48 object-contain rounded-xl"
-                />
-                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mt-2 text-center">
-                  Escaneie o QR Code no aplicativo do seu banco
-                </p>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  Pagamento via Pix {pixQrCodeBase64 ? "(Mercado Pago)" : lojaInfo?.usar_mercadopago ? "(Mercado Pago)" : "(Manual)"}
+                </span>
+                <Badge className={`text-[10px] font-mono font-bold border-0 ${pixQrCodeBase64 ? "bg-blue-600 text-white" : lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
+                  {pixQrCodeBase64 ? "Pix Automático" : lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
+                </Badge>
               </div>
-            )}
 
-            {/* CÓDIGO PIX COPIA E COLA */}
-            {pixCopiaCola ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={pixCopiaCola}
-                    className="font-mono text-[11px] h-9 bg-background select-all border-purple-300 focus-visible:ring-purple-400"
+              {/* SE TEM IMAGEM QR CODE BASE64 */}
+              {pixQrCodeBase64 && (
+                <div className="flex flex-col items-center justify-center p-3 bg-white dark:bg-stone-900 rounded-2xl border border-purple-200 shadow-inner space-y-2">
+                  <img
+                    src={pixQrCodeBase64.startsWith("data:") ? pixQrCodeBase64 : `data:image/png;base64,${pixQrCodeBase64}`}
+                    alt="QR Code Pix Mercado Pago"
+                    className="w-48 h-48 object-contain rounded-xl"
                   />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      if (typeof navigator !== "undefined" && navigator.clipboard) {
-                        navigator.clipboard.writeText(pixCopiaCola);
-                        setPixCopiado(true);
-                        toast.success("Código Pix Copia e Cola copiado!");
-                      }
-                    }}
-                    className="h-9 px-3 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1 shadow-xs"
-                  >
-                    {pixCopiado ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-300" /> Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" /> Copiar Código Pix
-                      </>
-                    )}
-                  </Button>
+                  <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
+                    Escaneie o QR Code no aplicativo do seu banco
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-[11px] text-blue-700 dark:text-blue-300 font-medium pt-1">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                    </span>
+                    Aguardando pagamento... Verificando em tempo real
+                  </div>
                 </div>
-                <p className="text-[10px] text-purple-700 dark:text-purple-300">
-                  Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> e cole o código acima para realizar o pagamento.
+              )}
+
+              {/* CÓDIGO PIX COPIA E COLA */}
+              {pixCopiaCola ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={pixCopiaCola}
+                      className="font-mono text-[11px] h-9 bg-background select-all border-purple-300 focus-visible:ring-purple-400"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(pixCopiaCola);
+                          setPixCopiado(true);
+                          toast.success("Código Pix Copia e Cola copiado!");
+                        }
+                      }}
+                      className="h-9 px-3 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1 shadow-xs"
+                    >
+                      {pixCopiado ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" /> Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" /> Copiar Código Pix
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-purple-700 dark:text-purple-300">
+                    Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> e cole o código acima para realizar o pagamento.
+                  </p>
+                </div>
+              ) : (lojaInfo?.chave_pix_manual || lojaInfo?.chavePix) ? (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-purple-800 dark:text-purple-200 font-medium">Chave Pix da Loja:</p>
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
+                    <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
+                      {lojaInfo.chave_pix_manual || lojaInfo.chavePix}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        const keyToCopy = lojaInfo.chave_pix_manual || lojaInfo.chavePix || "";
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(keyToCopy);
+                          setPixCopiado(true);
+                          toast.success("Chave Pix copiada!");
+                        }
+                      }}
+                      className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
+                    >
+                      {pixCopiado ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
+                      {pixCopiado ? "Copiada!" : "Copiar Chave"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground italic">
+                  Chave Pix não cadastrada no perfil da loja. Entre em contato pelo WhatsApp para obter os dados de pagamento.
                 </p>
-              </div>
-            ) : (lojaInfo?.chave_pix_manual || lojaInfo?.chavePix) ? (
-              <div className="space-y-1.5">
-                <p className="text-[11px] text-purple-800 dark:text-purple-200 font-medium">Chave Pix da Loja:</p>
-                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
-                  <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
-                    {lojaInfo.chave_pix_manual || lojaInfo.chavePix}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      const keyToCopy = lojaInfo.chave_pix_manual || lojaInfo.chavePix || "";
-                      if (typeof navigator !== "undefined" && navigator.clipboard) {
-                        navigator.clipboard.writeText(keyToCopy);
-                        setPixCopiado(true);
-                        toast.success("Chave Pix copiada!");
-                      }
-                    }}
-                    className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
-                  >
-                    {pixCopiado ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
-                    {pixCopiado ? "Copiada!" : "Copiar Chave"}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-[11px] text-muted-foreground italic">
-                Chave Pix não cadastrada no perfil da loja. Entre em contato pelo WhatsApp para obter os dados de pagamento.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* BOTÕES DE AÇÃO */}
           <div className="space-y-2 pt-2 border-t border-border/60">
