@@ -267,6 +267,52 @@ function renderizarBadgePagamentoMobile(ord: Encomenda) {
   );
 }
 
+function obterStatusFinanceiroEncomenda(ord: Encomenda): "pago_integral" | "sinal_pago" | "pendente" {
+  const totalPago = calcularTotalPagoEncomenda(ord);
+  const statusPag = String(ord.statusPagamento || (ord as any).status_pagamento || "").toLowerCase();
+  const isStatusPago =
+    statusPag === "pago" ||
+    statusPag === "pago_integral" ||
+    statusPag === "aprovado" ||
+    statusPag === "approved" ||
+    statusPag === "paid";
+
+  if (isStatusPago || (totalPago >= ord.valorTotal && ord.valorTotal > 0)) {
+    return "pago_integral";
+  }
+  if (totalPago > 0) {
+    return "sinal_pago";
+  }
+  return "pendente";
+}
+
+function obterEstiloCardFinanceiro(status: "pago_integral" | "sinal_pago" | "pendente"): string {
+  switch (status) {
+    case "pago_integral":
+      return "bg-green-50 dark:bg-green-950/20 border-l-4 border-green-500 border-t border-r border-b border-green-200 dark:border-green-900/40 shadow-xs hover:border-green-600";
+    case "sinal_pago":
+      return "bg-orange-50 dark:bg-orange-950/20 border-l-4 border-orange-500 border-t border-r border-b border-orange-200 dark:border-orange-900/40 shadow-xs hover:border-orange-600";
+    case "pendente":
+      return "bg-red-50 dark:bg-red-950/20 border-l-4 border-red-500 border-t border-r border-b border-red-200 dark:border-red-900/40 shadow-xs hover:border-red-600";
+  }
+}
+
+function verificarUrgenciaEntrega(dataEntrega?: string, status?: string): "hoje" | "atrasada" | null {
+  if (!dataEntrega) return null;
+  const statusLower = (status || "").toLowerCase();
+  if (statusLower === "entregue" || statusLower === "concluido" || statusLower === "concluida" || statusLower === "cancelada") {
+    return null;
+  }
+  const hoje = new Date().toISOString().split("T")[0];
+  if (dataEntrega === hoje) {
+    return "hoje";
+  }
+  if (dataEntrega < hoje) {
+    return "atrasada";
+  }
+  return null;
+}
+
 function obterMetodoPagamentoFormatado(ord: Encomenda): string {
   const metodo = ord.metodoPagamento || ord.metodo_pagamento || (ord as any).forma_pagamento;
   const origem = ord.origem_pagamento || (ord as any).origem;
@@ -1703,13 +1749,33 @@ export function OrdersView({
                   encomendasFiltradas.map((ord) => {
                     const totalPago = calcularTotalPagoEncomenda(ord);
                     const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+                    const statusFin = obterStatusFinanceiroEncomenda(ord);
+                    const urgencia = verificarUrgenciaEntrega(ord.dataEntrega, ord.status);
+
+                    const rowBgClass =
+                      statusFin === "pago_integral"
+                        ? "bg-green-50/70 dark:bg-green-950/20 hover:bg-green-100/80 border-l-4 border-l-green-500"
+                        : statusFin === "sinal_pago"
+                        ? "bg-orange-50/70 dark:bg-orange-950/20 hover:bg-orange-100/80 border-l-4 border-l-orange-500"
+                        : "bg-red-50/70 dark:bg-red-950/20 hover:bg-red-100/80 border-l-4 border-l-red-500";
+
                     return (
                       <TableRow
                         key={ord.id}
                         onClick={() => handleAbrirDetalhes(ord)}
-                        className="hover:bg-purple-500/5 cursor-pointer transition-colors"
+                        className={`cursor-pointer transition-colors ${rowBgClass}`}
                       >
                         <TableCell className="text-xs">
+                          {urgencia === "hoje" && (
+                            <Badge className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] tracking-wide px-1.5 py-0 mb-1 uppercase shadow-xs flex items-center gap-1 w-fit border-0 animate-pulse">
+                              🔥 ENTREGA HOJE
+                            </Badge>
+                          )}
+                          {urgencia === "atrasada" && (
+                            <Badge className="bg-red-700 text-white font-black text-[9px] tracking-wide px-1.5 py-0 mb-1 uppercase shadow-xs flex items-center gap-1 w-fit border-0">
+                              ⚠️ ENTREGA ATRASADA
+                            </Badge>
+                          )}
                           <div className="font-extrabold text-foreground flex items-center gap-1.5">
                             <CalendarDays className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                             <span>{ord.dataEntrega.split("-").reverse().join("/")}</span>
@@ -1733,8 +1799,29 @@ export function OrdersView({
                           )}
                         </TableCell>
 
-                        <TableCell className="text-xs font-extrabold text-foreground">
-                          {formatarMoeda(ord.valorTotal)}
+                        <TableCell className="text-xs">
+                          {saldoRestante > 0 ? (
+                            <div className="space-y-0.5">
+                              <span className="text-[9.5px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wide block">
+                                {statusFin === "sinal_pago" ? "Resta Pagar:" : "A Cobrar (100%):"}
+                              </span>
+                              <div className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono tracking-tight leading-tight">
+                                {formatarMoeda(saldoRestante)}
+                              </div>
+                              <div className="text-[10.5px] text-muted-foreground font-medium">
+                                Total: {formatarMoeda(ord.valorTotal)}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <span className="text-[9.5px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide block">
+                                Total Quitado:
+                              </span>
+                              <div className="text-xs font-extrabold text-foreground font-mono">
+                                {formatarMoeda(ord.valorTotal)}
+                              </div>
+                            </div>
+                          )}
                         </TableCell>
 
                         <TableCell className="text-xs space-y-1">
@@ -1828,7 +1915,7 @@ export function OrdersView({
             </Table>
           </Card>
 
-          {/* VISUALIZAÇÃO MOBILE (CARDS LIMPOS & CLICÁVEIS) */}
+          {/* VISUALIZAÇÃO MOBILE (CARDS REFATORADOS COM IDENTIFICAÇÃO IMEDIATA) */}
           <div className="block md:hidden space-y-3">
             {encomendasFiltradas.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground bg-card border border-border rounded-xl">
@@ -1840,16 +1927,42 @@ export function OrdersView({
               encomendasFiltradas.map((ord) => {
                 const totalPago = calcularTotalPagoEncomenda(ord);
                 const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+                const statusFin = obterStatusFinanceiroEncomenda(ord);
+                const cardStyle = obterEstiloCardFinanceiro(statusFin);
+                const urgencia = verificarUrgenciaEntrega(ord.dataEntrega, ord.status);
+
                 return (
                   <div
                     key={ord.id}
                     onClick={() => handleAbrirDetalhes(ord)}
-                    className="p-3.5 rounded-2xl border border-border bg-card shadow-xs hover:border-primary/50 cursor-pointer transition-all space-y-3"
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all space-y-3 ${cardStyle}`}
                   >
-                    <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-2.5">
+                    {/* Tag visual de Urgência no topo do card */}
+                    {urgencia === "hoje" && (
+                      <div className="flex items-center justify-between pb-0.5">
+                        <Badge className="bg-red-500 hover:bg-red-600 text-white font-black text-[10px] tracking-wide px-2 py-0.5 uppercase shadow-xs flex items-center gap-1 border-0 animate-pulse">
+                          🔥 ENTREGA HOJE
+                        </Badge>
+                        <span className="text-[10.5px] font-mono font-bold text-red-700 dark:text-red-300 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-red-600" /> {ord.horarioEntrega || "14:00"}
+                        </span>
+                      </div>
+                    )}
+                    {urgencia === "atrasada" && (
+                      <div className="flex items-center justify-between pb-0.5">
+                        <Badge className="bg-red-700 hover:bg-red-800 text-white font-black text-[10px] tracking-wide px-2 py-0.5 uppercase shadow-xs flex items-center gap-1 border-0">
+                          ⚠️ ENTREGA ATRASADA
+                        </Badge>
+                        <span className="text-[10.5px] font-mono font-bold text-red-800 dark:text-red-300 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-red-700" /> {ord.horarioEntrega || "14:00"}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-start justify-between gap-2 border-b border-border/40 pb-2.5">
                       <div className="space-y-1">
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5 flex-wrap">
-                          <span>{ord.clienteNome}</span>
+                          <span className="text-sm font-extrabold">{ord.clienteNome}</span>
                           {ord.status === "entregue" && (
                             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
                               ✓ Entregue
@@ -1871,14 +1984,36 @@ export function OrdersView({
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 space-y-1">
-                        <div className="text-xs font-extrabold text-foreground">{formatarMoeda(ord.valorTotal)}</div>
-                        {renderizarBadgePagamentoMobile(ord)}
+                      {/* Hierarquia Financeira: Destaque do Valor Restante a Pagar */}
+                      <div className="text-right shrink-0 space-y-0.5">
+                        {saldoRestante > 0 ? (
+                          <div>
+                            <span className="text-[9.5px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
+                              {statusFin === "sinal_pago" ? "Restante a Cobrar:" : "A Cobrar (100%):"}
+                            </span>
+                            <div className="text-base font-black text-rose-600 dark:text-rose-400 font-mono tracking-tight leading-tight">
+                              {formatarMoeda(saldoRestante)}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground font-medium">
+                              Total: <span className="font-semibold text-foreground">{formatarMoeda(ord.valorTotal)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-[9.5px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+                              Total Quitado:
+                            </span>
+                            <div className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">
+                              {formatarMoeda(ord.valorTotal)}
+                            </div>
+                          </div>
+                        )}
+                        <div className="pt-0.5">{renderizarBadgePagamentoMobile(ord)}</div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] text-primary font-bold">Ver todos os detalhes &gt;</span>
+                      <span className="text-[10.5px] text-primary font-bold hover:underline">Ver todos os detalhes &gt;</span>
 
                       <div className="flex items-center gap-1">
                         {ord.status === "entregue" ? (
@@ -2421,9 +2556,22 @@ export function OrdersView({
               ) : (
                 encomendasDoDiaDrawer.map((ord) => {
                   const statusCfg = STATUS_ENCOMENDA_CONFIG[ord.status];
+                  const totalPago = calcularTotalPagoEncomenda(ord);
+                  const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+                  const statusFin = obterStatusFinanceiroEncomenda(ord);
+                  const cardStyle = obterEstiloCardFinanceiro(statusFin);
+                  const urgencia = verificarUrgenciaEntrega(ord.dataEntrega, ord.status);
+
                   return (
-                    <Card key={ord.id} className="border-border shadow-xs bg-card overflow-hidden">
+                    <Card key={ord.id} className={`shadow-xs overflow-hidden ${cardStyle}`}>
                       <div className="p-3.5 space-y-3">
+                        {urgencia === "hoje" && (
+                          <div className="flex items-center justify-between pb-0.5">
+                            <Badge className="bg-red-500 hover:bg-red-600 text-white font-black text-[10px] px-2 py-0.5 uppercase border-0 animate-pulse">
+                              🔥 ENTREGA HOJE
+                            </Badge>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="font-mono text-xs font-black text-primary flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
@@ -2462,7 +2610,7 @@ export function OrdersView({
                           )}
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-muted/40 text-xs space-y-1">
+                        <div className="p-2.5 rounded-lg bg-background/60 text-xs space-y-1 border border-border/40">
                           <p className="font-medium text-foreground">{ord.itens}</p>
                           {ord.observacoes && (
                             <p className="text-[11px] text-muted-foreground italic">Obs: {ord.observacoes}</p>
@@ -2508,10 +2656,29 @@ export function OrdersView({
                         )}
 
                         <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
-                          <span className="font-extrabold text-foreground text-sm">
-                            {formatarMoeda(ord.valorTotal)}
-                          </span>
-                          <span className="text-muted-foreground text-[11px] font-medium">
+                          {saldoRestante > 0 ? (
+                            <div>
+                              <span className="text-[9.5px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wide block">
+                                {statusFin === "sinal_pago" ? "Resta Pagar:" : "A Cobrar (100%):"}
+                              </span>
+                              <div className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono">
+                                {formatarMoeda(saldoRestante)}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Total: {formatarMoeda(ord.valorTotal)}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-[9.5px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide block">
+                                Total Pago:
+                              </span>
+                              <div className="text-sm font-extrabold text-foreground font-mono">
+                                {formatarMoeda(ord.valorTotal)}
+                              </div>
+                            </div>
+                          )}
+                          <span className="text-muted-foreground text-[11px] font-medium self-end">
                             {ord.tipoEntrega === "delivery" ? "🚚 Delivery" : "🏬 Retirada"}
                           </span>
                         </div>
