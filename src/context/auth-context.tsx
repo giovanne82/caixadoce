@@ -47,6 +47,8 @@ export type UpdateEstablishmentDetailsInput = {
   whatsapp?: string;
   logoUrl?: string;
   store_logo_url?: string;
+  bannerUrl?: string;
+  banner_url?: string;
   tituloCardapio?: string;
   menu_title?: string;
   sloganCardapio?: string;
@@ -1078,6 +1080,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           const fallbackUpdatePayload = { ...updatePayload };
           delete fallbackUpdatePayload.logo_url;
           delete fallbackUpdatePayload.store_logo_url;
+          delete fallbackUpdatePayload.banner_url;
+          delete (fallbackUpdatePayload as any).bannerUrl;
           delete fallbackUpdatePayload.titulo_cardapio;
           delete fallbackUpdatePayload.menu_title;
           delete fallbackUpdatePayload.slogan_cardapio;
