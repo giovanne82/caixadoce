@@ -346,16 +346,47 @@ export function CardapioLojaView() {
   const [endLogradouro, setEndLogradouro] = useState("");
   const [endNumero, setEndNumero] = useState("");
   const [endBairro, setEndBairro] = useState("");
+  const [endCep, setEndCep] = useState("");
   const [endPontoRef, setEndPontoRef] = useState("");
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
+  const handleBuscarCep = async (cepInput: string) => {
+    setEndCep(cepInput);
+    const limpo = cepInput.replace(/\D/g, "");
+    if (limpo.length === 8) {
+      setBuscandoCep(true);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.erro) {
+            if (data.logradouro) setEndLogradouro(data.logradouro);
+            if (data.bairro) {
+              setEndBairro(data.bairro);
+              setBairroDropdownOpen(false);
+            }
+            toast.success(`Endereço localizado: ${data.bairro}${data.localidade ? ` - ${data.localidade}/${data.uf}` : ""}`);
+          } else {
+            toast.error("CEP não localizado. Preencha o bairro e a rua manualmente.");
+          }
+        }
+      } catch (e) {
+        console.warn("Aviso ao consultar CEP:", e);
+      } finally {
+        setBuscandoCep(false);
+      }
+    }
+  };
 
   const enderecoEntrega = useMemo(() => {
     const partes = [];
     if (endLogradouro.trim()) partes.push(endLogradouro.trim());
     if (endNumero.trim()) partes.push(`nº ${endNumero.trim()}`);
     if (endBairro.trim()) partes.push(`Bairro: ${endBairro.trim()}`);
+    if (endCep.trim()) partes.push(`CEP: ${endCep.trim()}`);
     if (endPontoRef.trim()) partes.push(`Ref: ${endPontoRef.trim()}`);
     return partes.join(", ");
-  }, [endLogradouro, endNumero, endBairro, endPontoRef]);
+  }, [endLogradouro, endNumero, endBairro, endCep, endPontoRef]);
 
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
@@ -757,6 +788,10 @@ export function CardapioLojaView() {
     if (tipoEntrega === "delivery") {
       if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
         toast.error("Preencha o logradouro, número e bairro para a entrega.");
+        return;
+      }
+      if (freteCalculado.naoAtendido) {
+        toast.error(`A confeitaria não realiza entregas para o bairro "${endBairro.trim()}". Por favor, escolha a opção Retirada no Balcão ou selecione um bairro atendido.`);
         return;
       }
     }
@@ -1623,14 +1658,41 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           Endereço para Entrega em Domicílio
                         </p>
                         {freteCalculado.motivo && (
-                          <Badge variant="outline" className="text-[10px] text-purple-700 dark:text-purple-300 border-purple-300">
+                          <Badge
+                            variant={freteCalculado.naoAtendido ? "destructive" : "outline"}
+                            className={`text-[10px] ${
+                              freteCalculado.naoAtendido
+                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300 font-bold"
+                                : "text-purple-700 dark:text-purple-300 border-purple-300"
+                            }`}
+                          >
                             {freteCalculado.motivo}
                           </Badge>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="sm:col-span-2 space-y-1">
+                      {/* 1. CEP + Logradouro + Número */}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <div className="space-y-1 sm:col-span-1">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="end-cep" className="text-[11px] font-semibold">CEP (Opcional)</Label>
+                            {buscandoCep && (
+                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-mono animate-pulse">
+                                Buscando...
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            id="end-cep"
+                            placeholder="00000-000"
+                            value={endCep}
+                            onChange={(e) => handleBuscarCep(e.target.value)}
+                            className="h-8 text-xs font-medium font-mono"
+                            maxLength={9}
+                          />
+                        </div>
+
+                        <div className="space-y-1 sm:col-span-2">
                           <Label htmlFor="end-rua" className="text-[11px] font-semibold">Logradouro (Rua / Av) *</Label>
                           <Input
                             id="end-rua"
@@ -1641,7 +1703,8 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                             required={tipoEntrega === "delivery"}
                           />
                         </div>
-                        <div className="space-y-1">
+
+                        <div className="space-y-1 sm:col-span-1">
                           <Label htmlFor="end-num" className="text-[11px] font-semibold">Número *</Label>
                           <Input
                             id="end-num"
@@ -1654,10 +1717,11 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         </div>
                       </div>
 
+                      {/* 2. Bairro / Região + Referência */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="space-y-1 relative">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro *</Label>
+                            <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro / Região *</Label>
                             {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
                               <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
                                 {freteConfig.regrasBairros.filter((b) => b.ativo).length} atendidos
@@ -1691,6 +1755,10 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                 }
                               }}
                               className={`h-8 text-xs font-medium ${
+                                freteCalculado.naoAtendido && endBairro.trim()
+                                  ? "border-rose-500 focus-visible:ring-rose-500"
+                                  : ""
+                              } ${
                                 endBairro.trim() && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0
                                   ? "pr-14"
                                   : "pr-7"
@@ -1794,7 +1862,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           {/* Indicador Dinâmico de Frete para o Bairro com Botão Trocar */}
                           {endBairro.trim() && (
                             <div className="flex items-center justify-between pt-0.5 text-[10px]">
-                              {freteCalculado.isGratis ? (
+                              {freteCalculado.naoAtendido ? (
+                                <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1 truncate">
+                                  <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                                  Sem entregas para {endBairro.trim()}
+                                </span>
+                              ) : freteCalculado.isGratis ? (
                                 <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 truncate">
                                   <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
                                   Entrega Grátis ({endBairro.trim()})
@@ -1802,7 +1875,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                               ) : (
                                 <span className="text-purple-700 dark:text-purple-300 font-bold flex items-center gap-1 truncate">
                                   <Truck className="w-3 h-3 text-purple-600 shrink-0" />
-                                  Taxa: {formatarMoeda(freteCalculado.valorFrete)} ({endBairro.trim()})
+                                  Taxa Calculada: {formatarMoeda(freteCalculado.valorFrete)} ({endBairro.trim()})
                                 </span>
                               )}
 
@@ -1818,6 +1891,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                             </div>
                           )}
                         </div>
+
                         <div className="space-y-1">
                           <Label htmlFor="end-ref" className="text-[11px] font-semibold">Ponto de Referência (Opcional)</Label>
                           <Input
@@ -1829,6 +1903,19 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           />
                         </div>
                       </div>
+
+                      {/* Alerta Destacado caso a Localidade não seja atendida */}
+                      {freteCalculado.naoAtendido && endBairro.trim() && (
+                        <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs space-y-1 mt-1">
+                          <p className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            Região Não Atendida para Entrega
+                          </p>
+                          <p className="text-[11px] leading-snug">
+                            A loja não realiza entregas para o bairro <strong>"{endBairro.trim()}"</strong>. Por favor, selecione um bairro atendido na lista ou altere a opção para <strong>Retirada no Balcão</strong>.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 

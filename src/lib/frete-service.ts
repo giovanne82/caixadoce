@@ -142,6 +142,7 @@ export function calcularFretePedido(
   motivo?: string;
   tempoEstimadoMinutos: number;
   bairroIdentificado?: string;
+  naoAtendido?: boolean;
 } {
   if (tipoEntrega === "retirada") {
     return {
@@ -149,6 +150,7 @@ export function calcularFretePedido(
       isGratis: true,
       motivo: "Retirada no Local (Grátis)",
       tempoEstimadoMinutos: 0,
+      naoAtendido: false,
     };
   }
 
@@ -159,6 +161,7 @@ export function calcularFretePedido(
       isGratis: true,
       motivo: "Frete Grátis em toda a loja!",
       tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
+      naoAtendido: false,
     };
   }
 
@@ -169,13 +172,15 @@ export function calcularFretePedido(
       isGratis: true,
       motivo: `Frete Grátis (Pedido acima de R$ ${config.valorMinimoFreteGratis.toFixed(2).replace(".", ",")})`,
       tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
+      naoAtendido: false,
     };
   }
 
   // 3. Busca e correspondência inteligente de Bairro / Região
-  if (bairroEscolhido && Array.isArray(config.regrasBairros) && config.regrasBairros.length > 0) {
-    const termoLimpo = bairroEscolhido.trim().toLowerCase();
+  const temBairrosAtivos = Array.isArray(config.regrasBairros) && config.regrasBairros.some((r) => r.ativo);
+  const termoLimpo = bairroEscolhido ? bairroEscolhido.trim().toLowerCase() : "";
 
+  if (termoLimpo && temBairrosAtivos) {
     // 3.1. Match exato ou por ID
     let regraEncontrada = config.regrasBairros.find(
       (r) => r.ativo && (r.bairro.toLowerCase() === termoLimpo || r.id === bairroEscolhido)
@@ -196,6 +201,15 @@ export function calcularFretePedido(
         motivo: valor === 0 ? `Frete Grátis (${regraEncontrada.bairro})` : `Taxa do Bairro ${regraEncontrada.bairro}`,
         tempoEstimadoMinutos: regraEncontrada.prazoMinutos || config.tempoMedioMinutos || 45,
         bairroIdentificado: regraEncontrada.bairro,
+        naoAtendido: false,
+      };
+    } else if (config.tipoFretePadrao === "bairros") {
+      return {
+        valorFrete: Number(config.valorFixoPadrao) || 0,
+        isGratis: false,
+        motivo: `Entrega indisponível para o bairro "${bairroEscolhido?.trim()}"`,
+        tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
+        naoAtendido: true,
       };
     }
   }
@@ -207,5 +221,6 @@ export function calcularFretePedido(
     isGratis: valorFixo === 0,
     motivo: config.tipoFretePadrao === "consulta" ? "Frete a combinar" : "Taxa de Entrega Padrão",
     tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
+    naoAtendido: false,
   };
 }
