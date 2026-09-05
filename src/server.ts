@@ -248,8 +248,8 @@ async function seedClientesLojaTableInSupabase() {
       DROP POLICY IF EXISTS "Permitir insercao em clientes_loja" ON public.clientes_loja;
       CREATE POLICY "Permitir insercao em clientes_loja" ON public.clientes_loja FOR INSERT WITH CHECK (true);
       DROP POLICY IF EXISTS "Permitir atualizacao em clientes_loja" ON public.clientes_loja;
-      CREATE POLICY "Permitir atualizacao em clientes_loja" ON public.clientes_loja FOR UPDATE USING (true);
       GRANT ALL ON TABLE public.clientes_loja TO anon, authenticated, service_role;
+      ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
     `;
 
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {

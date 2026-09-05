@@ -902,18 +902,24 @@ export function CardapioLojaView() {
         ? (observacoes.trim() ? `${observacoes.trim()} | ${avisoTexto}` : avisoTexto)
         : (observacoes.trim() || "");
 
-      // 1. Gestão e Identificação de Clientes no Supabase (tabela clientes_loja e customers)
+      // 1. Gestão e Identificação de Clientes no Supabase (tabela clientes_loja)
       let clienteId: string | null = null;
       const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
-      const estIdentificador = lojaInfo?.user_id || code;
 
       try {
-        const { data: clienteExistente } = await supabase
+        const phoneFilter = cleanPhone.length >= 8 ? cleanPhone.slice(-8) : cleanPhone;
+        let query = supabase
           .from("clientes_loja")
           .select("id, nome, telefone, total_pedidos, total_gasto")
-          .or(`estabelecimento_id.eq.${estIdentificador},estabelecimento_codigo.eq.${code}`)
-          .ilike("telefone", `%${cleanPhone.slice(-8)}%`)
-          .limit(1);
+          .eq("estabelecimento_codigo", code);
+
+        if (phoneFilter) {
+          query = query.ilike("telefone", `%${phoneFilter}%`);
+        } else {
+          query = query.eq("nome", clienteNome);
+        }
+
+        const { data: clienteExistente } = await query.limit(1);
 
         if (clienteExistente && clienteExistente.length > 0 && clienteExistente[0]?.id) {
           clienteId = clienteExistente[0].id;
@@ -933,12 +939,12 @@ export function CardapioLojaView() {
             .eq("id", clienteId);
         } else {
           const novoClienteId = crypto.randomUUID();
-          const { data: criado } = await supabase
+          const { data: criado, error: errInsertCli } = await supabase
             .from("clientes_loja")
             .insert([
               {
                 id: novoClienteId,
-                estabelecimento_id: lojaInfo?.user_id || null,
+                estabelecimento_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
                 estabelecimento_codigo: code,
                 nome: clienteNome,
                 telefone: clienteWhatsapp,
@@ -951,19 +957,21 @@ export function CardapioLojaView() {
             .select("id")
             .maybeSingle();
 
+          if (errInsertCli) {
+            console.warn("Aviso ao criar em clientes_loja:", errInsertCli.message);
+          }
           clienteId = criado?.id || novoClienteId;
         }
       } catch (eCli) {
         console.warn("Aviso ao processar tabela clientes_loja:", eCli);
       }
 
-      // 2. Criação do Pedido em 'encomendas' vinculado ao ID do cliente
+      // 2. Criação do Pedido em 'encomendas' vinculado ao cliente_id
       const payloadInsert: Record<string, any> = {
         id: pedidoId,
         estabelecimento_codigo: code,
         user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
         cliente_id: clienteId,
-        customer_id: clienteId,
         cliente_nome: clienteNome,
         cliente_whatsapp: clienteWhatsapp,
         data_entrega: dataEntrega,
@@ -977,7 +985,6 @@ export function CardapioLojaView() {
         itens_detalhes: itensDetalhesJson,
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
-        total_price: valTotalCarrinho,
         observacoes: obsFinal,
       };
 
@@ -986,12 +993,11 @@ export function CardapioLojaView() {
       if (insertError) {
         console.warn("Tentativa de insert em encomendas falhou com payload estendido, tentando fallback minimalista:", insertError.message);
         
-        const payloadMinimal = {
+        const payloadMinimal: Record<string, any> = {
           id: pedidoId,
           estabelecimento_codigo: code,
           user_id: payloadInsert.user_id,
           cliente_id: clienteId,
-          customer_id: clienteId,
           cliente_nome: clienteNome,
           cliente_whatsapp: clienteWhatsapp,
           data_entrega: dataEntrega,
@@ -1009,6 +1015,13 @@ export function CardapioLojaView() {
 
         const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
         insertError = resMin.error;
+
+        // Se falhar caso cliente_id não exista na versão específica do schema
+        if (insertError && insertError.message?.toLowerCase().includes("cliente_id")) {
+          const { cliente_id: _cid, ...payloadSemCli } = payloadMinimal;
+          const resFallback = await supabase.from("encomendas").insert([payloadSemCli]);
+          insertError = resFallback.error;
+        }
       }
 
       if (insertError) {
