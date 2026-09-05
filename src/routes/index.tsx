@@ -782,6 +782,31 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       supabase.removeChannel(channel);
     };
   }, [profile, activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
+
+  // Revalidação imediata de encomendas ao selecionar a aba 'encomendas'
+  useEffect(() => {
+    if (activeTab === "encomendas" && activeCode) {
+      fetchEncomendasECalendario(true);
+    }
+  }, [activeTab, activeCode, fetchEncomendasECalendario]);
+
+  // Revalidação ao retomar foco na janela / mudar visibilidade da página
+  useEffect(() => {
+    if (!activeCode) return;
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        fetchEncomendasECalendario(true);
+        fetchTransacoes(true);
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [activeCode, fetchEncomendasECalendario, fetchTransacoes]);
+
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
     const cleanWhatsapp = dados.whatsapp?.replace(/\D/g, "") || "";

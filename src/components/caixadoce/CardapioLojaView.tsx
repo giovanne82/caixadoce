@@ -922,6 +922,8 @@ export function CardapioLojaView() {
                 .update({
                   status_pagamento: "pago_integral",
                   metodo_pagamento: "Mercado Pago",
+                  forma_pagamento: "Mercado Pago",
+                  origem_pagamento: "mercadopago",
                   valor_entrada: totalComFrete,
                   historico_pagamentos: [
                     {
@@ -1097,6 +1099,8 @@ export function CardapioLojaView() {
     setSalvandoPedido(true);
     try {
       const pedidoId = crypto.randomUUID();
+      setUltimoPedidoId(pedidoId);
+      setPedidoCriadoId(pedidoId);
       const resumoItensTexto = carrinho
         .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
         .join(", ");
@@ -1216,7 +1220,10 @@ export function CardapioLojaView() {
         tipo_entrega: tipoEntrega,
         endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
-        status_pagamento: metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente",
+        status_pagamento: lojaInfo?.usar_mercadopago ? "pix_pendente" : (metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente"),
+        metodo_pagamento: lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão"),
+        forma_pagamento: lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão"),
+        origem_pagamento: lojaInfo?.usar_mercadopago ? "mercadopago" : "manual",
         status: "pendente",
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
@@ -1247,6 +1254,9 @@ export function CardapioLojaView() {
           total_amount: valTotalCarrinho,
           status: "pendente",
           status_pagamento: payloadInsert.status_pagamento,
+          metodo_pagamento: payloadInsert.metodo_pagamento,
+          forma_pagamento: payloadInsert.forma_pagamento,
+          origem_pagamento: payloadInsert.origem_pagamento,
           observacoes: obsFinal,
         };
 

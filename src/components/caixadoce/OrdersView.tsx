@@ -161,28 +161,37 @@ function obterEstiloPilula(status: StatusEncomenda) {
 
 function renderizarBadgePagamento(ord: Encomenda) {
   const totalPago = calcularTotalPagoEncomenda(ord);
+  const statusPag = String(ord.statusPagamento || (ord as any).status_pagamento || "").toLowerCase();
+  const isStatusPago =
+    statusPag === "pago" ||
+    statusPag === "pago_integral" ||
+    statusPag === "aprovado" ||
+    statusPag === "approved" ||
+    statusPag === "paid";
+
+  const isPagoIntegral = isStatusPago || (totalPago >= ord.valorTotal && ord.valorTotal > 0);
+
   const isMercadoPago =
     ord.metodoPagamento === "Mercado Pago" ||
     (ord as any).metodo_pagamento === "Mercado Pago" ||
     (ord as any).origem_pagamento === "mercadopago" ||
+    (ord as any).forma_pagamento === "Mercado Pago" ||
     ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
 
-  const isPagoIntegral = (totalPago >= ord.valorTotal && ord.valorTotal > 0) || ord.statusPagamento === "pago_integral";
-
-  if (isMercadoPago || (isPagoIntegral && isMercadoPago)) {
+  if (isPagoIntegral && isMercadoPago) {
     return (
-      <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
         <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <span>Pago • Mercado Pago</span>
+        <span>Pago (Mercado Pago)</span>
       </Badge>
     );
   }
 
   if (isPagoIntegral) {
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
         <Check className="w-3 h-3 text-emerald-600" />
-        <span>100% Pago ({formatarMoeda(totalPago)})</span>
+        <span>Pago (100%)</span>
       </Badge>
     );
   }
@@ -208,34 +217,44 @@ function renderizarBadgePagamento(ord: Encomenda) {
 
 function renderizarBadgePagamentoMobile(ord: Encomenda) {
   const totalPago = calcularTotalPagoEncomenda(ord);
+  const statusPag = String(ord.statusPagamento || (ord as any).status_pagamento || "").toLowerCase();
+  const isStatusPago =
+    statusPag === "pago" ||
+    statusPag === "pago_integral" ||
+    statusPag === "aprovado" ||
+    statusPag === "approved" ||
+    statusPag === "paid";
+
+  const isPagoIntegral = isStatusPago || (totalPago >= ord.valorTotal && ord.valorTotal > 0);
+
   const isMercadoPago =
     ord.metodoPagamento === "Mercado Pago" ||
     (ord as any).metodo_pagamento === "Mercado Pago" ||
     (ord as any).origem_pagamento === "mercadopago" ||
+    (ord as any).forma_pagamento === "Mercado Pago" ||
     ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
 
-  const isPagoIntegral = (totalPago >= ord.valorTotal && ord.valorTotal > 0) || ord.statusPagamento === "pago_integral";
-
-  if (isMercadoPago || (isPagoIntegral && isMercadoPago)) {
+  if (isPagoIntegral && isMercadoPago) {
     return (
-      <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
         <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-        <span>Pago • Mercado Pago</span>
+        <span>Pago (Mercado Pago)</span>
       </Badge>
     );
   }
 
   if (isPagoIntegral) {
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5">
-        100% Pago
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+        <Check className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+        <span>Pago (100%)</span>
       </Badge>
     );
   }
 
   if (totalPago > 0) {
     return (
-      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5">
+      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold">
         Pago: {formatarMoeda(totalPago)}
       </Badge>
     );
