@@ -217,6 +217,56 @@ async function seedInsumosTableInSupabase() {
 }
 seedInsumosTableInSupabase();
 
+// Injeção de Inicialização da Tabela clientes_loja no Supabase
+async function seedClientesLojaTableInSupabase() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    const createTableSql = `
+      CREATE TABLE IF NOT EXISTS public.clientes_loja (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        estabelecimento_id TEXT,
+        estabelecimento_codigo TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        telefone TEXT NOT NULL,
+        endereco TEXT DEFAULT '',
+        total_pedidos INTEGER DEFAULT 1,
+        total_gasto NUMERIC(12, 2) DEFAULT 0.00,
+        ultimo_pedido_em TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_clientes_loja_tel ON public.clientes_loja(telefone);
+      CREATE INDEX IF NOT EXISTS idx_clientes_loja_est ON public.clientes_loja(estabelecimento_codigo);
+      ALTER TABLE public.clientes_loja ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em clientes_loja" ON public.clientes_loja;
+      CREATE POLICY "Permitir leitura total em clientes_loja" ON public.clientes_loja FOR SELECT USING (true);
+      DROP POLICY IF EXISTS "Permitir insercao em clientes_loja" ON public.clientes_loja;
+      CREATE POLICY "Permitir insercao em clientes_loja" ON public.clientes_loja FOR INSERT WITH CHECK (true);
+      DROP POLICY IF EXISTS "Permitir atualizacao em clientes_loja" ON public.clientes_loja;
+      CREATE POLICY "Permitir atualizacao em clientes_loja" ON public.clientes_loja FOR UPDATE USING (true);
+      GRANT ALL ON TABLE public.clientes_loja TO anon, authenticated, service_role;
+    `;
+
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: createTableSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed Clientes Loja Table Log]", err);
+  }
+}
+seedClientesLojaTableInSupabase();
+
 // Cache global em memória para trava de idempotência de pagamentos processados
 const processedPaymentsSet = new Set<string>();
 

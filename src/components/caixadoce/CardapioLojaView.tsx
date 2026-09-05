@@ -58,6 +58,8 @@ import {
   ChevronDown,
   X,
   AlertTriangle,
+  HeartHandshake,
+  History,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -340,6 +342,24 @@ export function CardapioLojaView() {
   const [salvandoPedido, setSalvandoPedido] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [ultimoPedidoId, setUltimoPedidoId] = useState("");
+
+  // Estados de Identificação e Retenção do Cliente (Local Storage)
+  const [savedUserPhone, setSavedUserPhone] = useState<string>("");
+  const [savedUserName, setSavedUserName] = useState<string>("");
+  const [recentOrders, setRecentOrders] = useState<Array<{
+    id: string;
+    data: string;
+    data_entrega?: string;
+    horario_entrega?: string;
+    tipo_entrega?: string;
+    valor_total: number;
+    status: string;
+    itens: string;
+    total_itens?: number;
+    loja_codigo?: string;
+    loja_nome?: string;
+  }>>([]);
+  const [ultimosPedidosModalOpen, setUltimosPedidosModalOpen] = useState(false);
 
   // Estados do Formulário de Checkout do Cliente
   const [clienteNome, setClienteNome] = useState("");
@@ -650,7 +670,48 @@ export function CardapioLojaView() {
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     setDataEntrega(amanha.toISOString().split("T")[0]);
+
+    // Leitura e Reconhecimento Automático do Cliente no LocalStorage
+    if (typeof window !== "undefined") {
+      try {
+        const phone = localStorage.getItem("caixadoce_user_phone") || "";
+        const name = localStorage.getItem("caixadoce_user_name") || "";
+        const addr = localStorage.getItem("caixadoce_user_address") || "";
+
+        if (phone) {
+          setSavedUserPhone(phone);
+          setClienteWhatsapp((prev) => prev || phone);
+        }
+        if (name) {
+          setSavedUserName(name);
+          setClienteNome((prev) => prev || name);
+        }
+        if (addr) {
+          setEndLogradouro((prev) => prev || addr);
+        }
+
+        const rawOrders = localStorage.getItem("caixadoce_recent_orders");
+        if (rawOrders) {
+          const parsed = JSON.parse(rawOrders);
+          if (Array.isArray(parsed)) {
+            setRecentOrders(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn("Aviso ao ler histórico do cliente do localStorage:", e);
+      }
+    }
   }, [code]);
+
+  // Preenchimento automático ao abrir o carrinho
+  useEffect(() => {
+    if (cartOpen && typeof window !== "undefined") {
+      const phone = localStorage.getItem("caixadoce_user_phone");
+      const name = localStorage.getItem("caixadoce_user_name");
+      if (phone) setClienteWhatsapp((prev) => prev || phone);
+      if (name) setClienteNome((prev) => prev || name);
+    }
+  }, [cartOpen]);
 
   // Identificação Dinâmica do Modelo de Negócio
   const produtosProntaEntrega = useMemo(() => produtos.filter((p) => p.availability_type === "pronta_entrega"), [produtos]);
@@ -841,10 +902,68 @@ export function CardapioLojaView() {
         ? (observacoes.trim() ? `${observacoes.trim()} | ${avisoTexto}` : avisoTexto)
         : (observacoes.trim() || "");
 
+      // 1. Gestão e Identificação de Clientes no Supabase (tabela clientes_loja e customers)
+      let clienteId: string | null = null;
+      const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
+      const estIdentificador = lojaInfo?.user_id || code;
+
+      try {
+        const { data: clienteExistente } = await supabase
+          .from("clientes_loja")
+          .select("id, nome, telefone, total_pedidos, total_gasto")
+          .or(`estabelecimento_id.eq.${estIdentificador},estabelecimento_codigo.eq.${code}`)
+          .ilike("telefone", `%${cleanPhone.slice(-8)}%`)
+          .limit(1);
+
+        if (clienteExistente && clienteExistente.length > 0 && clienteExistente[0]?.id) {
+          clienteId = clienteExistente[0].id;
+          const novoTotal = (Number(clienteExistente[0].total_pedidos) || 0) + 1;
+          const novoGasto = (Number(clienteExistente[0].total_gasto) || 0) + valTotalCarrinho;
+
+          await supabase
+            .from("clientes_loja")
+            .update({
+              nome: clienteNome,
+              endereco: tipoEntrega === "delivery" ? enderecoEntrega : undefined,
+              total_pedidos: novoTotal,
+              total_gasto: novoGasto,
+              ultimo_pedido_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", clienteId);
+        } else {
+          const novoClienteId = crypto.randomUUID();
+          const { data: criado } = await supabase
+            .from("clientes_loja")
+            .insert([
+              {
+                id: novoClienteId,
+                estabelecimento_id: lojaInfo?.user_id || null,
+                estabelecimento_codigo: code,
+                nome: clienteNome,
+                telefone: clienteWhatsapp,
+                endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
+                total_pedidos: 1,
+                total_gasto: valTotalCarrinho,
+                ultimo_pedido_em: new Date().toISOString(),
+              },
+            ])
+            .select("id")
+            .maybeSingle();
+
+          clienteId = criado?.id || novoClienteId;
+        }
+      } catch (eCli) {
+        console.warn("Aviso ao processar tabela clientes_loja:", eCli);
+      }
+
+      // 2. Criação do Pedido em 'encomendas' vinculado ao ID do cliente
       const payloadInsert: Record<string, any> = {
         id: pedidoId,
         estabelecimento_codigo: code,
         user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+        cliente_id: clienteId,
+        customer_id: clienteId,
         cliente_nome: clienteNome,
         cliente_whatsapp: clienteWhatsapp,
         data_entrega: dataEntrega,
@@ -871,6 +990,8 @@ export function CardapioLojaView() {
           id: pedidoId,
           estabelecimento_codigo: code,
           user_id: payloadInsert.user_id,
+          cliente_id: clienteId,
+          customer_id: clienteId,
           cliente_nome: clienteNome,
           cliente_whatsapp: clienteWhatsapp,
           data_entrega: dataEntrega,
@@ -896,17 +1017,16 @@ export function CardapioLojaView() {
         return;
       }
 
-      // Gravação / Consolidação do Cliente no Banco e no Storage
+      // 3. Sincronização de Clientes no Storage e na tabela 'customers'
       try {
         const rawCust = typeof window !== "undefined" ? localStorage.getItem(`caixadoce_customers_${code}`) : null;
         let listaCust: any[] = rawCust ? JSON.parse(rawCust) : [];
-        const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
         const foundIndex = listaCust.findIndex((c: any) => {
           const p = (c.whatsapp || "").replace(/\D/g, "");
           return (cleanPhone && p && cleanPhone === p) || (c.nome || c.name || "").trim().toLowerCase() === clienteNome.trim().toLowerCase();
         });
 
-        const custId = foundIndex >= 0 ? listaCust[foundIndex].id : crypto.randomUUID();
+        const custId = clienteId || (foundIndex >= 0 ? listaCust[foundIndex].id : crypto.randomUUID());
         const novoCust = {
           id: custId,
           estabelecimentoCodigo: code,
@@ -943,6 +1063,42 @@ export function CardapioLojaView() {
         );
       } catch (custErr) {
         console.warn("Aviso ao atualizar base de clientes do cardápio digital:", custErr);
+      }
+
+      // 4. Memória do Navegador: Salva telefone, nome e histórico dos últimos 3 pedidos
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("caixadoce_user_phone", clienteWhatsapp);
+          localStorage.setItem("caixadoce_user_name", clienteNome);
+          if (tipoEntrega === "delivery" && enderecoEntrega) {
+            localStorage.setItem("caixadoce_user_address", enderecoEntrega);
+          }
+
+          setSavedUserPhone(clienteWhatsapp);
+          setSavedUserName(clienteNome);
+
+          const novoResumoPedido = {
+            id: pedidoId,
+            data: new Date().toISOString(),
+            data_entrega: dataEntrega,
+            horario_entrega: horarioEntrega || "15:00",
+            tipo_entrega: tipoEntrega,
+            valor_total: valTotalCarrinho,
+            status: "pendente",
+            itens: resumoItensTexto,
+            total_itens: totalItensCarrinho,
+            loja_codigo: code,
+            loja_nome: lojaInfo?.nome || "Confeitaria",
+          };
+
+          const rawOrders = localStorage.getItem("caixadoce_recent_orders");
+          const pedidosAnteriores = rawOrders ? JSON.parse(rawOrders) : [];
+          const atualizados = [novoResumoPedido, ...pedidosAnteriores.filter((p: any) => p.id !== pedidoId)].slice(0, 3);
+          localStorage.setItem("caixadoce_recent_orders", JSON.stringify(atualizados));
+          setRecentOrders(atualizados);
+        } catch (memErr) {
+          console.warn("Aviso ao salvar histórico do pedido no localStorage:", memErr);
+        }
       }
 
       // Reset de estados do Pix
@@ -1259,6 +1415,37 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             telefone={lojaInfo?.telefone}
             variant="banner"
           />
+        </div>
+      )}
+
+      {/* 0. COMPONENTE DISCRETO DE RECONHECIMENTO E BOAS-VINDAS */}
+      {savedUserPhone && (
+        <div className="max-w-5xl mx-auto px-4 pt-3 pb-0">
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-purple-500/10 dark:bg-purple-950/40 border border-purple-500/20 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs backdrop-blur-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-purple-950 dark:text-purple-200">
+              <div className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <HeartHandshake className="w-3.5 h-3.5" />
+              </div>
+              <span>
+                Bem-vindo(a) de volta{savedUserName ? `, ` : "!"}
+                {savedUserName && <strong className="text-purple-700 dark:text-purple-300 font-black">{savedUserName}</strong>}
+                !
+              </span>
+            </div>
+
+            {recentOrders.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setUltimosPedidosModalOpen(true)}
+                className="h-7 px-3 text-[11px] font-bold rounded-xl border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition-all shrink-0 flex items-center gap-1.5 shadow-xs"
+              >
+                <History className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />
+                Ver meus últimos pedidos ({recentOrders.length})
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -2185,6 +2372,73 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               Concluir e Limpar Carrinho
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE HISTÓRICO DE PEDIDOS RECENTES DO CLIENTE */}
+      <Dialog open={ultimosPedidosModalOpen} onOpenChange={setUltimosPedidosModalOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <History className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Meus Últimos Pedidos
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Histórico salvo no seu navegador {savedUserPhone ? `(${savedUserPhone})` : ""}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {recentOrders.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-xs">
+              Nenhum pedido recente registrado neste navegador.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentOrders.map((ord, idx) => (
+                <div
+                  key={ord.id || idx}
+                  className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-2 text-xs hover:border-purple-300 transition-all"
+                >
+                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                    <span className="font-bold font-mono text-[11px] text-purple-600 dark:text-purple-400">
+                      Pedido #{ord.id ? ord.id.slice(0, 8).toUpperCase() : `REC-${idx + 1}`}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-300 font-bold capitalize">
+                      {ord.status || "Pendente"}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1 text-muted-foreground">
+                    <p className="line-clamp-2 font-medium text-foreground">
+                      🛒 {ord.itens}
+                    </p>
+                    <div className="flex items-center justify-between pt-1 text-[11px]">
+                      <span>
+                        📅 {ord.data_entrega ? ord.data_entrega.split("-").reverse().join("/") : new Date(ord.data).toLocaleDateString("pt-BR")} {ord.horario_entrega ? `às ${ord.horario_entrega}` : ""}
+                      </span>
+                      <span className="font-mono font-black text-xs text-foreground">
+                        {formatarMoeda(ord.valor_total)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={() => setUltimosPedidosModalOpen(false)}
+            className="w-full text-xs font-bold rounded-xl h-9"
+          >
+            Fechar
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
