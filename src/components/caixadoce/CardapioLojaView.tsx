@@ -134,6 +134,7 @@ export interface LojaInfoState {
   delivery_ativo?: boolean;
   aceita_delivery?: boolean;
   usar_mercadopago?: boolean;
+  mp_access_token?: string | null;
   chave_pix_manual?: string;
   instagram?: string;
   tiktok?: string;
@@ -563,6 +564,7 @@ export function CardapioLojaView() {
             delivery_ativo: delAtivoVal,
             aceita_delivery: delAtivoVal,
             usar_mercadopago: Boolean(estData?.usar_mercadopago),
+            mp_access_token: estData?.mp_access_token || null,
             chave_pix_manual: estData?.chave_pix_manual || estData?.chave_pix || estData?.chavePix || "",
             instagram: insta,
             tiktok: tk,
@@ -948,30 +950,88 @@ export function CardapioLojaView() {
       setPixQrCodeBase64(null);
       setPixCopiado(false);
 
-      if (metodoPagamento === "pix" && valTotalCarrinho > 0) {
+      if (valTotalCarrinho > 0) {
         let gerouMp = false;
 
-        // SE TRUE (Mercado Pago Connect): Gera Pix via API /v1/payments
+        // 1. SE TRUE (Mercado Pago Connect): Gera Pix via API /v1/payments com o mp_access_token do lojista
         if (lojaInfo?.usar_mercadopago) {
           try {
-            console.log(`[Checkout Cardápio] Solicitando Pix Mercado Pago para ${code} (Valor: R$ ${valTotalCarrinho})...`);
-            const mpPixRes = await gerarPixMercadoPago({
-              establishmentCode: code,
-              amount: valTotalCarrinho,
-              description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
-              payerEmail: "cliente@caixadoce.com.br",
-            });
-
-            if (mpPixRes && mpPixRes.success) {
-              gerouMp = true;
-              if (mpPixRes.qr_code_base64) {
-                setPixQrCodeBase64(mpPixRes.qr_code_base64);
+            let tokenLojista = lojaInfo?.mp_access_token;
+            if (!tokenLojista) {
+              const { data: estRow } = await supabase
+                .from("estabelecimentos")
+                .select("mp_access_token")
+                .ilike("codigo", code)
+                .maybeSingle();
+              if (estRow?.mp_access_token) {
+                tokenLojista = estRow.mp_access_token;
               }
-              if (mpPixRes.qr_code) {
-                setPixCopiaCola(mpPixRes.qr_code);
-                if (typeof navigator !== "undefined" && navigator.clipboard) {
-                  navigator.clipboard.writeText(mpPixRes.qr_code);
-                  setPixCopiado(true);
+            }
+
+            // 1.1 Tentativa direta na API do Mercado Pago usando o token específico do lojista
+            if (tokenLojista) {
+              console.log(`[Checkout Cardápio] Gerando Pix via API Mercado Pago com token do lojista (${code})...`);
+              const mpDirectRes = await fetch("https://api.mercadopago.com/v1/payments", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${tokenLojista}`,
+                  "Content-Type": "application/json",
+                  "X-Idempotency-Key": `${code}-${pedidoId}-${Date.now()}`,
+                },
+                body: JSON.stringify({
+                  transaction_amount: valTotalCarrinho,
+                  payment_method_id: "pix",
+                  description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+                  payer: {
+                    email: "cliente@caixadoce.com.br",
+                  },
+                }),
+              });
+
+              if (mpDirectRes.ok) {
+                const mpData = await mpDirectRes.json();
+                const qrBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
+                const qrCode = mpData.point_of_interaction?.transaction_data?.qr_code;
+
+                if (qrBase64 || qrCode) {
+                  if (qrBase64) setPixQrCodeBase64(qrBase64);
+                  if (qrCode) {
+                    setPixCopiaCola(qrCode);
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(qrCode).catch(() => {});
+                      setPixCopiado(true);
+                    }
+                  }
+                  gerouMp = true;
+                  console.log("[Checkout Cardápio] Pix Mercado Pago gerado com sucesso via API direta!");
+                }
+              } else {
+                console.warn("[Checkout Cardápio] API direta do MP retornou erro, tentando rota backend:", await mpDirectRes.text());
+              }
+            }
+
+            // 1.2 Fallback de geração via rota do servidor backend
+            if (!gerouMp) {
+              console.log(`[Checkout Cardápio] Solicitando Pix Mercado Pago via backend para ${code}...`);
+              const mpPixRes = await gerarPixMercadoPago({
+                establishmentCode: code,
+                amount: valTotalCarrinho,
+                description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+                payerEmail: "cliente@caixadoce.com.br",
+                accessToken: tokenLojista || undefined,
+              });
+
+              if (mpPixRes && mpPixRes.success) {
+                gerouMp = true;
+                if (mpPixRes.qr_code_base64) {
+                  setPixQrCodeBase64(mpPixRes.qr_code_base64);
+                }
+                if (mpPixRes.qr_code) {
+                  setPixCopiaCola(mpPixRes.qr_code);
+                  if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard.writeText(mpPixRes.qr_code).catch(() => {});
+                    setPixCopiado(true);
+                  }
                 }
               }
             }
@@ -980,7 +1040,7 @@ export function CardapioLojaView() {
           }
         }
 
-        // SE FALSE (Pix Manual) ou se falhou no Mercado Pago:
+        // 2. FALLBACK PLANO B: Se usar_mercadopago for false OU se a API do Mercado Pago falhou
         if (!gerouMp) {
           const pixKeyToUse = lojaInfo?.chave_pix_manual || lojaInfo?.chavePix || "";
           if (pixKeyToUse) {
@@ -996,7 +1056,7 @@ export function CardapioLojaView() {
               if (pixPayloadGerado) {
                 setPixCopiaCola(pixPayloadGerado);
                 if (typeof navigator !== "undefined" && navigator.clipboard) {
-                  navigator.clipboard.writeText(pixPayloadGerado);
+                  navigator.clipboard.writeText(pixPayloadGerado).catch(() => {});
                   setPixCopiado(true);
                 }
               }
@@ -2018,20 +2078,20 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
                 <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                Pagamento via Pix {lojaInfo?.usar_mercadopago ? "(Mercado Pago)" : "(Manual)"}
+                Pagamento via Pix {pixQrCodeBase64 ? "(Mercado Pago)" : lojaInfo?.usar_mercadopago ? "(Mercado Pago)" : "(Manual)"}
               </span>
-              <Badge className={`text-[10px] font-mono font-bold border-0 ${lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
-                {lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
+              <Badge className={`text-[10px] font-mono font-bold border-0 ${pixQrCodeBase64 ? "bg-blue-600 text-white" : lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
+                {pixQrCodeBase64 ? "Pix Automático" : lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
               </Badge>
             </div>
 
-            {/* SE PIX AUTOMÁTICO MERCADO PAGO E TEM IMAGEM QR CODE BASE64 */}
-            {lojaInfo?.usar_mercadopago && pixQrCodeBase64 && (
+            {/* SE TEM IMAGEM QR CODE BASE64 */}
+            {pixQrCodeBase64 && (
               <div className="flex flex-col items-center justify-center p-3 bg-white dark:bg-stone-900 rounded-2xl border border-purple-200 shadow-inner">
                 <img
                   src={pixQrCodeBase64.startsWith("data:") ? pixQrCodeBase64 : `data:image/png;base64,${pixQrCodeBase64}`}
                   alt="QR Code Pix Mercado Pago"
-                  className="w-44 h-44 object-contain rounded-xl"
+                  className="w-48 h-48 object-contain rounded-xl"
                 />
                 <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mt-2 text-center">
                   Escaneie o QR Code no aplicativo do seu banco

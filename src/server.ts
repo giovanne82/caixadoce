@@ -1118,13 +1118,17 @@ export default {
             },
           });
 
-          let tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+          let tokenUso = body.accessToken || body.access_token || "";
 
-          if (estRes.ok) {
+          if (!tokenUso && estRes.ok) {
             const data = await estRes.json();
             if (data[0] && data[0].mp_access_token) {
               tokenUso = data[0].mp_access_token;
             }
+          }
+
+          if (!tokenUso) {
+            tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
           console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount}`);
