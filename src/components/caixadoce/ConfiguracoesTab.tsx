@@ -105,6 +105,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   // Establishment Form
   const [nomeEst, setNomeEst] = useState(profile?.establishmentName || "");
   const [slugEst, setSlugEst] = useState(profile?.slug || "");
+  const [salvandoSlug, setSalvandoSlug] = useState(false);
   const [responsavelEst, setResponsavelEst] = useState(profile?.responsavel || user?.name || "");
   const [telEst, setTelEst] = useState(profile?.telefone || "");
   const [chavePix, setChavePix] = useState(profile?.chavePix || "");
@@ -510,6 +511,56 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }));
     await persistirContasPix(atualizadas);
     toast.success("Conta Pix padrão atualizada!");
+  };
+
+  // Salva o link personalizado individualmente com verificação de colisão
+  const handleSalvarSlugDireto = async () => {
+    let slugLimpo = slugEst.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+    if (slugLimpo && slugLimpo.length < 3) {
+      toast.error("O Link Personalizado do cardápio deve conter no mínimo 3 caracteres (apenas letras minúsculas, números e hífens).");
+      return;
+    }
+
+    setSalvandoSlug(true);
+    try {
+      if (slugLimpo) {
+        const { data: estComMesmoSlug, error: errChecagem } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo, slug")
+          .eq("slug", slugLimpo)
+          .neq("codigo", activeCode)
+          .maybeSingle();
+
+        if (estComMesmoSlug && estComMesmoSlug.slug) {
+          toast.error("Este nome já está em uso por outra loja. Por favor, escolha outro.");
+          return;
+        }
+      }
+
+      let targetId = estId;
+      if (!targetId && activeCode) {
+        const { data: estRow } = await supabase
+          .from("estabelecimentos")
+          .select("id")
+          .ilike("codigo", activeCode.toUpperCase().trim())
+          .maybeSingle();
+        if (estRow?.id) targetId = estRow.id;
+      }
+
+      if (targetId) {
+        await supabase.from("estabelecimentos").update({ slug: slugLimpo || null }).eq("id", targetId);
+      } else if (activeCode) {
+        await supabase.from("estabelecimentos").update({ slug: slugLimpo || null }).ilike("codigo", activeCode.toUpperCase().trim());
+      }
+
+      await updateEstablishmentDetails({ slug: slugLimpo || undefined });
+      toast.success(slugLimpo ? "Link personalizado do cardápio salvo com sucesso!" : "Link personalizado removido (usando código padrão).");
+    } catch (err: any) {
+      console.error("[Slug Save Error]", err);
+      toast.error("Erro ao salvar link personalizado.");
+    } finally {
+      setSalvandoSlug(false);
+    }
   };
 
   // Form de Contato (Suporte & Sugestões)
@@ -1362,40 +1413,57 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                 </div>
 
                 {/* CAMPO DE LINK PERSONALIZADO DO CARDÁPIO (SLUG) */}
-                <div className="space-y-1.5 p-3.5 rounded-2xl bg-purple-500/5 border border-purple-500/20 shadow-2xs">
+                <div className="space-y-2.5 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/25 shadow-xs">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="est-slug" className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <Label htmlFor="est-slug" className="text-xs font-black text-foreground flex items-center gap-1.5">
+                      <Link2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       Link Personalizado do Cardápio (Slug)
                     </Label>
-                    <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono">
+                    <Badge variant="outline" className={`text-[10px] font-mono font-bold ${slugEst ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400" : "bg-muted text-muted-foreground"}`}>
                       {slugEst ? "Personalizado" : "Padrão"}
                     </Badge>
                   </div>
                   
-                  <div className="flex items-center rounded-xl border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/30">
-                    <span className="px-3 py-2 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-border shrink-0">
-                      caixadoce.com.br/cardapio/
-                    </span>
-                    <Input
-                      id="est-slug"
-                      value={slugEst}
-                      onChange={(e) => {
-                        // Regex em tempo real: apenas letras minúsculas, números e hífens
-                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
-                        setSlugEst(val);
-                      }}
-                      placeholder="minha-confeitaria"
-                      className="border-0 focus-visible:ring-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300 h-9"
-                    />
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="flex items-center rounded-xl border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/30 flex-1">
+                      <span className="px-3 py-2 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-border shrink-0">
+                        caixadoce.com.br/cardapio/
+                      </span>
+                      <Input
+                        id="est-slug"
+                        value={slugEst}
+                        onChange={(e) => {
+                          // Regex em tempo real: apenas letras minúsculas, números e hífens
+                          const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+                          setSlugEst(val);
+                        }}
+                        placeholder="minha-confeitaria"
+                        className="border-0 focus-visible:ring-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300 h-9"
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleSalvarSlugDireto}
+                      disabled={salvandoSlug}
+                      className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white h-9 rounded-xl shadow-xs shrink-0"
+                    >
+                      {salvandoSlug ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                      Salvar Link
+                    </Button>
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-muted-foreground gap-1 pt-0.5">
-                    <span>Permitido: letras minúsculas, números e hífens.</span>
+                    <span>Permitido: apenas letras minúsculas, números e hífens.</span>
                     {slugEst && (
-                      <span className="font-mono text-xs text-purple-600 dark:text-purple-400 font-bold truncate">
-                        Preview: /cardapio/{slugEst}
-                      </span>
+                      <a
+                        href={`/cardapio/${slugEst}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline font-bold truncate flex items-center gap-1"
+                      >
+                        Abrir: /cardapio/{slugEst} ↗
+                      </a>
                     )}
                   </div>
                 </div>

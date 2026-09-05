@@ -111,6 +111,10 @@ export interface SocialLinksProps {
 }
 
 export interface LojaInfoState {
+  id?: string;
+  estabelecimento_id?: string;
+  codigo?: string;
+  slug?: string;
   whatsapp?: string;
   telefone?: string;
   user_id?: string;
@@ -573,6 +577,10 @@ export function CardapioLojaView() {
 
         if (estData || name || title || insta || tk || fb || banner || themeCol) {
           setLojaInfo({
+            id: estData?.id,
+            estabelecimento_id: estData?.id,
+            codigo: estData?.codigo || code,
+            slug: estData?.slug,
             whatsapp: wa,
             telefone: wa,
             user_id: estData?.user_id,
@@ -916,12 +924,34 @@ export function CardapioLojaView() {
       let clienteId: string | null = null;
       const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
 
+      // Resolução segura do ID (UUID) do estabelecimento para respeitar Foreign Key
+      let estDbId: string | null = null;
+      if (lojaInfo?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.id)) {
+        estDbId = lojaInfo.id;
+      } else {
+        try {
+          const { data: estRow } = await supabase
+            .from("estabelecimentos")
+            .select("id")
+            .or(`codigo.eq.${code},estabelecimento_codigo.eq.${code}`)
+            .maybeSingle();
+          if (estRow?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(estRow.id)) {
+            estDbId = estRow.id;
+          }
+        } catch {}
+      }
+
       try {
         const phoneFilter = cleanPhone.length >= 8 ? cleanPhone.slice(-8) : cleanPhone;
         let query = supabase
           .from("clientes_loja")
-          .select("id, nome, telefone, total_pedidos, total_gasto")
-          .eq("estabelecimento_codigo", code);
+          .select("id, nome, telefone, total_pedidos, total_gasto");
+
+        if (estDbId) {
+          query = query.or(`estabelecimento_id.eq.${estDbId},estabelecimento_codigo.eq.${code}`);
+        } else {
+          query = query.eq("estabelecimento_codigo", code);
+        }
 
         if (phoneFilter) {
           query = query.ilike("telefone", `%${phoneFilter}%`);
@@ -940,6 +970,7 @@ export function CardapioLojaView() {
             .from("clientes_loja")
             .update({
               nome: clienteNome,
+              estabelecimento_id: estDbId || undefined,
               endereco: tipoEntrega === "delivery" ? enderecoEntrega : undefined,
               total_pedidos: novoTotal,
               total_gasto: novoGasto,
@@ -954,7 +985,7 @@ export function CardapioLojaView() {
             .insert([
               {
                 id: novoClienteId,
-                estabelecimento_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+                estabelecimento_id: estDbId,
                 estabelecimento_codigo: code,
                 nome: clienteNome,
                 telefone: clienteWhatsapp,
