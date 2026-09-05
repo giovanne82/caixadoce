@@ -70,13 +70,24 @@ export async function trocarCodigoOAuthMercadoPago(
   establishmentCode: string,
   redirectUri: string
 ): Promise<{ success: boolean; mp_user_id?: string; mp_public_key?: string }> {
-  const clientId =
-    (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
-    (typeof process !== "undefined" && process.env && (process.env.VITE_MERCADOPAGO_CLIENT_ID || process.env.VITE_MP_CLIENT_ID));
+  const envClientId =
+    (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
+    (typeof process !== "undefined" && process.env && (process.env.VITE_MP_CLIENT_ID || process.env.VITE_MERCADOPAGO_CLIENT_ID));
 
-  const clientSecret =
-    (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MERCADOPAGO_CLIENT_SECRET || import.meta.env.VITE_MP_CLIENT_SECRET || import.meta.env.VITE_MERCADO_PAGO_CLIENT_SECRET)) ||
-    (typeof process !== "undefined" && process.env && (process.env.VITE_MERCADOPAGO_CLIENT_SECRET || process.env.VITE_MP_CLIENT_SECRET));
+  const envClientSecret =
+    (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MP_CLIENT_SECRET || import.meta.env.VITE_MERCADOPAGO_CLIENT_SECRET || import.meta.env.VITE_MERCADO_PAGO_CLIENT_SECRET)) ||
+    (typeof process !== "undefined" && process.env && (process.env.VITE_MP_CLIENT_SECRET || process.env.VITE_MERCADOPAGO_CLIENT_SECRET));
+
+  const clientId = envClientId ? String(envClientId).trim() : undefined;
+  const clientSecret = envClientSecret ? String(envClientSecret).trim() : undefined;
+
+  // Validação de Segurança no Frontend antes do envio
+  if (!clientId || clientId === "undefined") {
+    console.error("[MercadoPago OAuth Alerta Frontend] VITE_MP_CLIENT_ID está undefined ou não configurado nas variáveis de ambiente!");
+  }
+  if (!clientSecret || clientSecret === "undefined") {
+    console.error("[MercadoPago OAuth Alerta Frontend] VITE_MP_CLIENT_SECRET está undefined ou não configurado nas variáveis de ambiente!");
+  }
 
   const res = await fetch("/api/mercadopago/oauth/token", {
     method: "POST",
@@ -85,8 +96,8 @@ export async function trocarCodigoOAuthMercadoPago(
       code: code.trim(),
       establishmentCode: (establishmentCode || "CD-1001").toUpperCase(),
       redirectUri: redirectUri.trim(),
-      ...(clientId ? { clientId: String(clientId).trim() } : {}),
-      ...(clientSecret ? { clientSecret: String(clientSecret).trim() } : {}),
+      ...(clientId && clientId !== "undefined" ? { clientId } : {}),
+      ...(clientSecret && clientSecret !== "undefined" ? { clientSecret } : {}),
     }),
   });
 

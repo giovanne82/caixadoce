@@ -725,29 +725,48 @@ export default {
           const body = await request.json();
           const { code, establishmentCode, redirectUri } = body;
 
-          const clientId = (
+          // 1. Leitura das Variáveis de Ambiente (priorizando VITE_MP_CLIENT_ID / VITE_MP_CLIENT_SECRET)
+          const rawClientId =
+            process.env.VITE_MP_CLIENT_ID ||
+            process.env.MP_CLIENT_ID ||
+            process.env.VITE_MERCADOPAGO_CLIENT_ID ||
+            process.env.MERCADOPAGO_CLIENT_ID ||
+            process.env.VITE_MERCADO_PAGO_CLIENT_ID ||
+            process.env.MERCADO_PAGO_CLIENT_ID ||
             body.clientId ||
             body.client_id ||
-            process.env.MERCADOPAGO_CLIENT_ID ||
-            process.env.VITE_MERCADOPAGO_CLIENT_ID ||
-            process.env.MP_CLIENT_ID ||
-            process.env.VITE_MP_CLIENT_ID ||
-            process.env.MERCADO_PAGO_CLIENT_ID ||
-            process.env.VITE_MERCADO_PAGO_CLIENT_ID ||
-            "3682622436709302"
-          ).toString().trim();
+            "3682622436709302";
 
-          const clientSecret = (
+          const rawClientSecret =
+            process.env.VITE_MP_CLIENT_SECRET ||
+            process.env.MP_CLIENT_SECRET ||
+            process.env.VITE_MERCADOPAGO_CLIENT_SECRET ||
+            process.env.MERCADOPAGO_CLIENT_SECRET ||
+            process.env.VITE_MERCADO_PAGO_CLIENT_SECRET ||
+            process.env.MERCADO_PAGO_CLIENT_SECRET ||
             body.clientSecret ||
             body.client_secret ||
-            process.env.MERCADOPAGO_CLIENT_SECRET ||
-            process.env.VITE_MERCADOPAGO_CLIENT_SECRET ||
-            process.env.MP_CLIENT_SECRET ||
-            process.env.VITE_MP_CLIENT_SECRET ||
-            process.env.MERCADO_PAGO_CLIENT_SECRET ||
-            process.env.VITE_MERCADO_PAGO_CLIENT_SECRET ||
-            "cQG1R6OaQx7w7WqF7m3G2x"
-          ).toString().trim();
+            "cQG1R6OaQx7w7WqF7m3G2x";
+
+          const clientId = rawClientId ? String(rawClientId).trim() : undefined;
+          const clientSecret = rawClientSecret ? String(rawClientSecret).trim() : undefined;
+
+          // 2. Validação de Segurança (Aborta se client_id ou client_secret forem undefined ou vazios)
+          if (!clientId || clientId === "undefined" || clientId === "null") {
+            console.error("[MercadoPago OAuth Security Check] Erro: 'client_id' (VITE_MP_CLIENT_ID) está undefined ou ausente nas variáveis de ambiente!");
+            return new Response(
+              JSON.stringify({ error: "Erro de Configuração: Variável de ambiente 'VITE_MP_CLIENT_ID' do Mercado Pago não encontrada ou está undefined." }),
+              { status: 500, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          if (!clientSecret || clientSecret === "undefined" || clientSecret === "null") {
+            console.error("[MercadoPago OAuth Security Check] Erro: 'client_secret' (VITE_MP_CLIENT_SECRET) está undefined ou ausente nas variáveis de ambiente!");
+            return new Response(
+              JSON.stringify({ error: "Erro de Configuração: Variável de ambiente 'VITE_MP_CLIENT_SECRET' do Mercado Pago não encontrada ou está undefined." }),
+              { status: 500, headers: { "content-type": "application/json" } }
+            );
+          }
 
           if (!code) {
             return new Response(

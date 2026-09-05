@@ -197,11 +197,19 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   }, [activeCode]);
 
   const handleConectarMercadoPago = () => {
-    const clientId = (
-      (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
-      (typeof process !== "undefined" && process.env && (process.env.VITE_MERCADOPAGO_CLIENT_ID || process.env.VITE_MP_CLIENT_ID)) ||
-      "3682622436709302"
-    ).toString().trim();
+    const rawClientId =
+      (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
+      (typeof process !== "undefined" && process.env && (process.env.VITE_MP_CLIENT_ID || process.env.VITE_MERCADOPAGO_CLIENT_ID)) ||
+      "3682622436709302";
+
+    const clientId = rawClientId ? String(rawClientId).trim() : undefined;
+
+    // Validação de Segurança: se client_id for undefined, aborta a requisição e exibe um erro claro no console
+    if (!clientId || clientId === "undefined" || clientId === "null") {
+      console.error("[MercadoPago OAuth Erro de Segurança] 'VITE_MP_CLIENT_ID' está undefined ou não foi encontrado nas variáveis de ambiente!");
+      toast.error("Erro de Configuração: VITE_MP_CLIENT_ID não foi encontrado nas variáveis de ambiente.");
+      return;
+    }
 
     const redirectUri = encodeURIComponent(obterRedirectUriMercadoPago());
     const oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${encodeURIComponent(activeCode)}&redirect_uri=${redirectUri}`;
