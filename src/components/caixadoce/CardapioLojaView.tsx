@@ -73,7 +73,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, type ProdutoCardapio } from "@/lib/caixadoce-data";
+import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, type ProdutoCardapio } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
@@ -335,6 +335,7 @@ export function CardapioLojaView() {
 
   // Estados dos Produtos e Carrinho
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
+  const [loadingProdutos, setLoadingProdutos] = useState<boolean>(true);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>("todas");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -475,13 +476,14 @@ export function CardapioLojaView() {
   const [mpPaymentId, setMpPaymentId] = useState<string | number | null>(null);
   const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
 
-  // 1. Carregamento de Dados da Confeitaria (Supabase + LocalStorage Fallback)
+  // 1. Carregamento de Dados da Confeitaria e Produtos em Cascata (Supabase + LocalStorage Fallback)
   useEffect(() => {
     let cancelado = false;
 
-    async function carregarDadosLoja() {
+    async function carregarDadosLojaEProdutos() {
+      setLoadingProdutos(true);
       try {
-        if (code === "CD-DEMO" || code === "DEMO-01") {
+        if (code === "CD-DEMO" || code === "DEMO-01" || rawParam.toUpperCase() === "CD-DEMO" || rawParam.toUpperCase() === "DEMO-01") {
           setLojaInfo({
             nome: "Loja Caixa Doce (Demo)",
             titulo_cardapio: "Cardápio de Demonstração — CaixaDoce",
@@ -496,14 +498,15 @@ export function CardapioLojaView() {
             tiktok: "@caixadoce",
             facebook: "caixadoce",
           });
+          setProdutos(CATALOGO_PRODUTOS_PADRAO);
           return;
         }
 
-        let estData = null;
+        let estData: any = null;
         const paramLower = rawParam.toLowerCase();
         const paramUpper = rawParam.toUpperCase();
 
-        // 1. Busca flexível por slug OU codigo OU estabelecimento_codigo
+        // 1. Busca flexível do Estabelecimento por slug OU codigo OU estabelecimento_codigo
         const { data: dFlex } = await supabase
           .from("estabelecimentos")
           .select("*")
@@ -512,10 +515,6 @@ export function CardapioLojaView() {
 
         if (dFlex) {
           estData = dFlex;
-          const resolvedCode = dFlex.codigo || dFlex.estabelecimento_codigo || paramUpper;
-          if (resolvedCode !== code) {
-            setCode(resolvedCode);
-          }
         } else {
           // Fallback por código direto caso .or() não case
           const { data: d1 } = await supabase
@@ -526,11 +525,12 @@ export function CardapioLojaView() {
 
           if (d1) {
             estData = d1;
-            const resolvedCode = d1.codigo || paramUpper;
-            if (resolvedCode !== code) {
-              setCode(resolvedCode);
-            }
           }
+        }
+
+        const resolvedCode = estData?.codigo || estData?.estabelecimento_codigo || paramUpper;
+        if (resolvedCode !== code) {
+          setCode(resolvedCode);
         }
 
         let insta = estData?.instagram || estData?.social_instagram || estData?.social_media?.instagram;
@@ -550,13 +550,13 @@ export function CardapioLojaView() {
 
         let delAtivoVal = estData?.delivery_ativo !== false && estData?.aceita_delivery !== false;
 
-        // Fallback resiliente: se no Supabase não vierem preenchidos (por exemplo, se as colunas remota estivem nulas), recupera do localStorage do navegador
+        // Fallback resiliente: se no Supabase não vierem preenchidos, recupera do localStorage do navegador
         if (typeof window !== "undefined") {
           try {
             const savedProfileStr = localStorage.getItem("caixadoce_profile");
             if (savedProfileStr) {
               const p = JSON.parse(savedProfileStr);
-              if (p.establishmentCode === code || p.codigo === code || !estData) {
+              if (p.establishmentCode === resolvedCode || p.codigo === resolvedCode || !estData) {
                 insta = insta || p.instagram || p.social_instagram || p.social_media?.instagram;
                 tk = tk || p.tiktok || p.social_tiktok || p.social_media?.tiktok;
                 fb = fb || p.facebook || p.social_facebook || p.social_media?.facebook;
@@ -570,18 +570,18 @@ export function CardapioLojaView() {
                 endLoja = endLoja || p.establishmentAddress || p.endereco;
               }
             }
-            const localDel = localStorage.getItem(`caixadoce_delivery_${code}`);
+            const localDel = localStorage.getItem(`caixadoce_delivery_${resolvedCode}`);
             if (localDel !== null) {
               delAtivoVal = localDel === "true";
             }
           } catch {}
         }
 
-        if (estData || name || title || insta || tk || fb || banner || themeCol) {
+        if (!cancelado && (estData || name || title || insta || tk || fb || banner || themeCol)) {
           setLojaInfo({
             id: estData?.id,
             estabelecimento_id: estData?.id,
-            codigo: estData?.codigo || code,
+            codigo: resolvedCode,
             slug: estData?.slug,
             whatsapp: wa,
             telefone: wa,
@@ -612,12 +612,99 @@ export function CardapioLojaView() {
             social_media: estData?.social_media || { instagram: insta, tiktok: tk, facebook: fb, whatsapp: wa },
           });
         }
+
+        // =====================================================================
+        // 2. NOVA LÓGICA DE CASCATA: BUSCA DOS PRODUTOS PELO ID DO ESTABELECIMENTO
+        // =====================================================================
+        let prodsDb: any[] = [];
+        const estUuid = estData?.id;
+
+        if (estUuid) {
+          console.log(`[Cardápio Público] Buscando produtos em cascata por estabelecimento_id (${estUuid})...`);
+          const { data: pByEstId, error: errEstId } = await supabase
+            .from("produtos" as any)
+            .select("*")
+            .eq("estabelecimento_id", estUuid)
+            .order("nome", { ascending: true });
+
+          if (!errEstId && pByEstId && pByEstId.length > 0) {
+            prodsDb = pByEstId;
+          }
+        }
+
+        // Fallback caso estejam vinculados por código de estabelecimento
+        if (prodsDb.length === 0 && resolvedCode) {
+          console.log(`[Cardápio Público] Fallback: buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
+          const { data: pByCode } = await supabase
+            .from("produtos" as any)
+            .select("*")
+            .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`)
+            .order("nome", { ascending: true });
+
+          if (pByCode && pByCode.length > 0) {
+            prodsDb = pByCode;
+          }
+        }
+
+        if (cancelado) return;
+
+        if (prodsDb.length > 0) {
+          const mapeados: ProdutoCardapio[] = prodsDb.map((p: any) => ({
+            id: String(p.id),
+            estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || resolvedCode,
+            nome: p.nome || p.name || "Doce Artesanal",
+            descricao: p.descricao || p.description || "",
+            preco: Number(p.preco ?? p.price ?? 0),
+            fotoUrl: p.foto_url || p.image_url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+            categoria: p.categoria || p.category || "Doces & Bolos",
+            destaque: Boolean(p.destaque),
+            tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
+            ativo: (p.ativo ?? p.is_active) !== false,
+            createdAt: p.created_at,
+            availability_type: p.availability_type || "encomenda",
+            available_days: Array.isArray(p.available_days)
+              ? p.available_days
+              : (typeof p.available_days === "string" ? (() => { try { return JSON.parse(p.available_days); } catch { return undefined; } })() : undefined),
+            min_lead_time_days: p.min_lead_time_days !== undefined ? Number(p.min_lead_time_days) : undefined,
+            isKit: Boolean(p.is_kit),
+            custoTotalInsumos: p.custo_total_insumos ? Number(p.custo_total_insumos) : undefined,
+            margemLucroPercentual: p.margem_lucro ? Number(p.margem_lucro) : undefined,
+            prazoEntregaIndependente: p.prazo_entrega,
+            itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
+          }));
+
+          const ativos = mapeados.filter((p) => p.ativo !== false);
+          setProdutos(ativos);
+
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(`caixadoce_cardapio_${resolvedCode}`, JSON.stringify(mapeados));
+            } catch {}
+          }
+        } else {
+          // Fallback para localStorage
+          const localList = obterProdutosCardapio(resolvedCode);
+          if (localList && localList.length > 0) {
+            setProdutos(localList.filter((p) => p.ativo !== false));
+          } else {
+            setProdutos([]);
+          }
+        }
       } catch (err) {
-        console.warn("[Cardápio Público] Aviso no carregamento do estabelecimento:", err);
+        console.warn("[Cardápio Público] Aviso no carregamento do estabelecimento e produtos:", err);
+      } finally {
+        if (!cancelado) {
+          setLoadingProdutos(false);
+        }
       }
     }
-    carregarDadosLoja();
-  }, [code]);
+
+    carregarDadosLojaEProdutos();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [rawParam]);
 
   // Garante que se o lojista desativou o delivery, a modalidade seja forçada para "retirada"
   useEffect(() => {
@@ -785,9 +872,6 @@ export function CardapioLojaView() {
   const [tabModoHibrido, setTabModoHibrido] = useState<"todos" | "pronta_entrega" | "encomenda">("todos");
 
   useEffect(() => {
-    const list = obterProdutosCardapio(code);
-    setProdutos(list.filter((p) => p.ativo !== false));
-
     // Data mínima inicial: amanhã por padrão
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
@@ -1772,7 +1856,29 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
         </div>
 
         {/* 5. GRID DE PRODUTOS */}
-        {produtosFiltrados.length === 0 ? (
+        {loadingProdutos ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6 pt-2">
+            {[1, 2, 3, 4, 5, 6].map((idx) => (
+              <Card
+                key={idx}
+                className="overflow-hidden border-border/80 bg-card rounded-2xl sm:rounded-3xl animate-pulse flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-32 sm:h-48 w-full bg-muted/60" />
+                  <div className="p-2.5 sm:p-4 space-y-2">
+                    <div className="h-4 bg-muted/70 rounded-md w-3/4" />
+                    <div className="h-3 bg-muted/40 rounded-md w-full" />
+                    <div className="h-3 bg-muted/40 rounded-md w-2/3" />
+                  </div>
+                </div>
+                <div className="p-2.5 sm:p-4 pt-0 flex items-center justify-between gap-2 border-t border-border/40 mt-2">
+                  <div className="h-4 bg-muted/60 rounded-md w-1/3" />
+                  <div className="h-7 bg-muted/70 rounded-xl w-16" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : produtosFiltrados.length === 0 ? (
           <div className="text-center py-16 px-4 bg-muted/20 rounded-3xl border border-dashed border-border space-y-3">
             <Cake className="w-12 h-12 text-muted-foreground/40 mx-auto" />
             <h4 className="text-base font-bold text-foreground">Nenhum doce encontrado</h4>
