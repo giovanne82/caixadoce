@@ -941,21 +941,31 @@ export default {
             updated_at: new Date().toISOString(),
           };
 
-          // 1. Atualizar via Supabase Client SDK
+          // 1. Atualizar via Supabase Client SDK buscando ID do estabelecimento
           try {
-            const { data: sdkData, error: sdkError } = await supabaseClient
+            const { data: estRow } = await supabaseClient
               .from("estabelecimentos")
-              .update(updateTokensPayload)
+              .select("id, codigo")
               .ilike("codigo", codeTarget)
-              .select();
+              .maybeSingle();
+
+            let updateQuery = supabaseClient.from("estabelecimentos").update(updateTokensPayload);
+            if (estRow?.id) {
+              updateQuery = updateQuery.eq("id", estRow.id);
+            } else {
+              updateQuery = updateQuery.ilike("codigo", codeTarget);
+            }
+
+            const { data: sdkData, error: sdkError } = await updateQuery.select();
 
             if (sdkError) {
-              console.error("[MercadoPago Token SDK Update Error]", sdkError);
+              console.error("Falha no UPDATE do Supabase:", sdkError);
+              throw new Error(sdkError.message);
             } else {
               console.log("[MercadoPago Token SDK Update Success] Linhas afetadas:", sdkData?.length || 1);
             }
-          } catch (supErr) {
-            console.error("[MercadoPago Token SDK Update Exception]", supErr);
+          } catch (supErr: any) {
+            console.error("Falha no UPDATE do Supabase:", supErr);
           }
 
           // 2. Atualizar via REST Patch no Supabase (garantia de compatibilidade total)
@@ -1016,13 +1026,28 @@ export default {
           };
 
           try {
-            await supabaseClient
+            const { data: estRow } = await supabaseClient
               .from("estabelecimentos")
-              .update(disconnectPayload)
-              .ilike("codigo", codeTarget);
-          } catch {}
+              .select("id, codigo")
+              .ilike("codigo", codeTarget)
+              .maybeSingle();
 
-          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}`, {
+            let query = supabaseClient.from("estabelecimentos").update(disconnectPayload);
+            if (estRow?.id) {
+              query = query.eq("id", estRow.id);
+            } else {
+              query = query.ilike("codigo", codeTarget);
+            }
+
+            const { error: discErr } = await query.select();
+            if (discErr) {
+              console.error("Falha no UPDATE do Supabase (Disconnect):", discErr);
+            }
+          } catch (discEx) {
+            console.error("Falha no UPDATE do Supabase (Disconnect Exception):", discEx);
+          }
+
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}`, {
             method: "PATCH",
             headers: {
               "apikey": supabaseKey,
@@ -1052,7 +1077,7 @@ export default {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const codeTarget = (url.searchParams.get("codigo") || "CD-1001").toUpperCase();
-          const selectRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}&select=mp_access_token,mp_public_key,mp_user_id,mercadopago_access_token,mercadopago_public_key,mercadopago_user_id`, {
+          const selectRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token,mp_public_key,mp_user_id,mercadopago_access_token,mercadopago_public_key,mercadopago_user_id`, {
             headers: {
               "apikey": supabaseKey,
               "authorization": `Bearer ${supabaseKey}`,
@@ -1096,7 +1121,7 @@ export default {
           const payerEmail = body.payerEmail || body.email || "cliente@caixadoce.com.br";
 
           // Buscar o mp_access_token do estabelecimento no Supabase
-          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}&select=mp_access_token,mercadopago_access_token`, {
+          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token,mercadopago_access_token`, {
             headers: {
               "apikey": supabaseKey,
               "authorization": `Bearer ${supabaseKey}`,

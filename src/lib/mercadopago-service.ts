@@ -62,6 +62,8 @@ export async function obterStatusConexaoMercadoPago(establishmentCode: string): 
   return { connected: false };
 }
 
+import { supabase } from "@/integrations/supabase/client";
+
 /**
  * Envia o código OAuth recebido no callback para o backend efetuar a troca pelos tokens e gravar no Supabase
  */
@@ -69,7 +71,13 @@ export async function trocarCodigoOAuthMercadoPago(
   code: string,
   establishmentCode: string,
   redirectUri: string
-): Promise<{ success: boolean; mp_user_id?: string; mp_public_key?: string }> {
+): Promise<{
+  success: boolean;
+  mp_user_id?: string;
+  mp_public_key?: string;
+  mp_access_token?: string;
+  mp_refresh_token?: string;
+}> {
   const envClientId =
     (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
     (typeof process !== "undefined" && process.env && (process.env.VITE_MP_CLIENT_ID || process.env.VITE_MERCADOPAGO_CLIENT_ID));
@@ -81,20 +89,25 @@ export async function trocarCodigoOAuthMercadoPago(
   const clientId = envClientId ? String(envClientId).trim() : undefined;
   const clientSecret = envClientSecret ? String(envClientSecret).trim() : undefined;
 
-  // Validação de Segurança no Frontend antes do envio
-  if (!clientId || clientId === "undefined") {
-    console.error("[MercadoPago OAuth Alerta Frontend] VITE_MP_CLIENT_ID está undefined ou não configurado nas variáveis de ambiente!");
-  }
-  if (!clientSecret || clientSecret === "undefined") {
-    console.error("[MercadoPago OAuth Alerta Frontend] VITE_MP_CLIENT_SECRET está undefined ou não configurado nas variáveis de ambiente!");
-  }
+  // Obter token de sessão do usuário ativo para respeitar políticas de RLS
+  let sessionToken: string | undefined;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    sessionToken = sessionData?.session?.access_token;
+  } catch {}
 
+  const targetCode = (establishmentCode || "CD-1001").toUpperCase().trim();
+
+  // 1. Chamada ao endpoint do backend para troca do código por tokens na API do MP
   const res = await fetch("/api/mercadopago/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+    },
     body: JSON.stringify({
       code: code.trim(),
-      establishmentCode: (establishmentCode || "CD-1001").toUpperCase(),
+      establishmentCode: targetCode,
       redirectUri: redirectUri.trim(),
       ...(clientId && clientId !== "undefined" ? { clientId } : {}),
       ...(clientSecret && clientSecret !== "undefined" ? { clientSecret } : {}),
@@ -105,6 +118,49 @@ export async function trocarCodigoOAuthMercadoPago(
   if (!res.ok || data.error) {
     throw new Error(data.error || "Erro ao conectar conta do Mercado Pago.");
   }
+
+  // 2. MUTAÇÃO EXPLÍCITA NO SUPABASE (FRONTEND AUTENTICADO COM SESSÃO ATIVA DO USUÁRIO)
+  const tokensToSave = {
+    mp_access_token: data.mp_access_token || data.access_token,
+    mp_public_key: data.mp_public_key || data.public_key,
+    mp_refresh_token: data.mp_refresh_token || data.refresh_token,
+    mp_user_id: data.mp_user_id ? String(data.mp_user_id) : (data.user_id ? String(data.user_id) : null),
+    mercadopago_access_token: data.mp_access_token || data.access_token,
+    mercadopago_public_key: data.mp_public_key || data.public_key,
+    mercadopago_refresh_token: data.mp_refresh_token || data.refresh_token,
+    mercadopago_user_id: data.mp_user_id ? String(data.mp_user_id) : (data.user_id ? String(data.user_id) : null),
+    mercadopago_conectado: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    // 2.1 Busca ID específico do estabelecimento para garantir cláusula .eq('id', ...)
+    const { data: estRow } = await supabase
+      .from("estabelecimentos")
+      .select("id, codigo")
+      .ilike("codigo", targetCode)
+      .maybeSingle();
+
+    let query = supabase.from("estabelecimentos").update(tokensToSave);
+    if (estRow?.id) {
+      query = query.eq("id", estRow.id);
+    } else {
+      query = query.ilike("codigo", targetCode);
+    }
+
+    const { data: updateData, error: updateError } = await query.select();
+
+    if (updateError) {
+      console.error("Falha no UPDATE do Supabase:", updateError);
+      throw new Error(updateError.message);
+    }
+
+    console.log("[MercadoPago Service] UPDATE no Supabase concluído com sucesso:", updateData);
+  } catch (err: any) {
+    console.error("Falha no UPDATE do Supabase:", err);
+    throw new Error(err.message || "Falha ao gravar tokens no banco de dados.");
+  }
+
   return data;
 }
 
@@ -112,11 +168,23 @@ export async function trocarCodigoOAuthMercadoPago(
  * Solicita ao backend a desconexão da conta do Mercado Pago (limpa os tokens no Supabase)
  */
 export async function desconectarMercadoPago(establishmentCode: string): Promise<boolean> {
+  const targetCode = (establishmentCode || "CD-1001").toUpperCase().trim();
+
+  let sessionToken: string | undefined;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    sessionToken = sessionData?.session?.access_token;
+  } catch {}
+
+  // 1. Desconectar via Backend API
   const res = await fetch("/api/mercadopago/oauth/disconnect", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+    },
     body: JSON.stringify({
-      establishmentCode: (establishmentCode || "CD-1001").toUpperCase(),
+      establishmentCode: targetCode,
     }),
   });
 
@@ -124,6 +192,44 @@ export async function desconectarMercadoPago(establishmentCode: string): Promise
   if (!res.ok || data.error) {
     throw new Error(data.error || "Erro ao desconectar conta do Mercado Pago.");
   }
+
+  // 2. Limpeza explícita no Supabase com sessão ativa
+  try {
+    const { data: estRow } = await supabase
+      .from("estabelecimentos")
+      .select("id, codigo")
+      .ilike("codigo", targetCode)
+      .maybeSingle();
+
+    const clearPayload = {
+      mp_access_token: null,
+      mp_public_key: null,
+      mp_refresh_token: null,
+      mp_user_id: null,
+      mercadopago_access_token: null,
+      mercadopago_public_key: null,
+      mercadopago_refresh_token: null,
+      mercadopago_user_id: null,
+      mercadopago_conectado: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    let query = supabase.from("estabelecimentos").update(clearPayload);
+    if (estRow?.id) {
+      query = query.eq("id", estRow.id);
+    } else {
+      query = query.ilike("codigo", targetCode);
+    }
+
+    const { error: clearErr } = await query.select();
+    if (clearErr) {
+      console.error("Falha no UPDATE do Supabase (Disconnect):", clearErr);
+      throw new Error(clearErr.message);
+    }
+  } catch (err: any) {
+    console.error("Falha no UPDATE do Supabase (Disconnect):", err);
+  }
+
   return true;
 }
 
