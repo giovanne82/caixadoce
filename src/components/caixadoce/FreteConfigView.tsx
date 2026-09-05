@@ -235,7 +235,7 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
           Taxas &amp; Regras de Frete (Delivery)
         </h3>
         <p className="text-xs text-muted-foreground">
-          Configure as taxas de entrega, bairros atendidos e regras promocionais de frete grátis para o seu cardápio.
+          Configure as taxas de entrega por Zonas / Regiões e regras promocionais de frete grátis para o seu cardápio.
         </p>
       </div>
 
@@ -251,7 +251,7 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                 {config.tipoFretePadrao === "fixo"
                   ? `Fixo (${valorFixoStr})`
                   : config.tipoFretePadrao === "bairros"
-                  ? "Por Bairros / Regiões"
+                  ? "Por Zonas / Regiões"
                   : config.tipoFretePadrao === "gratis_total"
                   ? "Frete 100% Grátis"
                   : "Sob Consulta"}
@@ -283,10 +283,10 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
           <CardContent className="p-3.5 flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-[10px] font-extrabold uppercase text-blue-700 dark:text-blue-300">
-                Bairros Cadastrados
+                Zonas de Entrega
               </span>
               <p className="text-sm font-black text-foreground">
-                {config.regrasBairros.filter((b) => b.ativo).length} de {config.regrasBairros.length} ativos
+                {config.regrasBairros.filter((b) => b.ativo).length} de {config.regrasBairros.length} ativas
               </p>
             </div>
             <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
@@ -497,29 +497,29 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
         </CardContent>
       </Card>
 
-      {/* SEÇÃO 3: TABELA DE TAXAS POR BAIRRO / REGIÃO */}
+      {/* SEÇÃO 3: TABELA DE TAXAS POR ZONA DE ENTREGA / REGIÃO */}
       <Card className="border-border shadow-xs">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
             <MapPin className="w-4 h-4 text-purple-600" />
-            <span>3. Tabela de Bairros &amp; Regiões Atendidas</span>
+            <span>3. Tabela de Zonas de Entrega &amp; Regiões</span>
           </CardTitle>
           <CardDescription className="text-xs">
-            Cadastre os bairros da sua cidade e suas respectivas taxas de entrega personalizadas.
+            Cadastre as zonas de entrega ou regiões ativas da sua confeitaria (Ex: "Região Central", "Até 5km", "Zona Sul", "Região Metropolitana").
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Form de Adicionar Bairro */}
+          {/* Form de Adicionar Zona */}
           <div className="p-3.5 rounded-2xl bg-muted/30 border border-border space-y-3">
             <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-              <Plus className="w-4 h-4 text-purple-600" /> Cadastrar Novo Bairro / Região
+              <Plus className="w-4 h-4 text-purple-600" /> Cadastrar Nova Zona de Entrega / Região
             </span>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
               <div className="sm:col-span-2 space-y-1">
-                <Label className="text-xs font-bold text-foreground">Nome do Bairro / Região</Label>
+                <Label className="text-xs font-bold text-foreground">Nome da Zona / Região</Label>
                 <Input
-                  placeholder="Ex: Lourdes, Savassi, Centro, Belvedere..."
+                  placeholder="Ex: Região Central, Até 5km, Zona Sul, Região Metropolitana..."
                   value={novoBairroNome}
                   onChange={(e) => setNovoBairroNome(e.target.value)}
                   className="h-9 text-xs"
@@ -550,12 +550,12 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
             </div>
           </div>
 
-          {/* Tabela de Bairros */}
+          {/* Tabela de Zonas de Entrega */}
           <div className="rounded-xl border border-border overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="text-xs font-bold">Bairro / Região</TableHead>
+                  <TableHead className="text-xs font-bold">Zona de Entrega / Região</TableHead>
                   <TableHead className="text-xs font-bold w-28 text-right">Taxa (R$)</TableHead>
                   <TableHead className="text-xs font-bold w-24 text-center">Prazo Est.</TableHead>
                   <TableHead className="text-xs font-bold w-20 text-center">Status</TableHead>
@@ -566,7 +566,7 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                 {config.regrasBairros.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">
-                      Nenhum bairro cadastrado ainda. Use o formulário acima para adicionar os bairros da sua cidade.
+                      Nenhuma zona de entrega cadastrada ainda. Use o formulário acima para adicionar as regiões atendidas.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -594,7 +594,7 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                             size="icon"
                             onClick={() => handleAbrirEdicao(b)}
                             className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-500/10"
-                            title="Editar Bairro / Taxa"
+                            title="Editar Zona / Taxa"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -603,7 +603,7 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
                             size="icon"
                             onClick={() => handleRemoverBairro(b.id)}
                             className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-                            title="Excluir Bairro"
+                            title="Excluir Zona"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -679,28 +679,28 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
         </Button>
       </div>
 
-      {/* MODAL DE EDIÇÃO DE BAIRRO / REGIÃO */}
+      {/* MODAL DE EDIÇÃO DE ZONA DE ENTREGA / REGIÃO */}
       <Dialog open={modalEdicaoOpen} onOpenChange={setModalEdicaoOpen}>
         <DialogContent className="max-w-md p-5 rounded-3xl space-y-4">
           <DialogHeader className="border-b border-border/60 pb-3">
             <DialogTitle className="text-base font-black text-foreground flex items-center gap-2">
               <Pencil className="w-4 h-4 text-purple-600" />
-              Editar Bairro / Região
+              Editar Zona de Entrega / Região
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Altere o nome da localidade e a taxa de frete cobrada no cardápio online.
+              Altere o nome da região e a taxa de frete cobrada no cardápio online.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3.5 py-1">
             <div className="space-y-1">
               <Label className="text-xs font-bold text-foreground">
-                Nome do Bairro / Região *
+                Nome da Zona / Região *
               </Label>
               <Input
                 value={editBairroNome}
                 onChange={(e) => setEditBairroNome(e.target.value)}
-                placeholder="Ex: Lourdes"
+                placeholder="Ex: Região Central"
                 className="h-9 text-xs font-semibold"
               />
             </div>
@@ -737,10 +737,10 @@ export function FreteConfigView({ estabelecimentoCodigo }: FreteConfigViewProps)
             <div className="flex items-center justify-between p-3 rounded-2xl border border-border bg-muted/20">
               <div className="space-y-0.5">
                 <Label className="text-xs font-bold text-foreground">
-                  Bairro Ativo para Entregas
+                  Zona Ativa para Entregas
                 </Label>
                 <p className="text-[11px] text-muted-foreground">
-                  Se desativado, o bairro não aparecerá no cardápio do cliente.
+                  Se desativada, a zona não aparecerá no cardápio do cliente.
                 </p>
               </div>
               <Switch

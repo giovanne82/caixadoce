@@ -395,19 +395,40 @@ export function CardapioLojaView() {
 
   // Configurações de Frete & Entrega
   const [freteConfig, setFreteConfig] = useState<ConfiguracaoFrete>(() => obterConfiguracaoFrete(code));
-  const [bairroDropdownOpen, setBairroDropdownOpen] = useState(false);
+  const [regiaoEntregaId, setRegiaoEntregaId] = useState<string>("");
 
   useEffect(() => {
-    setFreteConfig(obterConfiguracaoFrete(code));
+    const carregada = obterConfiguracaoFrete(code);
+    setFreteConfig(carregada);
+    if (carregada.regrasBairros && carregada.regrasBairros.length > 0) {
+      const primeiraAtiva = carregada.regrasBairros.find((b) => b.ativo);
+      if (primeiraAtiva && !regiaoEntregaId) {
+        setRegiaoEntregaId(primeiraAtiva.id);
+      }
+    }
+
     let isMounted = true;
     carregarConfiguracaoFreteAsync(code).then((cfg) => {
       if (isMounted && cfg) {
         setFreteConfig(cfg);
+        if (cfg.regrasBairros && cfg.regrasBairros.length > 0) {
+          const primeiraAtiva = cfg.regrasBairros.find((b) => b.ativo);
+          if (primeiraAtiva && !regiaoEntregaId) {
+            setRegiaoEntregaId(primeiraAtiva.id);
+          }
+        }
       }
     });
 
     const handleFreteUpdate = (e: any) => {
-      setFreteConfig(e.detail || obterConfiguracaoFrete(code));
+      const novaConfig = e.detail || obterConfiguracaoFrete(code);
+      setFreteConfig(novaConfig);
+      if (novaConfig.regrasBairros && novaConfig.regrasBairros.length > 0) {
+        const primeiraAtiva = novaConfig.regrasBairros.find((b: any) => b.ativo);
+        if (primeiraAtiva && !regiaoEntregaId) {
+          setRegiaoEntregaId(primeiraAtiva.id);
+        }
+      }
     };
     window.addEventListener("freteConfigUpdated", handleFreteUpdate);
     return () => {
@@ -415,18 +436,6 @@ export function CardapioLojaView() {
       window.removeEventListener("freteConfigUpdated", handleFreteUpdate);
     };
   }, [code]);
-
-  // Sugestões de Bairros filtradas dinamicamente
-  const bairrosSugeridos = useMemo(() => {
-    const lista = freteConfig.regrasBairros.filter((b) => b.ativo);
-    if (!endBairro.trim()) return lista;
-    const q = endBairro.trim().toLowerCase();
-    const isExactMatch = lista.some((b) => b.bairro.toLowerCase() === q);
-    // Se o usuário selecionou exatamente um bairro, ainda exibimos todos os bairros na lista para troca rápida
-    if (isExactMatch) return lista;
-    const filtrados = lista.filter((b) => b.bairro.toLowerCase().includes(q));
-    return filtrados.length > 0 ? filtrados : lista;
-  }, [freteConfig.regrasBairros, endBairro]);
 
   // Dados da Loja
   const [lojaInfo, setLojaInfo] = useState<LojaInfoState | null>(null);
@@ -747,10 +756,10 @@ export function CardapioLojaView() {
     return calcularFretePedido(
       freteConfig,
       totalCarrinho,
-      endBairro,
+      regiaoEntregaId,
       tipoEntrega
     );
-  }, [freteConfig, totalCarrinho, endBairro, tipoEntrega]);
+  }, [freteConfig, totalCarrinho, regiaoEntregaId, tipoEntrega]);
 
   // Valor Total do Pedido (Produtos + Frete)
   const totalComFrete = useMemo(() => {
@@ -786,12 +795,13 @@ export function CardapioLojaView() {
     }
 
     if (tipoEntrega === "delivery") {
-      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
-        toast.error("Preencha o logradouro, número e bairro para a entrega.");
+      const temRegras = freteConfig.regrasBairros.filter((b) => b.ativo).length > 0;
+      if (temRegras && !regiaoEntregaId) {
+        toast.error("Por favor, selecione sua Região / Zona de Entrega.");
         return;
       }
-      if (freteCalculado.naoAtendido) {
-        toast.error(`A confeitaria não realiza entregas para o bairro "${endBairro.trim()}". Por favor, escolha a opção Retirada no Balcão ou selecione um bairro atendido.`);
+      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
+        toast.error("Preencha a rua, número e bairro para a entrega.");
         return;
       }
     }
@@ -1717,179 +1727,50 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         </div>
                       </div>
 
-                      {/* 2. Bairro / Região + Referência */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="space-y-1 relative">
+                      {/* 1. Seleção Obrigatória de Região / Zona de Entrega */}
+                      {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
+                        <div className="space-y-1.5 p-3 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro / Região *</Label>
-                            {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
-                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
-                                {freteConfig.regrasBairros.filter((b) => b.ativo).length} atendidos
-                              </span>
-                            )}
+                            <Label htmlFor="regiao-entrega-select" className="text-[11px] font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              Selecione sua Região / Zona de Entrega *
+                            </Label>
+                            <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                              Taxa aplicada ao pedido
+                            </span>
                           </div>
 
-                          <div className="relative">
-                            <Input
-                              id="end-bairro"
-                              placeholder={
-                                freteConfig.regrasBairros.filter((b) => b.ativo).length > 0
-                                  ? "Digite ou escolha o bairro..."
-                                  : "Ex: Centro"
-                              }
-                              value={endBairro}
-                              onClick={() => {
-                                if (freteConfig.regrasBairros.filter((b) => b.ativo).length > 0) {
-                                  setBairroDropdownOpen(true);
-                                }
-                              }}
-                              onFocus={() => {
-                                if (freteConfig.regrasBairros.filter((b) => b.ativo).length > 0) {
-                                  setBairroDropdownOpen(true);
-                                }
-                              }}
-                              onChange={(e) => {
-                                setEndBairro(e.target.value);
-                                if (!bairroDropdownOpen && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0) {
-                                  setBairroDropdownOpen(true);
-                                }
-                              }}
-                              className={`h-8 text-xs font-medium ${
-                                freteCalculado.naoAtendido && endBairro.trim()
-                                  ? "border-rose-500 focus-visible:ring-rose-500"
-                                  : ""
-                              } ${
-                                endBairro.trim() && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0
-                                  ? "pr-14"
-                                  : "pr-7"
-                              }`}
-                              required={tipoEntrega === "delivery"}
-                              autoComplete="off"
-                            />
-                            
-                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                              {endBairro.trim() && (
-                                <button
-                                  type="button"
-                                  tabIndex={-1}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEndBairro("");
-                                    setBairroDropdownOpen(true);
-                                  }}
-                                  className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/15 rounded-full transition-colors"
-                                  title="Limpar e escolher outro bairro"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              )}
+                          <select
+                            id="regiao-entrega-select"
+                            value={regiaoEntregaId}
+                            onChange={(e) => setRegiaoEntregaId(e.target.value)}
+                            className="w-full h-9 text-xs font-bold bg-background border border-purple-300 dark:border-purple-800 rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-purple-500 text-foreground cursor-pointer"
+                            required={tipoEntrega === "delivery"}
+                          >
+                            <option value="">-- Clique para escolher sua região/zona --</option>
+                            {freteConfig.regrasBairros
+                              .filter((b) => b.ativo)
+                              .map((reg) => (
+                                <option key={reg.id} value={reg.id}>
+                                  {reg.bairro} — {reg.valor === 0 ? "Frete Grátis" : formatarMoeda(reg.valor)} {reg.prazoMinutos ? `(⏱️ ${reg.prazoMinutos} min)` : ""}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
 
-                              {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
-                                <button
-                                  type="button"
-                                  tabIndex={-1}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setBairroDropdownOpen((prev) => !prev);
-                                  }}
-                                  className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
-                                  title="Ver lista de bairros atendidos"
-                                >
-                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${bairroDropdownOpen ? "rotate-180" : ""}`} />
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Dropdown de Sugestões de Bairros */}
-                            {bairroDropdownOpen && freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={() => setBairroDropdownOpen(false)}
-                                />
-                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-background border border-border/80 rounded-xl shadow-xl max-h-52 overflow-y-auto p-1 text-xs divide-y divide-border/30">
-                                  {bairrosSugeridos.length > 0 ? (
-                                    bairrosSugeridos.map((b) => {
-                                      const isSelected = endBairro.trim().toLowerCase() === b.bairro.toLowerCase();
-                                      return (
-                                        <button
-                                          key={b.id}
-                                          type="button"
-                                          onClick={() => {
-                                            setEndBairro(b.bairro);
-                                            setBairroDropdownOpen(false);
-                                          }}
-                                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                                            isSelected
-                                              ? "bg-purple-500/15 text-purple-800 dark:text-purple-300 font-bold"
-                                              : "hover:bg-muted/70 text-foreground"
-                                          }`}
-                                        >
-                                          <div className="flex items-center gap-1.5 truncate">
-                                            <MapPin className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-purple-600" : "text-muted-foreground"}`} />
-                                            <span className="truncate">{b.bairro}</span>
-                                          </div>
-                                          <div className="flex items-center gap-1 shrink-0 ml-2">
-                                            {b.prazoEstimadoMinutos && (
-                                              <span className="text-[10px] text-muted-foreground font-mono">
-                                                ⏱️ {b.prazoEstimadoMinutos}min
-                                              </span>
-                                            )}
-                                            <Badge
-                                              variant={b.valor === 0 ? "default" : "outline"}
-                                              className={`text-[10px] px-1.5 py-0 ${
-                                                b.valor === 0
-                                                  ? "bg-emerald-600 hover:bg-emerald-600 text-white"
-                                                  : "border-purple-300 text-purple-700 dark:text-purple-300"
-                                              }`}
-                                            >
-                                              {b.valor === 0 ? "Grátis" : formatarMoeda(b.valor)}
-                                            </Badge>
-                                          </div>
-                                        </button>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="px-3 py-2 text-[11px] text-muted-foreground text-center">
-                                      Nenhum bairro cadastrado com esse nome.
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Indicador Dinâmico de Frete para o Bairro com Botão Trocar */}
-                          {endBairro.trim() && (
-                            <div className="flex items-center justify-between pt-0.5 text-[10px]">
-                              {freteCalculado.naoAtendido ? (
-                                <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1 truncate">
-                                  <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
-                                  Sem entregas para {endBairro.trim()}
-                                </span>
-                              ) : freteCalculado.isGratis ? (
-                                <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 truncate">
-                                  <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  Entrega Grátis ({endBairro.trim()})
-                                </span>
-                              ) : (
-                                <span className="text-purple-700 dark:text-purple-300 font-bold flex items-center gap-1 truncate">
-                                  <Truck className="w-3 h-3 text-purple-600 shrink-0" />
-                                  Taxa Calculada: {formatarMoeda(freteCalculado.valorFrete)} ({endBairro.trim()})
-                                </span>
-                              )}
-
-                              {freteConfig.regrasBairros.filter((b) => b.ativo).length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setBairroDropdownOpen(true)}
-                                  className="text-purple-600 hover:text-purple-800 dark:text-purple-400 font-bold hover:underline shrink-0 ml-1.5 cursor-pointer"
-                                >
-                                  Trocar
-                                </button>
-                              )}
-                            </div>
-                          )}
+                      {/* 2. Bairro (Texto Livre) + Ponto de Referência */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="end-bairro" className="text-[11px] font-semibold">Bairro *</Label>
+                          <Input
+                            id="end-bairro"
+                            placeholder="Ex: Jardim América, Centro, etc."
+                            value={endBairro}
+                            onChange={(e) => setEndBairro(e.target.value)}
+                            className="h-8 text-xs font-medium"
+                            required={tipoEntrega === "delivery"}
+                          />
                         </div>
 
                         <div className="space-y-1">
@@ -1903,19 +1784,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           />
                         </div>
                       </div>
-
-                      {/* Alerta Destacado caso a Localidade não seja atendida */}
-                      {freteCalculado.naoAtendido && endBairro.trim() && (
-                        <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs space-y-1 mt-1">
-                          <p className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                            Região Não Atendida para Entrega
-                          </p>
-                          <p className="text-[11px] leading-snug">
-                            A loja não realiza entregas para o bairro <strong>"{endBairro.trim()}"</strong>. Por favor, selecione um bairro atendido na lista ou altere a opção para <strong>Retirada no Balcão</strong>.
-                          </p>
-                        </div>
-                      )}
                     </div>
                   )}
 

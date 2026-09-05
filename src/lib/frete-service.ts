@@ -129,12 +129,12 @@ export async function salvarConfiguracaoFrete(
 }
 
 /**
- * Calcula o frete de um pedido com base nas regras ativas e no bairro informado
+ * Calcula o frete de um pedido com base na Zona de Entrega / Região selecionada
  */
 export function calcularFretePedido(
   config: ConfiguracaoFrete,
   subtotal: number,
-  bairroEscolhido?: string,
+  regiaoIdOuNome?: string,
   tipoEntrega: "retirada" | "delivery" = "delivery"
 ): {
   valorFrete: number;
@@ -176,40 +176,24 @@ export function calcularFretePedido(
     };
   }
 
-  // 3. Busca e correspondência inteligente de Bairro / Região
-  const temBairrosAtivos = Array.isArray(config.regrasBairros) && config.regrasBairros.some((r) => r.ativo);
-  const termoLimpo = bairroEscolhido ? bairroEscolhido.trim().toLowerCase() : "";
+  // 3. Correspondência por ID ou Nome da Zona de Entrega / Região
+  const temRegrasAtivas = Array.isArray(config.regrasBairros) && config.regrasBairros.some((r) => r.ativo);
+  const termoLimpo = regiaoIdOuNome ? regiaoIdOuNome.trim().toLowerCase() : "";
 
-  if (termoLimpo && temBairrosAtivos) {
-    // 3.1. Match exato ou por ID
-    let regraEncontrada = config.regrasBairros.find(
-      (r) => r.ativo && (r.bairro.toLowerCase() === termoLimpo || r.id === bairroEscolhido)
+  if (termoLimpo && temRegrasAtivas) {
+    const regraEncontrada = config.regrasBairros.find(
+      (r) => r.ativo && (r.id === regiaoIdOuNome || r.bairro.toLowerCase() === termoLimpo)
     );
-
-    // 3.2. Match parcial se não encontrou exato
-    if (!regraEncontrada && termoLimpo.length >= 3) {
-      regraEncontrada = config.regrasBairros.find(
-        (r) => r.ativo && (r.bairro.toLowerCase().includes(termoLimpo) || termoLimpo.includes(r.bairro.toLowerCase()))
-      );
-    }
 
     if (regraEncontrada) {
       const valor = Number(regraEncontrada.valor) || 0;
       return {
         valorFrete: valor,
         isGratis: valor === 0,
-        motivo: valor === 0 ? `Frete Grátis (${regraEncontrada.bairro})` : `Taxa do Bairro ${regraEncontrada.bairro}`,
+        motivo: valor === 0 ? `Frete Grátis (${regraEncontrada.bairro})` : `Taxa (${regraEncontrada.bairro})`,
         tempoEstimadoMinutos: regraEncontrada.prazoMinutos || config.tempoMedioMinutos || 45,
         bairroIdentificado: regraEncontrada.bairro,
         naoAtendido: false,
-      };
-    } else if (config.tipoFretePadrao === "bairros") {
-      return {
-        valorFrete: Number(config.valorFixoPadrao) || 0,
-        isGratis: false,
-        motivo: `Entrega indisponível para o bairro "${bairroEscolhido?.trim()}"`,
-        tempoEstimadoMinutos: config.tempoMedioMinutos || 45,
-        naoAtendido: true,
       };
     }
   }
