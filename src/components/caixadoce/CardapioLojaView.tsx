@@ -935,6 +935,11 @@ export function CardapioLojaView() {
       .map((item) => `• ${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
       .join("\n");
 
+    const modalidade =
+      tipoEntrega === "delivery"
+        ? `🚚 Entrega / Delivery${enderecoEntrega ? ` (${enderecoEntrega})` : ""}`
+        : "🏬 Retirada no Balcão";
+
     const taxaTexto = tipoEntrega === "delivery"
       ? (freteCalculado.isGratis ? "Grátis (Cortesia/Promoção)" : formatarMoeda(freteCalculado.valorFrete))
       : "R$ 0,00 (Retirada no Local)";
