@@ -1151,29 +1151,37 @@ export default {
         }
       }
 
-      if (url.pathname === "/api/mercadopago/create-pix-payment" && request.method === "POST") {
+      // ROTA BACKEND PROXY PIX MERCADO PAGO (/api/create-pix-payment & /api/mercadopago/create-pix-payment)
+      if (
+        (url.pathname === "/api/create-pix-payment" || url.pathname === "/api/mercadopago/create-pix-payment") &&
+        request.method === "POST"
+      ) {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const body = await request.json();
           const codeTarget = (body.establishmentCode || body.codigo || "CD-1001").toUpperCase();
-          const amount = Number(body.amount || body.valor || 10);
+          const amount = Number(body.transaction_amount || body.amount || body.valor || 0);
           const description = body.description || `Pedido no Cardápio Digital (${codeTarget})`;
-          const payerEmail = body.payerEmail || body.email || "cliente@caixadoce.com.br";
+          const payerData = body.payer || {};
+          const payerEmail = payerData.email || body.payerEmail || body.email || "cliente@caixadoce.com.br";
+          const payerFirstName = payerData.first_name || body.payerFirstName || body.clienteNome || "Cliente";
 
-          // Buscar o mp_access_token do estabelecimento no Supabase
-          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token`, {
-            headers: {
-              "apikey": supabaseKey,
-              "authorization": `Bearer ${supabaseKey}`,
-            },
-          });
+          let tokenUso = body.mp_access_token || body.accessToken || body.access_token || "";
 
-          let tokenUso = body.accessToken || body.access_token || "";
+          // Se o token não veio no body, busca o mp_access_token do estabelecimento no Supabase
+          if (!tokenUso && codeTarget) {
+            const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token`, {
+              headers: {
+                "apikey": supabaseKey,
+                "authorization": `Bearer ${supabaseKey}`,
+              },
+            });
 
-          if (!tokenUso && estRes.ok) {
-            const data = await estRes.json();
-            if (data[0] && data[0].mp_access_token) {
-              tokenUso = data[0].mp_access_token;
+            if (estRes.ok) {
+              const data = await estRes.json();
+              if (data[0] && data[0].mp_access_token) {
+                tokenUso = data[0].mp_access_token;
+              }
             }
           }
 
@@ -1196,6 +1204,7 @@ export default {
               description,
               payer: {
                 email: payerEmail,
+                first_name: payerFirstName,
               },
             }),
           });
@@ -1205,13 +1214,17 @@ export default {
           if (!mpRes.ok || mpData.error) {
             console.error("[MercadoPago Pix Error Response]", mpData);
             return new Response(
-              JSON.stringify({ error: mpData.message || mpData.error || "Falha ao gerar QR Code Pix no Mercado Pago." }),
-              { status: 400, headers: { "content-type": "application/json" } }
+              JSON.stringify({
+                error: mpData.message || mpData.error || "Falha ao gerar QR Code Pix no Mercado Pago.",
+                details: mpData,
+              }),
+              { status: mpRes.status || 400, headers: { "content-type": "application/json" } }
             );
           }
 
-          const qrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 || null;
-          const qrCode = mpData.point_of_interaction?.transaction_data?.qr_code || null;
+          const pointOfInteraction = mpData.point_of_interaction || null;
+          const qrCodeBase64 = pointOfInteraction?.transaction_data?.qr_code_base64 || null;
+          const qrCode = pointOfInteraction?.transaction_data?.qr_code || null;
 
           console.log(`[MercadoPago Pix Success] Payment ID: ${mpData.id} | Status: ${mpData.status}`);
 
@@ -1219,7 +1232,9 @@ export default {
             JSON.stringify({
               success: true,
               payment_id: mpData.id,
+              id: mpData.id,
               status: mpData.status,
+              point_of_interaction: pointOfInteraction,
               qr_code_base64: qrCodeBase64,
               qr_code: qrCode,
             }),

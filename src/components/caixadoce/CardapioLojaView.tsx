@@ -1122,7 +1122,7 @@ export function CardapioLojaView() {
       if (valTotalCarrinho > 0) {
         let gerouMp = false;
 
-        // 1. SE TRUE (Mercado Pago Connect): Gera Pix via API /v1/payments com o mp_access_token do lojista
+        // 1. SE TRUE (Mercado Pago Connect): Gera Pix via proxy backend (/api/create-pix-payment) com o mp_access_token do lojista
         if (lojaInfo?.usar_mercadopago) {
           try {
             let tokenLojista = lojaInfo?.mp_access_token;
@@ -1137,71 +1137,88 @@ export function CardapioLojaView() {
               }
             }
 
-            // 1.1 Tentativa direta na API do Mercado Pago usando o token específico do lojista
-            if (tokenLojista) {
-              console.log(`[Checkout Cardápio] Gerando Pix via API Mercado Pago com token do lojista (${code})...`);
-              const mpDirectRes = await fetch("https://api.mercadopago.com/v1/payments", {
+            console.log(`[Checkout Cardápio] Gerando Pix Mercado Pago via proxy seguro (/api/create-pix-payment) para ${code}...`);
+            
+            const pixPayload = {
+              transaction_amount: valTotalCarrinho,
+              amount: valTotalCarrinho,
+              establishmentCode: code,
+              mp_access_token: tokenLojista || undefined,
+              accessToken: tokenLojista || undefined,
+              description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+              payer: {
+                email: "cliente@caixadoce.com.br",
+                first_name: clienteNome || "Cliente",
+              },
+            };
+
+            let mpData: any = null;
+
+            // 1.1 Tenta rota backend da aplicação (/api/create-pix-payment)
+            try {
+              const resBackend = await fetch("/api/create-pix-payment", {
                 method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${tokenLojista}`,
-                  "Content-Type": "application/json",
-                  "X-Idempotency-Key": `${code}-${pedidoId}-${Date.now()}`,
-                },
-                body: JSON.stringify({
-                  transaction_amount: valTotalCarrinho,
-                  payment_method_id: "pix",
-                  description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
-                  payer: {
-                    email: "cliente@caixadoce.com.br",
-                  },
-                }),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(pixPayload),
               });
-
-              if (mpDirectRes.ok) {
-                const mpData = await mpDirectRes.json();
-                const qrBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
-                const qrCode = mpData.point_of_interaction?.transaction_data?.qr_code;
-
-                if (qrBase64 || qrCode) {
-                  if (qrBase64) setPixQrCodeBase64(qrBase64);
-                  if (qrCode) {
-                    setPixCopiaCola(qrCode);
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      navigator.clipboard.writeText(qrCode).catch(() => {});
-                      setPixCopiado(true);
-                    }
-                  }
-                  gerouMp = true;
-                  console.log("[Checkout Cardápio] Pix Mercado Pago gerado com sucesso via API direta!");
-                }
+              if (resBackend.ok) {
+                mpData = await resBackend.json();
               } else {
-                console.warn("[Checkout Cardápio] API direta do MP retornou erro, tentando rota backend:", await mpDirectRes.text());
+                console.warn("[Checkout Cardápio] /api/create-pix-payment retornou:", await resBackend.text());
+              }
+            } catch (errApi) {
+              console.warn("[Checkout Cardápio] Rota /api/create-pix-payment indisponível, tentando Edge Function:", errApi);
+            }
+
+            // 1.2 Fallback para Edge Function do Supabase (create-pix-payment)
+            if (!mpData?.point_of_interaction && !mpData?.qr_code_base64 && !mpData?.qr_code) {
+              try {
+                const { data: edgeData, error: edgeError } = await supabase.functions.invoke("create-pix-payment", {
+                  body: pixPayload,
+                });
+                if (!edgeError && edgeData) {
+                  mpData = edgeData;
+                }
+              } catch (errEdge) {
+                console.warn("[Checkout Cardápio] Edge Function create-pix-payment falhou:", errEdge);
               }
             }
 
-            // 1.2 Fallback de geração via rota do servidor backend
-            if (!gerouMp) {
-              console.log(`[Checkout Cardápio] Solicitando Pix Mercado Pago via backend para ${code}...`);
-              const mpPixRes = await gerarPixMercadoPago({
-                establishmentCode: code,
-                amount: valTotalCarrinho,
-                description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
-                payerEmail: "cliente@caixadoce.com.br",
-                accessToken: tokenLojista || undefined,
-              });
-
-              if (mpPixRes && mpPixRes.success) {
-                gerouMp = true;
-                if (mpPixRes.qr_code_base64) {
-                  setPixQrCodeBase64(mpPixRes.qr_code_base64);
+            // 1.3 Fallback para rota legada do backend (/api/mercadopago/create-pix-payment)
+            if (!mpData?.point_of_interaction && !mpData?.qr_code_base64 && !mpData?.qr_code) {
+              try {
+                const resMpPix = await gerarPixMercadoPago({
+                  establishmentCode: code,
+                  amount: valTotalCarrinho,
+                  description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+                  payerEmail: "cliente@caixadoce.com.br",
+                  accessToken: tokenLojista || undefined,
+                });
+                if (resMpPix && resMpPix.success) {
+                  mpData = resMpPix;
                 }
-                if (mpPixRes.qr_code) {
-                  setPixCopiaCola(mpPixRes.qr_code);
+              } catch (errGerar) {
+                console.warn("[Checkout Cardápio] gerarPixMercadoPago falhou:", errGerar);
+              }
+            }
+
+            // Processa o retorno com QR Code e Copia-e-Cola
+            if (mpData) {
+              const pointOfInteraction = mpData.point_of_interaction;
+              const qrBase64 = mpData.qr_code_base64 || pointOfInteraction?.transaction_data?.qr_code_base64;
+              const qrCode = mpData.qr_code || pointOfInteraction?.transaction_data?.qr_code;
+
+              if (qrBase64 || qrCode) {
+                if (qrBase64) setPixQrCodeBase64(qrBase64);
+                if (qrCode) {
+                  setPixCopiaCola(qrCode);
                   if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    navigator.clipboard.writeText(mpPixRes.qr_code).catch(() => {});
+                    navigator.clipboard.writeText(qrCode).catch(() => {});
                     setPixCopiado(true);
                   }
                 }
+                gerouMp = true;
+                console.log("[Checkout Cardápio] Pix Mercado Pago gerado com sucesso via Backend Proxy!");
               }
             }
           } catch (mpErr: any) {
