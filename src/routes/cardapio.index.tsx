@@ -23,9 +23,9 @@ function CardapioBuscaView() {
 
   const handleBuscar = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = storeCode.trim().toUpperCase();
+    const clean = storeCode.trim();
     if (!clean) {
-      toast.error("Por favor, digite o código da confeitaria (ex: CD-1001).");
+      toast.error("Por favor, digite o código ou link da confeitaria.");
       return;
     }
 
@@ -48,7 +48,7 @@ function CardapioBuscaView() {
             </div>
             <CardTitle className="text-lg font-black">Acessar Cardápio da Confeitaria</CardTitle>
             <CardDescription className="text-xs">
-              Digite o Código Único fornecido pela sua confeiteira para ver os produtos, fotos e fazer seu pedido.
+              Digite o Código Único ou Link Personalizado fornecido pela sua confeiteira para ver os produtos, fotos e fazer seu pedido.
             </CardDescription>
           </CardHeader>
 
@@ -56,10 +56,10 @@ function CardapioBuscaView() {
             <form onSubmit={handleBuscar} className="space-y-3">
               <div className="space-y-1">
                 <Input
-                  placeholder="Ex: CD-1001"
+                  placeholder="Ex: CD-1001 ou minha-confeitaria"
                   value={storeCode}
                   onChange={(e) => setStoreCode(e.target.value)}
-                  className="text-center text-lg font-mono font-black tracking-widest uppercase h-12"
+                  className="text-center text-base font-mono font-bold tracking-wider h-12"
                   autoFocus
                 />
               </div>

@@ -28,6 +28,7 @@ export type StaffRole = "admin" | "gerente" | "operador";
 export type UpdateEstablishmentDetailsInput = {
   estabelecimentoId?: string;
   codigo?: string;
+  slug?: string;
   nome?: string;
   endereco?: string;
   logradouro?: string;
@@ -78,6 +79,7 @@ export type UpdateEstablishmentDetailsInput = {
 export type StaffProfile = {
   role: StaffRole;
   establishmentCode: string;
+  slug?: string;
   establishmentName: string;
   establishmentAddress: string;
   logradouro?: string;
@@ -884,6 +886,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       };
 
       if (details.nome !== undefined) updatePayload.nome = details.nome;
+      if (details.slug !== undefined) updatePayload.slug = details.slug ? details.slug.trim().toLowerCase() : null;
       if (details.responsavel !== undefined) updatePayload.responsavel = details.responsavel;
 
       if (details.tipoDocumento !== undefined) updatePayload.tipo_documento = details.tipoDocumento;

@@ -250,6 +250,8 @@ async function seedClientesLojaTableInSupabase() {
       DROP POLICY IF EXISTS "Permitir atualizacao em clientes_loja" ON public.clientes_loja;
       GRANT ALL ON TABLE public.clientes_loja TO anon, authenticated, service_role;
       ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS slug TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_estabelecimentos_slug ON public.estabelecimentos(slug);
     `;
 
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {

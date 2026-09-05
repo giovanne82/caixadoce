@@ -23,6 +23,7 @@ export {
 export interface Estabelecimento {
   id: string;
   codigo: string;
+  slug?: string;
   nome: string;
   endereco: string;
   logradouro?: string;

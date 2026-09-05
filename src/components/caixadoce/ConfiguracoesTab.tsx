@@ -58,6 +58,7 @@ import {
   MessageCircle,
   Music,
   Truck,
+  Link2,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import {
@@ -103,6 +104,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   // Establishment Form
   const [nomeEst, setNomeEst] = useState(profile?.establishmentName || "");
+  const [slugEst, setSlugEst] = useState(profile?.slug || "");
   const [responsavelEst, setResponsavelEst] = useState(profile?.responsavel || user?.name || "");
   const [telEst, setTelEst] = useState(profile?.telefone || "");
   const [chavePix, setChavePix] = useState(profile?.chavePix || "");
@@ -741,6 +743,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     // 1. Aplica dados de profile imediatamente se disponíveis
     if (profile) {
       if (profile.establishmentName) setNomeEst(profile.establishmentName);
+      if (profile.slug) setSlugEst(profile.slug);
       if (profile.responsavel) setResponsavelEst(profile.responsavel);
       if (profile.telefone) setTelEst(profile.telefone);
       if (profile.chavePix) setChavePix(profile.chavePix);
@@ -780,6 +783,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.usar_mercadopago !== undefined && d.usar_mercadopago !== null) setUsarMercadopago(Boolean(d.usar_mercadopago));
           if (d.chave_pix_manual !== undefined && d.chave_pix_manual !== null) setChavePixManual(d.chave_pix_manual);
           if (d.nome) setNomeEst(d.nome);
+          if (d.slug) setSlugEst(d.slug);
           if (d.responsavel) setResponsavelEst(d.responsavel);
           if (d.telefone) setTelEst(d.telefone);
           if (d.tipo_documento) setTipoDoc(d.tipo_documento);
@@ -896,6 +900,29 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       return;
     }
 
+    // VALIDAÇÃO E CHECAGEM DE DISPONIBILIDADE DO SLUG (LINK PERSONALIZADO)
+    let slugLimpo: string | undefined = undefined;
+    if (slugEst && slugEst.trim()) {
+      slugLimpo = slugEst.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+      if (slugLimpo.length < 3) {
+        toast.error("O Link Personalizado do cardápio deve conter no mínimo 3 caracteres (apenas letras minúsculas, números e hífens).");
+        return;
+      }
+
+      // Consulta no Supabase se o slug já está em uso por outro estabelecimento
+      const { data: estComMesmoSlug, error: errChecagem } = await supabase
+        .from("estabelecimentos")
+        .select("id, codigo, slug")
+        .eq("slug", slugLimpo)
+        .neq("codigo", activeCode)
+        .maybeSingle();
+
+      if (estComMesmoSlug && estComMesmoSlug.slug) {
+        toast.error("Este nome já está em uso por outra loja. Por favor, escolha outro.");
+        return;
+      }
+    }
+
     setSalvandoEst(true);
     try {
       const enderecoFinal = `${logradouroEst}, ${numeroEst}${complementoEst ? ` - ${complementoEst}` : ""} - ${bairroEst}, ${cidadeEst}/${ufEst} - CEP: ${cepEst}`;
@@ -907,6 +934,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       await updateEstablishmentDetails({
         codigo: activeCode,
         nome: nomeEst,
+        slug: slugLimpo,
         endereco: enderecoFinal,
         logradouro: logradouroEst,
         numero: numeroEst,
@@ -1330,6 +1358,45 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       value={responsavelEst}
                       onChange={(e) => setResponsavelEst(e.target.value)}
                     />
+                  </div>
+                </div>
+
+                {/* CAMPO DE LINK PERSONALIZADO DO CARDÁPIO (SLUG) */}
+                <div className="space-y-1.5 p-3.5 rounded-2xl bg-purple-500/5 border border-purple-500/20 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="est-slug" className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      Link Personalizado do Cardápio (Slug)
+                    </Label>
+                    <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono">
+                      {slugEst ? "Personalizado" : "Padrão"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center rounded-xl border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/30">
+                    <span className="px-3 py-2 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-border shrink-0">
+                      caixadoce.com.br/cardapio/
+                    </span>
+                    <Input
+                      id="est-slug"
+                      value={slugEst}
+                      onChange={(e) => {
+                        // Regex em tempo real: apenas letras minúsculas, números e hífens
+                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+                        setSlugEst(val);
+                      }}
+                      placeholder="minha-confeitaria"
+                      className="border-0 focus-visible:ring-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300 h-9"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-muted-foreground gap-1 pt-0.5">
+                    <span>Permitido: letras minúsculas, números e hífens.</span>
+                    {slugEst && (
+                      <span className="font-mono text-xs text-purple-600 dark:text-purple-400 font-bold truncate">
+                        Preview: /cardapio/{slugEst}
+                      </span>
+                    )}
                   </div>
                 </div>
 

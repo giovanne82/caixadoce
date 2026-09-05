@@ -265,10 +265,11 @@ export function ProductsView({
   const [availableDays, setAvailableDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
   const [minLeadTimeDays, setMinLeadTimeDays] = useState<number>(1);
 
-  // URL do Cardápio Público
+  // URL do Cardápio Público (prioriza o slug personalizado se existir)
+  const slugOuCodigo = profile?.slug || estabelecimentoCodigo;
   const linkPublico = typeof window !== "undefined"
-    ? `${window.location.origin}/cardapio/${estabelecimentoCodigo}`
-    : `/cardapio/${estabelecimentoCodigo}`;
+    ? `${window.location.origin}/cardapio/${slugOuCodigo}`
+    : `/cardapio/${slugOuCodigo}`;
 
   // Todas as Categorias Disponíveis
   const todasCategoriasDisponiveis = useMemo(() => {
@@ -471,7 +472,7 @@ export function ProductsView({
             <QrCode className="w-3.5 h-3.5 mr-1 text-purple-700" /> QR Code
           </Button>
 
-          <a href={`/cardapio/${estabelecimentoCodigo}`} target="_blank" rel="noopener noreferrer">
+          <a href={`/cardapio/${slugOuCodigo}`} target="_blank" rel="noopener noreferrer">
             <Button
               size="sm"
               className="h-8.5 text-xs bg-black/40 text-white hover:bg-black/60 border border-white/20"
@@ -1047,7 +1048,7 @@ export function ProductsView({
               />
             </div>
             <p className="text-xs font-mono font-bold text-primary">
-              Código Único: {estabelecimentoCodigo}
+              {profile?.slug ? `Link: caixadoce.com.br/cardapio/${profile.slug}` : `Código Único: ${estabelecimentoCodigo}`}
             </p>
           </div>
 

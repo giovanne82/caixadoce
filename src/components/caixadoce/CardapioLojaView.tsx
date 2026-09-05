@@ -324,10 +324,10 @@ export function SocialLinks({
 // ==========================================
 
 export function CardapioLojaView() {
-  // Leitura desacoplada e segura dos parâmetros de rota
+  // Leitura desacoplada e segura dos parâmetros de rota (suporta slug ou código)
   const routeParams = useParams({ strict: false }) as Record<string, string> | undefined;
-  const storeCodeFromParam = routeParams?.storeCode;
-  const code = (storeCodeFromParam || "CD-1001").toUpperCase();
+  const rawParam = (routeParams?.storeCode || routeParams?.idOuSlug || routeParams?.slug || "CD-1001").trim();
+  const [code, setCode] = useState<string>(rawParam.toUpperCase());
 
   // Estados dos Produtos e Carrinho
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
@@ -494,26 +494,36 @@ export function CardapioLojaView() {
         }
 
         let estData = null;
+        const paramLower = rawParam.toLowerCase();
+        const paramUpper = rawParam.toUpperCase();
 
-        // 1. Busca por codigo
-        const { data: d1, error: err1 } = await supabase
+        // 1. Busca flexível por slug OU codigo OU estabelecimento_codigo
+        const { data: dFlex } = await supabase
           .from("estabelecimentos")
           .select("*")
-          .eq("codigo", code)
+          .or(`slug.eq.${paramLower},codigo.eq.${paramUpper},estabelecimento_codigo.eq.${paramUpper}`)
           .maybeSingle();
 
-        if (!err1 && d1) {
-          estData = d1;
+        if (dFlex) {
+          estData = dFlex;
+          const resolvedCode = dFlex.codigo || dFlex.estabelecimento_codigo || paramUpper;
+          if (resolvedCode !== code) {
+            setCode(resolvedCode);
+          }
         } else {
-          // 2. Busca por estabelecimento_codigo
-          const { data: d2, error: err2 } = await supabase
+          // Fallback por código direto caso .or() não case
+          const { data: d1 } = await supabase
             .from("estabelecimentos")
             .select("*")
-            .eq("estabelecimento_codigo", code)
+            .eq("codigo", paramUpper)
             .maybeSingle();
 
-          if (!err2 && d2) {
-            estData = d2;
+          if (d1) {
+            estData = d1;
+            const resolvedCode = d1.codigo || paramUpper;
+            if (resolvedCode !== code) {
+              setCode(resolvedCode);
+            }
           }
         }
 
