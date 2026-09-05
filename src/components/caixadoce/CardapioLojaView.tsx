@@ -364,6 +364,7 @@ export function CardapioLojaView() {
   const [recentOrders, setRecentOrders] = useState<Array<{
     id: string;
     data: string;
+    created_at?: string;
     data_entrega?: string;
     horario_entrega?: string;
     tipo_entrega?: string;
@@ -371,6 +372,7 @@ export function CardapioLojaView() {
     status: string;
     itens: string;
     total_itens?: number;
+    metodo_pagamento?: string;
     loja_codigo?: string;
     loja_nome?: string;
   }>>([]);
@@ -1337,9 +1339,17 @@ export function CardapioLojaView() {
           setSavedUserPhone(clienteWhatsapp);
           setSavedUserName(clienteNome);
 
+          const nowIso = new Date().toISOString();
+          const metodoPagamentoTexto = lojaInfo?.usar_mercadopago
+            ? "Pix Automático (Mercado Pago)"
+            : metodoPagamento === "cartao"
+            ? "Cartão de Crédito"
+            : "Pix Manual";
+
           const novoResumoPedido = {
             id: pedidoId,
-            data: new Date().toISOString(),
+            data: nowIso,
+            created_at: nowIso,
             data_entrega: dataEntrega,
             horario_entrega: horarioEntrega || "15:00",
             tipo_entrega: tipoEntrega,
@@ -1347,6 +1357,7 @@ export function CardapioLojaView() {
             status: "pendente",
             itens: resumoItensTexto,
             total_itens: totalItensCarrinho,
+            metodo_pagamento: metodoPagamentoTexto,
             loja_codigo: code,
             loja_nome: lojaInfo?.nome || "Confeitaria",
           };
@@ -2757,17 +2768,28 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     </Badge>
                   </div>
 
-                  <div className="space-y-1 text-muted-foreground">
+                  <div className="space-y-1.5 text-muted-foreground">
                     <p className="line-clamp-2 font-medium text-foreground">
                       🛒 {ord.itens}
                     </p>
                     <div className="flex items-center justify-between pt-1 text-[11px]">
-                      <span>
+                      <span className="flex items-center gap-1 font-semibold text-foreground/90">
                         📅 {ord.data_entrega ? ord.data_entrega.split("-").reverse().join("/") : new Date(ord.data).toLocaleDateString("pt-BR")} {ord.horario_entrega ? `às ${ord.horario_entrega}` : ""}
                       </span>
                       <span className="font-mono font-black text-xs text-foreground">
                         {formatarMoeda(ord.valor_total)}
                       </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[10.5px] text-muted-foreground/80 border-t border-border/40 pt-1.5 mt-1">
+                      <span>
+                        Realizado em: {new Date(ord.created_at || ord.data).toLocaleDateString("pt-BR")} às {new Date(ord.created_at || ord.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {ord.metodo_pagamento && (
+                        <span className="font-medium text-purple-700 dark:text-purple-300">
+                          Pagamento: {ord.metodo_pagamento}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

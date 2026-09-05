@@ -267,6 +267,44 @@ function renderizarBadgePagamentoMobile(ord: Encomenda) {
   );
 }
 
+function obterMetodoPagamentoFormatado(ord: Encomenda): string {
+  const metodo = ord.metodoPagamento || ord.metodo_pagamento || (ord as any).forma_pagamento;
+  const origem = ord.origem_pagamento || (ord as any).origem;
+
+  if (origem === "mercadopago" || metodo === "Mercado Pago" || metodo === "pix_mp") {
+    return "Pix Automático";
+  }
+  if (metodo?.toLowerCase().includes("manual") || metodo === "pix_manual") {
+    return "Pix Manual";
+  }
+  if (metodo?.toLowerCase() === "pix") {
+    return "Pix";
+  }
+  if (metodo?.toLowerCase().includes("cartao") || metodo?.toLowerCase().includes("cartão")) {
+    return "Cartão";
+  }
+  if (metodo?.toLowerCase().includes("dinheiro")) {
+    return "Dinheiro";
+  }
+  if (metodo) {
+    return metodo;
+  }
+  return "Não informado";
+}
+
+function formatarDataHoraCriacao(dateStr?: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const data = d.toLocaleDateString("pt-BR");
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return `${data} às ${hora}`;
+  } catch {
+    return "";
+  }
+}
+
 export function OrdersView({
   encomendas,
   datasBloqueadas,
@@ -1671,13 +1709,19 @@ export function OrdersView({
                         onClick={() => handleAbrirDetalhes(ord)}
                         className="hover:bg-purple-500/5 cursor-pointer transition-colors"
                       >
-                        <TableCell className="text-xs font-mono">
-                          <div className="font-bold text-foreground">
-                            {ord.dataEntrega.split("-").reverse().join("/")}
+                        <TableCell className="text-xs">
+                          <div className="font-extrabold text-foreground flex items-center gap-1.5">
+                            <CalendarDays className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span>{ord.dataEntrega.split("-").reverse().join("/")}</span>
                           </div>
-                          <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
-                            <Clock className="w-3 h-3 text-primary" /> {ord.horarioEntrega || "14:00"}
+                          <div className="text-muted-foreground flex items-center gap-1 text-[11px] font-mono mt-0.5">
+                            <Clock className="w-3 h-3 text-primary shrink-0" /> {ord.horarioEntrega || "14:00"}
                           </div>
+                          {ord.createdAt && (
+                            <div className="text-[10px] text-muted-foreground/80 flex items-center gap-1 mt-1 font-sans">
+                              <span>Pedido feito em: {formatarDataHoraCriacao(ord.createdAt)}</span>
+                            </div>
+                          )}
                         </TableCell>
 
                         <TableCell>
@@ -1693,8 +1737,12 @@ export function OrdersView({
                           {formatarMoeda(ord.valorTotal)}
                         </TableCell>
 
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs space-y-1">
                           {renderizarBadgePagamento(ord)}
+                          <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-medium pt-0.5">
+                            <CreditCard className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                            <span>{obterMetodoPagamentoFormatado(ord)}</span>
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -1798,9 +1846,9 @@ export function OrdersView({
                     onClick={() => handleAbrirDetalhes(ord)}
                     className="p-3.5 rounded-2xl border border-border bg-card shadow-xs hover:border-primary/50 cursor-pointer transition-all space-y-3"
                   >
-                    <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-2">
-                      <div>
-                        <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-2.5">
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                           <span>{ord.clienteNome}</span>
                           {ord.status === "entregue" && (
                             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
@@ -1808,13 +1856,22 @@ export function OrdersView({
                             </Badge>
                           )}
                         </div>
-                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono mt-0.5">
-                          <Clock className="w-3 h-3 text-primary" />
-                          {ord.dataEntrega.split("-").reverse().join("/")} às {ord.horarioEntrega || "14:00"}
+                        <div className="text-[11.5px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                          <CalendarDays className="w-3.5 h-3.5 shrink-0 text-purple-600" />
+                          <span>Entrega: {ord.dataEntrega.split("-").reverse().join("/")} às {ord.horarioEntrega || "14:00"}</span>
+                        </div>
+                        {ord.createdAt && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span>Pedido feito em: {formatarDataHoraCriacao(ord.createdAt)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-medium pt-0.5">
+                          <CreditCard className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                          <span>{obterMetodoPagamentoFormatado(ord)}</span>
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0 space-y-1">
                         <div className="text-xs font-extrabold text-foreground">{formatarMoeda(ord.valorTotal)}</div>
                         {renderizarBadgePagamentoMobile(ord)}
                       </div>
@@ -2371,12 +2428,23 @@ export function OrdersView({
                           <span className="font-mono text-xs font-black text-primary flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
                           </span>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {renderizarBadgePagamentoMobile(ord)}
                             <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
                               {statusCfg?.label || ord.status}
                             </Badge>
                           </div>
+                        </div>
+
+                        {ord.createdAt && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span>Pedido feito em: {formatarDataHoraCriacao(ord.createdAt)}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-medium">
+                          <CreditCard className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                          <span>{obterMetodoPagamentoFormatado(ord)}</span>
                         </div>
 
                         <div>
@@ -3516,7 +3584,7 @@ export function OrdersView({
           {encomendaDetalhes && (
             <div className="space-y-4 py-2">
               {/* BLOCO 1: DADOS DO CLIENTE & DATA/ENTREGA */}
-              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2">
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Cliente</span>
@@ -3530,18 +3598,35 @@ export function OrdersView({
                     )}
                   </div>
 
-                  <div>
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data &amp; Horário</span>
-                    <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-primary" />
-                      {encomendaDetalhes.dataEntrega.split("-").reverse().join("/")} às {encomendaDetalhes.horarioEntrega || "14:00"}
-                    </span>
-                    <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
-                      {encomendaDetalhes.tipoEntrega === "delivery"
-                        ? `🚚 Entrega: ${encomendaDetalhes.enderecoEntrega || "A combinar"}`
-                        : "🏬 Retirada no Balcão"}
-                    </span>
+                  <div className="space-y-1">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data de Entrega / Retirada</span>
+                      <span className="font-bold text-foreground text-xs flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
+                        <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />
+                        {encomendaDetalhes.dataEntrega.split("-").reverse().join("/")} às {encomendaDetalhes.horarioEntrega || "14:00"}
+                      </span>
+                      <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
+                        {encomendaDetalhes.tipoEntrega === "delivery"
+                          ? `🚚 Entrega: ${encomendaDetalhes.enderecoEntrega || "A combinar"}`
+                          : "🏬 Retirada no Balcão"}
+                      </span>
+                    </div>
+
+                    {encomendaDetalhes.createdAt && (
+                      <div className="pt-0.5 text-[10.5px] text-muted-foreground">
+                        <span className="font-medium">🕒 Pedido feito em:</span> {formatarDataHoraCriacao(encomendaDetalhes.createdAt)}
+                      </div>
+                    )}
                   </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-medium flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-primary shrink-0" /> Forma de Pagamento Escolhida:
+                  </span>
+                  <span className="font-bold text-foreground">
+                    {obterMetodoPagamentoFormatado(encomendaDetalhes)}
+                  </span>
                 </div>
 
                 {encomendaDetalhes.observacoes && (
