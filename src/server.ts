@@ -291,6 +291,7 @@ async function seedClientesLojaTableInSupabase() {
       ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS slug TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_estabelecimentos_slug ON public.estabelecimentos(slug);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_loja_code_tel ON public.clientes_loja (estabelecimento_codigo, telefone);
     `;
 
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {

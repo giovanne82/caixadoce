@@ -66,6 +66,7 @@ import {
   formatarWhatsappLink,
   formatarLinkRedeSocial,
   aplicarMascaraTelefone,
+  limparTelefone,
   obterProdutosCardapio,
   obterRegrasAgendamento,
   calcularRegrasAgendamentoCarrinho,
@@ -1179,7 +1180,7 @@ export function CardapioLojaView() {
 
       // 1. Gestão e Identificação de Clientes no Supabase (tabela clientes_loja)
       let clienteId: string | null = null;
-      const cleanPhone = clienteWhatsapp.replace(/\D/g, "");
+      const cleanPhone = limparTelefone(clienteWhatsapp);
 
       // Resolução segura do ID (UUID) do estabelecimento para respeitar Foreign Key
       let estDbId: string | null = null;
@@ -1199,37 +1200,39 @@ export function CardapioLojaView() {
       }
 
       try {
-        const phoneFilter = cleanPhone.length >= 8 ? cleanPhone.slice(-8) : cleanPhone;
         let clienteExistenteRow: any = null;
 
-        // 1. Busca prévia por telefone exato ou substring no estabelecimento
-        if (estDbId && cleanPhone) {
-          const { data: byEstPhone } = await supabase
-            .from("clientes_loja")
-            .select("id, total_pedidos, total_gasto, telefone")
-            .eq("estabelecimento_id", estDbId)
-            .or(`telefone.eq.${clienteWhatsapp},telefone.eq.${cleanPhone},telefone.ilike.%${phoneFilter}%`)
-            .limit(1);
+        // 1. Busca prévia por telefone limpo vinculado à loja
+        if (cleanPhone) {
+          if (estDbId) {
+            const { data: byEstPhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_id", estDbId)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
 
-          if (byEstPhone && byEstPhone.length > 0) {
-            clienteExistenteRow = byEstPhone[0];
+            if (byEstPhone && byEstPhone.length > 0) {
+              clienteExistenteRow = byEstPhone[0];
+            }
           }
-        }
 
-        if (!clienteExistenteRow && cleanPhone) {
-          const { data: byCodePhone } = await supabase
-            .from("clientes_loja")
-            .select("id, total_pedidos, total_gasto, telefone")
-            .eq("estabelecimento_codigo", code)
-            .or(`telefone.eq.${clienteWhatsapp},telefone.eq.${cleanPhone},telefone.ilike.%${phoneFilter}%`)
-            .limit(1);
+          if (!clienteExistenteRow) {
+            const { data: byCodePhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_codigo", code)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
 
-          if (byCodePhone && byCodePhone.length > 0) {
-            clienteExistenteRow = byCodePhone[0];
+            if (byCodePhone && byCodePhone.length > 0) {
+              clienteExistenteRow = byCodePhone[0];
+            }
           }
         }
 
         if (clienteExistenteRow?.id) {
+          // Cliente já existe: recupera ID e atualiza dados (nome, telefone normalizado, pedidos e LTV)
           clienteId = clienteExistenteRow.id;
           const novoTotal = (Number(clienteExistenteRow.total_pedidos) || 0) + 1;
           const novoGasto = (Number(clienteExistenteRow.total_gasto) || 0) + valTotalCarrinho;
@@ -1238,6 +1241,7 @@ export function CardapioLojaView() {
             .from("clientes_loja")
             .update({
               nome: clienteNome,
+              telefone: cleanPhone,
               estabelecimento_id: estDbId || undefined,
               endereco: tipoEntrega === "delivery" ? enderecoEntrega : undefined,
               total_pedidos: novoTotal,
@@ -1254,7 +1258,7 @@ export function CardapioLojaView() {
             estabelecimento_id: estDbId,
             estabelecimento_codigo: code,
             nome: clienteNome,
-            telefone: clienteWhatsapp,
+            telefone: cleanPhone,
             endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
             total_pedidos: 1,
             total_gasto: valTotalCarrinho,
@@ -1264,20 +1268,20 @@ export function CardapioLojaView() {
           const { data: criado, error: errUpsertCli } = await supabase
             .from("clientes_loja")
             .upsert(clientePayload, {
-              onConflict: estDbId ? "estabelecimento_id,telefone" : undefined,
+              onConflict: "estabelecimento_codigo,telefone",
             })
             .select("id")
             .maybeSingle();
 
           if (errUpsertCli) {
             console.warn("[Clientes Loja] Conflito ou erro no upsert, recuperando ID existente:", errUpsertCli.message);
-            // Fallback imediato: recupera ID existente por telefone
+            // Fallback imediato: recupera ID existente por telefone limpo
             if (estDbId) {
               const { data: fallbackCli } = await supabase
                 .from("clientes_loja")
                 .select("id")
                 .eq("estabelecimento_id", estDbId)
-                .eq("telefone", clienteWhatsapp)
+                .eq("telefone", cleanPhone)
                 .maybeSingle();
               if (fallbackCli?.id) {
                 clienteId = fallbackCli.id;
@@ -1288,7 +1292,7 @@ export function CardapioLojaView() {
                 .from("clientes_loja")
                 .select("id")
                 .eq("estabelecimento_codigo", code)
-                .eq("telefone", clienteWhatsapp)
+                .eq("telefone", cleanPhone)
                 .maybeSingle();
               if (fallbackCode?.id) {
                 clienteId = fallbackCode.id;
@@ -1379,7 +1383,7 @@ export function CardapioLojaView() {
         const rawCust = typeof window !== "undefined" ? localStorage.getItem(`caixadoce_customers_${code}`) : null;
         let listaCust: any[] = rawCust ? JSON.parse(rawCust) : [];
         const foundIndex = listaCust.findIndex((c: any) => {
-          const p = (c.whatsapp || "").replace(/\D/g, "");
+          const p = limparTelefone(c.whatsapp || "");
           return (cleanPhone && p && cleanPhone === p) || (c.nome || c.name || "").trim().toLowerCase() === clienteNome.trim().toLowerCase();
         });
 
@@ -1388,7 +1392,7 @@ export function CardapioLojaView() {
           id: custId,
           estabelecimentoCodigo: code,
           nome: clienteNome,
-          whatsapp: clienteWhatsapp,
+          whatsapp: cleanPhone,
           endereco: tipoEntrega === "delivery" ? enderecoEntrega : (foundIndex >= 0 ? (listaCust[foundIndex].endereco || "") : ""),
           observacoes: "Cadastrado via Cardápio Digital",
           createdAt: foundIndex >= 0 ? (listaCust[foundIndex].createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -1411,7 +1415,7 @@ export function CardapioLojaView() {
               user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
               estabelecimento_codigo: code,
               name: clienteNome,
-              whatsapp: clienteWhatsapp,
+              whatsapp: cleanPhone,
               address: tipoEntrega === "delivery" ? enderecoEntrega : "",
               notes: "Cadastrado via Cardápio Digital",
             },

@@ -17,6 +17,15 @@ export function aplicarMascaraTelefone(valor: string): string {
   return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
 }
 
+/**
+ * Normaliza uma string de telefone removendo parênteses, espaços, traços e caracteres não-numéricos.
+ * Exemplo: "(11) 98765-4321" -> "11987654321"
+ */
+export function limparTelefone(valor?: string): string {
+  if (!valor) return "";
+  return String(valor).replace(/\D/g, "");
+}
+
 export function aplicarMascaraMoedaInput(valorInput: string): string {
   const digitos = valorInput.replace(/\D/g, "");
   if (!digitos) return "";
