@@ -883,6 +883,84 @@ export default {
         }
       }
 
+      if (url.pathname === "/api/mercadopago/create-pix-payment" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const codeTarget = (body.establishmentCode || body.codigo || "CD-1001").toUpperCase();
+          const amount = Number(body.amount || body.valor || 10);
+          const description = body.description || `Pedido no Cardápio Digital (${codeTarget})`;
+          const payerEmail = body.payerEmail || body.email || "cliente@caixadoce.com.br";
+
+          // Buscar o mp_access_token do estabelecimento no Supabase
+          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}&select=mp_access_token`, {
+            headers: {
+              "apikey": supabaseKey,
+              "authorization": `Bearer ${supabaseKey}`,
+            },
+          });
+
+          let tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+
+          if (estRes.ok) {
+            const data = await estRes.json();
+            if (data[0] && data[0].mp_access_token) {
+              tokenUso = data[0].mp_access_token;
+            }
+          }
+
+          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount}`);
+
+          const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${tokenUso}`,
+              "Content-Type": "application/json",
+              "X-Idempotency-Key": `${codeTarget}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            },
+            body: JSON.stringify({
+              transaction_amount: amount,
+              payment_method_id: "pix",
+              description,
+              payer: {
+                email: payerEmail,
+              },
+            }),
+          });
+
+          const mpData = await mpRes.json();
+
+          if (!mpRes.ok || mpData.error) {
+            console.error("[MercadoPago Pix Error Response]", mpData);
+            return new Response(
+              JSON.stringify({ error: mpData.message || mpData.error || "Falha ao gerar QR Code Pix no Mercado Pago." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const qrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 || null;
+          const qrCode = mpData.point_of_interaction?.transaction_data?.qr_code || null;
+
+          console.log(`[MercadoPago Pix Success] Payment ID: ${mpData.id} | Status: ${mpData.status}`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              payment_id: mpData.id,
+              status: mpData.status,
+              qr_code_base64: qrCodeBase64,
+              qr_code: qrCode,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago Pix Exception]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro ao gerar Pix no servidor." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
       // =========================================================================
       // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
       // =========================================================================

@@ -71,6 +71,8 @@ export type UpdateEstablishmentDetailsInput = {
   delivery_ativo?: boolean;
   aceita_delivery?: boolean;
   deliveryHabilitado?: boolean;
+  usar_mercadopago?: boolean;
+  chave_pix_manual?: string;
 };
 
 export type StaffProfile = {
@@ -116,6 +118,8 @@ export type StaffProfile = {
   delivery_ativo?: boolean;
   aceita_delivery?: boolean;
   deliveryHabilitado?: boolean;
+  usar_mercadopago?: boolean;
+  chave_pix_manual?: string;
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -961,6 +965,14 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (delAtivo !== undefined) {
         updatePayload.delivery_ativo = delAtivo;
         updatePayload.aceita_delivery = delAtivo;
+      }
+
+      if (details.usar_mercadopago !== undefined) {
+        updatePayload.usar_mercadopago = details.usar_mercadopago;
+      }
+
+      if (details.chave_pix_manual !== undefined) {
+        updatePayload.chave_pix_manual = details.chave_pix_manual || null;
       }
 
       if (

@@ -110,6 +110,11 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
 
+  // Modo de Recebimento Pix & Mercado Pago
+  const [usarMercadopago, setUsarMercadopago] = useState<boolean>(Boolean(profile?.usar_mercadopago));
+  const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
+  const [salvandoPixPref, setSalvandoPixPref] = useState(false);
+
   // Estado do Mercado Pago Connect (OAuth)
   const [mpConectado, setMpConectado] = useState(false);
   const [mpUserId, setMpUserId] = useState<string | null>(null);
@@ -596,6 +601,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.instagram || profile.social_instagram || profile.social_media?.instagram) setInstagramEst(profile.instagram || profile.social_instagram || profile.social_media?.instagram || "");
       if (profile.tiktok || profile.social_tiktok || profile.social_media?.tiktok) setTiktokEst(profile.tiktok || profile.social_tiktok || profile.social_media?.tiktok || "");
       if (profile.facebook || profile.social_facebook || profile.social_media?.facebook) setFacebookEst(profile.facebook || profile.social_facebook || profile.social_media?.facebook || "");
+      if (profile.usar_mercadopago !== undefined) setUsarMercadopago(Boolean(profile.usar_mercadopago));
+      if (profile.chave_pix_manual) setChavePixManual(profile.chave_pix_manual);
     }
 
     // 2. Busca os dados mais recentes diretamente da tabela 'estabelecimentos' do Supabase para garantir amnésia zero no F5
@@ -607,6 +614,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       .then((res) => {
         if (res.data) {
           const d = res.data;
+          if (d.usar_mercadopago !== undefined && d.usar_mercadopago !== null) setUsarMercadopago(Boolean(d.usar_mercadopago));
+          if (d.chave_pix_manual !== undefined && d.chave_pix_manual !== null) setChavePixManual(d.chave_pix_manual);
           if (d.nome) setNomeEst(d.nome);
           if (d.responsavel) setResponsavelEst(d.responsavel);
           if (d.telefone) setTelEst(d.telefone);
@@ -769,6 +778,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         social_tiktok: tiktokEst,
         facebook: facebookEst,
         social_facebook: facebookEst,
+        usar_mercadopago: usarMercadopago,
+        chave_pix_manual: chavePixManual,
       });
 
       // Garante sincronização imediata dos campos locais sem reversão
@@ -1059,6 +1070,52 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   </Button>
                 </div>
               )}
+
+              {/* CONFIGURAÇÃO DO MODO DE RECEBIMENTO DO PIX NO CHECKOUT */}
+              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-4 mt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      Modo de Recebimento via Pix no Cardápio
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Escolha entre Pix Automático (Mercado Pago com QR Code gerado em tempo real) ou Pix Manual (exibe sua chave direta).
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 bg-background p-2 rounded-xl border border-border shrink-0">
+                    <span className={`text-xs font-bold ${!usarMercadopago ? "text-purple-600 dark:text-purple-400 font-extrabold" : "text-muted-foreground"}`}>
+                      Pix Manual
+                    </span>
+                    <Switch
+                      checked={usarMercadopago}
+                      onCheckedChange={(checked) => setUsarMercadopago(checked)}
+                    />
+                    <span className={`text-xs font-bold ${usarMercadopago ? "text-purple-600 dark:text-purple-400 font-extrabold" : "text-muted-foreground"}`}>
+                      Pix Automático (Mercado Pago)
+                    </span>
+                  </div>
+                </div>
+
+                {!usarMercadopago && (
+                  <div className="space-y-2 pt-2 border-t border-purple-500/20">
+                    <Label htmlFor="chave-pix-manual" className="text-xs font-bold text-foreground">
+                      Chave Pix Manual (Direto na Conta)
+                    </Label>
+                    <Input
+                      id="chave-pix-manual"
+                      placeholder="Digite seu CPF, CNPJ, E-mail, Celular ou Chave Aleatória"
+                      value={chavePixManual}
+                      onChange={(e) => setChavePixManual(e.target.value)}
+                      className="bg-background text-xs h-9"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Esta chave será exibida diretamente para o cliente ao finalizar o pedido no cardápio com o botão &quot;Copiar Chave&quot;.
+                    </p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 

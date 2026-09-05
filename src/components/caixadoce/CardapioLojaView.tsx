@@ -87,6 +87,7 @@ import {
   type ConfiguracaoFrete,
   CONFIG_FRETE_PADRAO,
 } from "@/lib/frete-service";
+import { gerarPixMercadoPago } from "@/lib/mercadopago-service";
 import { toast } from "sonner";
 
 // ==========================================
@@ -132,6 +133,8 @@ export interface LojaInfoState {
   endereco?: string;
   delivery_ativo?: boolean;
   aceita_delivery?: boolean;
+  usar_mercadopago?: boolean;
+  chave_pix_manual?: string;
   instagram?: string;
   tiktok?: string;
   facebook?: string;
@@ -442,6 +445,7 @@ export function CardapioLojaView() {
 
   // Dados de Conclusão do Pix
   const [pixCopiaCola, setPixCopiaCola] = useState("");
+  const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
 
   // 1. Carregamento de Dados da Confeitaria (Supabase + LocalStorage Fallback)
@@ -558,6 +562,8 @@ export function CardapioLojaView() {
             endereco: endLoja || "",
             delivery_ativo: delAtivoVal,
             aceita_delivery: delAtivoVal,
+            usar_mercadopago: Boolean(estData?.usar_mercadopago),
+            chave_pix_manual: estData?.chave_pix_manual || estData?.chave_pix || estData?.chavePix || "",
             instagram: insta,
             tiktok: tk,
             facebook: fb,
@@ -937,27 +943,67 @@ export function CardapioLojaView() {
         console.warn("Aviso ao atualizar base de clientes do cardápio digital:", custErr);
       }
 
-      // Tentar gerar Pix Payload para a chave Pix da loja
-      let pixPayloadGerado = "";
-      const pixKeyToUse = lojaInfo?.chavePix || "";
-      if (pixKeyToUse && valTotalCarrinho > 0) {
-        try {
-          pixPayloadGerado = generatePixPayload({
-            pixKey: pixKeyToUse,
-            merchantName: lojaInfo?.nome || "CaixaDoce",
-            merchantCity: lojaInfo?.cidade || "SAO PAULO",
-            amount: valTotalCarrinho,
-            txid: `PED${Date.now().toString().slice(-8)}`,
-            description: `Pedido ${clienteNome.slice(0, 15)}`,
-          });
-          setPixCopiaCola(pixPayloadGerado);
+      // Reset de estados do Pix
+      setPixCopiaCola("");
+      setPixQrCodeBase64(null);
+      setPixCopiado(false);
 
-          if (pixPayloadGerado && typeof navigator !== "undefined" && navigator.clipboard) {
-            navigator.clipboard.writeText(pixPayloadGerado);
-            setPixCopiado(true);
+      if (metodoPagamento === "pix" && valTotalCarrinho > 0) {
+        let gerouMp = false;
+
+        // SE TRUE (Mercado Pago Connect): Gera Pix via API /v1/payments
+        if (lojaInfo?.usar_mercadopago) {
+          try {
+            console.log(`[Checkout Cardápio] Solicitando Pix Mercado Pago para ${code} (Valor: R$ ${valTotalCarrinho})...`);
+            const mpPixRes = await gerarPixMercadoPago({
+              establishmentCode: code,
+              amount: valTotalCarrinho,
+              description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+              payerEmail: "cliente@caixadoce.com.br",
+            });
+
+            if (mpPixRes && mpPixRes.success) {
+              gerouMp = true;
+              if (mpPixRes.qr_code_base64) {
+                setPixQrCodeBase64(mpPixRes.qr_code_base64);
+              }
+              if (mpPixRes.qr_code) {
+                setPixCopiaCola(mpPixRes.qr_code);
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(mpPixRes.qr_code);
+                  setPixCopiado(true);
+                }
+              }
+            }
+          } catch (mpErr: any) {
+            console.warn("[Checkout Cardápio] Erro ao gerar Pix Mercado Pago, aplicando fallback manual:", mpErr);
           }
-        } catch (e) {
-          console.warn("Aviso ao gerar QR Code / Pix Copia e Cola:", e);
+        }
+
+        // SE FALSE (Pix Manual) ou se falhou no Mercado Pago:
+        if (!gerouMp) {
+          const pixKeyToUse = lojaInfo?.chave_pix_manual || lojaInfo?.chavePix || "";
+          if (pixKeyToUse) {
+            try {
+              const pixPayloadGerado = generatePixPayload({
+                pixKey: pixKeyToUse,
+                merchantName: lojaInfo?.nome || "CaixaDoce",
+                merchantCity: lojaInfo?.cidade || "SAO PAULO",
+                amount: valTotalCarrinho,
+                txid: `PED${Date.now().toString().slice(-8)}`,
+                description: `Pedido ${clienteNome.slice(0, 15)}`,
+              });
+              if (pixPayloadGerado) {
+                setPixCopiaCola(pixPayloadGerado);
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(pixPayloadGerado);
+                  setPixCopiado(true);
+                }
+              }
+            } catch (e) {
+              console.warn("Aviso ao gerar QR Code / Pix Copia e Cola manual:", e);
+            }
+          }
         }
       }
 
@@ -1967,20 +2013,33 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             </div>
           </div>
 
-          {/* BLOCO PIX COPIA E COLA */}
-          <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-2.5">
+          {/* BLOCO PIX DE PAGAMENTO (AUTOMÁTICO OU MANUAL) */}
+          <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
                 <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                Pagamento via Pix Copia e Cola
+                Pagamento via Pix {lojaInfo?.usar_mercadopago ? "(Mercado Pago)" : "(Manual)"}
               </span>
-              {lojaInfo?.chavePix && (
-                <span className="text-[10px] font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded-full">
-                  Chave: {lojaInfo.chavePix}
-                </span>
-              )}
+              <Badge className={`text-[10px] font-mono font-bold border-0 ${lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
+                {lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
+              </Badge>
             </div>
 
+            {/* SE PIX AUTOMÁTICO MERCADO PAGO E TEM IMAGEM QR CODE BASE64 */}
+            {lojaInfo?.usar_mercadopago && pixQrCodeBase64 && (
+              <div className="flex flex-col items-center justify-center p-3 bg-white dark:bg-stone-900 rounded-2xl border border-purple-200 shadow-inner">
+                <img
+                  src={pixQrCodeBase64.startsWith("data:") ? pixQrCodeBase64 : `data:image/png;base64,${pixQrCodeBase64}`}
+                  alt="QR Code Pix Mercado Pago"
+                  className="w-44 h-44 object-contain rounded-xl"
+                />
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mt-2 text-center">
+                  Escaneie o QR Code no aplicativo do seu banco
+                </p>
+              </div>
+            )}
+
+            {/* CÓDIGO PIX COPIA E COLA */}
             {pixCopiaCola ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -2007,7 +2066,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" /> Copiar Pix
+                        <Copy className="w-3.5 h-3.5" /> Copiar Código Pix
                       </>
                     )}
                   </Button>
@@ -2016,26 +2075,30 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> e cole o código acima para realizar o pagamento.
                 </p>
               </div>
-            ) : lojaInfo?.chavePix ? (
-              <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
-                <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
-                  {lojaInfo.chavePix}
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      navigator.clipboard.writeText(lojaInfo.chavePix || "");
-                      setPixCopiado(true);
-                      toast.success("Chave Pix copiada!");
-                    }
-                  }}
-                  className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
-                >
-                  {pixCopiado ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  {pixCopiado ? "Copiada!" : "Copiar Chave"}
-                </Button>
+            ) : (lojaInfo?.chave_pix_manual || lojaInfo?.chavePix) ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-purple-800 dark:text-purple-200 font-medium">Chave Pix da Loja:</p>
+                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-purple-200 text-xs">
+                  <span className="font-mono text-purple-900 dark:text-purple-200 font-bold truncate">
+                    {lojaInfo.chave_pix_manual || lojaInfo.chavePix}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      const keyToCopy = lojaInfo.chave_pix_manual || lojaInfo.chavePix || "";
+                      if (typeof navigator !== "undefined" && navigator.clipboard) {
+                        navigator.clipboard.writeText(keyToCopy);
+                        setPixCopiado(true);
+                        toast.success("Chave Pix copiada!");
+                      }
+                    }}
+                    className="h-8 px-2.5 font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 flex items-center gap-1"
+                  >
+                    {pixCopiado ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
+                    {pixCopiado ? "Copiada!" : "Copiar Chave"}
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-[11px] text-muted-foreground italic">

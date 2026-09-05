@@ -105,3 +105,33 @@ export async function desconectarMercadoPago(establishmentCode: string): Promise
   }
   return true;
 }
+
+/**
+ * Solicita ao backend a geração de uma cobrança Pix via Mercado Pago Connect para um pedido do cardápio
+ */
+export async function gerarPixMercadoPago(params: {
+  establishmentCode: string;
+  amount: number;
+  description?: string;
+  payerEmail?: string;
+}): Promise<{
+  success: boolean;
+  payment_id?: string | number;
+  status?: string;
+  qr_code_base64?: string;
+  qr_code?: string;
+  error?: string;
+}> {
+  const res = await fetch("/api/mercadopago/create-pix-payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "Falha ao gerar QR Code do Pix no Mercado Pago.");
+  }
+  return data;
+}
+
