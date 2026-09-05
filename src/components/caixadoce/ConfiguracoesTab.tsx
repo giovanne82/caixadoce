@@ -145,7 +145,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       // 1.1 Consulta direta ao Supabase via ilike (case-insensitive)
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("mp_access_token, mp_user_id, mp_public_key, mercadopago_access_token, mercadopago_user_id, mercadopago_public_key")
+        .select("mp_access_token, mp_user_id, mp_public_key")
         .ilike("codigo", targetCode)
         .maybeSingle();
 
@@ -153,13 +153,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         console.warn("[MercadoPago Sync Supabase Warn]", error);
       }
 
-      const tokenEncontrado = Boolean(
-        (data as any)?.mp_access_token ||
-        (data as any)?.mercadopago_access_token
-      );
-
-      const userIdEncontrado = (data as any)?.mp_user_id || (data as any)?.mercadopago_user_id || null;
-      const publicKeyEncontrada = (data as any)?.mp_public_key || (data as any)?.mercadopago_public_key || null;
+      const tokenEncontrado = Boolean((data as any)?.mp_access_token);
+      const userIdEncontrado = (data as any)?.mp_user_id || null;
+      const publicKeyEncontrada = (data as any)?.mp_public_key || null;
 
       if (tokenEncontrado) {
         setMpConectado(true);

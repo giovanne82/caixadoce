@@ -125,11 +125,6 @@ export async function trocarCodigoOAuthMercadoPago(
     mp_public_key: data.mp_public_key || data.public_key,
     mp_refresh_token: data.mp_refresh_token || data.refresh_token,
     mp_user_id: data.mp_user_id ? String(data.mp_user_id) : (data.user_id ? String(data.user_id) : null),
-    mercadopago_access_token: data.mp_access_token || data.access_token,
-    mercadopago_public_key: data.mp_public_key || data.public_key,
-    mercadopago_refresh_token: data.mp_refresh_token || data.refresh_token,
-    mercadopago_user_id: data.mp_user_id ? String(data.mp_user_id) : (data.user_id ? String(data.user_id) : null),
-    mercadopago_conectado: true,
     updated_at: new Date().toISOString(),
   };
 
@@ -206,11 +201,6 @@ export async function desconectarMercadoPago(establishmentCode: string): Promise
       mp_public_key: null,
       mp_refresh_token: null,
       mp_user_id: null,
-      mercadopago_access_token: null,
-      mercadopago_public_key: null,
-      mercadopago_refresh_token: null,
-      mercadopago_user_id: null,
-      mercadopago_conectado: false,
       updated_at: new Date().toISOString(),
     };
 

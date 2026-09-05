@@ -933,11 +933,6 @@ export default {
             mp_refresh_token: mpData.refresh_token,
             mp_public_key: mpData.public_key,
             mp_user_id: String(mpData.user_id),
-            mercadopago_access_token: mpData.access_token,
-            mercadopago_refresh_token: mpData.refresh_token,
-            mercadopago_public_key: mpData.public_key,
-            mercadopago_user_id: String(mpData.user_id),
-            mercadopago_conectado: true,
             updated_at: new Date().toISOString(),
           };
 
@@ -1017,11 +1012,6 @@ export default {
             mp_refresh_token: null,
             mp_public_key: null,
             mp_user_id: null,
-            mercadopago_access_token: null,
-            mercadopago_refresh_token: null,
-            mercadopago_public_key: null,
-            mercadopago_user_id: null,
-            mercadopago_conectado: false,
             updated_at: new Date().toISOString(),
           };
 
@@ -1077,7 +1067,7 @@ export default {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const codeTarget = (url.searchParams.get("codigo") || "CD-1001").toUpperCase();
-          const selectRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token,mp_public_key,mp_user_id,mercadopago_access_token,mercadopago_public_key,mercadopago_user_id`, {
+          const selectRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token,mp_public_key,mp_user_id`, {
             headers: {
               "apikey": supabaseKey,
               "authorization": `Bearer ${supabaseKey}`,
@@ -1087,13 +1077,13 @@ export default {
           if (selectRes.ok) {
             const data = await selectRes.json();
             const est = data[0];
-            const tokenVal = est?.mp_access_token || est?.mercadopago_access_token;
+            const tokenVal = est?.mp_access_token;
             const connected = Boolean(tokenVal);
             return new Response(
               JSON.stringify({
                 connected,
-                mp_user_id: est?.mp_user_id || est?.mercadopago_user_id || null,
-                mp_public_key: est?.mp_public_key || est?.mercadopago_public_key || null,
+                mp_user_id: est?.mp_user_id || null,
+                mp_public_key: est?.mp_public_key || null,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -1121,7 +1111,7 @@ export default {
           const payerEmail = body.payerEmail || body.email || "cliente@caixadoce.com.br";
 
           // Buscar o mp_access_token do estabelecimento no Supabase
-          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token,mercadopago_access_token`, {
+          const estRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}&select=mp_access_token`, {
             headers: {
               "apikey": supabaseKey,
               "authorization": `Bearer ${supabaseKey}`,
@@ -1132,8 +1122,8 @@ export default {
 
           if (estRes.ok) {
             const data = await estRes.json();
-            if (data[0] && (data[0].mp_access_token || data[0].mercadopago_access_token)) {
-              tokenUso = data[0].mp_access_token || data[0].mercadopago_access_token;
+            if (data[0] && data[0].mp_access_token) {
+              tokenUso = data[0].mp_access_token;
             }
           }
 
@@ -1685,22 +1675,25 @@ export default {
               mp_public_key: publicKey,
               mp_refresh_token: refreshToken,
               mp_user_id: userId,
-              mercadopago_access_token: accessToken,
-              mercadopago_public_key: publicKey,
-              mercadopago_refresh_token: refreshToken,
-              mercadopago_user_id: userId,
-              mercadopago_conectado: true,
-              mercadopago_token_expira_em: expiraEmIso,
               updated_at: new Date().toISOString(),
             };
 
             // 1. Atualização via Supabase Client
             try {
-              const { data: sdkData, error: sdkError } = await supabaseClient
+              const { data: estRow } = await supabaseClient
                 .from("estabelecimentos")
-                .update(updatePayload)
+                .select("id, codigo")
                 .ilike("codigo", targetEstablishmentCode)
-                .select();
+                .maybeSingle();
+
+              let query = supabaseClient.from("estabelecimentos").update(updatePayload);
+              if (estRow?.id) {
+                query = query.eq("id", estRow.id);
+              } else {
+                query = query.ilike("codigo", targetEstablishmentCode);
+              }
+
+              const { data: sdkData, error: sdkError } = await query.select();
 
               if (sdkError) {
                 console.error("[MercadoPago OAuth Supabase Client Error]", sdkError);
