@@ -114,6 +114,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const queryClient = useQueryClient();
 
   // Modo de Recebimento Pix & Mercado Pago
+  const [estId, setEstId] = useState<string | null>(null);
   const [usarMercadopago, setUsarMercadopago] = useState<boolean>(Boolean(profile?.usar_mercadopago));
   const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
   const [salvandoPixPref, setSalvandoPixPref] = useState(false);
@@ -145,12 +146,22 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       // 1.1 Consulta direta ao Supabase via ilike (case-insensitive)
       const { data, error } = await supabase
         .from("estabelecimentos")
-        .select("mp_access_token, mp_user_id, mp_public_key")
+        .select("id, mp_access_token, mp_user_id, mp_public_key, usar_mercadopago, chave_pix_manual")
         .ilike("codigo", targetCode)
         .maybeSingle();
 
       if (error) {
         console.warn("[MercadoPago Sync Supabase Warn]", error);
+      }
+
+      if (data?.id) {
+        setEstId(data.id);
+      }
+      if (data?.usar_mercadopago !== undefined && data?.usar_mercadopago !== null) {
+        setUsarMercadopago(Boolean(data.usar_mercadopago));
+      }
+      if (data?.chave_pix_manual !== undefined && data?.chave_pix_manual !== null) {
+        setChavePixManual(data.chave_pix_manual);
       }
 
       const tokenEncontrado = Boolean((data as any)?.mp_access_token);
@@ -200,6 +211,69 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       setCarregandoMp(false);
     }
   }, [activeCode]);
+
+  // Função para atualização imediata no banco ao alternar o modo de recebimento
+  const handleToggleModoRecebimento = async (novoEstadoBooleano: boolean) => {
+    const estadoAnterior = usarMercadopago;
+    setUsarMercadopago(novoEstadoBooleano);
+
+    try {
+      let targetId = estId;
+
+      if (!targetId && activeCode) {
+        const { data: estRow } = await supabase
+          .from("estabelecimentos")
+          .select("id")
+          .ilike("codigo", activeCode.toUpperCase().trim())
+          .maybeSingle();
+
+        if (estRow?.id) {
+          targetId = estRow.id;
+          setEstId(estRow.id);
+        }
+      }
+
+      let query = supabase.from("estabelecimentos").update({
+        usar_mercadopago: novoEstadoBooleano,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (targetId) {
+        query = query.eq("id", targetId);
+      } else if (activeCode) {
+        query = query.ilike("codigo", activeCode.toUpperCase().trim());
+      } else {
+        throw new Error("ID ou código do estabelecimento não encontrado.");
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        console.error("Falha no UPDATE de usar_mercadopago:", error);
+        throw error;
+      }
+
+      // Atualiza o contexto da aplicação para sincronizar outras telas em tempo real
+      updateEstablishmentDetails({
+        usar_mercadopago: novoEstadoBooleano,
+      });
+
+      queryClient.invalidateQueries();
+
+      toast.success("Preferência salva", {
+        description: novoEstadoBooleano
+          ? "Modo Pix Automático (Mercado Pago) ativado."
+          : "Modo Pix Manual ativado.",
+      });
+    } catch (err: any) {
+      console.error("Erro ao salvar modo de recebimento:", err);
+      // Reverte o estado visual em caso de erro
+      setUsarMercadopago(estadoAnterior);
+      toast.error("Erro ao salvar preferência", {
+        description: err.message || "Não foi possível atualizar no banco de dados.",
+      });
+    }
+  };
 
   useEffect(() => {
     checarMpStatus();
@@ -702,6 +776,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       .then((res) => {
         if (res.data) {
           const d = res.data;
+          if (d.id) setEstId(d.id);
           if (d.usar_mercadopago !== undefined && d.usar_mercadopago !== null) setUsarMercadopago(Boolean(d.usar_mercadopago));
           if (d.chave_pix_manual !== undefined && d.chave_pix_manual !== null) setChavePixManual(d.chave_pix_manual);
           if (d.nome) setNomeEst(d.nome);
@@ -1178,7 +1253,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     </span>
                     <Switch
                       checked={usarMercadopago}
-                      onCheckedChange={(checked) => setUsarMercadopago(checked)}
+                      onCheckedChange={handleToggleModoRecebimento}
                     />
                     <span className={`text-xs font-bold ${usarMercadopago ? "text-purple-600 dark:text-purple-400 font-extrabold" : "text-muted-foreground"}`}>
                       Pix Automático (Mercado Pago)
@@ -1196,6 +1271,25 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       placeholder="Digite seu CPF, CNPJ, E-mail, Celular ou Chave Aleatória"
                       value={chavePixManual}
                       onChange={(e) => setChavePixManual(e.target.value)}
+                      onBlur={async () => {
+                        try {
+                          let targetId = estId;
+                          if (!targetId && activeCode) {
+                            const { data: estRow } = await supabase
+                              .from("estabelecimentos")
+                              .select("id")
+                              .ilike("codigo", activeCode.toUpperCase().trim())
+                              .maybeSingle();
+                            if (estRow?.id) targetId = estRow.id;
+                          }
+                          if (targetId) {
+                            await supabase.from("estabelecimentos").update({ chave_pix_manual: chavePixManual }).eq("id", targetId);
+                          } else if (activeCode) {
+                            await supabase.from("estabelecimentos").update({ chave_pix_manual: chavePixManual }).ilike("codigo", activeCode.toUpperCase().trim());
+                          }
+                          updateEstablishmentDetails({ chave_pix_manual: chavePixManual });
+                        } catch {}
+                      }}
                       className="bg-background text-xs h-9"
                     />
                     <p className="text-[11px] text-muted-foreground">
