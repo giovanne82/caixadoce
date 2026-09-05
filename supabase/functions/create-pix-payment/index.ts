@@ -73,7 +73,6 @@ serve(async (req) => {
     }
 
     const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const expDate = body.date_of_expiration || formatarDataExpiracaoPixMercadoPago(5);
     const notificationUrl = body.notification_url || undefined;
     const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
 
@@ -88,7 +87,6 @@ serve(async (req) => {
         transaction_amount: amount,
         payment_method_id: "pix",
         description,
-        date_of_expiration: expDate,
         ...(notificationUrl ? { notification_url: notificationUrl } : {}),
         ...(externalRef ? { external_reference: externalRef } : {}),
         payer: {

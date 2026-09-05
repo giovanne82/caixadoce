@@ -1230,11 +1230,10 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          const expDate = body.date_of_expiration || formatarDataExpiracaoPixMercadoPago(5);
           const notifUrl = body.notification_url || `${url.origin}/api/webhook-mp`;
           const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
 
-          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount} | Expira em: ${expDate} | Notif: ${notifUrl}`);
+          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount} | Notif: ${notifUrl}`);
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
@@ -1247,7 +1246,6 @@ export default {
               transaction_amount: amount,
               payment_method_id: "pix",
               description,
-              date_of_expiration: expDate,
               notification_url: notifUrl,
               ...(externalRef ? { external_reference: externalRef } : {}),
               payer: {
@@ -1475,14 +1473,6 @@ export default {
               plano_id: planId,
               plan_type: planId,
             },
-            ...(payment_method_id === "pix"
-              ? {
-                  date_of_expiration:
-                    formData.date_of_expiration ||
-                    payload.date_of_expiration ||
-                    formatarDataExpiracaoPixMercadoPago(5),
-                }
-              : {}),
           };
 
           console.log(

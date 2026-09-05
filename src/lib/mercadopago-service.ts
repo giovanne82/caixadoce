@@ -281,15 +281,10 @@ export async function gerarPixMercadoPago(params: {
   qr_code?: string;
   error?: string;
 }> {
-  const payload = {
-    ...params,
-    date_of_expiration: params.date_of_expiration || formatarDataExpiracaoPixMercadoPago(5),
-  };
-
   const res = await fetch("/api/mercadopago/create-pix-payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(params),
   });
 
   const data = await res.json();
