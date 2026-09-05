@@ -178,14 +178,32 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       const params = new URLSearchParams(window.location.search);
       const errCode = params.get("error_code") || params.get("error");
       const errDesc = params.get("error_description");
+      const mpConnected = params.get("mp_connected");
+      const mpError = params.get("mp_error");
+      const tabParam = params.get("tab");
+
+      if (tabParam) {
+        setActiveTab(tabParam);
+      }
+
+      if (mpConnected === "true") {
+        toast.success("Integração com o Mercado Pago concluída e vinculada com sucesso!");
+      }
+
+      if (mpError) {
+        toast.error(`Aviso do Mercado Pago: ${mpError}`);
+      }
 
       if (errCode || errDesc) {
-        window.history.replaceState({}, "", window.location.pathname);
         if (errCode?.includes("bad_oauth_state") || errDesc?.includes("expired") || errDesc?.includes("OAuth")) {
           toast.error("Sessão de login expirada ou cancelada. Por favor, tente entrar novamente.");
         } else {
           toast.error(`Aviso de Autenticação: ${errDesc || errCode}`);
         }
+      }
+
+      if (errCode || errDesc || mpConnected || mpError) {
+        window.history.replaceState({}, "", window.location.pathname);
       }
     }
   }, []);

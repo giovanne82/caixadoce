@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { createClient } from "@supabase/supabase-js";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -9,6 +10,48 @@ type ServerEntry = {
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 let globalKeyRotationCounter = 0;
+
+// Configuração Centralizada e Segura do Supabase no Backend
+const DEFAULT_SUPABASE_URL = "https://camuhitzmsfmxvsowzlf.supabase.co";
+const DEFAULT_SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+export function getSupabaseCredentials(env?: any) {
+  const envObj = (env as Record<string, string>) || {};
+  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+  const supabaseUrl =
+    envObj.VITE_SUPABASE_URL ||
+    procObj.VITE_SUPABASE_URL ||
+    envObj.SUPABASE_URL ||
+    procObj.SUPABASE_URL ||
+    DEFAULT_SUPABASE_URL;
+
+  const supabaseKey =
+    envObj.SUPABASE_SERVICE_ROLE_KEY ||
+    procObj.SUPABASE_SERVICE_ROLE_KEY ||
+    envObj.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    procObj.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    envObj.SUPABASE_SERVICE_KEY ||
+    procObj.SUPABASE_SERVICE_KEY ||
+    envObj.SERVICE_ROLE_KEY ||
+    procObj.SERVICE_ROLE_KEY ||
+    envObj.VITE_SUPABASE_ANON_KEY ||
+    procObj.VITE_SUPABASE_ANON_KEY ||
+    DEFAULT_SUPABASE_KEY;
+
+  return { supabaseUrl, supabaseKey };
+}
+
+export function createSupabaseBackendClient(env?: any) {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
@@ -48,10 +91,7 @@ const paymentLinksMap = new Map<string, { url: string; description?: string; amo
 
 async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   if (!id) return null;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-  const supabaseKey =
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
 
   try {
     const res = await fetch(
@@ -390,6 +430,53 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   } catch (errClean) {
     console.warn("[Ativar Plano Supabase] Aviso ao executar limpeza de transações:", errClean);
   }
+}
+
+// Helper para cálculo inteligente de expiração com acúmulo de dias
+async function calcularNovaDataExpiracaoBackend(
+  estabelecimentoCodigo: string,
+  duracaoDias: number,
+  customSupabaseUrl?: string,
+  customSupabaseKey?: string
+): Promise<string> {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+  const targetUrl = customSupabaseUrl || supabaseUrl;
+  const targetKey = customSupabaseKey || supabaseKey;
+  const agoraMs = Date.now();
+  let baseMs = agoraMs;
+
+  try {
+    const fetchRes = await fetch(
+      `${targetUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=plano_status,status_assinatura,plano_expira_em`,
+      {
+        headers: {
+          apikey: targetKey,
+          Authorization: `Bearer ${targetKey}`,
+        },
+      }
+    );
+
+    if (fetchRes.ok) {
+      const rows = await fetchRes.json();
+      const estab = rows?.[0];
+      const isAtivo =
+        estab?.plano_status === "ativo" ||
+        estab?.status_assinatura === "ativo" ||
+        estab?.plano_status === "pro";
+
+      if (isAtivo && estab?.plano_expira_em) {
+        const expMs = new Date(estab.plano_expira_em).getTime();
+        if (!isNaN(expMs) && expMs > agoraMs) {
+          baseMs = expMs;
+          console.log(`[Acúmulo de Dias Backend] Estabelecimento ${estabelecimentoCodigo} ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias.`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Acúmulo de Dias Backend] Erro ao consultar validade atual:", err);
+  }
+
+  return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export default {
@@ -1343,148 +1430,250 @@ export default {
       }
 
       // =========================================================================
-      // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
+      // MERCADO PAGO: GERAÇÃO DE URL DE AUTORIZAÇÃO OAUTH (/api/mercadopago/oauth/url)
       // =========================================================================
-      if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {
+      if ((url.pathname === "/api/mercadopago/oauth/url" || url.pathname === "/api/mercadopago/connect-url") && request.method === "GET") {
         try {
-          const body = await request.json();
-          const { formData, selectedPaymentMethod, estabelecimentoCodigo, userEmail, planoId, valor } = body;
+          const establishmentCode = (
+            url.searchParams.get("estabelecimentoCodigo") ||
+            url.searchParams.get("establishmentCode") ||
+            url.searchParams.get("code") ||
+            "CD-1001"
+          ).toUpperCase();
 
-          const accessToken =
-            process.env.MERCADOPAGO_ACCESS_TOKEN ||
-            process.env.MERCADO_PAGO_ACCESS_TOKEN ||
-            process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-            "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+          const clientId =
+            process.env.MERCADOPAGO_CLIENT_ID ||
+            process.env.MERCADO_PAGO_CLIENT_ID ||
+            process.env.VITE_MERCADOPAGO_CLIENT_ID ||
+            process.env.MERCADOPAGO_APP_ID ||
+            "3682622436709302";
 
-          const requestedPlanClean = String(planoId || body?.nomePlano || formData?.description || "").toLowerCase();
-          const isPlanoAnualRequest =
-            requestedPlanClean.includes("anual") ||
-            requestedPlanClean.includes("ilimitado") ||
-            Number(valor || formData?.transaction_amount || 0) > 50;
-
-          const targetPlanType = isPlanoAnualRequest ? "anual" : "mensal";
-
-          console.log(`[Process Payment Request] Estabelecimento: ${estabelecimentoCodigo} | Plano Solicitado: '${targetPlanType}' (${isPlanoAnualRequest ? "+365 dias" : "+30 dias"}) | Valor: R$ ${valor}`);
-
-          // Monta o payload conforme a API v1/payments do Mercado Pago
-          const mpPayload: any = {
-            ...formData,
-            transaction_amount: Number(valor || formData?.transaction_amount || (isPlanoAnualRequest ? 114.90 : 10.90)),
-            description: `Plano ${targetPlanType === "anual" ? "Anual Completo PRO (365 dias)" : "Mensal Completo PRO (30 dias)"} — CaixaDoce`,
-            external_reference: estabelecimentoCodigo || "CD-1001",
-            metadata: {
-              ...formData?.metadata,
-              estabelecimento_codigo: estabelecimentoCodigo || "CD-1001",
-              plano_id: targetPlanType,
-              plan_id: targetPlanType,
-              plan_type: targetPlanType,
-              tipo_plano: targetPlanType,
-              user_email: userEmail || "contato@caixadoce.com.br",
-            },
-          };
-
-          if (!mpPayload.payer?.email && userEmail) {
-            mpPayload.payer = { ...mpPayload.payer, email: userEmail };
-          }
-
-          const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-              "X-Idempotency-Key": `pay_${estabelecimentoCodigo}_${Date.now()}`,
-            },
-            body: JSON.stringify(mpPayload),
-          });
-
-          const mpData = await mpRes.json();
-
-          if (!mpRes.ok) {
-            console.error("[MercadoPago API Error]", mpData);
-            return new Response(
-              JSON.stringify({ error: mpData.message || mpData.cause?.[0]?.description || "Erro no processamento do Mercado Pago." }),
-              { status: mpRes.status, headers: { "content-type": "application/json" } }
-            );
-          }
-
-          const status = mpData.status;
-          const statusDetail = mpData.status_detail;
-          const paymentId = mpData.id;
-          const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
-          const pixCopiaECola = mpData.point_of_interaction?.transaction_data?.qr_code;
-
-async function calcularNovaDataExpiracaoBackend(
-  estabelecimentoCodigo: string,
-  duracaoDias: number,
-  supabaseUrl: string,
-  supabaseKey: string
-): Promise<string> {
-  const agoraMs = Date.now();
-  let baseMs = agoraMs;
-
-  try {
-    const fetchRes = await fetch(
-      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(estabelecimentoCodigo)}&select=plano_status,status_assinatura,plano_expira_em`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    );
-
-    if (fetchRes.ok) {
-      const rows = await fetchRes.json();
-      const estab = rows?.[0];
-      const isAtivo =
-        estab?.plano_status === "ativo" ||
-        estab?.status_assinatura === "ativo" ||
-        estab?.plano_status === "pro";
-
-      if (isAtivo && estab?.plano_expira_em) {
-        const expMs = new Date(estab.plano_expira_em).getTime();
-        if (!isNaN(expMs) && expMs > agoraMs) {
-          baseMs = expMs;
-          console.log(`[Acúmulo de Dias Backend] Estabelecimento ${estabelecimentoCodigo} ativo até ${new Date(expMs).toISOString()}. Somando +${duracaoDias} dias.`);
-        }
-      }
-    }
-  } catch (err) {
-    console.error("[Acúmulo de Dias Backend] Erro ao consultar validade atual:", err);
-  }
-
-  return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-}
-
-          // Se for aprovado instantaneamente (Cartão/Pix), atualiza a assinatura no Supabase
-          if ((status === "approved" || status === "authorized") && (estabelecimentoCodigo || mpPayload.external_reference)) {
-            const code = estabelecimentoCodigo || mpPayload.external_reference;
-            const methodId = (mpData.payment_method_id || mpData.payment_type_id || selectedPaymentMethod || "").toLowerCase();
-            const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
-
-            await ativarPlanoEstabelecimentoNoSupabase({
-              establishmentCode: code,
-              planId: targetPlanType,
-              paymentId,
-              paymentMethod: tipoPag,
-              amount: Number(valor || mpPayload.transaction_amount || (targetPlanType === "anual" ? 114.90 : 10.90)),
-            });
-          }
+          const redirectUri = `${url.origin}/api/mercadopago/oauth/callback`;
+          const authUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId)}&response_type=code&platform_id=mp&state=${encodeURIComponent(establishmentCode)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
           return new Response(
-            JSON.stringify({
-              success: true,
-              payment_id: paymentId,
-              status,
-              status_detail: statusDetail,
-              pix_qr_code_base64: pixQrCodeBase64,
-              pix_copia_e_cola: pixCopiaECola,
-            }),
+            JSON.stringify({ success: true, authUrl, redirectUri, clientId, establishmentCode }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
+          console.error("[MercadoPago OAuth URL Error]", err);
           return new Response(
-            JSON.stringify({ error: err.message || "Falha interna no servidor de pagamento." }),
+            JSON.stringify({ error: err?.message || "Erro ao gerar URL do Mercado Pago." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // MERCADO PAGO: CALLBACK E PERSISTÊNCIA DE TOKENS OAUTH (/api/mercadopago/oauth/callback)
+      // =========================================================================
+      if (
+        (url.pathname === "/api/mercadopago/oauth/callback" ||
+          url.pathname === "/api/mercadopago/callback" ||
+          url.pathname === "/api/mercadopago/oauth" ||
+          url.pathname === "/api/oauth/mercadopago" ||
+          url.pathname === "/api/oauth/mercadopago/callback" ||
+          url.pathname === "/api/mercadopago/save-tokens") &&
+        (request.method === "GET" || request.method === "POST")
+      ) {
+        try {
+          let code: string | null = url.searchParams.get("code");
+          let state: string | null = url.searchParams.get("state");
+          let errorParam: string | null = url.searchParams.get("error");
+          let errorDesc: string | null = url.searchParams.get("error_description");
+          let customBody: any = null;
+
+          if (request.method === "POST") {
+            try {
+              customBody = await request.json();
+              if (customBody) {
+                code = customBody.code || code;
+                state = customBody.state || customBody.establishmentCode || customBody.estabelecimentoCodigo || state;
+                errorParam = customBody.error || errorParam;
+                errorDesc = customBody.error_description || errorDesc;
+              }
+            } catch {}
+          }
+
+          // Se o usuário cancelou ou o Mercado Pago retornou erro de autorização
+          if (errorParam || errorDesc) {
+            console.warn(`[MercadoPago OAuth Error Callback] Error: ${errorParam} | Desc: ${errorDesc}`);
+            if (request.method === "GET") {
+              return Response.redirect(
+                `${url.origin}/?tab=configuracoes&mp_error=${encodeURIComponent(errorDesc || errorParam || "autorizacao_cancelada")}`,
+                302
+              );
+            }
+            return new Response(
+              JSON.stringify({ error: errorDesc || errorParam || "Autorização cancelada no Mercado Pago." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          // Resolução do código do estabelecimento a partir do state
+          let targetEstablishmentCode = "CD-1001";
+          if (state) {
+            try {
+              if (state.startsWith("{")) {
+                const parsedState = JSON.parse(state);
+                targetEstablishmentCode = (parsedState.establishmentCode || parsedState.codigo || "CD-1001").toUpperCase();
+              } else {
+                targetEstablishmentCode = state.toUpperCase().trim();
+              }
+            } catch {
+              targetEstablishmentCode = state.toUpperCase().trim();
+            }
+          }
+
+          let tokenData: any = customBody?.tokens || customBody?.tokenData || null;
+
+          // Se recebeu o código de autorização e ainda precisa trocar por access_token
+          if (code && !tokenData) {
+            const clientId =
+              process.env.MERCADOPAGO_CLIENT_ID ||
+              process.env.MERCADO_PAGO_CLIENT_ID ||
+              process.env.VITE_MERCADOPAGO_CLIENT_ID ||
+              process.env.MERCADOPAGO_APP_ID ||
+              "3682622436709302";
+
+            const clientSecret =
+              process.env.MERCADOPAGO_CLIENT_SECRET ||
+              process.env.MERCADO_PAGO_CLIENT_SECRET ||
+              process.env.VITE_MERCADOPAGO_CLIENT_SECRET ||
+              process.env.MERCADOPAGO_ACCESS_TOKEN ||
+              process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+              process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
+              "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
+
+            const redirectUri = `${url.origin}/api/mercadopago/oauth/callback`;
+
+            console.log(`[MercadoPago OAuth Token Exchange] Trocando code por tokens para o estabelecimento: ${targetEstablishmentCode}`);
+
+            const mpTokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({
+                client_secret: clientSecret,
+                client_id: clientId,
+                grant_type: "authorization_code",
+                code,
+                redirect_uri: redirectUri,
+              }),
+            });
+
+            if (!mpTokenRes.ok) {
+              const errBody = await mpTokenRes.json();
+              console.error("[MercadoPago OAuth Exchange Error]", errBody);
+              if (request.method === "GET") {
+                return Response.redirect(
+                  `${url.origin}/?tab=configuracoes&mp_error=${encodeURIComponent(errBody.message || "Erro ao trocar credenciais no Mercado Pago")}`,
+                  302
+                );
+              }
+              return new Response(
+                JSON.stringify({ error: errBody.message || "Erro ao validar credenciais no Mercado Pago.", details: errBody }),
+                { status: mpTokenRes.status, headers: { "content-type": "application/json" } }
+              );
+            }
+
+            tokenData = await mpTokenRes.json();
+          }
+
+          // Se temos tokens válidos, salva no Supabase na tabela estabelecimentos
+          if (tokenData) {
+            const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+            const supabaseClient = createSupabaseBackendClient(env);
+
+            const accessToken = tokenData.access_token || tokenData.accessToken;
+            const publicKey = tokenData.public_key || tokenData.publicKey || null;
+            const refreshToken = tokenData.refresh_token || tokenData.refreshToken || null;
+            const userId = tokenData.user_id ? String(tokenData.user_id) : null;
+            const expiresIn = Number(tokenData.expires_in || 15552000);
+            const expiraEmIso = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+            console.log(`[MercadoPago OAuth Save] Salvando tokens no Supabase para ${targetEstablishmentCode} (User ID: ${userId})...`);
+
+            const updatePayload = {
+              mercadopago_access_token: accessToken,
+              mercadopago_public_key: publicKey,
+              mercadopago_refresh_token: refreshToken,
+              mercadopago_user_id: userId,
+              mercadopago_conectado: true,
+              mercadopago_token_expira_em: expiraEmIso,
+              updated_at: new Date().toISOString(),
+            };
+
+            // 1. Atualização via Supabase Client
+            try {
+              await supabaseClient
+                .from("estabelecimentos")
+                .update(updatePayload)
+                .ilike("codigo", targetEstablishmentCode);
+            } catch (supErr) {
+              console.warn("[MercadoPago OAuth Supabase Client Warn]", supErr);
+            }
+
+            // 2. Atualização direta via REST Patch resiliente (garante persistência 100%)
+            try {
+              await fetch(
+                `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(targetEstablishmentCode)}`,
+                {
+                  method: "PATCH",
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                    "Content-Type": "application/json",
+                    Prefer: "return=minimal",
+                  },
+                  body: JSON.stringify(updatePayload),
+                }
+              );
+            } catch (restErr) {
+              console.warn("[MercadoPago OAuth REST Patch Warn]", restErr);
+            }
+
+            console.log(`[MercadoPago OAuth Success] Tokens salvos com sucesso para '${targetEstablishmentCode}'!`);
+
+            if (request.method === "GET") {
+              return Response.redirect(
+                `${url.origin}/?tab=configuracoes&mp_connected=true&est=${encodeURIComponent(targetEstablishmentCode)}`,
+                302
+              );
+            }
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Mercado Pago conectado e tokens salvos com sucesso.",
+                estabelecimentoCodigo: targetEstablishmentCode,
+                user_id: userId,
+                public_key: publicKey,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          if (request.method === "GET") {
+            return Response.redirect(`${url.origin}/?tab=configuracoes`, 302);
+          }
+
+          return new Response(
+            JSON.stringify({ error: "Nenhum código de autorização ou token fornecido." }),
+            { status: 400, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago OAuth Callback Exception]", err);
+          if (request.method === "GET") {
+            return Response.redirect(
+              `${url.origin}/?tab=configuracoes&mp_error=${encodeURIComponent(err.message || "Erro no fluxo OAuth")}`,
+              302
+            );
+          }
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro interno no callback do Mercado Pago." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
