@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
@@ -19,10 +20,16 @@ import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlu
 import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
 import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
 import { Route as PagarCobrancaIdRouteImport } from './routes/pagar.$cobrancaId'
+import { Route as PainelConfiguracoesRouteImport } from './routes/painel.configuracoes'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LandingRoute = LandingRouteImport.update({
@@ -70,9 +77,15 @@ const PagarCobrancaIdRoute = PagarCobrancaIdRouteImport.update({
   path: '/pagar/$cobrancaId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PainelConfiguracoesRoute = PainelConfiguracoesRouteImport.update({
+  id: '/painel/configuracoes',
+  path: '/painel/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
@@ -81,10 +94,12 @@ export interface FileRoutesByFullPath {
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
+  '/painel/configuracoes': typeof PainelConfiguracoesRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
@@ -93,11 +108,13 @@ export interface FileRoutesByTo {
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
+  '/painel/configuracoes': typeof PainelConfiguracoesRoute
   '/cardapio': typeof CardapioIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
@@ -106,12 +123,14 @@ export interface FileRoutesById {
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
+  '/painel/configuracoes': typeof PainelConfiguracoesRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/configuracoes'
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
@@ -120,10 +139,12 @@ export interface FileRouteTypes {
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
+    | '/painel/configuracoes'
     | '/cardapio/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/configuracoes'
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
@@ -132,10 +153,12 @@ export interface FileRouteTypes {
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
+    | '/painel/configuracoes'
     | '/cardapio'
   id:
     | '__root__'
     | '/'
+    | '/configuracoes'
     | '/landing'
     | '/login'
     | '/pedido-confirmado'
@@ -144,11 +167,13 @@ export interface FileRouteTypes {
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
+    | '/painel/configuracoes'
     | '/cardapio/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
@@ -157,6 +182,7 @@ export interface RootRouteChildren {
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
   CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
   PagarCobrancaIdRoute: typeof PagarCobrancaIdRoute
+  PainelConfiguracoesRoute: typeof PainelConfiguracoesRoute
   CardapioIndexRoute: typeof CardapioIndexRoute
 }
 
@@ -167,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/landing': {
@@ -232,11 +265,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PagarCobrancaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/painel/configuracoes': {
+      id: '/painel/configuracoes'
+      path: '/painel/configuracoes'
+      fullPath: '/painel/configuracoes'
+      preLoaderRoute: typeof PainelConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
@@ -245,6 +286,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
   CardapioStoreCodeRoute: CardapioStoreCodeRoute,
   PagarCobrancaIdRoute: PagarCobrancaIdRoute,
+  PainelConfiguracoesRoute: PainelConfiguracoesRoute,
   CardapioIndexRoute: CardapioIndexRoute,
 }
 export const routeTree = rootRouteImport

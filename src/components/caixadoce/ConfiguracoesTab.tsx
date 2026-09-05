@@ -154,6 +154,16 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     };
   }, [activeCode]);
 
+  const obterRedirectUriMercadoPago = () => {
+    if (typeof window === "undefined") return "";
+    const origin = window.location.origin;
+    const path = window.location.pathname;
+    const targetPath = path.startsWith("/painel")
+      ? "/painel/configuracoes"
+      : (path.endsWith("/configuracoes") ? path : "/configuracoes");
+    return `${origin}${targetPath}`;
+  };
+
   // 2. Capturar callback OAuth da URL (?code=...&state=...)
   useEffect(() => {
     if (typeof window === "undefined" || !activeCode) return;
@@ -162,9 +172,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
     if (code) {
       setProcessandoOAuthMp(true);
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      const redirectUri = obterRedirectUriMercadoPago();
 
-      // Limpar os query params da URL
+      // Limpar os query params da URL mantendo o caminho limpo
       window.history.replaceState({}, "", window.location.pathname);
 
       trocarCodigoOAuthMercadoPago(code, activeCode, redirectUri)
@@ -188,7 +198,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   const handleConectarMercadoPago = () => {
     const clientId = "3682622436709302";
-    const redirectUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+    const redirectUri = encodeURIComponent(obterRedirectUriMercadoPago());
     const oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${encodeURIComponent(activeCode)}&redirect_uri=${redirectUri}`;
     
     toast.info("Redirecionando para autorização do Mercado Pago...");

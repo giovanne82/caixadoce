@@ -169,7 +169,7 @@ function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string
   );
 }
 
-function Index() {
+export function Index({ defaultTab }: { defaultTab?: string } = {}) {
   const { user, profile, isMounted, authLoading, logout, switchProfile } = useAuth();
 
   // Limpeza e tratamento de erros de redirecionamento OAuth na URL
@@ -190,8 +190,33 @@ function Index() {
     }
   }, []);
 
-  // Scanner é a tela inicial padrão
-  const [activeTab, setActiveTab] = useState<string>("scanner");
+  // Scanner é a tela inicial padrão; ajusta para 'config' se rota/parâmetro for de configurações/OAuth
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (defaultTab) return defaultTab;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const codeParam = params.get("code");
+      const tabParam = params.get("tab");
+      const path = window.location.pathname;
+      if (codeParam || tabParam === "config" || tabParam === "configuracoes" || path.includes("configuracoes")) {
+        return "config";
+      }
+    }
+    return "scanner";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const codeParam = params.get("code");
+      const tabParam = params.get("tab");
+      const path = window.location.pathname;
+
+      if (codeParam || tabParam === "config" || tabParam === "configuracoes" || path.includes("configuracoes")) {
+        setActiveTab("config");
+      }
+    }
+  }, []);
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
