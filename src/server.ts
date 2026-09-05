@@ -718,6 +718,172 @@ export default {
       }
 
       // =========================================================================
+      // MERCADO PAGO CONNECT (OAUTH): TROCA DE TOKEN, STATUS & DESCONEXÃO
+      // =========================================================================
+      if (url.pathname === "/api/mercadopago/oauth/token" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { code, establishmentCode, redirectUri } = body;
+
+          const clientId =
+            process.env.MERCADOPAGO_CLIENT_ID ||
+            process.env.VITE_MERCADOPAGO_CLIENT_ID ||
+            "3682622436709302";
+
+          const clientSecret =
+            process.env.MERCADOPAGO_CLIENT_SECRET ||
+            process.env.VITE_MERCADOPAGO_CLIENT_SECRET ||
+            "cQG1R6OaQx7w7WqF7m3G2x";
+
+          if (!code) {
+            return new Response(
+              JSON.stringify({ error: "Código de autorização OAuth ausente." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const codeVerifier = body.code_verifier || body.codeVerifier;
+
+          const params = new URLSearchParams();
+          params.append("client_secret", clientSecret);
+          params.append("client_id", clientId);
+          params.append("grant_type", "authorization_code");
+          params.append("code", code);
+          params.append("redirect_uri", redirectUri || `${url.origin}/configuracoes`);
+          if (codeVerifier) params.append("code_verifier", codeVerifier);
+
+          console.log(`[MercadoPago Connect] Trocando código OAuth para estabelecimento ${establishmentCode}...`);
+
+          const mpRes = await fetch("https://api.mercadopago.com/oauth/token", {
+            method: "POST",
+            headers: {
+              "accept": "application/json",
+              "content-type": "application/x-www-form-urlencoded",
+            },
+            body: params.toString(),
+          });
+
+          const mpData = await mpRes.json();
+
+          if (!mpRes.ok || mpData.error) {
+            console.error("[MercadoPago OAuth Error]", mpData);
+            return new Response(
+              JSON.stringify({ error: mpData.message || mpData.error || "Falha ao obter tokens no Mercado Pago." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const codeTarget = (establishmentCode || "CD-1001").toUpperCase();
+
+          // Atualizar os tokens do lojista na tabela 'estabelecimentos' do Supabase
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": supabaseKey,
+              "authorization": `Bearer ${supabaseKey}`,
+              "content-type": "application/json",
+              "prefer": "return=minimal",
+            },
+            body: JSON.stringify({
+              mp_access_token: mpData.access_token,
+              mp_refresh_token: mpData.refresh_token,
+              mp_public_key: mpData.public_key,
+              mp_user_id: String(mpData.user_id),
+            }),
+          });
+
+          console.log(`[MercadoPago Connect] Tokens salvos no Supabase para ${codeTarget}! User ID: ${mpData.user_id}`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              mp_user_id: mpData.user_id,
+              mp_public_key: mpData.public_key,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago OAuth Exception]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro interno ao conectar Mercado Pago." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      if (url.pathname === "/api/mercadopago/oauth/disconnect" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const codeTarget = (body.establishmentCode || body.codigo || "CD-1001").toUpperCase();
+
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": supabaseKey,
+              "authorization": `Bearer ${supabaseKey}`,
+              "content-type": "application/json",
+              "prefer": "return=minimal",
+            },
+            body: JSON.stringify({
+              mp_access_token: null,
+              mp_refresh_token: null,
+              mp_public_key: null,
+              mp_user_id: null,
+            }),
+          });
+
+          console.log(`[MercadoPago Connect] Conta desconectada para o estabelecimento ${codeTarget}.`);
+
+          return new Response(
+            JSON.stringify({ success: true, message: "Conta do Mercado Pago desconectada." }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[MercadoPago Disconnect Exception]", err);
+          return new Response(
+            JSON.stringify({ error: err.message || "Erro ao desconectar conta do Mercado Pago." }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      if (url.pathname === "/api/mercadopago/connect-status" && request.method === "GET") {
+        try {
+          const codeTarget = (url.searchParams.get("codigo") || "CD-1001").toUpperCase();
+          const selectRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}&select=mp_access_token,mp_public_key,mp_user_id`, {
+            headers: {
+              "apikey": supabaseKey,
+              "authorization": `Bearer ${supabaseKey}`,
+            },
+          });
+
+          if (selectRes.ok) {
+            const data = await selectRes.json();
+            const est = data[0];
+            const connected = Boolean(est && est.mp_access_token);
+            return new Response(
+              JSON.stringify({
+                connected,
+                mp_user_id: est?.mp_user_id || null,
+                mp_public_key: est?.mp_public_key || null,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ connected: false }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ connected: false, error: err.message }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
       // MERCADO PAGO: PROCESSAMENTO DE PAGAMENTO (CHECKOUT BRICKS)
       // =========================================================================
       if (url.pathname === "/api/mercadopago/process-payment" && request.method === "POST") {

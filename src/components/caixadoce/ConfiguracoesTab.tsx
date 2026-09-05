@@ -73,6 +73,12 @@ import {
 import { type ContaPix } from "@/lib/pix-utils";
 import { obterPlanoEfetivoEstabelecimento } from "@/lib/planos-utils";
 
+import {
+  obterStatusConexaoMercadoPago,
+  trocarCodigoOAuthMercadoPago,
+  desconectarMercadoPago,
+} from "@/lib/mercadopago-service";
+
 interface ConfiguracoesTabProps {
   onIrParaPlano?: () => void;
 }
@@ -103,6 +109,102 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [tipoDoc, setTipoDoc] = useState(profile?.tipoDocumento || "CNPJ");
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
+
+  // Estado do Mercado Pago Connect (OAuth)
+  const [mpConectado, setMpConectado] = useState(false);
+  const [mpUserId, setMpUserId] = useState<string | null>(null);
+  const [mpPublicKey, setMpPublicKey] = useState<string | null>(null);
+  const [carregandoMp, setCarregandoMp] = useState(true);
+  const [processandoOAuthMp, setProcessandoOAuthMp] = useState(false);
+  const [desconectandoMp, setDesconectandoMp] = useState(false);
+
+  // 1. Checar status da conexão com Mercado Pago
+  useEffect(() => {
+    let cancelado = false;
+    async function checarMpStatus() {
+      if (!activeCode) return;
+      setCarregandoMp(true);
+      try {
+        const { data } = await supabase
+          .from("estabelecimentos")
+          .select("mp_access_token, mp_user_id, mp_public_key")
+          .eq("codigo", activeCode)
+          .maybeSingle();
+
+        if (!cancelado && data) {
+          const temToken = Boolean((data as any).mp_access_token);
+          setMpConectado(temToken);
+          setMpUserId((data as any).mp_user_id || null);
+          setMpPublicKey((data as any).mp_public_key || null);
+        }
+      } catch (e) {
+        console.warn("Erro ao carregar status do Mercado Pago:", e);
+      } finally {
+        if (!cancelado) setCarregandoMp(false);
+      }
+    }
+    checarMpStatus();
+    return () => {
+      cancelado = true;
+    };
+  }, [activeCode]);
+
+  // 2. Capturar callback OAuth da URL (?code=...&state=...)
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeCode) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    if (code) {
+      setProcessandoOAuthMp(true);
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+
+      // Limpar os query params da URL
+      window.history.replaceState({}, "", window.location.pathname);
+
+      trocarCodigoOAuthMercadoPago(code, activeCode, redirectUri)
+        .then((res) => {
+          if (res.success) {
+            setMpConectado(true);
+            setMpUserId(res.mp_user_id ? String(res.mp_user_id) : null);
+            setMpPublicKey(res.mp_public_key || null);
+            toast.success("Conta do Mercado Pago conectada com sucesso!");
+          }
+        })
+        .catch((err: any) => {
+          console.error("Erro OAuth MP:", err);
+          toast.error(`Falha ao conectar Mercado Pago: ${err.message || "Autorização cancelada"}`);
+        })
+        .finally(() => {
+          setProcessandoOAuthMp(false);
+        });
+    }
+  }, [activeCode]);
+
+  const handleConectarMercadoPago = () => {
+    const clientId = "3682622436709302";
+    const redirectUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+    const oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${encodeURIComponent(activeCode)}&redirect_uri=${redirectUri}`;
+    
+    toast.info("Redirecionando para autorização do Mercado Pago...");
+    window.location.href = oauthUrl;
+  };
+
+  const handleDesconectarMercadoPago = async () => {
+    if (!activeCode) return;
+    setDesconectandoMp(true);
+    try {
+      await desconectarMercadoPago(activeCode);
+      setMpConectado(false);
+      setMpUserId(null);
+      setMpPublicKey(null);
+      toast.success("Conta do Mercado Pago desconectada.");
+    } catch (e: any) {
+      toast.error(`Erro ao desconectar: ${e.message || "Falha no servidor"}`);
+    } finally {
+      setDesconectandoMp(false);
+    }
+  };
 
   // Gerenciamento Dinâmico de Múltiplas Contas Pix
   const [contasPix, setContasPix] = useState<ContaPix[]>([]);
@@ -870,6 +972,93 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   {salvandoUser ? "Salvando..." : "Salvar Alterações do Perfil"}
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+
+          {/* CARD: INTEGRAÇÃO DE PAGAMENTO (MERCADO PAGO CONNECT) */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span>Integração de Pagamento (Mercado Pago Connect)</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    Conecte sua conta do Mercado Pago para receber pagamentos de vendas diretamente no seu estabelecimento no cardápio digital.
+                  </CardDescription>
+                </div>
+                {mpConectado && (
+                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Conta Conectada
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-2">
+              {carregandoMp || processandoOAuthMp ? (
+                <div className="p-4 rounded-2xl bg-muted/30 border border-border flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {processandoOAuthMp ? "Conectando e salvando tokens da sua conta Mercado Pago..." : "Verificando status da conexão..."}
+                  </span>
+                </div>
+              ) : mpConectado ? (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                          Sua conta do Mercado Pago está conectada e pronta para receber!
+                        </span>
+                      </div>
+                      {mpUserId && (
+                        <p className="text-[11px] font-mono text-muted-foreground">
+                          User ID Mercado Pago: <strong>{mpUserId}</strong>
+                        </p>
+                      )}
+                      {mpPublicKey && (
+                        <p className="text-[10px] font-mono text-muted-foreground truncate max-w-md">
+                          Chave Pública: {mpPublicKey.substring(0, 20)}...
+                        </p>
+                      )}
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleDesconectarMercadoPago}
+                      disabled={desconectandoMp}
+                      className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-500/15 hover:text-rose-700 h-9 rounded-xl gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {desconectandoMp ? "Desconectando..." : "Desconectar Mercado Pago"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-4">
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-extrabold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                      Receba pagamentos direto no seu Mercado Pago
+                    </h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Ao conectar sua conta, todas as vendas pagas por Pix ou Cartão no seu cardápio serão creditadas em tempo real na sua conta do Mercado Pago.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleConectarMercadoPago}
+                    className="w-full sm:w-auto font-black text-xs h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Conectar com Mercado Pago
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -41,3 +41,67 @@ export async function processarPagamentoMercadoPago(
 
   return data as MercadoPagoPaymentResult;
 }
+
+/**
+ * Consulta o status da conexão OAuth do Mercado Pago para um estabelecimento
+ */
+export async function obterStatusConexaoMercadoPago(establishmentCode: string): Promise<{
+  connected: boolean;
+  mp_user_id?: string | null;
+  mp_public_key?: string | null;
+}> {
+  try {
+    const code = (establishmentCode || "CD-1001").toUpperCase();
+    const res = await fetch(`/api/mercadopago/connect-status?codigo=${encodeURIComponent(code)}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn("Erro ao consultar status da conexão com Mercado Pago:", e);
+  }
+  return { connected: false };
+}
+
+/**
+ * Envia o código OAuth recebido no callback para o backend efetuar a troca pelos tokens e gravar no Supabase
+ */
+export async function trocarCodigoOAuthMercadoPago(
+  code: string,
+  establishmentCode: string,
+  redirectUri: string
+): Promise<{ success: boolean; mp_user_id?: string; mp_public_key?: string }> {
+  const res = await fetch("/api/mercadopago/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      establishmentCode: (establishmentCode || "CD-1001").toUpperCase(),
+      redirectUri,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "Erro ao conectar conta do Mercado Pago.");
+  }
+  return data;
+}
+
+/**
+ * Solicita ao backend a desconexão da conta do Mercado Pago (limpa os tokens no Supabase)
+ */
+export async function desconectarMercadoPago(establishmentCode: string): Promise<boolean> {
+  const res = await fetch("/api/mercadopago/oauth/disconnect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      establishmentCode: (establishmentCode || "CD-1001").toUpperCase(),
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "Erro ao desconectar conta do Mercado Pago.");
+  }
+  return true;
+}
