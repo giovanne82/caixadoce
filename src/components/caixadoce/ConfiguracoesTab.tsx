@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
@@ -110,49 +111,103 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
   const [salvandoEst, setSalvandoEst] = useState(false);
 
+  const queryClient = useQueryClient();
+
   // Modo de Recebimento Pix & Mercado Pago
   const [usarMercadopago, setUsarMercadopago] = useState<boolean>(Boolean(profile?.usar_mercadopago));
   const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
   const [salvandoPixPref, setSalvandoPixPref] = useState(false);
 
-  // Estado do Mercado Pago Connect (OAuth)
-  const [mpConectado, setMpConectado] = useState(false);
-  const [mpUserId, setMpUserId] = useState<string | null>(null);
+  // Estado do Mercado Pago Connect (OAuth) com hidratação imediata do cache local
+  const [mpConectado, setMpConectado] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && activeCode) {
+      return localStorage.getItem(`caixadoce_mp_connected_${activeCode.toUpperCase()}`) === "true";
+    }
+    return false;
+  });
+  const [mpUserId, setMpUserId] = useState<string | null>(() => {
+    if (typeof window !== "undefined" && activeCode) {
+      return localStorage.getItem(`caixadoce_mp_userid_${activeCode.toUpperCase()}`) || null;
+    }
+    return null;
+  });
   const [mpPublicKey, setMpPublicKey] = useState<string | null>(null);
   const [carregandoMp, setCarregandoMp] = useState(true);
   const [processandoOAuthMp, setProcessandoOAuthMp] = useState(false);
   const [desconectandoMp, setDesconectandoMp] = useState(false);
 
-  // 1. Checar status da conexão com Mercado Pago
-  useEffect(() => {
-    let cancelado = false;
-    async function checarMpStatus() {
-      if (!activeCode) return;
-      setCarregandoMp(true);
-      try {
-        const { data } = await supabase
-          .from("estabelecimentos")
-          .select("mp_access_token, mp_user_id, mp_public_key")
-          .eq("codigo", activeCode)
-          .maybeSingle();
+  // 1. Sincronização estrita com o Banco no Mount / Troca de Aba
+  const checarMpStatus = useCallback(async () => {
+    if (!activeCode) return;
+    const targetCode = activeCode.toUpperCase().trim();
+    setCarregandoMp(true);
+    try {
+      // 1.1 Consulta direta ao Supabase via ilike (case-insensitive)
+      const { data, error } = await supabase
+        .from("estabelecimentos")
+        .select("mp_access_token, mp_user_id, mp_public_key, mercadopago_access_token, mercadopago_user_id, mercadopago_public_key")
+        .ilike("codigo", targetCode)
+        .maybeSingle();
 
-        if (!cancelado && data) {
-          const temToken = Boolean((data as any).mp_access_token);
-          setMpConectado(temToken);
-          setMpUserId((data as any).mp_user_id || null);
-          setMpPublicKey((data as any).mp_public_key || null);
-        }
-      } catch (e) {
-        console.warn("Erro ao carregar status do Mercado Pago:", e);
-      } finally {
-        if (!cancelado) setCarregandoMp(false);
+      if (error) {
+        console.warn("[MercadoPago Sync Supabase Warn]", error);
       }
+
+      const tokenEncontrado = Boolean(
+        (data as any)?.mp_access_token ||
+        (data as any)?.mercadopago_access_token
+      );
+
+      const userIdEncontrado = (data as any)?.mp_user_id || (data as any)?.mercadopago_user_id || null;
+      const publicKeyEncontrada = (data as any)?.mp_public_key || (data as any)?.mercadopago_public_key || null;
+
+      if (tokenEncontrado) {
+        setMpConectado(true);
+        setMpUserId(userIdEncontrado);
+        setMpPublicKey(publicKeyEncontrada);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`caixadoce_mp_connected_${targetCode}`, "true");
+          if (userIdEncontrado) localStorage.setItem(`caixadoce_mp_userid_${targetCode}`, String(userIdEncontrado));
+        }
+      } else {
+        // 1.2 Fallback de checagem via Backend API com Service Role
+        const resStatus = await obterStatusConexaoMercadoPago(targetCode);
+        if (resStatus?.connected) {
+          setMpConectado(true);
+          setMpUserId(resStatus.mp_user_id || null);
+          setMpPublicKey(resStatus.mp_public_key || null);
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`caixadoce_mp_connected_${targetCode}`, "true");
+            if (resStatus.mp_user_id) localStorage.setItem(`caixadoce_mp_userid_${targetCode}`, String(resStatus.mp_user_id));
+          }
+        } else {
+          setMpConectado(false);
+          setMpUserId(null);
+          setMpPublicKey(null);
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`caixadoce_mp_connected_${targetCode}`);
+            localStorage.removeItem(`caixadoce_mp_userid_${targetCode}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[MercadoPago Sync Exception]", e);
+      try {
+        const resStatus = await obterStatusConexaoMercadoPago(targetCode);
+        if (resStatus?.connected) {
+          setMpConectado(true);
+          setMpUserId(resStatus.mp_user_id || null);
+          setMpPublicKey(resStatus.mp_public_key || null);
+        }
+      } catch {}
+    } finally {
+      setCarregandoMp(false);
     }
-    checarMpStatus();
-    return () => {
-      cancelado = true;
-    };
   }, [activeCode]);
+
+  useEffect(() => {
+    checarMpStatus();
+  }, [checarMpStatus]);
 
   const obterRedirectUriMercadoPago = () => {
     if (typeof window === "undefined") return "";
@@ -164,7 +219,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     return `${origin}${targetPath}`;
   };
 
-  // 2. Capturar callback OAuth da URL (?code=...&state=...)
+  // 2. Capturar callback OAuth da URL (?code=...&state=...) e invalidar cache
   useEffect(() => {
     if (typeof window === "undefined" || !activeCode) return;
     const params = new URLSearchParams(window.location.search);
@@ -180,21 +235,29 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       trocarCodigoOAuthMercadoPago(code, activeCode, redirectUri)
         .then((res) => {
           if (res.success) {
+            const targetCode = activeCode.toUpperCase().trim();
             setMpConectado(true);
             setMpUserId(res.mp_user_id ? String(res.mp_user_id) : null);
             setMpPublicKey(res.mp_public_key || null);
+            if (typeof window !== "undefined") {
+              localStorage.setItem(`caixadoce_mp_connected_${targetCode}`, "true");
+              if (res.mp_user_id) localStorage.setItem(`caixadoce_mp_userid_${targetCode}`, String(res.mp_user_id));
+            }
+            // Invalidação profunda do cache para atualizar todos os componentes
+            queryClient.invalidateQueries();
+            checarMpStatus();
             toast.success("Conta do Mercado Pago conectada com sucesso!");
           }
         })
         .catch((err: any) => {
-          console.error("Erro OAuth MP:", err);
+          console.error("[MercadoPago OAuth Error]", err);
           toast.error(`Falha ao conectar Mercado Pago: ${err.message || "Autorização cancelada"}`);
         })
         .finally(() => {
           setProcessandoOAuthMp(false);
         });
     }
-  }, [activeCode]);
+  }, [activeCode, checarMpStatus, queryClient]);
 
   const handleConectarMercadoPago = () => {
     const rawClientId =
@@ -223,9 +286,15 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     setDesconectandoMp(true);
     try {
       await desconectarMercadoPago(activeCode);
+      const targetCode = activeCode.toUpperCase().trim();
       setMpConectado(false);
       setMpUserId(null);
       setMpPublicKey(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`caixadoce_mp_connected_${targetCode}`);
+        localStorage.removeItem(`caixadoce_mp_userid_${targetCode}`);
+      }
+      queryClient.invalidateQueries();
       toast.success("Conta do Mercado Pago desconectada.");
     } catch (e: any) {
       toast.error(`Erro ao desconectar: ${e.message || "Falha no servidor"}`);

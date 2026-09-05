@@ -943,27 +943,39 @@ export default {
 
           // 1. Atualizar via Supabase Client SDK
           try {
-            await supabaseClient
+            const { data: sdkData, error: sdkError } = await supabaseClient
               .from("estabelecimentos")
               .update(updateTokensPayload)
-              .ilike("codigo", codeTarget);
+              .ilike("codigo", codeTarget)
+              .select();
+
+            if (sdkError) {
+              console.error("[MercadoPago Token SDK Update Error]", sdkError);
+            } else {
+              console.log("[MercadoPago Token SDK Update Success] Linhas afetadas:", sdkData?.length || 1);
+            }
           } catch (supErr) {
-            console.warn("[MercadoPago Token SDK Update Warn]", supErr);
+            console.error("[MercadoPago Token SDK Update Exception]", supErr);
           }
 
           // 2. Atualizar via REST Patch no Supabase (garantia de compatibilidade total)
-          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(codeTarget)}`, {
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(codeTarget)}`, {
             method: "PATCH",
             headers: {
               "apikey": supabaseKey,
               "authorization": `Bearer ${supabaseKey}`,
               "content-type": "application/json",
-              "prefer": "return=minimal",
+              "prefer": "return=representation",
             },
             body: JSON.stringify(updateTokensPayload),
           });
 
-          console.log(`[MercadoPago Connect] Tokens salvos no Supabase para ${codeTarget}! User ID: ${mpData.user_id}`);
+          if (!patchRes.ok) {
+            const patchErrText = await patchRes.text();
+            console.error(`[MercadoPago Connect REST Error] HTTP ${patchRes.status}:`, patchErrText);
+          } else {
+            console.log(`[MercadoPago Connect REST Success] Tokens salvos no Supabase para ${codeTarget}! User ID: ${mpData.user_id}`);
+          }
 
           return new Response(
             JSON.stringify({
@@ -1644,6 +1656,10 @@ export default {
             console.log(`[MercadoPago OAuth Save] Salvando tokens no Supabase para ${targetEstablishmentCode} (User ID: ${userId})...`);
 
             const updatePayload = {
+              mp_access_token: accessToken,
+              mp_public_key: publicKey,
+              mp_refresh_token: refreshToken,
+              mp_user_id: userId,
               mercadopago_access_token: accessToken,
               mercadopago_public_key: publicKey,
               mercadopago_refresh_token: refreshToken,
@@ -1655,17 +1671,24 @@ export default {
 
             // 1. Atualização via Supabase Client
             try {
-              await supabaseClient
+              const { data: sdkData, error: sdkError } = await supabaseClient
                 .from("estabelecimentos")
                 .update(updatePayload)
-                .ilike("codigo", targetEstablishmentCode);
+                .ilike("codigo", targetEstablishmentCode)
+                .select();
+
+              if (sdkError) {
+                console.error("[MercadoPago OAuth Supabase Client Error]", sdkError);
+              } else {
+                console.log("[MercadoPago OAuth Supabase Client Success] Linhas atualizadas:", sdkData?.length || 1);
+              }
             } catch (supErr) {
-              console.warn("[MercadoPago OAuth Supabase Client Warn]", supErr);
+              console.error("[MercadoPago OAuth Supabase Client Exception]", supErr);
             }
 
             // 2. Atualização direta via REST Patch resiliente (garante persistência 100%)
             try {
-              await fetch(
+              const restRes = await fetch(
                 `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(targetEstablishmentCode)}`,
                 {
                   method: "PATCH",
@@ -1673,13 +1696,19 @@ export default {
                     apikey: supabaseKey,
                     Authorization: `Bearer ${supabaseKey}`,
                     "Content-Type": "application/json",
-                    Prefer: "return=minimal",
+                    Prefer: "return=representation",
                   },
                   body: JSON.stringify(updatePayload),
                 }
               );
+              if (!restRes.ok) {
+                const restErr = await restRes.text();
+                console.error(`[MercadoPago OAuth REST Error] HTTP ${restRes.status}:`, restErr);
+              } else {
+                console.log(`[MercadoPago OAuth REST Success] Tokens salvos com sucesso para '${targetEstablishmentCode}'!`);
+              }
             } catch (restErr) {
-              console.warn("[MercadoPago OAuth REST Patch Warn]", restErr);
+              console.error("[MercadoPago OAuth REST Exception]", restErr);
             }
 
             console.log(`[MercadoPago OAuth Success] Tokens salvos com sucesso para '${targetEstablishmentCode}'!`);
