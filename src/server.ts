@@ -89,6 +89,45 @@ function isH3SwallowedErrorBody(body: string): boolean {
 // Mapeamento em memória de links curtos de cobrança (cobrancaId -> Payment Target URL)
 const paymentLinksMap = new Map<string, { url: string; description?: string; amount?: number; createdAt: number }>();
 
+/**
+ * Retorna uma string ISO 8601 com o offset explícito de Brasília (-03:00).
+ * Exemplo: 2026-09-05T20:00:00.000-03:00
+ * Essencial para evitar que bancos rejeitem o Pix no Mercado Pago com "Ordem rejeitada pelo participante".
+ */
+export function formatarDataExpiracaoPixMercadoPago(minutosNoFuturo = 5): string {
+  const agora = new Date();
+  const dataFutura = new Date(agora.getTime() + minutosNoFuturo * 60 * 1000);
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(dataFutura);
+  const map: Record<string, string> = {};
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      map[part.type] = part.value;
+    }
+  }
+
+  const ano = map.year;
+  const mes = map.month;
+  const dia = map.day;
+  const hora = (map.hour || "00").padStart(2, "0");
+  const minuto = (map.minute || "00").padStart(2, "0");
+  const segundo = (map.second || "00").padStart(2, "0");
+  const millis = String(dataFutura.getMilliseconds()).padStart(3, "0");
+
+  return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}.${millis}-03:00`;
+}
+
 async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
   if (!id) return null;
   const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
@@ -1191,7 +1230,7 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          const expDate = body.date_of_expiration || new Date(Date.now() + 5 * 60 * 1000).toISOString();
+          const expDate = body.date_of_expiration || formatarDataExpiracaoPixMercadoPago(5);
           const notifUrl = body.notification_url || `${url.origin}/api/webhook-mp`;
           const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
 
@@ -1436,6 +1475,14 @@ export default {
               plano_id: planId,
               plan_type: planId,
             },
+            ...(payment_method_id === "pix"
+              ? {
+                  date_of_expiration:
+                    formData.date_of_expiration ||
+                    payload.date_of_expiration ||
+                    formatarDataExpiracaoPixMercadoPago(5),
+                }
+              : {}),
           };
 
           console.log(

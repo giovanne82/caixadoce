@@ -224,6 +224,44 @@ export async function desconectarMercadoPago(establishmentCode: string): Promise
 }
 
 /**
+ * Retorna a data de expiração formatada estritamente no padrão ISO 8601 com o offset do Brasil (-03:00):
+ * Exemplo: "YYYY-MM-DDTHH:mm:ss.000-03:00"
+ */
+export function formatarDataExpiracaoPixMercadoPago(minutosNoFuturo = 5): string {
+  const agora = new Date();
+  const dataFutura = new Date(agora.getTime() + minutosNoFuturo * 60 * 1000);
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(dataFutura);
+  const map: Record<string, string> = {};
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      map[part.type] = part.value;
+    }
+  }
+
+  const ano = map.year;
+  const mes = map.month;
+  const dia = map.day;
+  const hora = (map.hour || "00").padStart(2, "0");
+  const minuto = (map.minute || "00").padStart(2, "0");
+  const segundo = (map.second || "00").padStart(2, "0");
+  const millis = String(dataFutura.getMilliseconds()).padStart(3, "0");
+
+  return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}.${millis}-03:00`;
+}
+
+/**
  * Solicita ao backend a geração de uma cobrança Pix via Mercado Pago Connect para um pedido do cardápio
  */
 export async function gerarPixMercadoPago(params: {
@@ -231,6 +269,10 @@ export async function gerarPixMercadoPago(params: {
   amount: number;
   description?: string;
   payerEmail?: string;
+  accessToken?: string;
+  date_of_expiration?: string;
+  notification_url?: string;
+  external_reference?: string;
 }): Promise<{
   success: boolean;
   payment_id?: string | number;
@@ -239,10 +281,15 @@ export async function gerarPixMercadoPago(params: {
   qr_code?: string;
   error?: string;
 }> {
+  const payload = {
+    ...params,
+    date_of_expiration: params.date_of_expiration || formatarDataExpiracaoPixMercadoPago(5),
+  };
+
   const res = await fetch("/api/mercadopago/create-pix-payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json();

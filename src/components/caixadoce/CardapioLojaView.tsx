@@ -89,7 +89,10 @@ import {
   type ConfiguracaoFrete,
   CONFIG_FRETE_PADRAO,
 } from "@/lib/frete-service";
-import { gerarPixMercadoPago } from "@/lib/mercadopago-service";
+import {
+  gerarPixMercadoPago,
+  formatarDataExpiracaoPixMercadoPago,
+} from "@/lib/mercadopago-service";
 import { toast } from "sonner";
 
 // ==========================================
@@ -1491,7 +1494,7 @@ export function CardapioLojaView() {
 
             console.log(`[Checkout Cardápio] Gerando Pix Mercado Pago via proxy seguro (/api/create-pix-payment) para ${code}...`);
             
-            const expDate = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            const expDate = formatarDataExpiracaoPixMercadoPago(5);
             const notifUrl = typeof window !== "undefined" ? `${window.location.origin}/api/webhook-mp` : undefined;
 
             const pixPayload = {
