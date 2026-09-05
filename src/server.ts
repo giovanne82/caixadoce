@@ -1191,7 +1191,11 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount}`);
+          const expDate = body.date_of_expiration || new Date(Date.now() + 5 * 60 * 1000).toISOString();
+          const notifUrl = body.notification_url || `${url.origin}/api/webhook-mp`;
+          const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
+
+          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount} | Expira em: ${expDate} | Notif: ${notifUrl}`);
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
@@ -1204,9 +1208,17 @@ export default {
               transaction_amount: amount,
               payment_method_id: "pix",
               description,
+              date_of_expiration: expDate,
+              notification_url: notifUrl,
+              ...(externalRef ? { external_reference: externalRef } : {}),
               payer: {
                 email: payerEmail,
                 first_name: payerFirstName,
+              },
+              metadata: {
+                pedido_id: externalRef,
+                estabelecimento_codigo: codeTarget,
+                tipo: "encomenda",
               },
             }),
           });
@@ -1573,13 +1585,17 @@ export default {
       }
 
       // =========================================================================
-      // MERCADO PAGO: WEBHOOK DE NOTIFICAÇÃO ASSÍNCRONA (/api/webhooks/mercadopago e /api/mercadopago/webhook)
+      // MERCADO PAGO: WEBHOOK DE NOTIFICAÇÃO ASSÍNCRONA (/api/webhook-mp, /webhook-mp, /api/webhooks/mercadopago, /api/mercadopago/webhook)
       // =========================================================================
       if (
-        (url.pathname === "/api/webhooks/mercadopago" || url.pathname === "/api/mercadopago/webhook") &&
+        (url.pathname === "/api/webhook-mp" ||
+          url.pathname === "/webhook-mp" ||
+          url.pathname === "/api/webhooks/mercadopago" ||
+          url.pathname === "/api/mercadopago/webhook") &&
         (request.method === "POST" || request.method === "GET")
       ) {
         try {
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           let paymentId = url.searchParams.get("data.id") || url.searchParams.get("id");
 
           if (!paymentId && request.method === "POST") {
@@ -1604,7 +1620,7 @@ export default {
               process.env.VITE_MERCADOPAGO_ACCESS_TOKEN ||
               "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
 
-            const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            let mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
               },
@@ -1618,43 +1634,101 @@ export default {
                 const meta = paymentData.metadata || {};
                 const desc = String(paymentData.description || "").toLowerCase();
                 const amount = Number(paymentData.transaction_amount || 0);
+                const externalRef = String(paymentData.external_reference || meta.pedido_id || meta.order_id || "").trim();
 
-                const metaPlanoId = String(
-                  meta.plano_id || meta.plan_id || meta.plan_type || meta.tipo_plano || ""
-                ).toLowerCase();
+                let processadoComoEncomenda = false;
 
-                const isAnual =
-                  metaPlanoId === "anual" ||
-                  metaPlanoId === "ilimitado" ||
-                  desc.includes("anual") ||
-                  desc.includes("365") ||
-                  amount > 50;
+                // 1. Verifica se o pagamento é referente a uma Encomenda do Cardápio Digital
+                if (externalRef && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalRef) || externalRef.startsWith("PED-") || meta.tipo === "encomenda")) {
+                  try {
+                    const encRes = await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${encodeURIComponent(externalRef)}&select=id,valor_total,estabelecimento_codigo`, {
+                      headers: {
+                        "apikey": supabaseKey,
+                        "authorization": `Bearer ${supabaseKey}`,
+                      },
+                    });
 
-                const planId = isAnual ? "anual" : "mensal";
+                    if (encRes.ok) {
+                      const encData = await encRes.json();
+                      if (encData && encData.length > 0) {
+                        processadoComoEncomenda = true;
+                        const encRow = encData[0];
+                        const valorPago = amount > 0 ? amount : Number(encRow.valor_total || 0);
 
-                console.log(
-                  `[MercadoPago Webhook PARSER STRICT] Payment ID: ${paymentId} | Plan Identified: '${planId}' (${isAnual ? "+365 DIAS (ANUAL)" : "+30 DIAS (MENSAL)"}) | Amount: R$ ${amount} | Meta:`,
-                  JSON.stringify(meta),
-                  `| Description: "${paymentData.description}"`
-                );
+                        const updatePayload = {
+                          status_pagamento: "pago_integral",
+                          metodo_pagamento: "Mercado Pago",
+                          forma_pagamento: "Mercado Pago",
+                          origem_pagamento: "mercadopago",
+                          valor_entrada: valorPago,
+                          historico_pagamentos: [
+                            {
+                              id: `mp_${paymentId}`,
+                              data: new Date().toISOString().split("T")[0],
+                              valor: valorPago,
+                              observacao: "Pagamento aprovado via Webhook Mercado Pago (Pix Automático)",
+                            },
+                          ],
+                          updated_at: new Date().toISOString(),
+                        };
 
-                const establishmentCode =
-                  paymentData.external_reference ||
-                  meta.estabelecimento_codigo ||
-                  meta.establishment_code ||
-                  meta.establishmentcode ||
-                  "CD-1001";
+                        const patchRes = await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${encodeURIComponent(externalRef)}`, {
+                          method: "PATCH",
+                          headers: {
+                            "apikey": supabaseKey,
+                            "authorization": `Bearer ${supabaseKey}`,
+                            "content-type": "application/json",
+                          },
+                          body: JSON.stringify(updatePayload),
+                        });
 
-                const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
-                const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+                        console.log(`[MercadoPago Webhook] Encomenda ${externalRef} atualizada com status PAGO! PATCH HTTP: ${patchRes.status}`);
+                      }
+                    }
+                  } catch (errEnc) {
+                    console.error("[MercadoPago Webhook] Erro ao atualizar encomenda:", errEnc);
+                  }
+                }
 
-                await ativarPlanoEstabelecimentoNoSupabase({
-                  establishmentCode,
-                  planId,
-                  paymentId,
-                  paymentMethod: tipoPag,
-                  amount,
-                });
+                // 2. Se não for encomenda, processa como ativação de assinatura de plano
+                if (!processadoComoEncomenda) {
+                  const metaPlanoId = String(
+                    meta.plano_id || meta.plan_id || meta.plan_type || meta.tipo_plano || ""
+                  ).toLowerCase();
+
+                  const isAnual =
+                    metaPlanoId === "anual" ||
+                    metaPlanoId === "ilimitado" ||
+                    desc.includes("anual") ||
+                    desc.includes("365") ||
+                    amount > 50;
+
+                  const planId = isAnual ? "anual" : "mensal";
+
+                  console.log(
+                    `[MercadoPago Webhook PARSER STRICT] Payment ID: ${paymentId} | Plan Identified: '${planId}' (${isAnual ? "+365 DIAS (ANUAL)" : "+30 DIAS (MENSAL)"}) | Amount: R$ ${amount} | Meta:`,
+                    JSON.stringify(meta),
+                    `| Description: "${paymentData.description}"`
+                  );
+
+                  const establishmentCode =
+                    paymentData.external_reference ||
+                    meta.estabelecimento_codigo ||
+                    meta.establishment_code ||
+                    meta.establishmentcode ||
+                    "CD-1001";
+
+                  const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
+                  const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
+
+                  await ativarPlanoEstabelecimentoNoSupabase({
+                    establishmentCode,
+                    planId,
+                    paymentId,
+                    paymentMethod: tipoPag,
+                    amount,
+                  });
+                }
               }
             } else {
               console.error(`[MercadoPago Webhook] Erro ao consultar pagamento ${paymentId} na API do MP: Status ${mpRes.status}`);

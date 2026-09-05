@@ -357,6 +357,8 @@ export function CardapioLojaView() {
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
   const [mpPaymentId, setMpPaymentId] = useState<string | number | null>(null);
   const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
+  const [pixSegundosRestantes, setPixSegundosRestantes] = useState<number>(300); // 5 minutos = 300 segundos
+  const [pixExpirado, setPixExpirado] = useState<boolean>(false);
 
   // Estados de Identificação e Retenção do Cliente (Local Storage)
   const [savedUserPhone, setSavedUserPhone] = useState<string>("");
@@ -853,10 +855,60 @@ export function CardapioLojaView() {
   }, [lojaInfo]);
 
   // =========================================================================
-  // POLLING EM TEMPO REAL DO STATUS DO PAGAMENTO PIX NO MERCADO PAGO (3 em 3 segundos)
+  // 1. CONTAGEM REGRESSIVA VISUAL DE 5 MINUTOS (300s) & EXPIRAÇÃO DO PIX
   // =========================================================================
   useEffect(() => {
-    if (!sucessoModalOpen || !mpPaymentId || pagamentoAprovadoMp) {
+    if (!sucessoModalOpen || pagamentoAprovadoMp || pixExpirado) {
+      return;
+    }
+
+    if (!pixQrCodeBase64 && !pixCopiaCola && !lojaInfo?.chave_pix_manual && !lojaInfo?.chavePix) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setPixSegundosRestantes((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setPixExpirado(true);
+
+          // Atualiza o pedido no Supabase para Cancelado/Expirado
+          const targetPedidoId = ultimoPedidoId || pedidoCriadoId;
+          if (targetPedidoId) {
+            supabase
+              .from("encomendas")
+              .update({
+                status: "cancelada",
+                status_pagamento: "cancelado",
+                observacoes: "Cancelado / Expirado: Pagamento Pix não efetuado dentro do prazo de 5 minutos.",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", targetPedidoId)
+              .then(() => {
+                console.log(`[Pix Expirado 5min] Pedido ${targetPedidoId} atualizado no Supabase como cancelado.`);
+              })
+              .catch((err) => {
+                console.warn("[Pix Expirado] Falha ao atualizar pedido:", err);
+              });
+          }
+
+          toast.error("⏱️ Tempo limite de 5 minutos esgotado. O QR Code Pix expirou.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [sucessoModalOpen, pagamentoAprovadoMp, pixExpirado, pixQrCodeBase64, pixCopiaCola, lojaInfo, ultimoPedidoId, pedidoCriadoId]);
+
+  // =========================================================================
+  // 2. POLLING EM TEMPO REAL DO STATUS DO PAGAMENTO PIX NO MERCADO PAGO (3 em 3 segundos)
+  // =========================================================================
+  useEffect(() => {
+    if (!sucessoModalOpen || !mpPaymentId || pagamentoAprovadoMp || pixExpirado) {
       return;
     }
 
@@ -867,7 +919,7 @@ export function CardapioLojaView() {
     console.log(`[Polling Pix MP] Iniciando monitoramento a cada 3s para payment_id=${mpPaymentId}...`);
 
     const timer = setInterval(async () => {
-      if (isCancelled || pagamentoAprovadoMp) return;
+      if (isCancelled || pagamentoAprovadoMp || pixExpirado) return;
 
       try {
         let statusResult: any = null;
@@ -954,7 +1006,7 @@ export function CardapioLojaView() {
       isCancelled = true;
       clearInterval(timer);
     };
-  }, [sucessoModalOpen, mpPaymentId, pagamentoAprovadoMp, lojaInfo, code, ultimoPedidoId, pedidoCriadoId, totalComFrete]);
+  }, [sucessoModalOpen, mpPaymentId, pagamentoAprovadoMp, pixExpirado, lojaInfo, code, ultimoPedidoId, pedidoCriadoId, totalComFrete]);
 
   // Inicialização de data mínima e histórico do cliente
   useEffect(() => {
@@ -1416,6 +1468,8 @@ export function CardapioLojaView() {
       setPixCopiaCola("");
       setPixQrCodeBase64(null);
       setPixCopiado(false);
+      setPixSegundosRestantes(300);
+      setPixExpirado(false);
 
       if (valTotalCarrinho > 0) {
         let gerouMp = false;
@@ -1437,6 +1491,9 @@ export function CardapioLojaView() {
 
             console.log(`[Checkout Cardápio] Gerando Pix Mercado Pago via proxy seguro (/api/create-pix-payment) para ${code}...`);
             
+            const expDate = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            const notifUrl = typeof window !== "undefined" ? `${window.location.origin}/api/webhook-mp` : undefined;
+
             const pixPayload = {
               transaction_amount: valTotalCarrinho,
               amount: valTotalCarrinho,
@@ -1444,9 +1501,18 @@ export function CardapioLojaView() {
               mp_access_token: tokenLojista || undefined,
               accessToken: tokenLojista || undefined,
               description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+              date_of_expiration: expDate,
+              notification_url: notifUrl,
+              external_reference: pedidoId,
+              pedidoId: pedidoId,
               payer: {
                 email: "cliente@caixadoce.com.br",
                 first_name: clienteNome || "Cliente",
+              },
+              metadata: {
+                pedido_id: pedidoId,
+                estabelecimento_codigo: code,
+                tipo: "encomenda",
               },
             };
 
@@ -1632,7 +1698,13 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
     setPixQrCodeBase64(null);
     setMpPaymentId(null);
     setPagamentoAprovadoMp(false);
+    setPixSegundosRestantes(300);
+    setPixExpirado(false);
   };
+
+  const minutosPix = Math.floor(pixSegundosRestantes / 60);
+  const segundosPix = pixSegundosRestantes % 60;
+  const tempoPixFormatado = `${String(minutosPix).padStart(2, "0")}:${String(segundosPix).padStart(2, "0")}`;
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-foreground pb-24">
@@ -2626,7 +2698,30 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           </div>
 
           {/* BLOCO PIX DE PAGAMENTO (AUTOMÁTICO OU MANUAL) */}
-          {pagamentoAprovadoMp ? (
+          {pixExpirado ? (
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700/60 text-center space-y-3 animate-in fade-in zoom-in duration-300 shadow-xs">
+              <div className="w-14 h-14 bg-rose-600/15 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
+                <Clock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-rose-950 dark:text-rose-200">
+                  Tempo Limite Expirado (5 Minutos)
+                </h3>
+                <p className="text-xs text-rose-800 dark:text-rose-300 font-medium leading-relaxed">
+                  O prazo de 5 minutos para pagamento via Pix esgotou e o pedido foi cancelado automaticamente. Por favor, monte um novo pedido para gerar um novo QR Code.
+                </p>
+              </div>
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  onClick={handleConcluirELimpar}
+                  className="w-full h-10 font-extrabold text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs"
+                >
+                  Fazer Novo Pedido
+                </Button>
+              </div>
+            </div>
+          ) : pagamentoAprovadoMp ? (
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/60 text-center space-y-3 animate-in fade-in zoom-in duration-300 shadow-xs">
               <div className="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/30 animate-bounce">
                 <Check className="w-8 h-8 stroke-[3]" />
@@ -2656,6 +2751,17 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 <Badge className={`text-[10px] font-mono font-bold border-0 ${pixQrCodeBase64 ? "bg-blue-600 text-white" : lojaInfo?.usar_mercadopago ? "bg-blue-600 text-white" : "bg-purple-600 text-white"}`}>
                   {pixQrCodeBase64 ? "Pix Automático" : lojaInfo?.usar_mercadopago ? "Pix Automático" : "Pix Manual"}
                 </Badge>
+              </div>
+
+              {/* CRONÔMETRO VISUAL DE 5 MINUTOS */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-bold">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
+                  <span>Tempo restante para pagar:</span>
+                </span>
+                <span className="font-mono text-xs sm:text-sm font-black px-2 py-0.5 rounded-lg bg-amber-500/25 text-amber-950 dark:text-amber-100">
+                  {tempoPixFormatado}
+                </span>
               </div>
 
               {/* SE TEM IMAGEM QR CODE BASE64 */}

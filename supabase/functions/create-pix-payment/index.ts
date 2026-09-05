@@ -39,6 +39,9 @@ serve(async (req) => {
     }
 
     const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const expDate = body.date_of_expiration || new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const notificationUrl = body.notification_url || undefined;
+    const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
 
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -51,9 +54,16 @@ serve(async (req) => {
         transaction_amount: amount,
         payment_method_id: "pix",
         description,
+        date_of_expiration: expDate,
+        ...(notificationUrl ? { notification_url: notificationUrl } : {}),
+        ...(externalRef ? { external_reference: externalRef } : {}),
         payer: {
           email: payer.email || "cliente@caixadoce.com.br",
           first_name: payer.first_name || "Cliente",
+        },
+        metadata: {
+          pedido_id: externalRef,
+          tipo: "encomenda",
         },
       }),
     });
