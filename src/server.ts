@@ -1230,10 +1230,7 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          const notifUrl = body.notification_url || `${url.origin}/api/webhook-mp`;
-          const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
-
-          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount} | Notif: ${notifUrl}`);
+          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount}`);
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
@@ -1246,16 +1243,9 @@ export default {
               transaction_amount: amount,
               payment_method_id: "pix",
               description,
-              notification_url: notifUrl,
-              ...(externalRef ? { external_reference: externalRef } : {}),
               payer: {
                 email: payerEmail,
                 first_name: payerFirstName,
-              },
-              metadata: {
-                pedido_id: externalRef,
-                estabelecimento_codigo: codeTarget,
-                tipo: "encomenda",
               },
             }),
           });

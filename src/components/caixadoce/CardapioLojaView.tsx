@@ -1493,8 +1493,6 @@ export function CardapioLojaView() {
             }
 
             console.log(`[Checkout Cardápio] Gerando Pix Mercado Pago via proxy seguro (/api/create-pix-payment) para ${code}...`);
-            
-            const notifUrl = typeof window !== "undefined" ? `${window.location.origin}/api/webhook-mp` : undefined;
 
             const pixPayload = {
               transaction_amount: valTotalCarrinho,
@@ -1503,17 +1501,9 @@ export function CardapioLojaView() {
               mp_access_token: tokenLojista || undefined,
               accessToken: tokenLojista || undefined,
               description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
-              notification_url: notifUrl,
-              external_reference: pedidoId,
-              pedidoId: pedidoId,
               payer: {
                 email: "cliente@caixadoce.com.br",
                 first_name: clienteNome || "Cliente",
-              },
-              metadata: {
-                pedido_id: pedidoId,
-                estabelecimento_codigo: code,
-                tipo: "encomenda",
               },
             };
 

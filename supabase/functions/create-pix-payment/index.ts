@@ -6,40 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
 };
 
-function formatarDataExpiracaoPixMercadoPago(minutosNoFuturo = 5): string {
-  const agora = new Date();
-  const dataFutura = new Date(agora.getTime() + minutosNoFuturo * 60 * 1000);
-
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-
-  const parts = formatter.formatToParts(dataFutura);
-  const map: Record<string, string> = {};
-  for (const part of parts) {
-    if (part.type !== "literal") {
-      map[part.type] = part.value;
-    }
-  }
-
-  const ano = map.year;
-  const mes = map.month;
-  const dia = map.day;
-  const hora = (map.hour || "00").padStart(2, "0");
-  const minuto = (map.minute || "00").padStart(2, "0");
-  const segundo = (map.second || "00").padStart(2, "0");
-  const millis = String(dataFutura.getMilliseconds()).padStart(3, "0");
-
-  return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}.${millis}-03:00`;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -73,8 +39,6 @@ serve(async (req) => {
     }
 
     const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const notificationUrl = body.notification_url || undefined;
-    const externalRef = body.external_reference || body.pedidoId || body.orderId || "";
 
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -87,15 +51,9 @@ serve(async (req) => {
         transaction_amount: amount,
         payment_method_id: "pix",
         description,
-        ...(notificationUrl ? { notification_url: notificationUrl } : {}),
-        ...(externalRef ? { external_reference: externalRef } : {}),
         payer: {
           email: payer.email || "cliente@caixadoce.com.br",
           first_name: payer.first_name || "Cliente",
-        },
-        metadata: {
-          pedido_id: externalRef,
-          tipo: "encomenda",
         },
       }),
     });
