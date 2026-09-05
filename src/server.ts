@@ -725,15 +725,29 @@ export default {
           const body = await request.json();
           const { code, establishmentCode, redirectUri } = body;
 
-          const clientId =
+          const clientId = (
+            body.clientId ||
+            body.client_id ||
             process.env.MERCADOPAGO_CLIENT_ID ||
             process.env.VITE_MERCADOPAGO_CLIENT_ID ||
-            "3682622436709302";
+            process.env.MP_CLIENT_ID ||
+            process.env.VITE_MP_CLIENT_ID ||
+            process.env.MERCADO_PAGO_CLIENT_ID ||
+            process.env.VITE_MERCADO_PAGO_CLIENT_ID ||
+            "3682622436709302"
+          ).toString().trim();
 
-          const clientSecret =
+          const clientSecret = (
+            body.clientSecret ||
+            body.client_secret ||
             process.env.MERCADOPAGO_CLIENT_SECRET ||
             process.env.VITE_MERCADOPAGO_CLIENT_SECRET ||
-            "cQG1R6OaQx7w7WqF7m3G2x";
+            process.env.MP_CLIENT_SECRET ||
+            process.env.VITE_MP_CLIENT_SECRET ||
+            process.env.MERCADO_PAGO_CLIENT_SECRET ||
+            process.env.VITE_MERCADO_PAGO_CLIENT_SECRET ||
+            "cQG1R6OaQx7w7WqF7m3G2x"
+          ).toString().trim();
 
           if (!code) {
             return new Response(
@@ -742,33 +756,58 @@ export default {
             );
           }
 
+          const targetRedirectUri = (redirectUri || `${url.origin}/configuracoes`).toString().trim();
+          const targetCode = String(code).trim();
           const codeVerifier = body.code_verifier || body.codeVerifier;
 
-          const params = new URLSearchParams();
-          params.append("client_secret", clientSecret);
-          params.append("client_id", clientId);
-          params.append("grant_type", "authorization_code");
-          params.append("code", code);
-          params.append("redirect_uri", redirectUri || `${url.origin}/configuracoes`);
-          if (codeVerifier) params.append("code_verifier", codeVerifier);
+          console.log(`[MercadoPago Connect] Trocando código OAuth para estabelecimento ${establishmentCode} | client_id: ${clientId} | redirect_uri: ${targetRedirectUri}...`);
 
-          console.log(`[MercadoPago Connect] Trocando código OAuth para estabelecimento ${establishmentCode}...`);
+          // 1. Tenta envio via application/x-www-form-urlencoded
+          const formParams = new URLSearchParams();
+          formParams.append("client_secret", clientSecret);
+          formParams.append("client_id", clientId);
+          formParams.append("grant_type", "authorization_code");
+          formParams.append("code", targetCode);
+          formParams.append("redirect_uri", targetRedirectUri);
+          if (codeVerifier) formParams.append("code_verifier", String(codeVerifier).trim());
 
-          const mpRes = await fetch("https://api.mercadopago.com/oauth/token", {
+          let mpRes = await fetch("https://api.mercadopago.com/oauth/token", {
             method: "POST",
             headers: {
               "accept": "application/json",
               "content-type": "application/x-www-form-urlencoded",
             },
-            body: params.toString(),
+            body: formParams.toString(),
           });
 
-          const mpData = await mpRes.json();
+          let mpData = await mpRes.json();
+
+          // 2. Fallback via application/json caso a API do Mercado Pago requira JSON
+          if (!mpRes.ok && (mpData.error === "invalid_client" || mpData.status === 400)) {
+            console.warn("[MercadoPago OAuth Form-urlencoded Fallback -> Trying JSON]", mpData);
+            mpRes = await fetch("https://api.mercadopago.com/oauth/token", {
+              method: "POST",
+              headers: {
+                "accept": "application/json",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                client_secret: clientSecret,
+                client_id: clientId,
+                grant_type: "authorization_code",
+                code: targetCode,
+                redirect_uri: targetRedirectUri,
+                ...(codeVerifier ? { code_verifier: String(codeVerifier).trim() } : {}),
+              }),
+            });
+
+            mpData = await mpRes.json();
+          }
 
           if (!mpRes.ok || mpData.error) {
             console.error("[MercadoPago OAuth Error]", mpData);
             return new Response(
-              JSON.stringify({ error: mpData.message || mpData.error || "Falha ao obter tokens no Mercado Pago." }),
+              JSON.stringify({ error: mpData.message || mpData.error_description || mpData.error || "Falha ao obter tokens no Mercado Pago." }),
               { status: 400, headers: { "content-type": "application/json" } }
             );
           }

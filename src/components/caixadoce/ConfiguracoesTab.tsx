@@ -197,7 +197,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   }, [activeCode]);
 
   const handleConectarMercadoPago = () => {
-    const clientId = "3682622436709302";
+    const clientId = (
+      (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
+      (typeof process !== "undefined" && process.env && (process.env.VITE_MERCADOPAGO_CLIENT_ID || process.env.VITE_MP_CLIENT_ID)) ||
+      "3682622436709302"
+    ).toString().trim();
+
     const redirectUri = encodeURIComponent(obterRedirectUriMercadoPago());
     const oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${encodeURIComponent(activeCode)}&redirect_uri=${redirectUri}`;
     
