@@ -333,6 +333,9 @@ export function CardapioLojaView() {
   const rawParam = (routeParams?.storeCode || routeParams?.idOuSlug || routeParams?.slug || "CD-1001").trim();
   const [code, setCode] = useState<string>(rawParam.toUpperCase());
 
+  // Dados da Loja
+  const [lojaInfo, setLojaInfo] = useState<LojaInfoState | null>(null);
+
   // Estados dos Produtos e Carrinho
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
   const [loadingProdutos, setLoadingProdutos] = useState<boolean>(true);
@@ -347,6 +350,13 @@ export function CardapioLojaView() {
   const [salvandoPedido, setSalvandoPedido] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [ultimoPedidoId, setUltimoPedidoId] = useState("");
+  const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
+
+  // Dados de Conclusão do Pix & Mercado Pago
+  const [pixCopiaCola, setPixCopiaCola] = useState("");
+  const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
+  const [mpPaymentId, setMpPaymentId] = useState<string | number | null>(null);
+  const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
 
   // Estados de Identificação e Retenção do Cliente (Local Storage)
   const [savedUserPhone, setSavedUserPhone] = useState<string>("");
@@ -379,33 +389,174 @@ export function CardapioLojaView() {
   const [endPontoRef, setEndPontoRef] = useState("");
   const [buscandoCep, setBuscandoCep] = useState(false);
 
-  const handleBuscarCep = async (cepInput: string) => {
-    setEndCep(cepInput);
-    const limpo = cepInput.replace(/\D/g, "");
-    if (limpo.length === 8) {
-      setBuscandoCep(true);
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.erro) {
-            if (data.logradouro) setEndLogradouro(data.logradouro);
-            if (data.bairro) {
-              setEndBairro(data.bairro);
-              setBairroDropdownOpen(false);
-            }
-            toast.success(`Endereço localizado: ${data.bairro}${data.localidade ? ` - ${data.localidade}/${data.uf}` : ""}`);
-          } else {
-            toast.error("CEP não localizado. Preencha o bairro e a rua manualmente.");
-          }
+  const [observacoes, setObservacoes] = useState("");
+  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
+  const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
+  const [processandoPagamento, setProcessandoPagamento] = useState(false);
+
+  // Configurações de Frete & Entrega
+  const [freteConfig, setFreteConfig] = useState<ConfiguracaoFrete>(() => obterConfiguracaoFrete(code));
+  const [regiaoEntregaId, setRegiaoEntregaId] = useState<string>("");
+
+  // Dias e Modos
+  const [diaSemanaSelecionado, setDiaSemanaSelecionado] = useState<number | "todos">(() => new Date().getDay());
+  const [tabModoHibrido, setTabModoHibrido] = useState<"todos" | "pronta_entrega" | "encomenda">("todos");
+
+  // ==========================================
+  // VALORES CALCULADOS & MEMOS
+  // ==========================================
+  const DIAS_SEMANA_KANBAN = [
+    { dia: 1, label: "Seg", nome: "Segunda" },
+    { dia: 2, label: "Ter", nome: "Terça" },
+    { dia: 3, label: "Qua", nome: "Quarta" },
+    { dia: 4, label: "Qui", nome: "Quinta" },
+    { dia: 5, label: "Sex", nome: "Sexta" },
+    { dia: 6, label: "Sáb", nome: "Sábado" },
+    { dia: 0, label: "Dom", nome: "Domingo" },
+  ];
+
+  const hojeDiaSemana = useMemo(() => new Date().getDay(), []);
+
+  const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
+  const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
+  const regras = useMemo(
+    () => calcularRegrasAgendamentoCarrinho(regrasBase, carrinho),
+    [regrasBase, carrinho]
+  );
+
+  const dataMinimaStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const necessitaConfirmacaoDisponibilidade = useMemo(() => {
+    if (!dataEntrega) return false;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const partes = dataEntrega.split("-").map(Number);
+    if (partes.length !== 3) return false;
+    const dataEscolhida = new Date(partes[0], partes[1] - 1, partes[2], 0, 0, 0, 0);
+    const diffTime = dataEscolhida.getTime() - hoje.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const antecedenciaMinima = regras.antecedenciaMinimaDias || 0;
+    return diffDays < antecedenciaMinima;
+  }, [dataEntrega, regras]);
+
+  // Identificação Dinâmica do Modelo de Negócio
+  const produtosProntaEntrega = useMemo(() => produtos.filter((p) => p.availability_type === "pronta_entrega"), [produtos]);
+  const produtosEncomenda = useMemo(() => produtos.filter((p) => p.availability_type !== "pronta_entrega"), [produtos]);
+
+  const modeloNegocio = useMemo<"pronta_entrega" | "encomendas" | "hibrido">(() => {
+    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length === 0) return "pronta_entrega";
+    if (produtosProntaEntrega.length === 0 && produtosEncomenda.length > 0) return "encomendas";
+    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length > 0) return "hibrido";
+    return "encomendas";
+  }, [produtosProntaEntrega, produtosEncomenda]);
+
+  // Cor de destaque da confeitaria
+  const corTemaDestaque = useMemo(() => {
+    return lojaInfo?.theme_color || lojaInfo?.themeColor || lojaInfo?.cor_destaque || lojaInfo?.corTema || "#8E7CC3";
+  }, [lojaInfo]);
+
+  // Imagem de capa / banner da confeitaria
+  const bannerUrlCapa = useMemo(() => {
+    return lojaInfo?.banner_url || lojaInfo?.store_banner_url || lojaInfo?.bannerUrl || "";
+  }, [lojaInfo]);
+
+  // Categorias Únicas
+  const categorias = useMemo(() => {
+    let base = produtos;
+    if (modeloNegocio === "pronta_entrega" || (modeloNegocio === "hibrido" && tabModoHibrido === "pronta_entrega")) {
+      base = produtosProntaEntrega;
+    } else if (modeloNegocio === "encomendas" || (modeloNegocio === "hibrido" && tabModoHibrido === "encomenda")) {
+      base = produtosEncomenda;
+    }
+    const cats = Array.from(new Set(base.map((p) => p.categoria))).filter(Boolean);
+    return ["todas", ...cats];
+  }, [produtos, modeloNegocio, tabModoHibrido, produtosProntaEntrega, produtosEncomenda]);
+
+  // Produtos Filtrados Dinamicamente
+  const produtosFiltrados = useMemo(() => {
+    let baseList = produtos;
+
+    if (modeloNegocio === "pronta_entrega") {
+      baseList = produtosProntaEntrega;
+      if (diaSemanaSelecionado !== "todos") {
+        baseList = baseList.filter(
+          (p) =>
+            !p.available_days ||
+            p.available_days.length === 0 ||
+            p.available_days.includes(diaSemanaSelecionado)
+        );
+      }
+    } else if (modeloNegocio === "encomendas") {
+      baseList = produtosEncomenda;
+    } else {
+      // Híbrido
+      if (tabModoHibrido === "pronta_entrega") {
+        baseList = produtosProntaEntrega;
+        if (diaSemanaSelecionado !== "todos") {
+          baseList = baseList.filter(
+            (p) =>
+              !p.available_days ||
+              p.available_days.length === 0 ||
+              p.available_days.includes(diaSemanaSelecionado)
+          );
         }
-      } catch (e) {
-        console.warn("Aviso ao consultar CEP:", e);
-      } finally {
-        setBuscandoCep(false);
+      } else if (tabModoHibrido === "encomenda") {
+        baseList = produtosEncomenda;
+      } else {
+        baseList = produtos;
       }
     }
-  };
+
+    if (categoriaAtiva !== "todas") {
+      baseList = baseList.filter((p) => p.categoria === categoriaAtiva);
+    }
+
+    return baseList;
+  }, [produtos, modeloNegocio, produtosProntaEntrega, produtosEncomenda, diaSemanaSelecionado, tabModoHibrido, categoriaAtiva]);
+
+  const totalCarrinho = useMemo(() => {
+    return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
+  }, [carrinho]);
+
+  // Cálculo Dinâmico do Frete do Pedido
+  const freteCalculado = useMemo(() => {
+    return calcularFretePedido(
+      freteConfig,
+      totalCarrinho,
+      regiaoEntregaId,
+      tipoEntrega
+    );
+  }, [freteConfig, totalCarrinho, regiaoEntregaId, tipoEntrega]);
+
+  // Valor Total do Pedido (Produtos + Frete)
+  const totalComFrete = useMemo(() => {
+    return totalCarrinho + (tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0);
+  }, [totalCarrinho, tipoEntrega, freteCalculado]);
+
+  const feeResult = useMemo(() => {
+    return calculateDynamicTotal(
+      totalComFrete,
+      parcelasSelecionadas,
+      metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
+    );
+  }, [totalComFrete, parcelasSelecionadas, metodoPagamento, stripeConfig]);
+
+  const installmentOptions = useMemo(() => {
+    return getInstallmentOptions(
+      totalComFrete,
+      stripeConfig.repassarTaxaStripe
+    );
+  }, [totalComFrete, stripeConfig]);
+
+  const totalItensCarrinho = useMemo(() => {
+    return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
+  }, [carrinho]);
 
   const enderecoEntrega = useMemo(() => {
     const partes = [];
@@ -417,15 +568,11 @@ export function CardapioLojaView() {
     return partes.join(", ");
   }, [endLogradouro, endNumero, endBairro, endCep, endPontoRef]);
 
-  const [observacoes, setObservacoes] = useState("");
-  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
-  const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
-  const [processandoPagamento, setProcessandoPagamento] = useState(false);
+  // ==========================================
+  // EFEITOS (useEffect)
+  // ==========================================
 
-  // Configurações de Frete & Entrega
-  const [freteConfig, setFreteConfig] = useState<ConfiguracaoFrete>(() => obterConfiguracaoFrete(code));
-  const [regiaoEntregaId, setRegiaoEntregaId] = useState<string>("");
-
+  // Efeito de Configurações de Frete
   useEffect(() => {
     const carregada = obterConfiguracaoFrete(code);
     setFreteConfig(carregada);
@@ -465,16 +612,6 @@ export function CardapioLojaView() {
       window.removeEventListener("freteConfigUpdated", handleFreteUpdate);
     };
   }, [code]);
-
-  // Dados da Loja
-  const [lojaInfo, setLojaInfo] = useState<LojaInfoState | null>(null);
-
-  // Dados de Conclusão do Pix
-  const [pixCopiaCola, setPixCopiaCola] = useState("");
-  const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
-  const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
-  const [mpPaymentId, setMpPaymentId] = useState<string | number | null>(null);
-  const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
 
   // 1. Carregamento de Dados da Confeitaria e Produtos em Cascata (Supabase + LocalStorage Fallback)
   useEffect(() => {
@@ -713,7 +850,6 @@ export function CardapioLojaView() {
     }
   }, [lojaInfo]);
 
-  const stripeConfig = useMemo(() => obterConfiguracoesStripeLoja(code), [code]);
   // =========================================================================
   // POLLING EM TEMPO REAL DO STATUS DO PAGAMENTO PIX NO MERCADO PAGO (3 em 3 segundos)
   // =========================================================================
@@ -816,61 +952,7 @@ export function CardapioLojaView() {
     };
   }, [sucessoModalOpen, mpPaymentId, pagamentoAprovadoMp, lojaInfo, code, ultimoPedidoId, pedidoCriadoId, totalComFrete]);
 
-  const regrasBase = useMemo(() => obterRegrasAgendamento(code), [code]);
-  const regras = useMemo(
-    () => calcularRegrasAgendamentoCarrinho(regrasBase, carrinho),
-    [regrasBase, carrinho]
-  );
-
-  // Calculo da data minima de seleção no calendario (apenas hoje em diante, sem bloqueio por antecedencia)
-  const dataMinimaStr = useMemo(() => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }, []);
-
-  const handleDataEntregaChange = (val: string) => {
-    setDataEntrega(val);
-  };
-
-  // Checagem dinêmica se a data escolhida e inferior ao prazo de antecedencia exigido pelos produtos
-  const necessitaConfirmacaoDisponibilidade = useMemo(() => {
-    if (!dataEntrega) return false;
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const partes = dataEntrega.split("-").map(Number);
-    if (partes.length !== 3) return false;
-    const dataEscolhida = new Date(partes[0], partes[1] - 1, partes[2], 0, 0, 0, 0);
-    const diffTime = dataEscolhida.getTime() - hoje.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    const antecedenciaMinima = regras.antecedenciaMinimaDias || 0;
-    return diffDays < antecedenciaMinima;
-  }, [dataEntrega, regras]);
-
-  const handleHorarioEntregaChange = (val: string) => {
-    setHorarioEntrega(val);
-    const horRes = validarHorarioEntrega(val, regras);
-    if (!horRes.valido) {
-      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
-    }
-  };
-
-  const DIAS_SEMANA_KANBAN = [
-    { dia: 1, label: "Seg", nome: "Segunda" },
-    { dia: 2, label: "Ter", nome: "Terça" },
-    { dia: 3, label: "Qua", nome: "Quarta" },
-    { dia: 4, label: "Qui", nome: "Quinta" },
-    { dia: 5, label: "Sex", nome: "Sexta" },
-    { dia: 6, label: "Sáb", nome: "Sábado" },
-    { dia: 0, label: "Dom", nome: "Domingo" },
-  ];
-
-  const hojeDiaSemana = useMemo(() => new Date().getDay(), []);
-  const [diaSemanaSelecionado, setDiaSemanaSelecionado] = useState<number | "todos">(() => new Date().getDay());
-  const [tabModoHibrido, setTabModoHibrido] = useState<"todos" | "pronta_entrega" | "encomenda">("todos");
-
+  // Inicialização de data mínima e histórico do cliente
   useEffect(() => {
     // Data mínima inicial: amanhã por padrão
     const amanha = new Date();
@@ -919,82 +1001,46 @@ export function CardapioLojaView() {
     }
   }, [cartOpen]);
 
-  // Identificação Dinâmica do Modelo de Negócio
-  const produtosProntaEntrega = useMemo(() => produtos.filter((p) => p.availability_type === "pronta_entrega"), [produtos]);
-  const produtosEncomenda = useMemo(() => produtos.filter((p) => p.availability_type !== "pronta_entrega"), [produtos]);
-
-  const modeloNegocio = useMemo<"pronta_entrega" | "encomendas" | "hibrido">(() => {
-    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length === 0) return "pronta_entrega";
-    if (produtosProntaEntrega.length === 0 && produtosEncomenda.length > 0) return "encomendas";
-    if (produtosProntaEntrega.length > 0 && produtosEncomenda.length > 0) return "hibrido";
-    return "encomendas";
-  }, [produtosProntaEntrega, produtosEncomenda]);
-
-  // Cor de destaque da confeitaria
-  const corTemaDestaque = useMemo(() => {
-    return lojaInfo?.theme_color || lojaInfo?.themeColor || lojaInfo?.cor_destaque || lojaInfo?.corTema || "#8E7CC3";
-  }, [lojaInfo]);
-
-  // Imagem de capa / banner da confeitaria
-  const bannerUrlCapa = useMemo(() => {
-    return lojaInfo?.banner_url || lojaInfo?.store_banner_url || lojaInfo?.bannerUrl || "";
-  }, [lojaInfo]);
-
-  // Categorias Únicas
-  const categorias = useMemo(() => {
-    let base = produtos;
-    if (modeloNegocio === "pronta_entrega" || (modeloNegocio === "hibrido" && tabModoHibrido === "pronta_entrega")) {
-      base = produtosProntaEntrega;
-    } else if (modeloNegocio === "encomendas" || (modeloNegocio === "hibrido" && tabModoHibrido === "encomenda")) {
-      base = produtosEncomenda;
-    }
-    const cats = Array.from(new Set(base.map((p) => p.categoria))).filter(Boolean);
-    return ["todas", ...cats];
-  }, [produtos, modeloNegocio, tabModoHibrido, produtosProntaEntrega, produtosEncomenda]);
-
-  // Produtos Filtrados Dinamicamente
-  const produtosFiltrados = useMemo(() => {
-    let baseList = produtos;
-
-    if (modeloNegocio === "pronta_entrega") {
-      baseList = produtosProntaEntrega;
-      if (diaSemanaSelecionado !== "todos") {
-        baseList = baseList.filter(
-          (p) =>
-            !p.available_days ||
-            p.available_days.length === 0 ||
-            p.available_days.includes(diaSemanaSelecionado)
-        );
-      }
-    } else if (modeloNegocio === "encomendas") {
-      baseList = produtosEncomenda;
-    } else {
-      // Híbrido
-      if (tabModoHibrido === "pronta_entrega") {
-        baseList = produtosProntaEntrega;
-        if (diaSemanaSelecionado !== "todos") {
-          baseList = baseList.filter(
-            (p) =>
-              !p.available_days ||
-              p.available_days.length === 0 ||
-              p.available_days.includes(diaSemanaSelecionado)
-          );
+  // ==========================================
+  // FUNÇÕES DE MANIPULAÇÃO (HANDLERS)
+  // ==========================================
+  const handleBuscarCep = async (cepInput: string) => {
+    setEndCep(cepInput);
+    const limpo = cepInput.replace(/\D/g, "");
+    if (limpo.length === 8) {
+      setBuscandoCep(true);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.erro) {
+            if (data.logradouro) setEndLogradouro(data.logradouro);
+            if (data.bairro) setEndBairro(data.bairro);
+            toast.success(`Endereço localizado: ${data.bairro}${data.localidade ? ` - ${data.localidade}/${data.uf}` : ""}`);
+          } else {
+            toast.error("CEP não localizado. Preencha o bairro e a rua manualmente.");
+          }
         }
-      } else if (tabModoHibrido === "encomenda") {
-        baseList = produtosEncomenda;
-      } else {
-        baseList = produtos;
+      } catch (e) {
+        console.warn("Aviso ao consultar CEP:", e);
+      } finally {
+        setBuscandoCep(false);
       }
     }
+  };
 
-    if (categoriaAtiva !== "todas") {
-      baseList = baseList.filter((p) => p.categoria === categoriaAtiva);
+  const handleDataEntregaChange = (val: string) => {
+    setDataEntrega(val);
+  };
+
+  const handleHorarioEntregaChange = (val: string) => {
+    setHorarioEntrega(val);
+    const horRes = validarHorarioEntrega(val, regras);
+    if (!horRes.valido) {
+      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
     }
+  };
 
-    return baseList;
-  }, [produtos, modeloNegocio, produtosProntaEntrega, produtosEncomenda, diaSemanaSelecionado, tabModoHibrido, categoriaAtiva]);
-
-  // Adicionar ao Carrinho
   const handleAdicionarAoCarrinho = (prod: ProdutoCardapio) => {
     setCarrinho((prev) => {
       const idx = prev.findIndex((item) => item.produto.id === prod.id);
@@ -1021,44 +1067,6 @@ export function CardapioLojaView() {
         .filter(Boolean) as ItemCarrinho[];
     });
   };
-
-  const totalCarrinho = useMemo(() => {
-    return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
-  }, [carrinho]);
-
-  // Cálculo Dinâmico do Frete do Pedido
-  const freteCalculado = useMemo(() => {
-    return calcularFretePedido(
-      freteConfig,
-      totalCarrinho,
-      regiaoEntregaId,
-      tipoEntrega
-    );
-  }, [freteConfig, totalCarrinho, regiaoEntregaId, tipoEntrega]);
-
-  // Valor Total do Pedido (Produtos + Frete)
-  const totalComFrete = useMemo(() => {
-    return totalCarrinho + (tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0);
-  }, [totalCarrinho, tipoEntrega, freteCalculado]);
-
-  const feeResult = useMemo(() => {
-    return calculateDynamicTotal(
-      totalComFrete,
-      parcelasSelecionadas,
-      metodoPagamento === "cartao" && stripeConfig.repassarTaxaStripe
-    );
-  }, [totalComFrete, parcelasSelecionadas, metodoPagamento, stripeConfig]);
-
-  const installmentOptions = useMemo(() => {
-    return getInstallmentOptions(
-      totalComFrete,
-      stripeConfig.repassarTaxaStripe
-    );
-  }, [totalComFrete, stripeConfig]);
-
-  const totalItensCarrinho = useMemo(() => {
-    return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
-  }, [carrinho]);
 
   // 1. Gravação Automática na Base de Dados e Abertura do Modal de Confirmação & Pagamento
   const handleConfirmarPedido = async (e?: React.FormEvent) => {
