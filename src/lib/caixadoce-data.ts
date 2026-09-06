@@ -1407,6 +1407,85 @@ export interface DadosLojaPix {
   cidadeLoja?: string;
 }
 
+export type MetodoPagamentoNormalizado = "credit_card" | "pix" | "manual";
+
+/**
+ * Identifica e normaliza o método de pagamento de uma encomenda ou string
+ */
+export function identificarMetodoPagamento(
+  encomendaOuMetodo?: any,
+  origem?: string
+): MetodoPagamentoNormalizado {
+  if (!encomendaOuMetodo) return "pix";
+
+  let metodoStr = "";
+  let origemStr = origem || "";
+
+  if (typeof encomendaOuMetodo === "string") {
+    metodoStr = encomendaOuMetodo;
+  } else if (typeof encomendaOuMetodo === "object") {
+    metodoStr =
+      encomendaOuMetodo.metodo_pagamento ||
+      encomendaOuMetodo.metodoPagamento ||
+      encomendaOuMetodo.forma_pagamento ||
+      encomendaOuMetodo.formaPagamento ||
+      "";
+    origemStr =
+      encomendaOuMetodo.origem_pagamento ||
+      encomendaOuMetodo.origemPagamento ||
+      encomendaOuMetodo.origem ||
+      origemStr ||
+      "";
+  }
+
+  const m = metodoStr.toLowerCase().trim();
+  const o = origemStr.toLowerCase().trim();
+
+  // 1. Cartão de Crédito
+  if (
+    m === "credit_card" ||
+    m === "creditcard" ||
+    m.includes("cartao") ||
+    m.includes("cartão") ||
+    m.includes("credito") ||
+    m.includes("crédito")
+  ) {
+    return "credit_card";
+  }
+
+  // 2. Pix
+  if (
+    m === "pix" ||
+    m === "pix_mp" ||
+    m === "pix_manual" ||
+    m.includes("pix") ||
+    m === "mercado pago" ||
+    (o === "mercadopago" && !m.includes("manual") && !m.includes("dinheiro") && !m.includes("combinar"))
+  ) {
+    return "pix";
+  }
+
+  // 3. Manual / A combinar / Dinheiro / Balcão / Outros
+  if (
+    m === "manual" ||
+    m === "a combinar" ||
+    m === "a_combinar" ||
+    m.includes("combinar") ||
+    m.includes("dinheiro") ||
+    m.includes("balcao") ||
+    m.includes("balcão") ||
+    m.includes("entrega")
+  ) {
+    return "manual";
+  }
+
+  if (m === "pendente" || m === "não informado" || m === "nao informado") {
+    return "manual";
+  }
+
+  return "pix";
+}
+
 /**
  * Gera mensagem formatada e elegante com o resumo do pedido para enviar ao cliente no WhatsApp
  */
@@ -1442,13 +1521,20 @@ export function gerarMensagemResumoWhatsApp(
     topoVelaTexto += `\n🕯️ *Vela:* ${encomenda.detalhesVela || "Sim"}`;
   }
 
-  // Exibe a Chave Pix limpa, o favorecido e o valor devido na mensagem do WhatsApp
-  let blocoPix = "";
-  const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
+  // Bloco dinâmico de pagamento conforme o método da encomenda
+  const tipoMetodo = identificarMetodoPagamento(encomenda);
+  let blocoPagamento = "";
 
-  if (chavePix && chavePix.trim().length > 0 && valorParaPix > 0) {
+  if (tipoMetodo === "credit_card") {
+    blocoPagamento = `\n\n💳 *PAGAMENTO VIA CARTÃO DE CRÉDITO (Aprovado via Mercado Pago)*`;
+  } else if (tipoMetodo === "pix") {
+    const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (encomenda.valorTotal > 0 ? encomenda.valorTotal : 0);
     const blocoFavorecido = favorecido ? `\n👤 *Favorecido:* ${favorecido}` : "";
-    blocoPix = `\n\n💳 *Forma de Pagamento:* PIX\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}${blocoFavorecido}\n🔑 *Chave Pix:* ${chavePix}`;
+    const blocoChave = chavePix && chavePix.trim().length > 0 ? `\n🔑 *Chave Pix:* ${chavePix}` : "";
+    blocoPagamento = `\n\n💠 *PAGAMENTO VIA PIX*\n💰 *Valor Devido:* ${formatarMoeda(valorParaPix)}${blocoFavorecido}${blocoChave}`;
+  } else {
+    // manual / a combinar
+    blocoPagamento = `\n\n💵 *PAGAMENTO A COMBINAR (Cobrar do cliente no momento da entrega)*`;
   }
 
   return `✨ *Confirmação de Encomenda - ${nomeLoja}* ✨
@@ -1463,7 +1549,7 @@ ${itensTexto}${topoVelaTexto}
 ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : ""}
 💰 *Valor Total:* ${valorTotal}
 💳 *Total Pago:* ${sinalPago}
-💵 *Saldo Restante:* ${saldoRestante}${blocoPix}
+💵 *Saldo Restante:* ${saldoRestante}${blocoPagamento}
 
 Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
 }

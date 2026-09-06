@@ -97,6 +97,7 @@ import {
   formatarMoeda,
   formatarWhatsappLink,
   gerarMensagemResumoWhatsApp,
+  identificarMetodoPagamento,
   generatePixPayload,
   type ContaPix,
   aplicarMascaraTelefone,
@@ -170,47 +171,51 @@ function renderizarBadgePagamento(ord: Encomenda) {
     statusPag === "paid";
 
   const isPagoIntegral = isStatusPago || (totalPago >= ord.valorTotal && ord.valorTotal > 0);
-
-  const isMercadoPago =
-    ord.metodoPagamento === "Mercado Pago" ||
-    (ord as any).metodo_pagamento === "Mercado Pago" ||
-    (ord as any).origem_pagamento === "mercadopago" ||
-    (ord as any).forma_pagamento === "Mercado Pago" ||
-    ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
-
-  if (isPagoIntegral && isMercadoPago) {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
-        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <span>Pago (Mercado Pago)</span>
-      </Badge>
-    );
-  }
+  const tipoMetodo = identificarMetodoPagamento(ord);
 
   if (isPagoIntegral) {
+    if (tipoMetodo === "credit_card") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
+          <CreditCard className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>Pago (Cartão)</span>
+        </Badge>
+      );
+    }
+    if (tipoMetodo === "pix") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>Pago (Pix)</span>
+        </Badge>
+      );
+    }
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
-        <Check className="w-3 h-3 text-emerald-600" />
-        <span>Pago (100%)</span>
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:bg-emerald-500/25">
+        <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+        <span>Pago (Manual)</span>
       </Badge>
     );
   }
 
   if (totalPago > 0) {
     const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+    const labelMetodo = tipoMetodo === "credit_card" ? "Cartão" : tipoMetodo === "pix" ? "Pix" : "Manual";
     return (
       <div className="space-y-0.5">
         <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-          Pago: {formatarMoeda(totalPago)}
+          Pago ({labelMetodo}): {formatarMoeda(totalPago)}
         </Badge>
         <p className="text-[10px] text-rose-600 font-bold">Falta: {formatarMoeda(saldoRestante)}</p>
       </div>
     );
   }
 
+  const labelPendente = tipoMetodo === "credit_card" ? "Pendente (Cartão)" : tipoMetodo === "pix" ? "Pendente (Pix)" : "Pendente (Manual)";
+
   return (
     <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[10px]">
-      Pendente (0%)
+      {labelPendente}
     </Badge>
   );
 }
@@ -226,43 +231,47 @@ function renderizarBadgePagamentoMobile(ord: Encomenda) {
     statusPag === "paid";
 
   const isPagoIntegral = isStatusPago || (totalPago >= ord.valorTotal && ord.valorTotal > 0);
-
-  const isMercadoPago =
-    ord.metodoPagamento === "Mercado Pago" ||
-    (ord as any).metodo_pagamento === "Mercado Pago" ||
-    (ord as any).origem_pagamento === "mercadopago" ||
-    (ord as any).forma_pagamento === "Mercado Pago" ||
-    ord.historicoPagamentos?.some((p) => p.observacao?.toLowerCase().includes("mercado pago"));
-
-  if (isPagoIntegral && isMercadoPago) {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
-        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-        <span>Pago (Mercado Pago)</span>
-      </Badge>
-    );
-  }
+  const tipoMetodo = identificarMetodoPagamento(ord);
 
   if (isPagoIntegral) {
+    if (tipoMetodo === "credit_card") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+          <CreditCard className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+          <span>Pago (Cartão)</span>
+        </Badge>
+      );
+    }
+    if (tipoMetodo === "pix") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+          <span>Pago (Pix)</span>
+        </Badge>
+      );
+    }
     return (
       <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
         <Check className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-        <span>Pago (100%)</span>
+        <span>Pago (Manual)</span>
       </Badge>
     );
   }
 
   if (totalPago > 0) {
+    const labelMetodo = tipoMetodo === "credit_card" ? "Cartão" : tipoMetodo === "pix" ? "Pix" : "Manual";
     return (
       <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold">
-        Pago: {formatarMoeda(totalPago)}
+        Pago ({labelMetodo}): {formatarMoeda(totalPago)}
       </Badge>
     );
   }
 
+  const labelPendente = tipoMetodo === "credit_card" ? "Pendente (Cartão)" : tipoMetodo === "pix" ? "Pendente (Pix)" : "Pendente (Manual)";
+
   return (
     <Badge variant="outline" className="text-rose-600 border-rose-500/30 text-[9px] px-1.5 py-0 mt-0.5">
-      Pendente (0%)
+      {labelPendente}
     </Badge>
   );
 }
@@ -314,28 +323,36 @@ function verificarUrgenciaEntrega(dataEntrega?: string, status?: string): "hoje"
 }
 
 function obterMetodoPagamentoFormatado(ord: Encomenda): string {
-  const metodo = ord.metodoPagamento || ord.metodo_pagamento || (ord as any).forma_pagamento;
-  const origem = ord.origem_pagamento || (ord as any).origem;
+  const tipo = identificarMetodoPagamento(ord);
+  const metodoRaw = ord.metodoPagamento || ord.metodo_pagamento || (ord as any).forma_pagamento || "";
 
-  if (origem === "mercadopago" || metodo === "Mercado Pago" || metodo === "pix_mp") {
-    return "Pix Automático";
+  if (tipo === "credit_card") {
+    if (metodoRaw && (metodoRaw.toLowerCase().includes("cartão") || metodoRaw.toLowerCase().includes("cartao"))) {
+      return metodoRaw;
+    }
+    return "Cartão de Crédito";
   }
-  if (metodo?.toLowerCase().includes("manual") || metodo === "pix_manual") {
-    return "Pix Manual";
-  }
-  if (metodo?.toLowerCase() === "pix") {
+
+  if (tipo === "pix") {
+    const origem = ord.origem_pagamento || (ord as any).origem;
+    if (origem === "mercadopago" || metodoRaw === "Mercado Pago" || metodoRaw === "pix_mp") {
+      return "Pix Automático";
+    }
+    if (metodoRaw?.toLowerCase().includes("manual") || metodoRaw === "pix_manual") {
+      return "Pix Manual";
+    }
     return "Pix";
   }
-  if (metodo?.toLowerCase().includes("cartao") || metodo?.toLowerCase().includes("cartão")) {
-    return "Cartão";
-  }
-  if (metodo?.toLowerCase().includes("dinheiro")) {
+
+  if (metodoRaw?.toLowerCase().includes("dinheiro")) {
     return "Dinheiro";
   }
-  if (metodo) {
-    return metodo;
+
+  if (metodoRaw) {
+    return metodoRaw;
   }
-  return "Não informado";
+
+  return "A combinar";
 }
 
 function formatarDataHoraCriacao(dateStr?: string): string {
@@ -1038,7 +1055,7 @@ export function OrdersView({
     const saldoRestanteNum = Math.max(0, ord.valorTotal - totalPago);
     const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (ord.valorTotal > 0 ? ord.valorTotal : 0);
 
-    // 1. Gera mensagem com a chave Pix, favorecido e valor devido
+    // 1. Gera mensagem com a formatação dinâmica conforme o método da encomenda
     const mensagem = gerarMensagemResumoWhatsApp(ord, {
       nomeLoja,
       chavePix,
@@ -1046,9 +1063,11 @@ export function OrdersView({
       cidadeLoja,
     });
 
-    // 2. Copia automaticamente a string bruta do Pix Copia e Cola EMVCo para a área de transferência
+    const tipoMetodo = identificarMetodoPagamento(ord);
+
+    // 2. Copia automaticamente a string bruta do Pix Copia e Cola EMVCo para a área de transferência APENAS SE FOR PIX
     let pixCopiadoComSucesso = false;
-    if (chavePix && valorParaPix > 0) {
+    if (tipoMetodo === "pix" && chavePix && valorParaPix > 0) {
       try {
         const pixPayload = generatePixPayload({
           pixKey: chavePix,

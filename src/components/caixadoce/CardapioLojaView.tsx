@@ -74,7 +74,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, type ProdutoCardapio, type ProdutoOpcao } from "@/lib/caixadoce-data";
+import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
@@ -2375,12 +2375,24 @@ export function CardapioLojaView() {
       ? (freteCalculado.isGratis ? "Grátis (Cortesia/Promoção)" : formatarMoeda(freteCalculado.valorFrete))
       : "R$ 0,00 (Retirada no Local)";
 
-    let blocoPixInfo = "";
-    if (lojaInfo?.chavePix && totalComFrete > 0) {
-      blocoPixInfo = `\n\n💳 *PAGAMENTO VIA PIX*\n💰 *Valor Total do Pedido:* ${formatarMoeda(totalComFrete)}\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
-      if (pixCopiaCola) {
-        blocoPixInfo += `\n📋 *Pix Copia e Cola:*\n${pixCopiaCola}`;
+    // Bloco dinâmico de pagamento conforme o método utilizado no checkout
+    const metodoUsado = metodoPagamentoFinal || metodoPagamento;
+    const tipoMetodo = identificarMetodoPagamento(metodoUsado);
+    let blocoPagamentoInfo = "";
+
+    if (tipoMetodo === "credit_card") {
+      blocoPagamentoInfo = `\n\n💳 *PAGAMENTO VIA CARTÃO DE CRÉDITO (Aprovado via Mercado Pago)*`;
+    } else if (tipoMetodo === "pix") {
+      let detalhePix = "";
+      if (lojaInfo?.chavePix) {
+        detalhePix += `\n🔑 *Chave Pix:* ${lojaInfo.chavePix}`;
       }
+      if (pixCopiaCola) {
+        detalhePix += `\n📋 *Pix Copia e Cola:*\n${pixCopiaCola}`;
+      }
+      blocoPagamentoInfo = `\n\n💠 *PAGAMENTO VIA PIX*\n💰 *Valor Total do Pedido:* ${formatarMoeda(totalComFrete)}${detalhePix}`;
+    } else {
+      blocoPagamentoInfo = `\n\n💵 *PAGAMENTO A COMBINAR (Cobrar do cliente no momento da entrega)*`;
     }
 
     const blocoAvisoData = necessitaConfirmacaoDisponibilidade
@@ -2402,7 +2414,7 @@ ${resumoItens}
 
 📦 *Subtotal dos Itens:* ${formatarMoeda(totalCarrinho)}
 🚚 *Taxa de Entrega:* ${taxaTexto}
-💰 *Total com Entrega:* ${formatarMoeda(totalComFrete)}${blocoPixInfo}
+💰 *Total com Entrega:* ${formatarMoeda(totalComFrete)}${blocoPagamentoInfo}
 
 Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito obrigado(a)!`;
 
