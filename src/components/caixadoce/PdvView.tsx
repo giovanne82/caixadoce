@@ -973,6 +973,194 @@ export function PdvView() {
     setVendaConcluidaModalOpen(true);
   };
 
+  // ==========================================
+  // FINALIZAÇÃO E GRAVAÇÃO DA VENDA NO BANCO
+  // ==========================================
+  const handleFinalizarVendaPdv = async () => {
+    if (totalVenda <= 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+
+    if (totalPagoAcumulado < totalVenda) {
+      toast.error(
+        `Faltam ${formatarMoeda(saldoRestante)} para cobrir o total da venda de ${formatarMoeda(totalVenda)}.`
+      );
+      return;
+    }
+
+    if (tipoVenda === "agendada" && !clienteNome.trim()) {
+      toast.error("Para encomendas agendadas, informe o nome do cliente.");
+      return;
+    }
+
+    setSalvandoVenda(true);
+    try {
+      const pedidoId = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const hojeStr = nowIso.split("T")[0];
+
+      // Formatação do resumo de itens
+      const resumoItensTexto = pdvCart
+        .map((it) => {
+          if (it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0) {
+            const opcsStr = it.opcoesSelecionadas
+              .map((o) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+              .join(", ");
+            return `• ${it.quantidade}x ${it.produto.nome} (${opcsStr})`;
+          }
+          if (it.opcaoSelecionada) {
+            return `• ${it.quantidade}x ${it.produto.nome} (${it.opcaoSelecionada.nome})`;
+          }
+          return `• ${it.quantidade}x ${it.produto.nome}`;
+        })
+        .join("\n");
+
+      // Detalhamento JSON dos itens
+      const itensDetalhesJson = pdvCart.map((it) => ({
+        id: it.produto.id,
+        nome: it.produto.nome,
+        categoria: it.produto.categoria,
+        quantidade: it.quantidade,
+        precoUnitario: it.precoUnitario || it.produto.preco,
+        subtotal: it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0
+          ? it.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1) * (it.produto.preco + (Number(o.preco_adicional) || 0)), 0)
+          : (it.precoUnitario || it.produto.preco) * it.quantidade,
+        opcaoNome: it.opcaoSelecionada?.nome,
+        opcoes_selecionadas: it.opcoesSelecionadas || (it.opcaoSelecionada ? [it.opcaoSelecionada] : []),
+      }));
+
+      // Síntese dos métodos de pagamento utilizados
+      const metodosUnicos = Array.from(
+        new Set(
+          partesPagamento.map((p) => {
+            if (p.metodo === "dinheiro") return "Dinheiro";
+            if (p.metodo === "pix") return "Pix";
+            if (p.metodo === "cartao_credito") return "Cartão Crédito";
+            if (p.metodo === "cartao_debito") return "Cartão Débito";
+            return "Outro";
+          })
+        )
+      );
+      const metodoPagamentoSintese =
+        metodosUnicos.length > 1
+          ? `Pagamento Misto (${metodosUnicos.join(" + ")})`
+          : metodosUnicos[0] || "Dinheiro";
+
+      const historicoPagamentosJson = partesPagamento.map((p) => ({
+        id: p.id,
+        data: hojeStr,
+        valor: p.valor,
+        metodo: p.metodo,
+        valor_recebido: p.valorRecebido,
+        troco: p.troco,
+        observacao: p.observacao || `Pagamento PDV (${p.metodo})`,
+      }));
+
+      const isVendaBalcaoImediata = tipoVenda === "balcao";
+      const statusFinalPedido = isVendaBalcaoImediata ? "entregue" : "pendente";
+      const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
+
+      // 1. Gravação em 'encomendas'
+      const payloadEncomenda: Record<string, any> = {
+        id: pedidoId,
+        estabelecimento_codigo: activeCode,
+        user_id: finUserId,
+        cliente_nome: clienteNome.trim() || "Cliente Balcão",
+        cliente_whatsapp: clienteWhatsapp.trim() || "",
+        data_entrega: isVendaBalcaoImediata ? hojeStr : dataEntrega,
+        horario_entrega: isVendaBalcaoImediata ? new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : horarioEntrega,
+        tipo_entrega: isVendaBalcaoImediata ? "balcao" : tipoEntregaAgendada,
+        endereco_entrega: isVendaBalcaoImediata ? "" : enderecoEntrega,
+        status: statusFinalPedido,
+        status_pagamento: "pago_integral",
+        metodo_pagamento: metodoPagamentoSintese,
+        forma_pagamento: "PDV / Balcão",
+        origem_pagamento: "pdv",
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: totalVenda,
+        total_amount: totalVenda,
+        valor_entrada: totalVenda,
+        valor_restante: 0,
+        historico_pagamentos: historicoPagamentosJson,
+        observacoes: observacoesVenda ? `[PDV] ${observacoesVenda}` : "[PDV Balcão]",
+      };
+
+      const { error: errInsert } = await supabase.from("encomendas").insert([payloadEncomenda]);
+      if (errInsert) {
+        console.warn("[PDV Insert Warning] Falhou com payload completo, tentando minimal:", errInsert.message);
+        const { itens_detalhes: _id, ...payloadMin } = payloadEncomenda;
+        await supabase.from("encomendas").insert([payloadMin]);
+      }
+
+      // 2. Se venda imediata, registra receita no módulo financeiro (transacoes_financeiras)
+      if (isVendaBalcaoImediata) {
+        try {
+          const payloadFin: any = {
+            estabelecimento_codigo: activeCode,
+            user_id: finUserId,
+            descricao: `Venda PDV #${pedidoId.slice(0, 8)} (${clienteNome.trim() || "Cliente Balcão"})`,
+            categoria: "venda_balcao",
+            tipo: "receita",
+            valor: totalVenda,
+            metodo_pagamento: metodoPagamentoSintese,
+            status: "concluida",
+            cliente_ou_fornecedor: `PDV-${pedidoId}`,
+            data: hojeStr,
+            origem: "PDV",
+          };
+
+          const { error: errFin } = await supabase.from("transacoes_financeiras").insert([payloadFin]);
+          if (errFin) {
+            console.warn("[PDV Financeiro Insert Fallback]", errFin.message);
+            const payloadFinMin = {
+              estabelecimento_codigo: activeCode,
+              user_id: finUserId,
+              descricao: payloadFin.descricao,
+              categoria: "venda_balcao",
+              tipo: "receita",
+              valor: totalVenda,
+              status: "concluida",
+              data: hojeStr,
+            };
+            await supabase.from("transacoes_financeiras").insert([payloadFinMin]);
+          }
+        } catch (eFin) {
+          console.warn("[PDV Financeiro Insert Warning]", eFin);
+        }
+      }
+
+      // 3. Monta o recibo da venda e abre o modal de sucesso
+      setReciboUltimaVenda({
+        id: pedidoId,
+        data: new Date().toLocaleString("pt-BR"),
+        clienteNome: clienteNome || "Cliente Balcão",
+        itens: pdvCart,
+        total: totalVenda,
+        partes: partesPagamento,
+        tipoVenda,
+        statusFinalPedido,
+      });
+
+      setCheckoutModalOpen(false);
+      setVendaConcluidaModalOpen(true);
+      setPdvCart([]);
+      setPartesPagamento([]);
+      toast.success(
+        isVendaBalcaoImediata
+          ? "🎉 Venda concluída e registrada com sucesso no caixa!"
+          : "🎉 Encomenda agendada com sucesso!"
+      );
+      await carregarDadosCaixaETurnos();
+    } catch (err: any) {
+      console.error("[PDV Finalizar Erro]", err);
+      toast.error(`Falha ao registrar venda: ${err?.message || err}`);
+    } finally {
+      setSalvandoVenda(false);
+    }
+  };
+
   const handleNovaVenda = () => {
     setVendaConcluidaModalOpen(false);
     setReciboUltimaVenda(null);
