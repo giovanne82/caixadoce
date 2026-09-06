@@ -1797,6 +1797,25 @@ export function OrdersView({
                               <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
                             </span>
                           )}
+                          <div className="mt-1 space-y-0.5 max-w-xs">
+                            {ord.itensDetalhes && ord.itensDetalhes.length > 0 ? (
+                              ord.itensDetalhes.map((it: any, idx: number) => {
+                                const opcaoNome = it.opcaoNome || it.opcao_selecionada?.nome;
+                                return (
+                                  <div key={idx} className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-1">
+                                    <span className="font-medium text-foreground">{it.quantidade}x {it.nome}</span>
+                                    {opcaoNome && (
+                                      <span className="inline-flex items-center text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
+                                        Sabor: {opcaoNome}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-[11px] text-muted-foreground line-clamp-1">{ord.itens}</div>
+                            )}
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-xs">
@@ -2010,6 +2029,34 @@ export function OrdersView({
                         )}
                         <div className="pt-0.5">{renderizarBadgePagamentoMobile(ord)}</div>
                       </div>
+                    </div>
+
+                    {/* ITENS DO PEDIDO COM OPÇÕES NO CARD MOBILE */}
+                    <div className="space-y-1 bg-background/60 p-2.5 rounded-xl border border-border/60 text-xs">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                        <Cake className="w-3 h-3 text-purple-600" /> Itens a Produzir:
+                      </span>
+                      {ord.itensDetalhes && ord.itensDetalhes.length > 0 ? (
+                        <div className="space-y-1 pt-0.5">
+                          {ord.itensDetalhes.map((it: any, idx: number) => {
+                            const opcaoNome = it.opcaoNome || it.opcao_selecionada?.nome;
+                            return (
+                              <div key={idx} className="text-xs">
+                                <span className="font-bold text-foreground">{it.quantidade}x {it.nome}</span>
+                                {opcaoNome && (
+                                  <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
+                                    <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                      Opção / Sabor: {opcaoNome}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-foreground/90 font-medium">{ord.itens}</p>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
@@ -2610,8 +2657,28 @@ export function OrdersView({
                           )}
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-background/60 text-xs space-y-1 border border-border/40">
-                          <p className="font-medium text-foreground">{ord.itens}</p>
+                        <div className="p-2.5 rounded-lg bg-background/60 text-xs space-y-1.5 border border-border/40">
+                          {ord.itensDetalhes && ord.itensDetalhes.length > 0 ? (
+                            <div className="space-y-1">
+                              {ord.itensDetalhes.map((it: any, idx: number) => {
+                                const opcaoNome = it.opcaoNome || it.opcao_selecionada?.nome;
+                                return (
+                                  <div key={idx} className="text-xs">
+                                    <span className="font-semibold text-foreground">{it.quantidade}x {it.nome}</span>
+                                    {opcaoNome && (
+                                      <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
+                                        <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                          Opção / Sabor: {opcaoNome}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="font-medium text-foreground">{ord.itens}</p>
+                          )}
                           {ord.observacoes && (
                             <p className="text-[11px] text-muted-foreground italic">Obs: {ord.observacoes}</p>
                           )}
@@ -3828,17 +3895,31 @@ export function OrdersView({
                   <Cake className="w-4 h-4 text-purple-600" /> Itens Pedidos pelo Cliente
                 </h4>
                 {encomendaDetalhes.itensDetalhes && encomendaDetalhes.itensDetalhes.length > 0 ? (
-                  <div className="p-3 rounded-xl border border-border bg-card space-y-1.5">
-                    {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-border/50">
-                        <span className="font-semibold text-foreground">
-                          {it.quantidade}x {it.nome}
-                        </span>
-                        <span className="font-mono font-bold text-muted-foreground">
-                          {formatarMoeda((it.preco || it.valorUnitario || 0) * (it.quantidade || 1))}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="p-3 rounded-xl border border-border bg-card space-y-2">
+                    {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => {
+                      const opcaoNome = it.opcaoNome || it.opcao_selecionada?.nome;
+                      const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
+                      const qtd = it.quantidade || 1;
+                      return (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs py-1.5 border-b last:border-b-0 border-border/50 gap-1">
+                          <div>
+                            <span className="font-semibold text-foreground">
+                              {qtd}x {it.nome}
+                            </span>
+                            {opcaoNome && (
+                              <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
+                                <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                  Opção / Sabor: {opcaoNome}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <span className="font-mono font-bold text-muted-foreground self-end sm:self-auto">
+                            {formatarMoeda(precoUnit * qtd)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground font-medium">

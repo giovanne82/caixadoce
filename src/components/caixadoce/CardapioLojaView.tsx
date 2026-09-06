@@ -1152,15 +1152,18 @@ export function CardapioLojaView() {
   const handleAbrirModalProduto = (prod: ProdutoCardapio) => {
     setProdutoModal(prod);
     setQuantidadeModal(1);
-    if (prod.opcoes && prod.opcoes.length > 0) {
-      setOpcaoSelecionadaModal(prod.opcoes[0]);
-    } else {
-      setOpcaoSelecionadaModal(null);
-    }
+    // Trava de Validação: inicializa sem opção selecionada se houver opções cadastradas
+    setOpcaoSelecionadaModal(null);
   };
 
   const handleConfirmarAdicionarCarrinho = () => {
     if (!produtoModal) return;
+
+    if (produtoModal.opcoes && produtoModal.opcoes.length > 0 && !opcaoSelecionadaModal) {
+      toast.error("Por favor, selecione uma opção antes de adicionar ao pedido.");
+      return;
+    }
+
     const unitPrice = produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0);
 
     setCarrinho((prev) => {
@@ -1178,7 +1181,13 @@ export function CardapioLojaView() {
         {
           produto: produtoModal,
           quantidade: quantidadeModal,
-          opcaoSelecionada: opcaoSelecionadaModal || undefined,
+          opcaoSelecionada: opcaoSelecionadaModal
+            ? {
+                id: opcaoSelecionadaModal.id,
+                nome: opcaoSelecionadaModal.nome,
+                preco_adicional: Number(opcaoSelecionadaModal.preco_adicional) || 0,
+              }
+            : undefined,
           precoUnitario: unitPrice,
         },
       ];
@@ -3144,14 +3153,26 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   Cancelar
                 </Button>
 
-                <Button
-                  type="button"
-                  onClick={handleConfirmarAdicionarCarrinho}
-                  style={{ backgroundColor: corTemaDestaque }}
-                  className="w-2/3 text-white font-extrabold text-xs h-10 rounded-xl shadow-md hover:opacity-90 transition-opacity"
-                >
-                  Adicionar ao Pedido
-                </Button>
+                {(() => {
+                  const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
+                  const precisaSelecionarOpcao = temOpcoes && !opcaoSelecionadaModal;
+
+                  return (
+                    <Button
+                      type="button"
+                      disabled={precisaSelecionarOpcao}
+                      onClick={handleConfirmarAdicionarCarrinho}
+                      style={!precisaSelecionarOpcao ? { backgroundColor: corTemaDestaque } : {}}
+                      className={`w-2/3 font-extrabold text-xs h-10 rounded-xl shadow-md transition-all ${
+                        precisaSelecionarOpcao
+                          ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60 border border-border"
+                          : "text-white hover:opacity-90"
+                      }`}
+                    >
+                      {precisaSelecionarOpcao ? "Selecione uma Opção" : "Adicionar ao Pedido"}
+                    </Button>
+                  );
+                })()}
               </div>
             </>
           )}
