@@ -703,6 +703,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           margemLucroPercentual: p.margem_lucro ? Number(p.margem_lucro) : undefined,
           prazoEntregaIndependente: p.prazo_entrega,
           itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
+          opcoes: Array.isArray(p.opcoes)
+            ? p.opcoes
+            : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
         }));
       }
 
@@ -938,6 +941,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         descricao: novo.descricao || "",
         foto_url: novo.fotoUrl || "",
         ativo: novo.ativo !== false,
+        opcoes: novo.opcoes || [],
       },
     ]);
 
@@ -960,6 +964,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.descricao !== undefined) payload.descricao = dados.descricao;
     if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
     if (dados.ativo !== undefined) payload.ativo = dados.ativo;
+    if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
 
     const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
     if (error) {

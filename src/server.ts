@@ -292,6 +292,7 @@ async function seedClientesLojaTableInSupabase() {
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS slug TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_estabelecimentos_slug ON public.estabelecimentos(slug);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_loja_code_tel ON public.clientes_loja (estabelecimento_codigo, telefone);
+      ALTER TABLE public.produtos ADD COLUMN IF NOT EXISTS opcoes JSONB DEFAULT '[]'::jsonb;
     `;
 
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {

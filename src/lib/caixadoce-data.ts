@@ -181,6 +181,12 @@ export interface KitProduto {
   createdAt?: string;
 }
 
+export interface ProdutoOpcao {
+  id: string;
+  nome: string;
+  preco_adicional: number;
+}
+
 export interface ProdutoCardapio {
   id: string;
   estabelecimentoCodigo: string;
@@ -201,6 +207,7 @@ export interface ProdutoCardapio {
   margemLucroPercentual?: number;
   prazoEntregaIndependente?: string;
   itensKit?: KitItemComponente[];
+  opcoes?: ProdutoOpcao[];
 }
 
 
@@ -1088,6 +1095,11 @@ export interface ItemPedidoEncomenda {
   nome: string;
   quantidade: number;
   precoUnitario?: number;
+  subtotal?: number;
+  opcao_selecionada?: ProdutoOpcao;
+  opcaoNome?: string;
+  opcaoPrecoAdicional?: number;
+  categoria?: string;
 }
 
 export interface InsumoNecessarioPedido {

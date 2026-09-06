@@ -66,6 +66,7 @@ import {
   converterMoedaInputParaNumero,
   type ProdutoCardapio,
   type KitProduto,
+  type ProdutoOpcao,
 } from "@/lib/caixadoce-data";
 import { PALETAS_CORES_TEMA, type PaletaCorTema } from "@/lib/cardapio-helpers";
 import { toast } from "sonner";
@@ -260,6 +261,11 @@ export function ProductsView({
   const [destaque, setDestaque] = useState(false);
   const [ativo, setAtivo] = useState(true);
 
+  // Opções de Escolha do Produto (Sabores, Tamanhos, etc.)
+  const [opcoes, setOpcoes] = useState<ProdutoOpcao[]>([]);
+  const [nomeNovaOpcao, setNomeNovaOpcao] = useState("");
+  const [precoAdicionalNovaOpcao, setPrecoAdicionalNovaOpcao] = useState("");
+
   // Disponibilidade e Agendamento por Produto
   const [availabilityType, setAvailabilityType] = useState<"pronta_entrega" | "encomenda">("encomenda");
   const [availableDays, setAvailableDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
@@ -329,6 +335,28 @@ export function ProductsView({
     setModalNovaCatOpen(false);
   };
 
+  const handleAdicionarOpcao = () => {
+    const nomeLimpo = nomeNovaOpcao.trim();
+    if (!nomeLimpo) {
+      toast.error("Informe o nome da opção (ex: Morango, 1kg, etc).");
+      return;
+    }
+    const precoNum = converterMoedaInputParaNumero(precoAdicionalNovaOpcao);
+    const nova: ProdutoOpcao = {
+      id: crypto.randomUUID(),
+      nome: nomeLimpo,
+      preco_adicional: precoNum >= 0 ? precoNum : 0,
+    };
+    setOpcoes((prev) => [...prev, nova]);
+    setNomeNovaOpcao("");
+    setPrecoAdicionalNovaOpcao("");
+    toast.success(`Opção "${nomeLimpo}" adicionada!`);
+  };
+
+  const handleRemoverOpcao = (idOpcao: string) => {
+    setOpcoes((prev) => prev.filter((o) => o.id !== idOpcao));
+  };
+
   const handleAbrirCriacao = () => {
     setEditingId(null);
     setNome("");
@@ -338,6 +366,9 @@ export function ProductsView({
     setFotoUrl("");
     setDestaque(false);
     setAtivo(true);
+    setOpcoes([]);
+    setNomeNovaOpcao("");
+    setPrecoAdicionalNovaOpcao("");
     setAvailabilityType("encomenda");
     setAvailableDays([1, 2, 3, 4, 5, 6]);
     setMinLeadTimeDays(1);
@@ -353,6 +384,9 @@ export function ProductsView({
     setFotoUrl(prod.fotoUrl);
     setDestaque(!!prod.destaque);
     setAtivo(prod.ativo !== false);
+    setOpcoes(prod.opcoes && Array.isArray(prod.opcoes) ? prod.opcoes : []);
+    setNomeNovaOpcao("");
+    setPrecoAdicionalNovaOpcao("");
     setAvailabilityType(prod.availability_type || "encomenda");
     setAvailableDays(prod.available_days || [1, 2, 3, 4, 5, 6]);
     setMinLeadTimeDays(prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1));
@@ -386,6 +420,7 @@ export function ProductsView({
         availability_type: availabilityType,
         available_days: availableDays,
         min_lead_time_days: minLeadTimeDays,
+        opcoes,
       };
 
       if (editingId) {
@@ -847,6 +882,121 @@ export function ProductsView({
                 onChange={(e) => setDescricao(e.target.value)}
                 className="text-xs"
               />
+            </div>
+
+            {/* SEÇÃO: OPÇÕES DE ESCOLHA (EX: SABORES, TAMANHOS) */}
+            <div className="space-y-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <UtensilsCrossed className="w-4 h-4 text-purple-600" />
+                    Opções de Escolha (Ex: Sabores, Tamanhos)
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Permita que o cliente escolha o sabor ou tamanho no cardápio público.
+                  </p>
+                </div>
+                {opcoes.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                    {opcoes.length} {opcoes.length === 1 ? "opção" : "opções"}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Inputs para adicionar nova opção */}
+              <div className="p-3 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                  <div className="sm:col-span-6 space-y-1">
+                    <Label htmlFor="nome-opcao" className="text-[11px] font-semibold text-foreground">
+                      Nome da Opção / Sabor *
+                    </Label>
+                    <Input
+                      id="nome-opcao"
+                      placeholder="Ex: Ninho com Morango"
+                      value={nomeNovaOpcao}
+                      onChange={(e) => setNomeNovaOpcao(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAdicionarOpcao();
+                        }
+                      }}
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-4 space-y-1">
+                    <Label htmlFor="preco-opcao" className="text-[11px] font-semibold text-foreground">
+                      Preço Adicional (Opcional)
+                    </Label>
+                    <Input
+                      id="preco-opcao"
+                      placeholder="R$ 0,00"
+                      value={precoAdicionalNovaOpcao}
+                      onChange={(e) => setPrecoAdicionalNovaOpcao(aplicarMascaraMoedaInput(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAdicionarOpcao();
+                        }
+                      }}
+                      className="h-8 text-xs font-mono bg-background"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAdicionarOpcao}
+                      className="w-full h-8 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1 shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Adicionar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Listagem das opções já adicionadas */}
+                {opcoes.length > 0 ? (
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Opções Ativas para este Produto:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {opcoes.map((opc) => (
+                        <div
+                          key={opc.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-background border border-border shadow-2xs text-xs"
+                        >
+                          <div className="truncate flex-1 mr-2">
+                            <span className="font-bold text-foreground truncate block">{opc.nome}</span>
+                            {opc.preco_adicional > 0 ? (
+                              <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                                + {formatarMoeda(opc.preco_adicional)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">Sem custo adicional</span>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverOpcao(opc.id)}
+                            className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground text-center py-1">
+                    Nenhuma opção adicionada. O produto será vendido em versão única.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* SEÇÃO: DISPONIBILIDADE E AGENDAMENTO */}

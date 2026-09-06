@@ -74,7 +74,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, type ProdutoCardapio } from "@/lib/caixadoce-data";
+import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, type ProdutoCardapio, type ProdutoOpcao } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
@@ -103,6 +103,8 @@ import { toast } from "sonner";
 export interface ItemCarrinho {
   produto: ProdutoCardapio;
   quantidade: number;
+  opcaoSelecionada?: ProdutoOpcao;
+  precoUnitario?: number;
 }
 
 export interface SocialLinksProps {
@@ -348,6 +350,11 @@ export function CardapioLojaView() {
   const [cartOpen, setCartOpen] = useState(false);
   const [pedidoConcluido, setPedidoConcluido] = useState(false);
 
+  // Modal de Detalhes / Opções do Produto para o Cliente
+  const [produtoModal, setProdutoModal] = useState<ProdutoCardapio | null>(null);
+  const [opcaoSelecionadaModal, setOpcaoSelecionadaModal] = useState<ProdutoOpcao | null>(null);
+  const [quantidadeModal, setQuantidadeModal] = useState<number>(1);
+
   // Modais de Resumo e Sucesso do Pedido
   const [resumoModalOpen, setResumoModalOpen] = useState(false);
   const [sucessoModalOpen, setSucessoModalOpen] = useState(false);
@@ -529,7 +536,10 @@ export function CardapioLojaView() {
   }, [produtos, modeloNegocio, produtosProntaEntrega, produtosEncomenda, diaSemanaSelecionado, tabModoHibrido, categoriaAtiva]);
 
   const totalCarrinho = useMemo(() => {
-    return carrinho.reduce((acc, item) => acc + item.produto.preco * item.quantidade, 0);
+    return carrinho.reduce((acc, item) => {
+      const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+      return acc + unitPrice * item.quantidade;
+    }, 0);
   }, [carrinho]);
 
   // Cálculo Dinâmico do Frete do Pedido
@@ -816,6 +826,9 @@ export function CardapioLojaView() {
             margemLucroPercentual: p.margem_lucro ? Number(p.margem_lucro) : undefined,
             prazoEntregaIndependente: p.prazo_entrega,
             itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
+            opcoes: Array.isArray(p.opcoes)
+              ? p.opcoes
+              : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
           }));
 
           const ativos = mapeados.filter((p) => p.ativo !== false);
@@ -1101,24 +1114,72 @@ export function CardapioLojaView() {
     }
   };
 
-  const handleAdicionarAoCarrinho = (prod: ProdutoCardapio) => {
+  const handleAbrirModalProduto = (prod: ProdutoCardapio) => {
+    setProdutoModal(prod);
+    setQuantidadeModal(1);
+    if (prod.opcoes && prod.opcoes.length > 0) {
+      setOpcaoSelecionadaModal(prod.opcoes[0]);
+    } else {
+      setOpcaoSelecionadaModal(null);
+    }
+  };
+
+  const handleConfirmarAdicionarCarrinho = () => {
+    if (!produtoModal) return;
+    const unitPrice = produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0);
+
     setCarrinho((prev) => {
-      const idx = prev.findIndex((item) => item.produto.id === prod.id);
+      const idx = prev.findIndex(
+        (item) => item.produto.id === produtoModal.id && item.opcaoSelecionada?.id === opcaoSelecionadaModal?.id
+      );
+      if (idx >= 0) {
+        const novo = [...prev];
+        novo[idx].quantidade += quantidadeModal;
+        novo[idx].precoUnitario = unitPrice;
+        return novo;
+      }
+      return [
+        ...prev,
+        {
+          produto: produtoModal,
+          quantidade: quantidadeModal,
+          opcaoSelecionada: opcaoSelecionadaModal || undefined,
+          precoUnitario: unitPrice,
+        },
+      ];
+    });
+
+    toast.success(
+      opcaoSelecionadaModal
+        ? `${produtoModal.nome} (${opcaoSelecionadaModal.nome}) adicionado ao pedido!`
+        : `${produtoModal.nome} adicionado ao pedido!`
+    );
+    setProdutoModal(null);
+  };
+
+  const handleAdicionarAoCarrinho = (prod: ProdutoCardapio) => {
+    if (prod.opcoes && prod.opcoes.length > 0) {
+      handleAbrirModalProduto(prod);
+      return;
+    }
+
+    setCarrinho((prev) => {
+      const idx = prev.findIndex((item) => item.produto.id === prod.id && !item.opcaoSelecionada);
       if (idx >= 0) {
         const novo = [...prev];
         novo[idx].quantidade += 1;
         return novo;
       }
-      return [...prev, { produto: prod, quantidade: 1 }];
+      return [...prev, { produto: prod, quantidade: 1, precoUnitario: prod.preco }];
     });
     toast.success(`${prod.nome} adicionado ao pedido!`);
   };
 
-  const handleAlterarQuantidade = (prodId: string, delta: number) => {
+  const handleAlterarQuantidade = (prodId: string, opcaoId: string | undefined, delta: number) => {
     setCarrinho((prev) => {
       return prev
         .map((item) => {
-          if (item.produto.id === prodId) {
+          if (item.produto.id === prodId && item.opcaoSelecionada?.id === opcaoId) {
             const novaQtd = item.quantidade + delta;
             return novaQtd > 0 ? { ...item, quantidade: novaQtd } : null;
           }
@@ -1160,16 +1221,27 @@ export function CardapioLojaView() {
       setUltimoPedidoId(pedidoId);
       setPedidoCriadoId(pedidoId);
       const resumoItensTexto = carrinho
-        .map((item) => `${item.quantidade}x ${item.produto.nome} (${formatarMoeda(item.produto.preco * item.quantidade)})`)
+        .map((item) => {
+          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+          return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
+        })
         .join(", ");
 
-      const itensDetalhesJson = carrinho.map((item) => ({
-        id: item.produto.id,
-        nome: item.produto.nome,
-        quantidade: item.quantidade,
-        precoUnitario: item.produto.preco,
-        subtotal: item.produto.preco * item.quantidade,
-      }));
+      const itensDetalhesJson = carrinho.map((item) => {
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+        return {
+          id: item.produto.id,
+          nome: item.produto.nome,
+          quantidade: item.quantidade,
+          precoUnitario: unitPrice,
+          subtotal: unitPrice * item.quantidade,
+          opcao_selecionada: item.opcaoSelecionada || null,
+          opcaoNome: item.opcaoSelecionada?.nome || null,
+          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
+          categoria: item.produto.categoria,
+        };
+      });
 
       const valTotalCarrinho = Math.max(0, Number(totalComFrete) || 0);
 
@@ -2041,7 +2113,8 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               return (
                 <Card
                   key={prod.id}
-                  className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group rounded-2xl sm:rounded-3xl"
+                  onClick={() => handleAbrirModalProduto(prod)}
+                  className="overflow-hidden border-border/80 hover:border-primary/50 transition-all hover:shadow-lg flex flex-col justify-between bg-card group rounded-2xl sm:rounded-3xl cursor-pointer"
                 >
                   <div>
                     <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
@@ -2077,6 +2150,14 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       <CardDescription className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-3 mt-0.5 sm:mt-1.5">
                         {prod.descricao}
                       </CardDescription>
+
+                      {prod.opcoes && prod.opcoes.length > 0 && (
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                            ✨ {prod.opcoes.length} opções disponíveis
+                          </span>
+                        </div>
+                      )}
                     </CardHeader>
                   </div>
 
@@ -2093,11 +2174,14 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
                     <Button
                       size="sm"
-                      onClick={() => handleAdicionarAoCarrinho(prod)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAbrirModalProduto(prod);
+                      }}
                       style={{ backgroundColor: corTemaDestaque }}
                       className="font-bold text-[11px] sm:text-xs text-white shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center hover:opacity-90 transition-opacity"
                     >
-                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Pedir
+                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> {prod.opcoes && prod.opcoes.length > 0 ? "Escolher" : "Pedir"}
                     </Button>
                   </CardFooter>
                 </Card>
@@ -2185,43 +2269,52 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               <div className="mt-4 space-y-4">
                 {/* Lista de Itens */}
                 <div className="space-y-2 max-h-48 overflow-y-auto p-1">
-                  {carrinho.map((item) => (
-                    <div
-                      key={item.produto.id}
-                      className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="truncate flex-1">
-                        <p className="font-bold text-foreground truncate">{item.produto.nome}</p>
-                        <p className="text-[11px] font-mono text-muted-foreground">
-                          {formatarMoeda(item.produto.preco)} cada
-                        </p>
-                      </div>
+                  {carrinho.map((item) => {
+                    const itemKey = `${item.produto.id}_${item.opcaoSelecionada?.id || "default"}`;
+                    const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+                    return (
+                      <div
+                        key={itemKey}
+                        className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="truncate flex-1">
+                          <p className="font-bold text-foreground truncate">{item.produto.nome}</p>
+                          {item.opcaoSelecionada && (
+                            <p className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold truncate">
+                              Opção: {item.opcaoSelecionada.nome}
+                            </p>
+                          )}
+                          <p className="text-[11px] font-mono text-muted-foreground">
+                            {formatarMoeda(unitPrice)} cada
+                          </p>
+                        </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleAlterarQuantidade(item.produto.id, -1)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="font-mono font-bold px-1">{item.quantidade}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleAlterarQuantidade(item.produto.id, 1)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAlterarQuantidade(item.produto.id, item.opcaoSelecionada?.id, -1)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <span className="font-mono font-bold px-1">{item.quantidade}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAlterarQuantidade(item.produto.id, item.opcaoSelecionada?.id, 1)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
 
-                      <span className="font-black font-mono text-xs text-foreground shrink-0 min-w-[60px] text-right">
-                        {formatarMoeda(item.produto.preco * item.quantidade)}
-                      </span>
-                    </div>
-                  ))}
+                        <span className="font-black font-mono text-xs text-foreground shrink-0 min-w-[60px] text-right">
+                          {formatarMoeda(unitPrice * item.quantidade)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* BANNER PROMOCIONAL DE FRETE GRÁTIS */}
@@ -2867,6 +2960,166 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               Concluir e Limpar Carrinho
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE SELEÇÃO DE OPÇÕES E PERSONALIZAÇÃO DO PRODUTO */}
+      <Dialog open={!!produtoModal} onOpenChange={(open) => !open && setProdutoModal(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
+          {produtoModal && (
+            <>
+              <DialogHeader className="border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-black/70 text-white text-[10px] font-bold px-2 py-0.5">
+                    {produtoModal.categoria}
+                  </Badge>
+                  {produtoModal.destaque && (
+                    <Badge className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 flex items-center gap-0.5">
+                      <Sparkles className="w-3 h-3" /> Destaque
+                    </Badge>
+                  )}
+                </div>
+                <DialogTitle className="text-lg font-black text-foreground pt-1">
+                  {produtoModal.nome}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {produtoModal.descricao || "Escolha suas opções favoritas para este item."}
+                </DialogDescription>
+              </DialogHeader>
+
+              {produtoModal.fotoUrl && (
+                <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-muted">
+                  <img
+                    src={produtoModal.fotoUrl}
+                    alt={produtoModal.nome}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs">
+                    Base: {formatarMoeda(produtoModal.preco)}
+                  </div>
+                </div>
+              )}
+
+              {/* SEÇÃO DE OPÇÕES / SABORES / VARIAÇÕES */}
+              {produtoModal.opcoes && produtoModal.opcoes.length > 0 ? (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-black text-foreground uppercase tracking-wider">
+                      Escolha sua Opção *
+                    </Label>
+                    <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">
+                      1 obrigatório
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {produtoModal.opcoes.map((opc) => {
+                      const isSelected = opcaoSelecionadaModal?.id === opc.id;
+                      return (
+                        <div
+                          key={opc.id}
+                          onClick={() => setOpcaoSelecionadaModal(opc)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                            isSelected
+                              ? "bg-purple-500/10 border-purple-500 shadow-xs"
+                              : "bg-muted/30 border-border hover:border-purple-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                isSelected
+                                  ? "border-purple-600 bg-purple-600"
+                                  : "border-muted-foreground/50"
+                              }`}
+                            >
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <span className="text-xs font-bold text-foreground">
+                              {opc.nome}
+                            </span>
+                          </div>
+
+                          {opc.preco_adicional > 0 ? (
+                            <Badge className="bg-purple-600 text-white text-[10px] font-mono font-bold px-2 py-0.5">
+                              + {formatarMoeda(opc.preco_adicional)}
+                            </Badge>
+                          ) : (
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              Incluso
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* CONTROLES DE QUANTIDADE E SUBTOTAL */}
+              <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex items-center justify-between gap-3 pt-2">
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground">Quantidade</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuantidadeModal((q) => Math.max(1, q - 1))}
+                      className="h-7 w-7 p-0 rounded-lg"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="font-mono font-black text-sm px-1.5">
+                      {quantidadeModal}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuantidadeModal((q) => q + 1)}
+                      className="h-7 w-7 p-0 rounded-lg"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-[11px] font-medium text-muted-foreground">Total deste item</p>
+                  <p
+                    style={{ color: corTemaDestaque }}
+                    className="text-base sm:text-lg font-black font-mono"
+                  >
+                    {formatarMoeda(
+                      (produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0)) * quantidadeModal
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* BOTÕES DE AÇÃO */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setProdutoModal(null)}
+                  className="w-1/3 text-xs font-bold h-10 rounded-xl"
+                >
+                  Cancelar
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleConfirmarAdicionarCarrinho}
+                  style={{ backgroundColor: corTemaDestaque }}
+                  className="w-2/3 text-white font-extrabold text-xs h-10 rounded-xl shadow-md hover:opacity-90 transition-opacity"
+                >
+                  Adicionar ao Pedido
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
