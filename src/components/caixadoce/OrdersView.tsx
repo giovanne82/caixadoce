@@ -1801,16 +1801,19 @@ export function OrdersView({
                             {ord.itensDetalhes && ord.itensDetalhes.length > 0 ? (
                               ord.itensDetalhes.map((it: any, idx: number) => {
                                 const opcaoNome =
-                                  it.opcaoNome ||
                                   (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
-                                    ? it.opcoes_selecionadas.map((o: any) => o.nome).join(", ")
-                                    : it.opcao_selecionada?.nome);
+                                    ? it.opcoes_selecionadas
+                                        .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                                        .join(", ")
+                                    : null) ||
+                                  it.opcaoNome ||
+                                  it.opcao_selecionada?.nome;
                                 return (
                                   <div key={idx} className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-1">
                                     <span className="font-medium text-foreground">{it.quantidade}x {it.nome}</span>
                                     {opcaoNome && (
                                       <span className="inline-flex items-center text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
-                                        Opção: {opcaoNome}
+                                        Sabores: {opcaoNome}
                                       </span>
                                     )}
                                   </div>
@@ -2044,17 +2047,20 @@ export function OrdersView({
                         <div className="space-y-1 pt-0.5">
                           {ord.itensDetalhes.map((it: any, idx: number) => {
                             const opcaoNome =
-                              it.opcaoNome ||
                               (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
-                                ? it.opcoes_selecionadas.map((o: any) => o.nome).join(", ")
-                                : it.opcao_selecionada?.nome);
+                                ? it.opcoes_selecionadas
+                                    .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                                    .join(", ")
+                                : null) ||
+                              it.opcaoNome ||
+                              it.opcao_selecionada?.nome;
                             return (
                               <div key={idx} className="text-xs">
                                 <span className="font-bold text-foreground">{it.quantidade}x {it.nome}</span>
                                 {opcaoNome && (
                                   <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
                                     <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                      Opção / Sabor: {opcaoNome}
+                                      Sabores: {opcaoNome}
                                     </span>
                                   </div>
                                 )}
@@ -3906,10 +3912,13 @@ export function OrdersView({
                   <div className="p-3 rounded-xl border border-border bg-card space-y-2">
                     {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => {
                       const opcaoNome =
-                        it.opcaoNome ||
                         (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
-                          ? it.opcoes_selecionadas.map((o: any) => o.nome).join(", ")
-                          : it.opcao_selecionada?.nome);
+                          ? it.opcoes_selecionadas
+                              .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                              .join(", ")
+                          : null) ||
+                        it.opcaoNome ||
+                        it.opcao_selecionada?.nome;
                       const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
                       const qtd = it.quantidade || 1;
                       return (
@@ -3921,7 +3930,7 @@ export function OrdersView({
                             {opcaoNome && (
                               <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
                                 <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                  Opção / Sabor: {opcaoNome}
+                                  Sabores: {opcaoNome}
                                 </span>
                               </div>
                             )}

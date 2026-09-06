@@ -107,11 +107,18 @@ import { toast } from "sonner";
 // 1. INTERFACES & TIPAGENS DO CARDÁPIO
 // ==========================================
 
+export interface ProdutoOpcaoSelecionada {
+  id?: string;
+  nome: string;
+  preco_adicional: number;
+  quantidade?: number;
+}
+
 export interface ItemCarrinho {
   produto: ProdutoCardapio;
   quantidade: number;
   opcaoSelecionada?: ProdutoOpcao;
-  opcoesSelecionadas?: ProdutoOpcao[];
+  opcoesSelecionadas?: ProdutoOpcaoSelecionada[];
   precoUnitario?: number;
 }
 
@@ -362,7 +369,7 @@ export function CardapioLojaView() {
   // Modal de Detalhes / Opções do Produto para o Cliente
   const [produtoModal, setProdutoModal] = useState<ProdutoCardapio | null>(null);
   const [opcaoSelecionadaModal, setOpcaoSelecionadaModal] = useState<ProdutoOpcao | null>(null);
-  const [opcoesSelecionadasModal, setOpcoesSelecionadasModal] = useState<ProdutoOpcao[]>([]);
+  const [quantidadesOpcoesModal, setQuantidadesOpcoesModal] = useState<Record<string, number>>({});
   const [quantidadeModal, setQuantidadeModal] = useState<number>(1);
 
   // Modais de Resumo e Sucesso do Pedido
@@ -546,12 +553,31 @@ export function CardapioLojaView() {
     return baseList;
   }, [produtos, modeloNegocio, produtosProntaEntrega, produtosEncomenda, diaSemanaSelecionado, tabModoHibrido, categoriaAtiva]);
 
+  const totalPrecoMultiOpcoes = useMemo(() => {
+    if (!produtoModal || !produtoModal.opcoes) return 0;
+    return produtoModal.opcoes.reduce((acc, opc) => {
+      const qtd = quantidadesOpcoesModal[opc.id] || 0;
+      if (qtd <= 0) return acc;
+      const precoUnitarioOpcao = produtoModal.preco + (Number(opc.preco_adicional) || 0);
+      return acc + qtd * precoUnitarioOpcao;
+    }, 0);
+  }, [produtoModal, quantidadesOpcoesModal]);
+
+  const totalQtdMultiOpcoes = useMemo(() => {
+    if (!produtoModal || !produtoModal.opcoes) return 0;
+    return produtoModal.opcoes.reduce((acc, opc) => acc + (quantidadesOpcoesModal[opc.id] || 0), 0);
+  }, [produtoModal, quantidadesOpcoesModal]);
+
   const totalCarrinho = useMemo(() => {
     return carrinho.reduce((acc, item) => {
-      const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-        ? item.opcoesSelecionadas.reduce((sum, o) => sum + (Number(o.preco_adicional) || 0), 0)
-        : (item.opcaoSelecionada?.preco_adicional || 0);
-      const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+      if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+        const sub = item.opcoesSelecionadas.reduce((s, o) => {
+          const qtd = o.quantidade && o.quantidade > 0 ? o.quantidade : 1;
+          return s + qtd * (item.produto.preco + (Number(o.preco_adicional) || 0));
+        }, 0);
+        return acc + sub;
+      }
+      const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
       return acc + unitPrice * item.quantidade;
     }, 0);
   }, [carrinho]);
@@ -587,7 +613,12 @@ export function CardapioLojaView() {
   }, [totalComFrete, stripeConfig]);
 
   const totalItensCarrinho = useMemo(() => {
-    return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
+    return carrinho.reduce((acc, item) => {
+      if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+        return acc + item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+      }
+      return acc + item.quantidade;
+    }, 0);
   }, [carrinho]);
 
   const enderecoEntrega = useMemo(() => {
@@ -1181,17 +1212,14 @@ export function CardapioLojaView() {
     setQuantidadeModal(1);
     // Trava de Validação: inicializa sem opção selecionada se houver opções cadastradas
     setOpcaoSelecionadaModal(null);
-    setOpcoesSelecionadasModal([]);
+    setQuantidadesOpcoesModal({});
   };
 
-  const handleToggleOpcaoMultipla = (opc: ProdutoOpcao) => {
-    setOpcoesSelecionadasModal((prev) => {
-      const exists = prev.some((o) => o.id === opc.id);
-      if (exists) {
-        return prev.filter((o) => o.id !== opc.id);
-      } else {
-        return [...prev, opc];
-      }
+  const handleAlterarQtdOpcaoModal = (opcId: string, delta: number) => {
+    setQuantidadesOpcoesModal((prev) => {
+      const atual = prev[opcId] || 0;
+      const nova = Math.max(0, atual + delta);
+      return { ...prev, [opcId]: nova };
     });
   };
 
@@ -1200,31 +1228,94 @@ export function CardapioLojaView() {
 
     const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
 
-    if (!isMulti && produtoModal.opcoes && produtoModal.opcoes.length > 0 && !opcaoSelecionadaModal) {
+    if (isMulti) {
+      const opcoesComQuantidade: ProdutoOpcaoSelecionada[] = (produtoModal.opcoes || [])
+        .map((opc) => ({
+          id: opc.id,
+          nome: opc.nome,
+          preco_adicional: Number(opc.preco_adicional) || 0,
+          quantidade: quantidadesOpcoesModal[opc.id] || 0,
+        }))
+        .filter((opc) => (opc.quantidade || 0) > 0);
+
+      if (opcoesComQuantidade.length === 0) {
+        toast.error("Por favor, selecione ao menos 1 unidade em alguma opção.");
+        return;
+      }
+
+      const totalQtd = opcoesComQuantidade.reduce((sum, o) => sum + (o.quantidade || 1), 0);
+      const subtotalItem = opcoesComQuantidade.reduce(
+        (sum, o) => sum + (o.quantidade || 1) * (produtoModal.preco + o.preco_adicional),
+        0
+      );
+
+      const configKey = opcoesComQuantidade
+        .map((o) => `${o.id}:${o.quantidade}`)
+        .sort()
+        .join("_");
+
+      setCarrinho((prev) => {
+        const idx = prev.findIndex((item) => {
+          if (item.produto.id !== produtoModal.id) return false;
+          if (!item.opcoesSelecionadas || item.opcoesSelecionadas.length === 0) return false;
+          const itemKey = item.opcoesSelecionadas
+            .map((o) => `${o.id}:${o.quantidade}`)
+            .sort()
+            .join("_");
+          return itemKey === configKey;
+        });
+
+        if (idx >= 0) {
+          const novo = [...prev];
+          const itemExistente = novo[idx];
+          const novasOpcoes = (itemExistente.opcoesSelecionadas || []).map((o) => {
+            const added = opcoesComQuantidade.find((a) => a.id === o.id);
+            return {
+              ...o,
+              quantidade: (o.quantidade || 1) + (added?.quantidade || 0),
+            };
+          });
+          const newTotalQtd = novasOpcoes.reduce((sum, o) => sum + (o.quantidade || 1), 0);
+          novo[idx] = {
+            ...itemExistente,
+            quantidade: newTotalQtd,
+            opcoesSelecionadas: novasOpcoes,
+          };
+          return novo;
+        }
+
+        return [
+          ...prev,
+          {
+            produto: produtoModal,
+            quantidade: totalQtd,
+            opcoesSelecionadas: opcoesComQuantidade,
+            precoUnitario: subtotalItem / totalQtd,
+          },
+        ];
+      });
+
+      const descOpcoes = opcoesComQuantidade
+        .map((o) => `${o.quantidade}x ${o.nome}`)
+        .join(", ");
+
+      toast.success(`${produtoModal.nome} (${descOpcoes}) adicionado ao pedido!`);
+      setProdutoModal(null);
+      return;
+    }
+
+    // Seleção única (permite_multiplas_opcoes === false)
+    if (produtoModal.opcoes && produtoModal.opcoes.length > 0 && !opcaoSelecionadaModal) {
       toast.error("Por favor, selecione uma opção antes de adicionar ao pedido.");
       return;
     }
 
-    const somaOpcoes = isMulti
-      ? opcoesSelecionadasModal.reduce((sum, o) => sum + (Number(o.preco_adicional) || 0), 0)
-      : (opcaoSelecionadaModal?.preco_adicional || 0);
-
-    const unitPrice = produtoModal.preco + somaOpcoes;
-
-    const opcoesIdsKey = isMulti
-      ? opcoesSelecionadasModal.map((o) => o.id).sort().join("_")
-      : (opcaoSelecionadaModal?.id || "default");
+    const unitPrice = produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0);
 
     setCarrinho((prev) => {
-      const idx = prev.findIndex((item) => {
-        if (item.produto.id !== produtoModal.id) return false;
-        if (isMulti) {
-          const itemKeys = (item.opcoesSelecionadas || []).map((o) => o.id).sort().join("_");
-          return itemKeys === opcoesIdsKey;
-        } else {
-          return (item.opcaoSelecionada?.id || "default") === opcoesIdsKey;
-        }
-      });
+      const idx = prev.findIndex(
+        (item) => item.produto.id === produtoModal.id && item.opcaoSelecionada?.id === opcaoSelecionadaModal?.id
+      );
 
       if (idx >= 0) {
         const novo = [...prev];
@@ -1237,32 +1328,23 @@ export function CardapioLojaView() {
         {
           produto: produtoModal,
           quantidade: quantidadeModal,
-          opcaoSelecionada: !isMulti
-            ? opcaoSelecionadaModal
-              ? {
-                  id: opcaoSelecionadaModal.id,
-                  nome: opcaoSelecionadaModal.nome,
-                  preco_adicional: Number(opcaoSelecionadaModal.preco_adicional) || 0,
-                }
-              : undefined
-            : undefined,
-          opcoesSelecionadas: isMulti
-            ? opcoesSelecionadasModal.map((o) => ({
-                id: o.id,
-                nome: o.nome,
-                preco_adicional: Number(o.preco_adicional) || 0,
-              }))
+          opcaoSelecionada: opcaoSelecionadaModal
+            ? {
+                id: opcaoSelecionadaModal.id,
+                nome: opcaoSelecionadaModal.nome,
+                preco_adicional: Number(opcaoSelecionadaModal.preco_adicional) || 0,
+              }
             : undefined,
           precoUnitario: unitPrice,
         },
       ];
     });
 
-    const descOpcoes = isMulti
-      ? (opcoesSelecionadasModal.length > 0 ? ` (${opcoesSelecionadasModal.map((o) => o.nome).join(", ")})` : "")
-      : (opcaoSelecionadaModal ? ` (${opcaoSelecionadaModal.nome})` : "");
-
-    toast.success(`${produtoModal.nome}${descOpcoes} adicionado ao pedido!`);
+    toast.success(
+      opcaoSelecionadaModal
+        ? `${produtoModal.nome} (${opcaoSelecionadaModal.nome}) adicionado ao pedido!`
+        : `${produtoModal.nome} adicionado ao pedido!`
+    );
     setProdutoModal(null);
   };
 
@@ -1293,11 +1375,32 @@ export function CardapioLojaView() {
     setCarrinho((prev) => {
       return prev
         .map((item, idx) => {
-          if (idx === index) {
-            const novaQtd = item.quantidade + delta;
-            return novaQtd > 0 ? { ...item, quantidade: novaQtd } : null;
+          if (idx !== index) return item;
+          if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+            if (delta < 0) {
+              const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+              if (totalQtd <= 1) return null;
+              const novasOpcoes = [...item.opcoesSelecionadas];
+              for (let i = novasOpcoes.length - 1; i >= 0; i--) {
+                if ((novasOpcoes[i].quantidade || 1) > 1) {
+                  novasOpcoes[i] = { ...novasOpcoes[i], quantidade: (novasOpcoes[i].quantidade || 1) - 1 };
+                  break;
+                } else if ((novasOpcoes[i].quantidade || 1) === 1 && novasOpcoes.filter((o) => (o.quantidade || 0) > 0).length > 1) {
+                  novasOpcoes.splice(i, 1);
+                  break;
+                }
+              }
+              const newTotalQtd = novasOpcoes.reduce((s, o) => s + (o.quantidade || 1), 0);
+              return { ...item, quantidade: newTotalQtd, opcoesSelecionadas: novasOpcoes };
+            } else {
+              const novasOpcoes = [...item.opcoesSelecionadas];
+              novasOpcoes[0] = { ...novasOpcoes[0], quantidade: (novasOpcoes[0].quantidade || 1) + 1 };
+              const newTotalQtd = novasOpcoes.reduce((s, o) => s + (o.quantidade || 1), 0);
+              return { ...item, quantidade: newTotalQtd, opcoesSelecionadas: novasOpcoes };
+            }
           }
-          return item;
+          const novaQtd = item.quantidade + delta;
+          return novaQtd > 0 ? { ...item, quantidade: novaQtd } : null;
         })
         .filter(Boolean) as ItemCarrinho[];
     });
@@ -1337,36 +1440,57 @@ export function CardapioLojaView() {
       setPedidoCriadoId(pedidoId);
       const resumoItensTexto = carrinho
         .map((item) => {
-          const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-            ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
-            : (item.opcaoSelecionada?.nome || "");
-          const optText = nomesOpcoes ? ` [${nomesOpcoes}]` : "";
-          const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-            ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
-            : (item.opcaoSelecionada?.preco_adicional || 0);
-          const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+          if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+            const descOpcoes = item.opcoesSelecionadas
+              .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+              .join(", ");
+            const subtotal = item.opcoesSelecionadas.reduce(
+              (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+              0
+            );
+            const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+            return `${totalQtd}x ${item.produto.nome} [${descOpcoes}] (${formatarMoeda(subtotal)})`;
+          }
+          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
           return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
         })
         .join(", ");
 
       const itensDetalhesJson = carrinho.map((item) => {
-        const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-          ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
-          : (item.opcaoSelecionada?.preco_adicional || 0);
-        const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
-        const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-          ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
-          : (item.opcaoSelecionada?.nome || null);
+        if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+          const subtotal = item.opcoesSelecionadas.reduce(
+            (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+            0
+          );
+          const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+          const descOpcoes = item.opcoesSelecionadas
+            .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+            .join(", ");
+          return {
+            id: item.produto.id,
+            nome: item.produto.nome,
+            quantidade: totalQtd,
+            precoUnitario: subtotal / (totalQtd || 1),
+            subtotal: subtotal,
+            opcao_selecionada: item.opcoesSelecionadas[0] || null,
+            opcoes_selecionadas: item.opcoesSelecionadas,
+            opcaoNome: descOpcoes,
+            opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
+            categoria: item.produto.categoria,
+          };
+        }
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
         return {
           id: item.produto.id,
           nome: item.produto.nome,
           quantidade: item.quantidade,
           precoUnitario: unitPrice,
           subtotal: unitPrice * item.quantidade,
-          opcao_selecionada: item.opcaoSelecionada || (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0 ? item.opcoesSelecionadas[0] : null),
-          opcoes_selecionadas: item.opcoesSelecionadas || (item.opcaoSelecionada ? [item.opcaoSelecionada] : []),
-          opcaoNome: nomesOpcoes,
-          opcaoPrecoAdicional: somaOpcoes,
+          opcao_selecionada: item.opcaoSelecionada || null,
+          opcoes_selecionadas: item.opcaoSelecionada ? [item.opcaoSelecionada] : [],
+          opcaoNome: item.opcaoSelecionada?.nome || null,
+          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
           categoria: item.produto.categoria,
         };
       });
@@ -2003,36 +2127,57 @@ export function CardapioLojaView() {
 
       const resumoItensTexto = carrinho
         .map((item) => {
-          const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-            ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
-            : (item.opcaoSelecionada?.nome || "");
-          const optText = nomesOpcoes ? ` [${nomesOpcoes}]` : "";
-          const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-            ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
-            : (item.opcaoSelecionada?.preco_adicional || 0);
-          const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+          if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+            const descOpcoes = item.opcoesSelecionadas
+              .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+              .join(", ");
+            const subtotal = item.opcoesSelecionadas.reduce(
+              (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+              0
+            );
+            const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+            return `${totalQtd}x ${item.produto.nome} [${descOpcoes}] (${formatarMoeda(subtotal)})`;
+          }
+          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
           return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
         })
         .join(", ");
 
       const itensDetalhesJson = carrinho.map((item) => {
-        const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-          ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
-          : (item.opcaoSelecionada?.preco_adicional || 0);
-        const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
-        const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-          ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
-          : (item.opcaoSelecionada?.nome || null);
+        if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+          const subtotal = item.opcoesSelecionadas.reduce(
+            (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+            0
+          );
+          const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+          const descOpcoes = item.opcoesSelecionadas
+            .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+            .join(", ");
+          return {
+            id: item.produto.id,
+            nome: item.produto.nome,
+            quantidade: totalQtd,
+            precoUnitario: subtotal / (totalQtd || 1),
+            subtotal: subtotal,
+            opcao_selecionada: item.opcoesSelecionadas[0] || null,
+            opcoes_selecionadas: item.opcoesSelecionadas,
+            opcaoNome: descOpcoes,
+            opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
+            categoria: item.produto.categoria,
+          };
+        }
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
         return {
           id: item.produto.id,
           nome: item.produto.nome,
           quantidade: item.quantidade,
           precoUnitario: unitPrice,
           subtotal: unitPrice * item.quantidade,
-          opcao_selecionada: item.opcaoSelecionada || (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0 ? item.opcoesSelecionadas[0] : null),
-          opcoes_selecionadas: item.opcoesSelecionadas || (item.opcaoSelecionada ? [item.opcaoSelecionada] : []),
-          opcaoNome: nomesOpcoes,
-          opcaoPrecoAdicional: somaOpcoes,
+          opcao_selecionada: item.opcaoSelecionada || null,
+          opcoes_selecionadas: item.opcaoSelecionada ? [item.opcaoSelecionada] : [],
+          opcaoNome: item.opcaoSelecionada?.nome || null,
+          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
           categoria: item.produto.categoria,
         };
       });
@@ -2782,13 +2927,19 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 {/* Lista de Itens */}
                 <div className="space-y-2 max-h-48 overflow-y-auto p-1">
                   {carrinho.map((item, idx) => {
-                    const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-                      ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+                    const isMulti = Boolean(item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0);
+                    const nomesOpcoes = isMulti
+                      ? item.opcoesSelecionadas?.map((o) => `${o.quantidade || 1}x ${o.nome}`).join(", ")
                       : item.opcaoSelecionada?.nome;
-                    const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-                      ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
-                      : (item.opcaoSelecionada?.preco_adicional || 0);
-                    const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+                    const subtotalItem = isMulti
+                      ? item.opcoesSelecionadas!.reduce(
+                          (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+                          0
+                        )
+                      : (item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0))) * item.quantidade;
+                    const totalQtdItem = isMulti
+                      ? item.opcoesSelecionadas!.reduce((s, o) => s + (o.quantidade || 1), 0)
+                      : item.quantidade;
                     const itemKey = `${item.produto.id}_${idx}`;
                     return (
                       <div
@@ -2799,12 +2950,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           <p className="font-bold text-foreground truncate">{item.produto.nome}</p>
                           {nomesOpcoes && (
                             <p className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold truncate">
-                              {item.opcoesSelecionadas && item.opcoesSelecionadas.length > 1 ? "Opções: " : "Opção: "}
+                              {isMulti ? "Opções: " : "Opção: "}
                               {nomesOpcoes}
                             </p>
                           )}
                           <p className="text-[11px] font-mono text-muted-foreground">
-                            {formatarMoeda(unitPrice)} cada
+                            {formatarMoeda(subtotalItem / (totalQtdItem || 1))} cada (méd.)
                           </p>
                         </div>
 
@@ -2817,7 +2968,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           >
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="font-mono font-bold px-1">{item.quantidade}</span>
+                          <span className="font-mono font-bold px-1">{totalQtdItem}</span>
                           <Button
                             variant="outline"
                             size="sm"
@@ -2829,7 +2980,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         </div>
 
                         <span className="font-black font-mono text-xs text-foreground shrink-0 min-w-[60px] text-right">
-                          {formatarMoeda(unitPrice * item.quantidade)}
+                          {formatarMoeda(subtotalItem)}
                         </span>
                       </div>
                     );
@@ -3625,7 +3776,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-black text-foreground uppercase tracking-wider">
-                      {produtoModal.permite_multiplas_opcoes ? "Escolha suas Opções" : "Escolha sua Opção *"}
+                      {produtoModal.permite_multiplas_opcoes ? "Escolha as Quantidades por Opção" : "Escolha sua Opção *"}
                     </Label>
                     <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">
                       {produtoModal.permite_multiplas_opcoes ? "Múltipla escolha" : "1 obrigatório"}
@@ -3635,20 +3786,78 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   <div className="space-y-2">
                     {produtoModal.opcoes.map((opc) => {
                       const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
-                      const isSelected = isMulti
-                        ? opcoesSelecionadasModal.some((o) => o.id === opc.id)
-                        : opcaoSelecionadaModal?.id === opc.id;
 
+                      if (isMulti) {
+                        const qtd = quantidadesOpcoesModal[opc.id] || 0;
+                        const isSelected = qtd > 0;
+                        const unitPriceOpcao = produtoModal.preco + (Number(opc.preco_adicional) || 0);
+
+                        return (
+                          <div
+                            key={opc.id}
+                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                              isSelected
+                                ? "bg-purple-500/10 border-purple-500 shadow-xs"
+                                : "bg-muted/30 border-border hover:border-purple-300"
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-foreground truncate">
+                                  {opc.nome}
+                                </span>
+                                {opc.preco_adicional > 0 ? (
+                                  <Badge className="bg-purple-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2 shrink-0">
+                                    + {formatarMoeda(opc.preco_adicional)}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                                    Incluso
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10.5px] font-mono text-muted-foreground mt-0.5">
+                                {formatarMoeda(unitPriceOpcao)} cada
+                              </p>
+                            </div>
+
+                            {/* CONTROLE NUMÉRICO DE QUANTIDADE LOCAL */}
+                            <div className="flex items-center gap-1.5 shrink-0 bg-background/90 p-1 rounded-xl border border-border/80 shadow-2xs">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAlterarQtdOpcaoModal(opc.id, -1)}
+                                disabled={qtd === 0}
+                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted disabled:opacity-40"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </Button>
+
+                              <span className="font-mono font-black text-xs px-1.5 min-w-[20px] text-center text-foreground">
+                                {qtd}
+                              </span>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAlterarQtdOpcaoModal(opc.id, 1)}
+                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // SELEÇÃO ÚNICA (RADIO BUTTONS)
+                      const isSelected = opcaoSelecionadaModal?.id === opc.id;
                       return (
                         <div
                           key={opc.id}
-                          onClick={() => {
-                            if (isMulti) {
-                              handleToggleOpcaoMultipla(opc);
-                            } else {
-                              setOpcaoSelecionadaModal(opc);
-                            }
-                          }}
+                          onClick={() => setOpcaoSelecionadaModal(opc)}
                           className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                             isSelected
                               ? "bg-purple-500/10 border-purple-500 shadow-xs"
@@ -3656,27 +3865,15 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            {isMulti ? (
-                              <div
-                                className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                                  isSelected
-                                    ? "border-purple-600 bg-purple-600 text-white"
-                                    : "border-muted-foreground/50 bg-background"
-                                }`}
-                              >
-                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                            ) : (
-                              <div
-                                className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                                  isSelected
-                                    ? "border-purple-600 bg-purple-600"
-                                    : "border-muted-foreground/50"
-                                }`}
-                              >
-                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                              </div>
-                            )}
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                isSelected
+                                  ? "border-purple-600 bg-purple-600"
+                                  : "border-muted-foreground/50"
+                              }`}
+                            >
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
                             <span className="text-xs font-bold text-foreground">
                               {opc.nome}
                             </span>
@@ -3700,32 +3897,41 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
               {/* CONTROLES DE QUANTIDADE E SUBTOTAL */}
               <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex items-center justify-between gap-3 pt-2">
-                <div>
-                  <p className="text-[11px] font-medium text-muted-foreground">Quantidade</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQuantidadeModal((q) => Math.max(1, q - 1))}
-                      className="h-7 w-7 p-0 rounded-lg"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                    </Button>
-                    <span className="font-mono font-black text-sm px-1.5">
-                      {quantidadeModal}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQuantidadeModal((q) => q + 1)}
-                      className="h-7 w-7 p-0 rounded-lg"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </Button>
+                {produtoModal.permite_multiplas_opcoes ? (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground">Total de Unidades</p>
+                    <p className="text-xs font-black text-foreground font-mono mt-0.5">
+                      {totalQtdMultiOpcoes} {totalQtdMultiOpcoes === 1 ? "unidade" : "unidades"}
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground">Quantidade</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setQuantidadeModal((q) => Math.max(1, q - 1))}
+                        className="h-7 w-7 p-0 rounded-lg"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </Button>
+                      <span className="font-mono font-black text-sm px-1.5">
+                        {quantidadeModal}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setQuantidadeModal((q) => q + 1)}
+                        className="h-7 w-7 p-0 rounded-lg"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="text-right">
                   <p className="text-[11px] font-medium text-muted-foreground">Total deste item</p>
@@ -3734,13 +3940,9 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     className="text-base sm:text-lg font-black font-mono"
                   >
                     {formatarMoeda(
-                      (() => {
-                        const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
-                        const somaOpcoesModal = isMulti
-                          ? opcoesSelecionadasModal.reduce((acc, o) => acc + (Number(o.preco_adicional) || 0), 0)
-                          : (opcaoSelecionadaModal?.preco_adicional || 0);
-                        return (produtoModal.preco + somaOpcoesModal) * quantidadeModal;
-                      })()
+                      produtoModal.permite_multiplas_opcoes
+                        ? totalPrecoMultiOpcoes
+                        : (produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0)) * quantidadeModal
                     )}
                   </p>
                 </div>
@@ -3758,23 +3960,33 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 </Button>
 
                 {(() => {
-                  const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
                   const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
-                  const precisaSelecionarOpcao = temOpcoes && !isMulti && !opcaoSelecionadaModal;
+                  const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
+                  const desabilitado = isMulti
+                    ? totalQtdMultiOpcoes === 0
+                    : temOpcoes && !opcaoSelecionadaModal;
+
+                  const labelBotao = isMulti
+                    ? totalQtdMultiOpcoes === 0
+                      ? "Selecione as Quantidades"
+                      : "Adicionar ao Pedido"
+                    : temOpcoes && !opcaoSelecionadaModal
+                    ? "Selecione uma Opção"
+                    : "Adicionar ao Pedido";
 
                   return (
                     <Button
                       type="button"
-                      disabled={precisaSelecionarOpcao}
+                      disabled={desabilitado}
                       onClick={handleConfirmarAdicionarCarrinho}
-                      style={!precisaSelecionarOpcao ? { backgroundColor: corTemaDestaque } : {}}
+                      style={!desabilitado ? { backgroundColor: corTemaDestaque } : {}}
                       className={`w-2/3 font-extrabold text-xs h-10 rounded-xl shadow-md transition-all ${
-                        precisaSelecionarOpcao
+                        desabilitado
                           ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60 border border-border"
                           : "text-white hover:opacity-90"
                       }`}
                     >
-                      {precisaSelecionarOpcao ? "Selecione uma Opção" : "Adicionar ao Pedido"}
+                      {labelBotao}
                     </Button>
                   );
                 })()}

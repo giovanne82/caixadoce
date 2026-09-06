@@ -187,6 +187,13 @@ export interface ProdutoOpcao {
   preco_adicional: number;
 }
 
+export interface ProdutoOpcaoSelecionada {
+  id?: string;
+  nome: string;
+  preco_adicional: number;
+  quantidade?: number;
+}
+
 export interface ProdutoCardapio {
   id: string;
   estabelecimentoCodigo: string;
@@ -1098,7 +1105,7 @@ export interface ItemPedidoEncomenda {
   precoUnitario?: number;
   subtotal?: number;
   opcao_selecionada?: ProdutoOpcao;
-  opcoes_selecionadas?: ProdutoOpcao[];
+  opcoes_selecionadas?: ProdutoOpcaoSelecionada[];
   opcaoNome?: string;
   opcaoPrecoAdicional?: number;
   categoria?: string;
