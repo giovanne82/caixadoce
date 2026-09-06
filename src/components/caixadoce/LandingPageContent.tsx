@@ -37,6 +37,16 @@ import {
   Layers,
   Clock,
   DollarSign,
+  QrCode,
+  Flame,
+  Palette,
+  Smartphone,
+  RefreshCw,
+  SlidersHorizontal,
+  BadgeCheck,
+  AlertCircle,
+  Truck,
+  MessageCircle,
 } from "lucide-react";
 
 type DemoModalType = "notinha" | "lista" | "encomendas" | "cardapio" | "financeiro" | null;
@@ -60,6 +70,7 @@ export function LandingPageContent() {
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-200/50 rounded-full blur-3xl"></div>
         <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] bg-pink-200/40 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-amber-100/40 rounded-full blur-3xl"></div>
       </div>
 
       {/* BANNER PROMOCIONAL FIXO NO TOPO - 7 DIAS GRÁTIS */}
@@ -74,7 +85,7 @@ export function LandingPageContent() {
           className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-[11px] h-7 px-3.5 rounded-full shadow-md shrink-0 ml-1 flex items-center gap-1 transition-all transform hover:scale-105"
         >
           <Sparkles className="w-3.5 h-3.5 text-slate-950" />
-          <span>Acessa e testa grátis</span>
+          <span>Criar minha Loja Grátis agora</span>
           <ArrowRight className="w-3 h-3" />
         </Button>
       </div>
@@ -88,9 +99,15 @@ export function LandingPageContent() {
             <CaixaDoceLogo size="md" />
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-            <a href="#como-funciona" className="hover:text-purple-600 transition-colors">
-              Como Funciona
+          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-600">
+            <a href="#vitrine" className="hover:text-purple-600 transition-colors">
+              Loja &amp; Pix
+            </a>
+            <a href="#encomendas" className="hover:text-purple-600 transition-colors">
+              Gestão de Encomendas
+            </a>
+            <a href="#precificacao" className="hover:text-purple-600 transition-colors">
+              Precificação &amp; Ficha Técnica
             </a>
             <a href="#demonstracao" className="hover:text-purple-600 transition-colors">
               Demonstração
@@ -103,7 +120,7 @@ export function LandingPageContent() {
             </a>
           </nav>
 
-          {/* Destaque para o Login */}
+          {/* Destaque para o Login / CTA */}
           <div className="flex items-center gap-3">
             <Button
               onClick={irParaLogin}
@@ -115,17 +132,17 @@ export function LandingPageContent() {
 
             <Button
               onClick={irParaLogin}
-              className="font-extrabold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 rounded-xl py-2 px-5 h-10 flex items-center gap-2 transition-all transform hover:scale-[1.02]"
+              className="font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md shadow-purple-600/20 rounded-xl py-2 px-5 h-10 flex items-center gap-2 transition-all transform hover:scale-[1.02]"
             >
-              <UserCheck className="w-4 h-4" /> Acessar Sistema
+              <Sparkles className="w-4 h-4 text-amber-300" /> Criar Loja Grátis
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 space-y-20 sm:space-y-28 pb-20">
+      <main className="relative z-10 space-y-24 sm:space-y-32 pb-24">
         {/* ========================================================================= */}
-        {/* SEÇÃO 1: HERO */}
+        {/* SEÇÃO 1: HERO SECTION */}
         {/* ========================================================================= */}
         <section className="pt-8 sm:pt-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center space-y-8">
           <div className="inline-flex items-center justify-center gap-2 p-1.5 px-4 rounded-full bg-purple-100/90 border border-purple-200 shadow-xs">
@@ -133,25 +150,37 @@ export function LandingPageContent() {
               NOVO
             </Badge>
             <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-spin" /> Gestão Completa para Confeiteiras &amp; Doceiras
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-spin" /> A Solução Definitiva de Gestão e Vendas para Confeiteiros
             </span>
           </div>
 
-          <div className="space-y-4">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-tight">
-              Sua Confeitaria no Piloto Automático:{" "}
+          <div className="space-y-5">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.15]">
+              Transforme sua Confeitaria em um Negócio Profissional e{" "}
               <span className="bg-gradient-to-r from-purple-700 via-pink-600 to-amber-600 bg-clip-text text-transparent">
-                Da Notinha de Mercado à Venda Online.
+                Venda no Piloto Automático
               </span>
             </h1>
 
             <p className="text-base sm:text-xl text-slate-600 max-w-3xl mx-auto font-normal leading-relaxed">
-              Esqueça as planilhas. Escaneie suas compras com IA, crie seu cardápio com encomendas agendadas e receba pagamentos por Pix e Cartão.
+              Crie sua loja virtual personalizada, controle todas as suas entregas e nunca mais perca dinheiro por calcular o preço errado dos seus doces.
             </p>
           </div>
 
-          {/* SELO DE DESTAQUE REFORÇADO — 7 DIAS GRÁTIS PARA TESTAR */}
-          <div className="mx-auto max-w-2xl p-1 sm:p-1.5 rounded-3xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 shadow-xl shadow-purple-600/20 transform hover:scale-[1.01] transition-all">
+          {/* CTA PRINCIPAL DO HERO */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+            <Button
+              onClick={irParaLogin}
+              className="w-full sm:w-auto font-black text-base sm:text-lg bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white h-14 px-8 rounded-2xl shadow-xl shadow-purple-600/30 flex items-center justify-center gap-3 transition-all transform hover:scale-105 active:scale-95"
+            >
+              <Sparkles className="w-5 h-5 text-amber-300" />
+              <span>Criar minha Loja Grátis agora</span>
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          </div>
+
+          {/* CARD DE BENEFÍCIOS DO TESTE */}
+          <div className="mx-auto max-w-3xl p-1 sm:p-1.5 rounded-3xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 shadow-xl shadow-purple-600/15 transform hover:scale-[1.01] transition-all">
             <div className="bg-white rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left border border-purple-100">
               <div className="space-y-1">
                 <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
@@ -166,17 +195,17 @@ export function LandingPageContent() {
                   Teste grátis por 7 dias sem compromisso
                 </h3>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  Acesso ilimitado instantâneo a todas as ferramentas da sua confeitaria.
+                  Acesso completo e imediato: Cardápio Digital, Pix Mercado Pago, Gestão de Encomendas e Ficha Técnica.
                 </p>
               </div>
 
               <Button
                 onClick={irParaLogin}
-                className="w-full sm:w-auto font-black bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs sm:text-sm h-12 px-6 rounded-2xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 shrink-0 transition-all transform active:scale-95"
+                variant="outline"
+                className="w-full sm:w-auto font-bold border-2 border-purple-600 text-purple-700 hover:bg-purple-50 text-xs sm:text-sm h-11 px-5 rounded-xl shrink-0 transition-all"
               >
-                <Zap className="w-4 h-4 text-amber-300" />
-                <span>Acessa e testa grátis</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Acessar e Começar</span>
+                <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
             </div>
           </div>
@@ -190,177 +219,448 @@ export function LandingPageContent() {
               <ShieldCheck className="w-4 h-4 text-purple-600" /> Setup em menos de 2 minutos
             </div>
             <div className="flex items-center gap-2">
-              <Heart className="w-4 h-4 text-pink-600" /> Feito para confeitaria artesanal
+              <Heart className="w-4 h-4 text-pink-600" /> Feito sob medida para confeitarias &amp; docerias
             </div>
           </div>
         </section>
 
         {/* ========================================================================= */}
-        {/* SEÇÃO 2: COMO FUNCIONA NA PRÁTICA (3 PILARES VISUAIS) */}
+        {/* SEÇÃO 2: LOJA E PAGAMENTOS AUTOMÁTICOS */}
         {/* ========================================================================= */}
-        <section id="como-funciona" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
-          <div className="text-center space-y-3">
-            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3 py-1 font-bold">
-              COMO FUNCIONA NA PRÁTICA
+        <section id="vitrine" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 scroll-mt-24">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <Badge variant="outline" className="text-pink-700 border-pink-300 bg-pink-50 text-xs px-3.5 py-1 font-bold">
+              LOJA VIRTUAL &amp; CHECKOUT PIX
             </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">
-              Tudo o que sua cozinha precisa em 3 passos simples
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              Sua Vitrine, Suas Regras
             </h2>
+            <p className="text-base text-slate-600 font-normal leading-relaxed">
+              Esqueça a confusão de tirar pedidos pelo WhatsApp. Monte uma loja virtual profissional com as suas cores em poucos minutos.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-            {/* CARD 1: Escaneie Notinhas com IA */}
-            <Card className="bg-white border border-slate-200/90 rounded-3xl shadow-lg shadow-slate-200/50 overflow-hidden flex flex-col relative group hover:border-purple-300 transition-all">
-              <div className="p-4 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-purple-600 animate-pulse" />
-                  <span className="text-sm font-bold text-purple-950">📸 1. Escaneie Notinhas com IA</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Lado Esquerdo: Diferenciais e Bullet Points */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="p-6 rounded-3xl bg-white border border-pink-100 shadow-lg shadow-pink-500/5 space-y-4 hover:border-pink-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-pink-100 text-pink-700 flex items-center justify-center shrink-0">
+                  <QrCode className="w-6 h-6" />
                 </div>
-                <Badge className="bg-purple-200 text-purple-900 text-[10px] font-bold">Leitura IA</Badge>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    Pix com Baixa Automática
+                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">Mercado Pago</Badge>
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Integração direta com o Mercado Pago. O cliente paga e o sistema reconhece sozinho, sem precisar de comprovante.
+                  </p>
+                </div>
               </div>
 
-              <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  Tire foto do cupom do mercado. A IA cadastra ingredientes, calcula custos e atualiza seu financeiro em segundos.
-                </p>
-
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-slate-800 font-bold">🛒 ATACADÃO ALIMENTOS</span>
-                    <span className="text-emerald-700 font-bold">NF-e 049.182</span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs">
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex justify-between items-center text-slate-900 shadow-2xs">
-                      <span className="font-semibold text-slate-800">4x Leite Condensado 395g</span>
-                      <span className="font-mono font-bold text-emerald-700 text-sm">R$ 27,60</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex justify-between items-center text-slate-900 shadow-2xs">
-                      <span className="font-semibold text-slate-800">2x Chantilly Norcau 1L</span>
-                      <span className="font-mono font-bold text-emerald-700 text-sm">R$ 33,80</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">Total Processado:</span>
-                    <span className="text-base font-black text-emerald-700 font-mono">R$ 61,40</span>
-                  </div>
+              <div className="p-6 rounded-3xl bg-white border border-purple-100 shadow-lg shadow-purple-500/5 space-y-4 hover:border-purple-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                  <Zap className="w-6 h-6" />
                 </div>
-
-                <Button
-                  onClick={() => setModalDemo("notinha")}
-                  variant="outline"
-                  className="w-full text-xs font-bold border-purple-200 hover:bg-purple-50 text-purple-700 rounded-xl"
-                >
-                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Ver Demonstração da Leitura
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* CARD 2: Cardápio & Encomendas Sob Medida */}
-            <Card className="bg-white border border-slate-200/90 rounded-3xl shadow-lg shadow-slate-200/50 overflow-hidden flex flex-col relative group hover:border-pink-300 transition-all">
-              <div className="p-4 bg-pink-50 border-b border-pink-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-pink-600" />
-                  <span className="text-sm font-bold text-pink-950">🎂 2. Cardápio &amp; Encomendas</span>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Zero Atrito para seu Cliente
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Uma experiência de compra fluida e rápida para o seu cliente final: escolha de sabores, cálculo de frete por delivery/retirada e pagamento instantâneo.
+                  </p>
                 </div>
-                <Badge className="bg-pink-200 text-pink-900 text-[10px] font-bold">Loja Online</Badge>
               </div>
 
-              <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  Crie sua loja online personalizada. Defina disponibilidade por produto: itens a Pronta Entrega nos dias que você escolher ou Sob Encomenda com antecedência mínima.
-                </p>
+              <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Personalização Completa da sua Marca
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Defina banner, logotipo, cores da sua identidade visual e regras de agendamento por produto (Pronta Entrega ou Encomendas com antecedência).
+                  </p>
+                </div>
+              </div>
+            </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-purple-950">Bolo de Aniversário 2kg</span>
-                      <span className="text-xs font-bold text-purple-800">R$ 140,00</span>
+            {/* Lado Direito: Mockup Visual Interativo da Vitrine & Checkout Pix */}
+            <div className="lg:col-span-6">
+              <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-pink-50 via-purple-50 to-white border-2 border-pink-200/80 shadow-xl space-y-5 relative overflow-hidden">
+                {/* Cabeçalho do Mockup da Loja */}
+                <div className="flex items-center justify-between pb-3 border-b border-pink-200/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-pink-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
+                      🎂
                     </div>
-                    <span className="inline-block px-2 py-0.5 rounded bg-purple-200 text-purple-900 text-[11px] font-bold">
-                      🕒 Antecedência: ~24h
-                    </span>
+                    <div>
+                      <div className="text-xs font-extrabold text-slate-900">Doce Encanto Confeitaria</div>
+                      <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Loja Aberta • Entregas &amp; Retiradas
+                      </div>
+                    </div>
+                  </div>
+                  <Badge className="bg-purple-600 text-white text-[10px] font-bold">caixadoce.com/doceencanto</Badge>
+                </div>
+
+                {/* Itens do Cardápio */}
+                <div className="space-y-2.5 text-xs">
+                  <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">Bolo Vulcão Ninho com Nutella</div>
+                      <div className="text-[11px] text-pink-700 font-semibold font-mono">R$ 68,00</div>
+                      <Badge className="mt-1 bg-emerald-100 text-emerald-800 text-[9px] font-bold">⚡ Pronta Entrega</Badge>
+                    </div>
+                    <Button size="sm" className="h-8 px-3 bg-purple-600 text-white text-xs font-bold rounded-xl">
+                      + Adicionar
+                    </Button>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-emerald-950">Caixa Brigadeiros (12 un)</span>
-                      <span className="text-xs font-bold text-emerald-800">R$ 48,00</span>
+                  <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">Bolo Festivo Chantininho 2kg</div>
+                      <div className="text-[11px] text-pink-700 font-semibold font-mono">R$ 145,00</div>
+                      <Badge className="mt-1 bg-purple-100 text-purple-800 text-[9px] font-bold">🕒 Encomenda (24h de antecedência)</Badge>
                     </div>
-                    <span className="inline-block px-2 py-0.5 rounded bg-emerald-200 text-emerald-900 text-[11px] font-bold">
-                      ⚡ Pronta Entrega (Qua a Sáb)
+                    <Button size="sm" className="h-8 px-3 bg-purple-600 text-white text-xs font-bold rounded-xl">
+                      + Adicionar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Box de Checkout com Pix Automático */}
+                <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-300 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4 text-emerald-700" /> Pagamento Pix Instantâneo
                     </span>
+                    <Badge className="bg-emerald-600 text-white text-[10px] font-black animate-pulse">
+                      ✓ Baixa Automática
+                    </Badge>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-xl border border-emerald-200 flex items-center justify-between">
+                    <div className="text-xs">
+                      <div className="text-slate-500 font-medium">Status do Pagamento:</div>
+                      <div className="text-emerald-700 font-black text-sm flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Aprovado pelo Mercado Pago
+                      </div>
+                    </div>
+                    <span className="font-mono font-black text-slate-900 text-sm">R$ 213,00</span>
+                  </div>
+
+                  <div className="text-[10px] text-emerald-800 font-semibold text-center">
+                    🚀 O pedido cai direto no seu painel com status <strong>"Pago (100%)"</strong> sem precisar pedir comprovante!
                   </div>
                 </div>
 
                 <Button
                   onClick={() => setModalDemo("cardapio")}
                   variant="outline"
-                  className="w-full text-xs font-bold border-pink-200 hover:bg-pink-50 text-pink-700 rounded-xl"
+                  className="w-full text-xs font-bold border-pink-300 text-pink-800 hover:bg-pink-100/50 rounded-xl"
                 >
-                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Ver Exemplo de Cardápio
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir Demonstração da Loja Virtual
                 </Button>
-              </CardContent>
-            </Card>
-
-            {/* CARD 3: Ficha Técnica & Precificação Exata Sem Prejuízo */}
-            <Card className="bg-white border border-slate-200/90 rounded-3xl shadow-lg shadow-slate-200/50 overflow-hidden flex flex-col relative group hover:border-amber-300 transition-all">
-              <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-amber-600" />
-                  <span className="text-sm font-bold text-amber-950">📊 3. Ficha Técnica &amp; Precificação</span>
-                </div>
-                <Badge className="bg-amber-200 text-amber-900 text-[10px] font-bold">Precificação Sem Prejuízo</Badge>
               </div>
+            </div>
+          </div>
+        </section>
 
-              <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  Descubra o custo real exato do seu produto final e precifique corretamente para NUNCA ter prejuízo. À medida que você adiciona notinhas, o sistema atualiza o custo dos insumos automaticamente com base no <strong>último preço comprado</strong>!
-                </p>
+        {/* ========================================================================= */}
+        {/* SEÇÃO 3: GESTÃO DE ENCOMENDAS */}
+        {/* ========================================================================= */}
+        <section id="encomendas" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 scroll-mt-24">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <Badge variant="outline" className="text-amber-800 border-amber-300 bg-amber-50 text-xs px-3.5 py-1 font-bold">
+              GESTÃO DE ENCOMENDAS &amp; PRODUÇÃO
+            </Badge>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              O Fim do Caos na sua Produção
+            </h2>
+            <p className="text-base text-slate-600 font-normal leading-relaxed">
+              Diga adeus às agendas de papel. Uma tela inteligente desenhada para a rotina acelerada da confeitaria.
+            </p>
+          </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <div className="text-[10px] text-slate-500 font-bold uppercase">Custo Real da Receita</div>
-                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                        🎂 Bolo Vulcano Ninho (2kg)
-                      </div>
-                    </div>
-                    <span className="text-sm font-mono font-bold text-rose-600">R$ 28,40</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Lado Esquerdo: Mockup Visual dos Cards de Encomenda com Cores e Alertas */}
+            <div className="lg:col-span-6 order-2 lg:order-1">
+              <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-amber-50 via-slate-50 to-white border-2 border-amber-200/80 shadow-xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-amber-200">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-amber-700" />
+                    <span className="text-xs font-black text-slate-900">Painel "Minhas Encomendas"</span>
                   </div>
+                  <Badge className="bg-amber-500 text-white text-[10px] font-bold">Hoje &amp; Próximos Dias</Badge>
+                </div>
 
-                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <div className="text-[10px] text-emerald-800 font-bold uppercase">Preço Venda Sugerido</div>
-                      <div className="text-xs font-bold text-emerald-700">Lucro Garantido (62%)</div>
-                    </div>
-                    <span className="text-base font-mono font-black text-emerald-700">R$ 75,00</span>
+                {/* Card 1: Pago Integral + Entrega Hoje */}
+                <div className="p-3.5 rounded-2xl bg-green-50 border-l-4 border-green-500 border border-green-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge className="bg-rose-600 text-white text-[10px] font-black animate-pulse flex items-center gap-1">
+                      <Flame className="w-3 h-3 text-amber-300 fill-amber-300" /> ENTREGA HOJE
+                    </Badge>
+                    <Badge className="bg-green-200 text-green-900 text-[10px] font-bold">
+                      Pago (Mercado Pago)
+                    </Badge>
                   </div>
+                  <div className="flex justify-between items-start text-xs">
+                    <div>
+                      <div className="font-bold text-slate-900">Bolo de Cenoura c/ Brigadeiro + 12 Docinhos</div>
+                      <div className="text-[11px] text-slate-600">Cliente: Amanda Ribeiro • 🕒 16:00</div>
+                    </div>
+                    <span className="font-mono font-black text-green-800 text-sm">R$ 95,00</span>
+                  </div>
+                </div>
 
-                  <div className="text-[10px] text-center font-bold text-purple-700 bg-purple-50 p-1.5 rounded-lg border border-purple-200">
-                    ⚡ Custos atualizados automaticamente pela última compra!
+                {/* Card 2: Sinal 50% Pago */}
+                <div className="p-3.5 rounded-2xl bg-orange-50 border-l-4 border-orange-500 border border-orange-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">📅 Sábado (Amanhã) às 14:00</span>
+                    <Badge className="bg-orange-200 text-orange-950 text-[10px] font-bold">
+                      Sinal 50% Pago
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-start text-xs">
+                    <div>
+                      <div className="font-bold text-slate-900">Bolo Red Velvet Casamento (3kg)</div>
+                      <div className="text-[11px] text-slate-600">Cliente: Carlos &amp; Beatriz • Entrega Local</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-black text-rose-600 text-sm">Falta: R$ 130,00</div>
+                      <div className="text-[10px] text-slate-400 font-mono">Total: R$ 260,00</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Pendente */}
+                <div className="p-3.5 rounded-2xl bg-red-50 border-l-4 border-red-500 border border-red-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700">📅 Domingo às 11:30</span>
+                    <Badge className="bg-red-200 text-red-950 text-[10px] font-bold">
+                      Pendente (0%)
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-start text-xs">
+                    <div>
+                      <div className="font-bold text-slate-900">Cento de Salgados Finos + Torta Doce</div>
+                      <div className="text-[11px] text-slate-600">Cliente: Renata Silva</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-black text-rose-600 text-sm">Cobrar: R$ 180,00</div>
+                    </div>
                   </div>
                 </div>
 
                 <Button
                   onClick={() => setModalDemo("encomendas")}
                   variant="outline"
-                  className="w-full text-xs font-bold border-amber-200 hover:bg-amber-50 text-amber-800 rounded-xl"
+                  className="w-full text-xs font-bold border-amber-300 text-amber-900 hover:bg-amber-100/50 rounded-xl"
                 >
-                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Ver Exemplo de Encomendas
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir Demonstração da Gestão de Encomendas
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+
+            {/* Lado Direito: Bullet Points da Gestão de Encomendas */}
+            <div className="lg:col-span-6 order-1 lg:order-2 space-y-6">
+              <div className="p-6 rounded-3xl bg-white border border-amber-100 shadow-lg shadow-amber-500/5 space-y-4 hover:border-amber-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Calendário de Entregas
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Separe facilmente os pedidos para entrega imediata dos agendados para o futuro. Nunca mais se perca em conversas perdidas no WhatsApp.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-white border border-purple-100 shadow-lg shadow-purple-500/5 space-y-4 hover:border-purple-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Status Financeiro Visual
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Identifique em um segundo quem pagou integral, quem deu sinal e quem está pendente. Cores vivas e fonte destacada para saber exatamente quanto resta a cobrar.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                  <Flame className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Destaque de Urgência Automático
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    O sistema alerta automaticamente com a tag <strong>"🔥 ENTREGA HOJE"</strong> e destaca pedidos prioritários para a cozinha produzir primeiro.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
         {/* ========================================================================= */}
-        {/* SEÇÃO NOVAS DEMONSTRAÇÕES INTERATIVAS (MODAIS DE FERRAMENTAS) */}
+        {/* SEÇÃO 4: FICHA TÉCNICA E PRECIFICAÇÃO AUTOMÁTICA */}
         {/* ========================================================================= */}
-        <section id="demonstracao" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-10">
+        <section id="precificacao" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 scroll-mt-24">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3 py-1 font-bold">
+            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3.5 py-1 font-bold">
+              FICHA TÉCNICA &amp; MARGEM DE LUCRO
+            </Badge>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              O Leite Condensado subiu? O CaixaDoce atualiza tudo com 1 clique!
+            </h2>
+            <p className="text-base text-slate-600 font-normal leading-relaxed">
+              Nunca mais pague para trabalhar. Sua margem de lucro sempre protegida contra a inflação.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Lado Esquerdo: Diferenciais da Precificação em Cascata */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="p-6 rounded-3xl bg-white border-2 border-purple-200 shadow-xl shadow-purple-600/10 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                  <RefreshCw className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    Atualização em Cascata
+                    <Badge className="bg-purple-600 text-white text-[10px] font-bold">Exclusivo</Badge>
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Mudou o preço do insumo? O sistema recalcula o custo e o preço de venda de <strong>TODOS</strong> os produtos que usam aquele ingrediente instantaneamente.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4 hover:border-purple-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Escaneamento de Notinhas com IA
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Tire foto do cupom fiscal do mercado. A Inteligência Artificial extrai os preços pagos e atualiza os custos dos seus insumos no sistema sem digitação.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4 hover:border-purple-300 transition-all">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Calculator className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Margem de Lucro Blindada
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Defina sua margem de lucro desejada (ex: 60%) e o sistema calcula o preço de venda sugerido para você nunca vender com prejuízo.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lado Direito: Simulação Visual da Atualização em Cascata */}
+            <div className="lg:col-span-6">
+              <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-purple-50 via-pink-50 to-white border-2 border-purple-200 shadow-xl space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-5 h-5 text-purple-700" />
+                    <span className="text-xs font-black text-slate-900">Simulação de Atualização em Cascata</span>
+                  </div>
+                  <Badge className="bg-emerald-600 text-white text-[10px] font-bold">1 Insumo ➔ 8 Receitas Atualizadas</Badge>
+                </div>
+
+                {/* Bloco 1: Alteração do Insumo */}
+                <div className="p-4 rounded-2xl bg-white border border-purple-200 shadow-xs space-y-2">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    🛒 Insumo Base: Leite Condensado 395g
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="line-through text-slate-400 font-mono">R$ 5,90</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
+                      <span className="font-mono font-black text-purple-700 text-sm">R$ 7,40</span>
+                    </div>
+                    <Badge className="bg-amber-100 text-amber-900 text-[10px] font-bold">
+                      Preço Novo da Notinha
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Bloco 2: Produtos Recalculados Automaticamente */}
+                <div className="space-y-2 text-xs">
+                  <div className="text-[11px] font-bold text-purple-950 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Produtos recalculados em tempo real:
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">🎂 Bolo Vulcão Brigadeiro (1.5kg)</div>
+                      <div className="text-[10px] text-slate-500">Custo: R$ 18,20 ➔ <strong className="text-purple-700">R$ 21,20</strong></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-black text-emerald-700 text-sm">R$ 65,00</div>
+                      <div className="text-[9px] text-emerald-700 font-bold">Lucro 67%</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">🍬 Cento de Brigadeiros Gourmet</div>
+                      <div className="text-[10px] text-slate-500">Custo: R$ 34,50 ➔ <strong className="text-purple-700">R$ 40,50</strong></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-black text-emerald-700 text-sm">R$ 130,00</div>
+                      <div className="text-[9px] text-emerald-700 font-bold">Lucro 69%</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">🍮 Copo da Felicidade Ninho (x4)</div>
+                      <div className="text-[10px] text-slate-500">Custo: R$ 12,00 ➔ <strong className="text-purple-700">R$ 14,20</strong></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-black text-emerald-700 text-sm">R$ 48,00</div>
+                      <div className="text-[9px] text-emerald-700 font-bold">Lucro 70%</div>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => setModalDemo("notinha")}
+                  variant="outline"
+                  className="w-full text-xs font-bold border-purple-300 text-purple-800 hover:bg-purple-100/50 rounded-xl"
+                >
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Ver Demonstração da Leitura de Insumos por IA
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* SEÇÃO 5: DEMONSTRAÇÕES INTERATIVAS (MODAIS DE FERRAMENTAS) */}
+        {/* ========================================================================= */}
+        <section id="demonstracao" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-10 scroll-mt-24">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3.5 py-1 font-bold">
               EXPLORE AS FERRAMENTAS
             </Badge>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">
@@ -470,11 +770,11 @@ export function LandingPageContent() {
         </section>
 
         {/* ========================================================================= */}
-        {/* SEÇÃO 3: PREÇOS & PLANOS */}
+        {/* SEÇÃO 6: PREÇOS & PLANOS */}
         {/* ========================================================================= */}
-        <section id="precos" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
+        <section id="precos" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 scroll-mt-24">
           <div className="text-center space-y-3">
-            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3 py-1 font-bold">
+            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3.5 py-1 font-bold">
               PREÇOS TRANSPARENTES
             </Badge>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">
@@ -502,7 +802,7 @@ export function LandingPageContent() {
               className="w-full sm:w-auto font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs py-3 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 shrink-0 transition-all transform active:scale-95"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
-              <span>Acessa e testa grátis</span>
+              <span>Criar minha Loja Grátis agora</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
@@ -528,19 +828,19 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">Loja Virtual com Pix Mercado Pago (Bloqueado)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="line-through">Escanear a Notinha com IA (Bloqueado)</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Ficha Técnica &amp; Precificação Sem Prejuízo (Bloqueado)</span>
+                    <span className="line-through">Ficha Técnica &amp; Precificação em Cascata (Bloqueado)</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Calendário de Encomendas &amp; Clientes (Bloqueado)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Painel Financeiro &amp; Fluxo de Caixa (Bloqueado)</span>
+                    <span className="line-through">Calendário de Encomendas &amp; Gestão Visual (Bloqueado)</span>
                   </div>
                 </div>
               </div>
@@ -563,10 +863,10 @@ export function LandingPageContent() {
               <div className="space-y-4 pt-2">
                 <div className="space-y-1">
                   <h3 className="text-xl font-extrabold text-slate-900 flex items-center justify-between">
-                    <span>Plano Pro Mensal</span>
+                    <span>Plano Pro Completo</span>
                     <Badge className="bg-purple-100 text-purple-800 font-bold text-[10px]">Mais Vendido</Badge>
                   </h3>
-                  <p className="text-xs text-purple-700 font-medium">Automação total com Inteligência Artificial e Precificação Sem Prejuízo.</p>
+                  <p className="text-xs text-purple-700 font-medium">Automação total: Loja Virtual, Pix Automático, Encomendas e Precificação em Cascata.</p>
                 </div>
 
                 <div className="space-y-1">
@@ -580,33 +880,25 @@ export function LandingPageContent() {
                 </div>
 
                 <div className="pt-4 border-t border-purple-100 space-y-2.5 text-xs text-slate-700">
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Loja Virtual personalizada com Pix Mercado Pago automático</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Gestão visual de Encomendas (Status financeiro &amp; Entrega Hoje)</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Ficha Técnica com Atualização de Preços em Cascata</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Escanear a Notinha com IA (Ilimitado)</span>
                   </div>
-                  <div className="flex items-center gap-2 font-bold text-slate-900">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Ficha Técnica &amp; Precificação (Custo Real sem Prejuízo)</span>
-                  </div>
-                  <div className="flex items-center gap-2 font-bold text-slate-900">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Atualização automática com base no <strong>último preço comprado</strong></span>
-                  </div>
-                  <div className="flex items-center gap-2 font-bold text-slate-900">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Milhares de pré-cadastros de insumos para Lista de Compras</span>
-                  </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Controlar pedidos de clientes (Calendário de Encomendas)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Controle financeiro dos pedidos e fluxo de caixa</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Cardápio digital personalizado</span>
+                    <span>Controle financeiro, fluxo de caixa e lucro líquido</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
@@ -626,11 +918,11 @@ export function LandingPageContent() {
         </section>
 
         {/* ========================================================================= */}
-        {/* SEÇÃO 4: FAQ (APENAS PERGUNTAS ATIVAS E RELEVANTES) */}
+        {/* SEÇÃO 7: FAQ & BANNER FINAL */}
         {/* ========================================================================= */}
-        <section id="faq" className="px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-12">
+        <section id="faq" className="px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-12 scroll-mt-24">
           <div className="text-center space-y-3">
-            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3 py-1 font-bold">
+            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 text-xs px-3.5 py-1 font-bold">
               TIRE SUAS DÚVIDAS
             </Badge>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">
@@ -641,16 +933,20 @@ export function LandingPageContent() {
           <div className="space-y-4">
             {[
               {
-                q: "Como funciona a leitura de notinhas por IA?",
-                a: "Basta tirar uma foto do cupom fiscal do supermercado pelo celular ou subir o arquivo. Nossa IA lê os insumos, quantidades e preços automaticamente, atualizando seus custos sem digitação manual.",
+                q: "Como funciona a Loja Virtual com Pix do Mercado Pago?",
+                a: "Você cria sua vitrine com seus produtos, fotos e preços em minutos. Ao finalizar a compra, seu cliente paga via Pix do Mercado Pago e o CaixaDoce confirma o pagamento automaticamente, sem que você precise conferir comprovante.",
               },
               {
-                q: "Preciso cadastrar cartão de crédito para testar?",
-                a: "Não! Você pode iniciar o seu teste gratuito de 7 dias do Plano Pro imediatamente sem informar nenhum cartão de crédito.",
+                q: "O que é a Atualização em Cascata na Ficha Técnica?",
+                a: "Quando você altera o preço de um insumo (como o leite condensado ou chocolate) ou escaneia uma notinha com novo valor, o sistema recalcula instantaneamente o custo e a margem de lucro de todas as receitas que utilizam aquele ingrediente.",
               },
               {
-                q: "Como o CaixaDoce ajuda a controlar o lucro da minha confeitaria?",
-                a: "O sistema cruza automaticamente o custo real das suas compras (notinhas escaneadas) com os preços de venda das encomendas e produtos do cardápio, mostrando sua margem de lucro exata por pedido.",
+                q: "Como funciona o teste grátis de 7 dias?",
+                a: "Você cria sua conta gratuitamente e tem 7 dias completos para usar todas as funcionalidades Pro, incluindo a vitrine online, baixa automática de Pix, calendário de encomendas e precificação por IA, sem precisar cadastrar cartão de crédito.",
+              },
+              {
+                q: "Como o sistema me ajuda a não perder prazos de entrega?",
+                a: "A tela de Gestão de Encomendas organiza seus pedidos por data e horário, com alertas visuais '🔥 ENTREGA HOJE', separando pedidos imediatos dos futuros e indicando com clareza quem já pagou o sinal ou valor total.",
               },
             ].map((item, index) => (
               <div
@@ -679,19 +975,21 @@ export function LandingPageContent() {
           <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-purple-900 via-purple-800 to-pink-800 text-white text-center space-y-6 relative overflow-hidden shadow-xl shadow-purple-900/20">
             <div className="space-y-3">
               <h2 className="text-2xl sm:text-4xl font-black text-white">
-                Pronta para transformar a gestão da sua confeitaria?
+                Pronta para transformar sua confeitaria em um negócio profissional?
               </h2>
               <p className="text-sm sm:text-base text-purple-100 max-w-xl mx-auto font-medium">
-                Junte-se a doceiras e confeiteiras que economizam horas de trabalho manual e aumentam o lucro com o CaixaDoce.
+                Junte-se a confeiteiros e doceiras que vendem no piloto automático, economizam tempo e nunca mais perdem dinheiro na precificação.
               </p>
             </div>
 
             <div className="flex justify-center">
               <Button
                 onClick={irParaLogin}
-                className="h-14 px-8 text-base font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-2xl shadow-xl transition-all"
+                className="h-14 px-8 text-base font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-2xl shadow-xl transition-all flex items-center gap-2 transform hover:scale-105"
               >
-                Testar 7 Dias Grátis <ArrowRight className="w-5 h-5 ml-2" />
+                <Sparkles className="w-5 h-5 text-slate-950" />
+                <span>Criar minha Loja Grátis agora</span>
+                <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
           </div>
@@ -956,8 +1254,14 @@ export function LandingPageContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-6">
-            <a href="#como-funciona" className="hover:text-purple-700 transition-colors">
-              Como Funciona
+            <a href="#vitrine" className="hover:text-purple-700 transition-colors">
+              Loja &amp; Pix
+            </a>
+            <a href="#encomendas" className="hover:text-purple-700 transition-colors">
+              Encomendas
+            </a>
+            <a href="#precificacao" className="hover:text-purple-700 transition-colors">
+              Precificação
             </a>
             <a href="#demonstracao" className="hover:text-purple-700 transition-colors">
               Demonstração
