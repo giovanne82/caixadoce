@@ -227,6 +227,7 @@ export function PdvView() {
         if (!error && prodsData && prodsData.length > 0) {
           const formatados: ProdutoCardapio[] = prodsData.map((p) => ({
             id: p.id,
+            estabelecimentoCodigo: activeCode,
             nome: p.nome,
             categoria: p.categoria || "Geral",
             preco: Number(p.preco) || 0,
@@ -638,7 +639,7 @@ export function PdvView() {
   const handleConfirmarAberturaCaixa = async () => {
     const valorNum = converterMoedaInputParaNumero(valorAberturaInput);
     const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const operadorNome = profile?.nome || user?.email?.split("@")[0] || "Operador";
+    const operadorNome = profile?.responsavel || (profile as any)?.nome || user?.email?.split("@")[0] || "Operador";
 
     const novoCaixa: CaixaTurno = {
       data: hoje,
@@ -936,8 +937,11 @@ export function PdvView() {
       itensFormatados = venda.itens_detalhes.map((it: any) => ({
         produto: {
           id: it.id,
+          estabelecimentoCodigo: activeCode,
           nome: it.nome,
           categoria: it.categoria || "Geral",
+          descricao: "",
+          fotoUrl: "",
           preco: Number(it.precoUnitario) || 0,
           ativo: true,
         },
@@ -950,8 +954,11 @@ export function PdvView() {
         {
           produto: {
             id: "1",
+            estabelecimentoCodigo: activeCode,
             nome: venda.itens || "Itens do Pedido",
             categoria: "Geral",
+            descricao: "",
+            fotoUrl: "",
             preco: Number(venda.valor_total || venda.total_amount || 0),
             ativo: true,
           },
@@ -2260,7 +2267,7 @@ export function PdvView() {
 
             <div className="text-xs text-slate-400 flex items-center gap-2">
               <User className="w-4 h-4 text-slate-500" />
-              <span>Operador responsável: <strong className="text-white">{profile?.nome || user?.email?.split("@")[0] || "Operador"}</strong></span>
+              <span>Operador responsável: <strong className="text-white">{profile?.responsavel || (profile as any)?.nome || user?.email?.split("@")[0] || "Operador"}</strong></span>
             </div>
           </div>
 
