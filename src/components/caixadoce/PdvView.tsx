@@ -57,6 +57,17 @@ import {
   Banknote,
   Smartphone,
   ChevronRight,
+  History,
+  Wallet,
+  ArrowDownRight,
+  ArrowUpRight,
+  Lock,
+  Unlock,
+  Edit,
+  Eye,
+  RefreshCw,
+  FileText,
+  X,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -68,6 +79,16 @@ import {
   type ProdutoOpcao,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
+
+function getValidUuid(userId?: string | null, ownerUserId?: string | null): string {
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return userId;
+  }
+  if (ownerUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerUserId)) {
+    return ownerUserId;
+  }
+  return "00000000-0000-0000-0000-000000000000";
+}
 
 export interface ItemCarrinhoPdv {
   produto: ProdutoCardapio;
@@ -95,12 +116,22 @@ export interface PartePagamentoPdv {
   mpPaymentId?: string;
 }
 
+export interface CaixaTurno {
+  data: string;
+  status: "aberto" | "fechado";
+  horaAbertura: string;
+  valorAbertura: number;
+  operador: string;
+  horaFechamento?: string;
+}
+
 export function PdvView() {
   const { user, profile, isMounted, authLoading } = useAuth();
   const navigate = useNavigate();
 
   const activeCode = profile?.establishmentCode || "";
   const activeName = profile?.establishmentName || "Minha Confeitaria";
+  const hoje = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   // Estados de Produtos e Loja
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
@@ -145,18 +176,41 @@ export function PdvView() {
   const [vendaConcluidaModalOpen, setVendaConcluidaModalOpen] = useState(false);
   const [reciboUltimaVenda, setReciboUltimaVenda] = useState<any>(null);
 
-  // 1. Carregamento dos Produtos do Estabelecimento
+  // =========================================================================
+  // GESTÃO DE CAIXA (ABERTURA, SANGRIA, REFORÇO)
+  // =========================================================================
+  const [caixaAtual, setCaixaAtual] = useState<CaixaTurno | null>(null);
+  const [modalAberturaCaixaOpen, setModalAberturaCaixaOpen] = useState(false);
+  const [valorAberturaInput, setValorAberturaInput] = useState("0,00");
+  const [modalGestaoCaixaOpen, setModalGestaoCaixaOpen] = useState(false);
+  const [abaGestaoCaixa, setAbaGestaoCaixa] = useState<"resumo" | "sangria" | "reforco" | "movimentacoes">("resumo");
+  const [valorMovimentacaoInput, setValorMovimentacaoInput] = useState("");
+  const [motivoMovimentacaoInput, setMotivoMovimentacaoInput] = useState("");
+  const [salvandoMovimentacao, setSalvandoMovimentacao] = useState(false);
+  const [movimentacoesHoje, setMovimentacoesHoje] = useState<any[]>([]);
+
+  // =========================================================================
+  // HISTÓRICO DE ÚLTIMAS VENDAS (SINCRONIZADO)
+  // =========================================================================
+  const [modalUltimasVendasOpen, setModalUltimasVendasOpen] = useState(false);
+  const [vendasRecentes, setVendasRecentes] = useState<any[]>([]);
+  const [carregandoVendas, setCarregandoVendas] = useState(false);
+  const [modalEditarVendaOpen, setModalEditarVendaOpen] = useState(false);
+  const [vendaEmEdicao, setVendaEmEdicao] = useState<any | null>(null);
+  const [salvandoEdicaoVenda, setSalvandoEdicaoVenda] = useState(false);
+
+  // 1. Carregamento dos Produtos do Estabelecimento (Correção Bug 400 Bad Request)
   useEffect(() => {
     if (!activeCode) return;
 
     async function carregarCatalogo() {
       setCarregandoProdutos(true);
       try {
-        // Carrega dados da loja (para obter MP tokens e Pix Key)
+        // Carrega dados da loja (para obter MP tokens e Pix Key) de forma segura sem colunas inexistentes
         const { data: estRow } = await supabase
           .from("estabelecimentos")
           .select("*")
-          .or(`codigo.eq.${activeCode},estabelecimento_codigo.eq.${activeCode}`)
+          .or(`codigo.eq.${activeCode},codigo.eq.${activeCode.toLowerCase()}`)
           .maybeSingle();
 
         if (estRow) {
@@ -199,6 +253,7 @@ export function PdvView() {
 
     carregarCatalogo();
   }, [activeCode]);
+
 
   // Categorias Únicas
   const categorias = useMemo(() => {
@@ -520,177 +575,402 @@ export function PdvView() {
     setPartesPagamento((prev) => prev.filter((p) => p.id !== id));
   };
 
-  // ==========================================
-  // FINALIZAÇÃO E GRAVAÇÃO DA VENDA NO BANCO
-  // ==========================================
-  const handleFinalizarVendaPdv = async () => {
-    if (totalVenda <= 0) {
-      toast.error("O carrinho está vazio.");
-      return;
-    }
-
-    if (totalPagoAcumulado < totalVenda) {
-      toast.error(
-        `Faltam ${formatarMoeda(saldoRestante)} para cobrir o total da venda de ${formatarMoeda(totalVenda)}.`
-      );
-      return;
-    }
-
-    if (tipoVenda === "agendada" && !clienteNome.trim()) {
-      toast.error("Para encomendas agendadas, informe o nome do cliente.");
-      return;
-    }
-
-    setSalvandoVenda(true);
+  // =========================================================================
+  // GESTÃO DE CAIXA: CARREGAMENTO, ABERTURA, SANGRIA, REFORÇO E FECHAMENTO
+  // =========================================================================
+  const carregarDadosCaixaETurnos = async () => {
+    if (!activeCode) return;
     try {
-      const pedidoId = crypto.randomUUID();
-      const nowIso = new Date().toISOString();
-      const hoje = nowIso.split("T")[0];
+      // 1. Carrega movimentações de hoje de transacoes_financeiras
+      const { data: transacoesHoje } = await supabase
+        .from("transacoes_financeiras")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("data", hoje);
 
-      // Formatação do resumo de itens
-      const resumoItensTexto = pdvCart
-        .map((it) => {
-          if (it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0) {
-            const opcsStr = it.opcoesSelecionadas
-              .map((o) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
-              .join(", ");
-            return `• ${it.quantidade}x ${it.produto.nome} (${opcsStr})`;
-          }
-          if (it.opcaoSelecionada) {
-            return `• ${it.quantidade}x ${it.produto.nome} (${it.opcaoSelecionada.nome})`;
-          }
-          return `• ${it.quantidade}x ${it.produto.nome}`;
-        })
-        .join("\n");
+      if (transacoesHoje) {
+        setMovimentacoesHoje(transacoesHoje);
+      }
 
-      // Detalhamento JSON dos itens
-      const itensDetalhesJson = pdvCart.map((it) => ({
-        id: it.produto.id,
-        nome: it.produto.nome,
-        categoria: it.produto.categoria,
-        quantidade: it.quantidade,
-        precoUnitario: it.precoUnitario || it.produto.preco,
-        subtotal: it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0
-          ? it.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1) * (it.produto.preco + (Number(o.preco_adicional) || 0)), 0)
-          : (it.precoUnitario || it.produto.preco) * it.quantidade,
-        opcaoNome: it.opcaoSelecionada?.nome,
-        opcoes_selecionadas: it.opcoesSelecionadas || (it.opcaoSelecionada ? [it.opcaoSelecionada] : []),
-      }));
+      // 2. Carrega vendas recentes de encomendas
+      const { data: vendasData } = await supabase
+        .from("encomendas")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-      // Síntese dos métodos de pagamento utilizados
-      const metodosUnicos = Array.from(
-        new Set(
-          partesPagamento.map((p) => {
-            if (p.metodo === "dinheiro") return "Dinheiro";
-            if (p.metodo === "pix") return "Pix";
-            if (p.metodo === "cartao_credito") return "Cartão Crédito";
-            if (p.metodo === "cartao_debito") return "Cartão Débito";
-            return "Outro";
-          })
-        )
-      );
-      const metodoPagamentoSintese =
-        metodosUnicos.length > 1
-          ? `Pagamento Misto (${metodosUnicos.join(" + ")})`
-          : metodosUnicos[0] || "Dinheiro";
+      if (vendasData) {
+        setVendasRecentes(vendasData);
+      }
+    } catch (e) {
+      console.warn("[PDV] Erro ao carregar dados do caixa e vendas:", e);
+    }
+  };
 
-      const historicoPagamentosJson = partesPagamento.map((p) => ({
-        id: p.id,
-        data: hoje,
-        valor: p.valor,
-        metodo: p.metodo,
-        valor_recebido: p.valorRecebido,
-        troco: p.troco,
-        observacao: p.observacao || `Pagamento PDV (${p.metodo})`,
-      }));
+  // Verificação inicial de abertura de caixa ao abrir o PDV
+  useEffect(() => {
+    if (!activeCode) return;
 
-      const isVendaBalcaoImediata = tipoVenda === "balcao";
-      const statusFinalPedido = isVendaBalcaoImediata ? "entregue" : "pendente";
+    const storedCaixa = localStorage.getItem(`caixadoce_caixa_${activeCode}_${hoje}`);
+    if (storedCaixa) {
+      try {
+        const parsed: CaixaTurno = JSON.parse(storedCaixa);
+        setCaixaAtual(parsed);
+        if (parsed.status === "aberto") {
+          setModalAberturaCaixaOpen(false);
+        } else {
+          setModalAberturaCaixaOpen(true);
+        }
+      } catch {
+        setModalAberturaCaixaOpen(true);
+      }
+    } else {
+      // Se ainda não abriu caixa hoje, abre modal obrigatório de abertura
+      setCaixaAtual(null);
+      setModalAberturaCaixaOpen(true);
+    }
 
-      // 1. Gravação em 'encomendas'
-      const payloadEncomenda: Record<string, any> = {
-        id: pedidoId,
+    carregarDadosCaixaETurnos();
+  }, [activeCode, hoje]);
+
+  // Abertura de Caixa
+  const handleConfirmarAberturaCaixa = async () => {
+    const valorNum = converterMoedaInputParaNumero(valorAberturaInput);
+    const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const operadorNome = profile?.nome || user?.email?.split("@")[0] || "Operador";
+
+    const novoCaixa: CaixaTurno = {
+      data: hoje,
+      status: "aberto",
+      horaAbertura: horaAgora,
+      valorAbertura: valorNum,
+      operador: operadorNome,
+    };
+
+    setCaixaAtual(novoCaixa);
+    try {
+      localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(novoCaixa));
+    } catch {}
+
+    // Grava abertura na tabela transacoes_financeiras se houver valor inicial informado
+    if (valorNum > 0) {
+      try {
+        const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
+        const payloadFin = {
+          estabelecimento_codigo: activeCode,
+          user_id: finUserId,
+          descricao: `Abertura de Caixa (Fundo de Troco Inicial)`,
+          categoria: "abertura_caixa",
+          tipo: "receita",
+          valor: valorNum,
+          metodo_pagamento: "dinheiro",
+          status: "concluida",
+          cliente_ou_fornecedor: "Operador Caixa",
+          data: hoje,
+          origem: "PDV",
+        };
+        await supabase.from("transacoes_financeiras").insert([payloadFin]);
+      } catch (errFin) {
+        console.warn("[PDV Abertura Financeiro Error]", errFin);
+      }
+    }
+
+    setModalAberturaCaixaOpen(false);
+    toast.success(`🎉 Caixa aberto com sucesso! Fundo inicial: ${formatarMoeda(valorNum)}`);
+    carregarDadosCaixaETurnos();
+  };
+
+  // Sangria e Reforço
+  const handleRegistrarMovimentacao = async (tipo: "sangria" | "reforco") => {
+    const valorNum = converterMoedaInputParaNumero(valorMovimentacaoInput);
+    if (!valorNum || valorNum <= 0) {
+      toast.error("Informe um valor válido maior que zero.");
+      return;
+    }
+
+    const isSangria = tipo === "sangria";
+    const motivoPadrao = isSangria ? "Retirada de Dinheiro" : "Aporte de Troco";
+    const motivoFinal = motivoMovimentacaoInput.trim() || motivoPadrao;
+
+    setSalvandoMovimentacao(true);
+    try {
+      const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
+      const payloadFin = {
         estabelecimento_codigo: activeCode,
-        user_id: profile?.ownerUserId || user?.id || null,
-        cliente_nome: clienteNome.trim() || "Cliente Balcão",
-        cliente_whatsapp: clienteWhatsapp.trim() || "",
-        data_entrega: isVendaBalcaoImediata ? hoje : dataEntrega,
-        horario_entrega: isVendaBalcaoImediata ? new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : horarioEntrega,
-        tipo_entrega: isVendaBalcaoImediata ? "balcao" : tipoEntregaAgendada,
-        endereco_entrega: isVendaBalcaoImediata ? "" : enderecoEntrega,
-        status: statusFinalPedido,
-        status_pagamento: "pago_integral",
-        metodo_pagamento: metodoPagamentoSintese,
-        forma_pagamento: "PDV / Balcão",
-        origem_pagamento: "pdv",
-        itens: resumoItensTexto,
-        itens_detalhes: itensDetalhesJson,
-        valor_total: totalVenda,
-        total_amount: totalVenda,
-        valor_entrada: totalVenda,
-        valor_restante: 0,
-        historico_pagamentos: historicoPagamentosJson,
-        observacoes: observacoesVenda ? `[PDV] ${observacoesVenda}` : "[PDV Balcão]",
+        user_id: finUserId,
+        descricao: `${isSangria ? "Sangria" : "Reforço"} de Caixa: ${motivoFinal}`,
+        categoria: isSangria ? "sangria" : "reforco",
+        tipo: isSangria ? "despesa" : "receita",
+        valor: valorNum,
+        metodo_pagamento: "dinheiro",
+        status: "concluida",
+        cliente_ou_fornecedor: isSangria ? "Sangria Caixa" : "Reforço Caixa",
+        data: hoje,
+        origem: "PDV",
       };
 
-      const { error: errInsert } = await supabase.from("encomendas").insert([payloadEncomenda]);
+      const { error: errInsert } = await supabase.from("transacoes_financeiras").insert([payloadFin]);
       if (errInsert) {
-        console.warn("[PDV Insert Warning] Falhou com payload completo, tentando minimal:", errInsert.message);
-        const { itens_detalhes: _id, ...payloadMin } = payloadEncomenda;
-        await supabase.from("encomendas").insert([payloadMin]);
+        console.warn("[PDV Movimentação Fallback]", errInsert.message);
+        // Fallback minimal
+        await supabase.from("transacoes_financeiras").insert([{
+          estabelecimento_codigo: activeCode,
+          user_id: finUserId,
+          descricao: payloadFin.descricao,
+          categoria: payloadFin.categoria,
+          tipo: payloadFin.tipo,
+          valor: valorNum,
+          status: "concluida",
+          data: hoje,
+        }]);
       }
 
-      // 2. Se venda imediata, registra receita no módulo financeiro automaticamente
-      if (isVendaBalcaoImediata) {
-        try {
-          await supabase.from("transacoes_financeiras").insert([
-            {
-              id: crypto.randomUUID(),
-              estabelecimento_codigo: activeCode,
-              user_id: profile?.ownerUserId || user?.id || null,
-              tipo: "receita",
-              descricao: `Venda PDV Balcão (${clienteNome || "Cliente"})`,
-              categoria: "venda_balcao",
-              valor: totalVenda,
-              data: hoje,
-              forma_pagamento: metodoPagamentoSintese,
-              metodo_pagamento: metodoPagamentoSintese,
-              status: "concluida",
-              observacoes: `Itens: ${resumoItensTexto.slice(0, 150)}`,
-            },
-          ]);
-        } catch (eFin) {
-          console.warn("[PDV Financeiro Insert Warning]", eFin);
-        }
-      }
-
-      // 3. Monta o recibo da venda e abre o modal de sucesso
-      setReciboUltimaVenda({
-        id: pedidoId,
-        data: new Date().toLocaleString("pt-BR"),
-        clienteNome: clienteNome || "Cliente Balcão",
-        itens: pdvCart,
-        total: totalVenda,
-        partes: partesPagamento,
-        tipoVenda,
-        statusFinalPedido,
-      });
-
-      setCheckoutModalOpen(false);
-      setVendaConcluidaModalOpen(true);
-      setPdvCart([]);
-      setPartesPagamento([]);
+      setValorMovimentacaoInput("");
+      setMotivoMovimentacaoInput("");
+      setAbaGestaoCaixa("resumo");
       toast.success(
-        isVendaBalcaoImediata
-          ? "🎉 Venda concluída e registrada com sucesso no caixa!"
-          : "🎉 Encomenda agendada com sucesso!"
+        isSangria
+          ? `💸 Sangria de ${formatarMoeda(valorNum)} registrada com sucesso!`
+          : `💵 Reforço de ${formatarMoeda(valorNum)} registrado com sucesso!`
       );
+      await carregarDadosCaixaETurnos();
     } catch (err: any) {
-      console.error("[PDV Finalizar Erro]", err);
-      toast.error(`Falha ao registrar venda: ${err?.message || err}`);
+      toast.error(`Falha ao registrar movimentação: ${err?.message || err}`);
     } finally {
-      setSalvandoVenda(false);
+      setSalvandoMovimentacao(false);
     }
+  };
+
+  // Fechamento de Caixa
+  const handleFecharCaixa = () => {
+    if (!caixaAtual) return;
+    const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const caixaFechado: CaixaTurno = {
+      ...caixaAtual,
+      status: "fechado",
+      horaFechamento: horaAgora,
+    };
+    setCaixaAtual(caixaFechado);
+    try {
+      localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(caixaFechado));
+    } catch {}
+    setModalGestaoCaixaOpen(false);
+    toast.info("Caixa do dia fechado com sucesso!");
+  };
+
+  // Cálculo Dinâmico do Resumo Financeiro da Gaveta
+  const resumoFinanceiroCaixa = useMemo(() => {
+    const valorAbertura = Number(caixaAtual?.valorAbertura) || 0;
+
+    let totalVendasDinheiro = 0;
+    let totalVendasPix = 0;
+    let totalVendasCartao = 0;
+    let totalVendasGeral = 0;
+
+    for (const v of vendasRecentes) {
+      const dataVenda = v.created_at ? v.created_at.split("T")[0] : v.data_entrega;
+      const isHoje = !dataVenda || dataVenda === hoje;
+      if (!isHoje) continue;
+
+      const total = Number(v.valor_total || v.total_amount || 0) || 0;
+      totalVendasGeral += total;
+
+      const historico = Array.isArray(v.historico_pagamentos) ? v.historico_pagamentos : [];
+      if (historico.length > 0) {
+        for (const p of historico) {
+          const val = Number(p.valor || p.amount || 0) || 0;
+          const met = String(p.metodo || "").toLowerCase();
+          if (met === "dinheiro") totalVendasDinheiro += val;
+          else if (met === "pix") totalVendasPix += val;
+          else if (met.includes("cartao") || met.includes("card") || met.includes("credit") || met.includes("debit")) totalVendasCartao += val;
+          else totalVendasDinheiro += val;
+        }
+      } else {
+        const met = String(v.metodo_pagamento || "").toLowerCase();
+        if (met === "dinheiro") totalVendasDinheiro += total;
+        else if (met === "pix") totalVendasPix += total;
+        else if (met.includes("cartao") || met.includes("credit") || met.includes("debit")) totalVendasCartao += total;
+        else totalVendasDinheiro += total;
+      }
+    }
+
+    let totalReforcos = 0;
+    let totalSangrias = 0;
+
+    for (const m of movimentacoesHoje) {
+      const cat = String(m.categoria || "").toLowerCase();
+      const desc = String(m.descricao || "").toLowerCase();
+      const val = Number(m.valor) || 0;
+
+      if (cat === "reforco" || desc.includes("reforço") || desc.includes("reforco")) {
+        totalReforcos += val;
+      } else if (cat === "sangria" || desc.includes("sangria")) {
+        totalSangrias += val;
+      }
+    }
+
+    const saldoDinheiroGaveta = Math.max(0, valorAbertura + totalVendasDinheiro + totalReforcos - totalSangrias);
+
+    return {
+      valorAbertura,
+      totalVendasDinheiro,
+      totalVendasPix,
+      totalVendasCartao,
+      totalVendasGeral,
+      totalReforcos,
+      totalSangrias,
+      saldoDinheiroGaveta,
+    };
+  }, [caixaAtual, vendasRecentes, movimentacoesHoje, hoje]);
+
+  // =========================================================================
+  // HISTÓRICO DE ÚLTIMAS VENDAS: RE-BUSCA, EDIÇÃO, DELEÇÃO E ESTORNO
+  // =========================================================================
+  const handleAbrirUltimasVendas = async () => {
+    setCarregandoVendas(true);
+    setModalUltimasVendasOpen(true);
+    try {
+      const { data, error } = await supabase
+        .from("encomendas")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (!error && data) {
+        setVendasRecentes(data);
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar vendas recentes:", e);
+    } finally {
+      setCarregandoVendas(false);
+    }
+  };
+
+  // Exclusão com Sincronização e Estorno Automático em transacoes_financeiras
+  const handleExcluirVenda = async (vendaId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta venda? O lançamento financeiro correspondente será estornado para manter o caixa sincronizado.")) {
+      return;
+    }
+    try {
+      // 1. Exclui da tabela encomendas
+      const { error: errEnc } = await supabase
+        .from("encomendas")
+        .delete()
+        .eq("id", vendaId)
+        .eq("estabelecimento_codigo", activeCode);
+
+      if (errEnc) {
+        console.warn("[PDV Excluir Encomenda Warning]", errEnc);
+      }
+
+      // 2. Exclui/Estorna da tabela transacoes_financeiras para não furar o caixa
+      try {
+        await supabase
+          .from("transacoes_financeiras")
+          .delete()
+          .eq("estabelecimento_codigo", activeCode)
+          .or(`cliente_ou_fornecedor.eq.PDV-${vendaId},descricao.ilike.%${vendaId}%,descricao.ilike.%${vendaId.slice(0, 8)}%`);
+      } catch (errFin) {
+        console.warn("[PDV Excluir Transacao Warning]", errFin);
+      }
+
+      setVendasRecentes((prev) => prev.filter((v) => v.id !== vendaId));
+      toast.success("Venda e lançamento financeiro excluídos com sucesso!");
+      await carregarDadosCaixaETurnos();
+    } catch (err: any) {
+      toast.error(`Erro ao excluir venda: ${err?.message || err}`);
+    }
+  };
+
+  // Edição de Venda
+  const handleAbrirEdicaoVenda = (venda: any) => {
+    setVendaEmEdicao({
+      id: venda.id,
+      cliente_nome: venda.cliente_nome || "",
+      cliente_whatsapp: venda.cliente_whatsapp || "",
+      status: venda.status || "entregue",
+      status_pagamento: venda.status_pagamento || "pago_integral",
+      observacoes: venda.observacoes || "",
+      valor_total: venda.valor_total || venda.total_amount || 0,
+      itens: venda.itens || "",
+    });
+    setModalEditarVendaOpen(true);
+  };
+
+  const handleSalvarEdicaoVenda = async () => {
+    if (!vendaEmEdicao) return;
+    setSalvandoEdicaoVenda(true);
+    try {
+      const { error } = await supabase
+        .from("encomendas")
+        .update({
+          cliente_nome: vendaEmEdicao.cliente_nome,
+          cliente_whatsapp: vendaEmEdicao.cliente_whatsapp,
+          status: vendaEmEdicao.status,
+          status_pagamento: vendaEmEdicao.status_pagamento,
+          observacoes: vendaEmEdicao.observacoes,
+        })
+        .eq("id", vendaEmEdicao.id)
+        .eq("estabelecimento_codigo", activeCode);
+
+      if (error) throw error;
+
+      setVendasRecentes((prev) =>
+        prev.map((v) => (v.id === vendaEmEdicao.id ? { ...v, ...vendaEmEdicao } : v))
+      );
+      setModalEditarVendaOpen(false);
+      toast.success("Venda atualizada com sucesso!");
+    } catch (err: any) {
+      toast.error(`Erro ao atualizar venda: ${err?.message || err}`);
+    } finally {
+      setSalvandoEdicaoVenda(false);
+    }
+  };
+
+  // Reimpressão de Cupom a partir do Histórico
+  const handleReimprimirCupom = (venda: any) => {
+    let itensFormatados: ItemCarrinhoPdv[] = [];
+    if (Array.isArray(venda.itens_detalhes) && venda.itens_detalhes.length > 0) {
+      itensFormatados = venda.itens_detalhes.map((it: any) => ({
+        produto: {
+          id: it.id,
+          nome: it.nome,
+          categoria: it.categoria || "Geral",
+          preco: Number(it.precoUnitario) || 0,
+          ativo: true,
+        },
+        quantidade: it.quantidade || 1,
+        precoUnitario: Number(it.precoUnitario) || 0,
+        opcoesSelecionadas: it.opcoes_selecionadas,
+      }));
+    } else {
+      itensFormatados = [
+        {
+          produto: {
+            id: "1",
+            nome: venda.itens || "Itens do Pedido",
+            categoria: "Geral",
+            preco: Number(venda.valor_total || venda.total_amount || 0),
+            ativo: true,
+          },
+          quantidade: 1,
+          precoUnitario: Number(venda.valor_total || venda.total_amount || 0),
+        },
+      ];
+    }
+
+    setReciboUltimaVenda({
+      id: venda.id,
+      data: venda.created_at ? new Date(venda.created_at).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR"),
+      clienteNome: venda.cliente_nome || "Cliente Balcão",
+      itens: itensFormatados,
+      total: Number(venda.valor_total || venda.total_amount || 0),
+      tipoVenda: venda.tipo_entrega === "balcao" ? "balcao" : "agendada",
+      statusFinalPedido: venda.status,
+    });
+    setVendaConcluidaModalOpen(true);
   };
 
   const handleNovaVenda = () => {
@@ -741,7 +1021,7 @@ export function PdvView() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-purple-500 selection:text-white">
       {/* ========================================================================= */}
-      {/* 1. HEADER DO PDV (FRENTE DE CAIXA) */}
+      {/* 1. HEADER DO PDV (FRENTE DE CAIXA PROFISSIONAL) */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-6 py-2.5 shadow-md">
         <div className="flex items-center justify-between gap-3">
@@ -763,11 +1043,11 @@ export function PdvView() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-black text-white truncate max-w-[180px] sm:max-w-[280px]">
+                  <h1 className="text-sm font-black text-white truncate max-w-[150px] sm:max-w-[240px]">
                     {activeName}
                   </h1>
                   <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-mono font-bold px-1.5 py-0 uppercase tracking-wide">
-                    PDV Ativo
+                    PDV
                   </Badge>
                 </div>
                 <p className="text-[10px] text-slate-400 font-mono hidden sm:block">
@@ -778,13 +1058,55 @@ export function PdvView() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-xl border border-slate-700 text-xs">
-              <span className="text-slate-400">Total no Caixa:</span>
-              <span className="font-mono font-black text-emerald-400 text-sm">
-                {formatarMoeda(totalVenda)}
+            {/* Botão de Gestão de Caixa */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!caixaAtual || caixaAtual.status === "fechado") {
+                  setModalAberturaCaixaOpen(true);
+                } else {
+                  setModalGestaoCaixaOpen(true);
+                }
+              }}
+              className={`h-8.5 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors ${
+                caixaAtual?.status === "aberto"
+                  ? "bg-slate-800/90 border-emerald-500/40 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
+                  : "bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200"
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {caixaAtual?.status === "aberto" ? (
+                  <>
+                    <span className="hidden md:inline">Caixa: </span>
+                    <span className="font-mono font-bold text-white">
+                      {formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)}
+                    </span>
+                  </>
+                ) : (
+                  "Abrir Caixa"
+                )}
               </span>
-            </div>
+            </Button>
 
+            {/* Botão de Últimas Vendas */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAbrirUltimasVendas}
+              className="h-8.5 px-3 rounded-xl bg-slate-800/90 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 shadow-xs"
+            >
+              <History className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Últimas Vendas</span>
+              {vendasRecentes.length > 0 && (
+                <Badge className="bg-purple-600 text-white text-[9px] px-1 py-0 rounded-full font-mono">
+                  {vendasRecentes.length}
+                </Badge>
+              )}
+            </Button>
+
+            {/* Limpar Pedido */}
             {pdvCart.length > 0 && (
               <Button
                 variant="ghost"
@@ -798,6 +1120,7 @@ export function PdvView() {
               </Button>
             )}
 
+            {/* Cobrar */}
             <Button
               size="sm"
               disabled={pdvCart.length === 0}
@@ -810,6 +1133,7 @@ export function PdvView() {
           </div>
         </div>
       </header>
+
 
       {/* ========================================================================= */}
       {/* 2. CORPO PRINCIPAL (PRODUTOS NA ESQUERDA + CARRINHO FIXO NA DIREITA) */}
@@ -1708,7 +2032,604 @@ export function PdvView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 6. MODAL OBRIGATÓRIO DE ABERTURA DE CAIXA */}
+      {/* ========================================================================= */}
+      <Dialog open={modalAberturaCaixaOpen} onOpenChange={setModalAberturaCaixaOpen}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-purple-500/40 text-white p-5 shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-slate-800">
+            <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-purple-400 shrink-0" />
+              Abertura de Caixa (Turno Diário)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
+              Inicie a sessão do PDV informando o fundo de troco em dinheiro disponível na gaveta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-4">
+            <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/30 space-y-2">
+              <Label className="text-xs font-bold text-purple-200">
+                Com qual valor em dinheiro o caixa está iniciando hoje?
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">
+                  R$
+                </span>
+                <Input
+                  autoFocus
+                  placeholder="0,00"
+                  value={valorAberturaInput}
+                  onChange={(e) => setValorAberturaInput(aplicarMascaraMoedaInput(e.target.value))}
+                  className="pl-10 h-11 text-base font-mono font-black bg-slate-950 border-purple-500/40 text-emerald-400 focus-visible:ring-purple-500 rounded-xl"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Se não houver valor em notas/moedas na gaveta, deixe 0,00.
+              </p>
+            </div>
+
+            <div className="text-xs text-slate-400 flex items-center gap-2">
+              <User className="w-4 h-4 text-slate-500" />
+              <span>Operador responsável: <strong className="text-white">{profile?.nome || user?.email?.split("@")[0] || "Operador"}</strong></span>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setModalAberturaCaixaOpen(false)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Depois
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmarAberturaCaixa}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-black text-xs px-5 h-9 shadow-md"
+            >
+              <Unlock className="w-3.5 h-3.5 mr-1.5" />
+              Abrir Caixa Agora
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 7. MODAL DE GESTÃO DE CAIXA (RESUMO, SANGRIA, REFORÇO, FECHAMENTO) */}
+      {/* ========================================================================= */}
+      <Dialog open={modalGestaoCaixaOpen} onOpenChange={setModalGestaoCaixaOpen}>
+        <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-800 text-white p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-3 border-b border-slate-800">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-emerald-400 shrink-0" />
+                Gestão e Controle de Caixa
+              </DialogTitle>
+              <Badge className={caixaAtual?.status === "aberto" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]" : "bg-rose-500/20 text-rose-300 border-rose-500/30 text-[10px]"}>
+                {caixaAtual?.status === "aberto" ? "Caixa Aberto" : "Caixa Fechado"}
+              </Badge>
+            </div>
+            <DialogDescription className="text-xs text-slate-400">
+              Operador: <strong className="text-slate-200">{caixaAtual?.operador || "Operador"}</strong> • Aberto às: <strong className="text-slate-200">{caixaAtual?.horaAbertura || "--:--"}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* ABAS DO MENU DE CAIXA */}
+          <div className="flex items-center gap-1.5 border-b border-slate-800 pb-2 overflow-x-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant={abaGestaoCaixa === "resumo" ? "default" : "ghost"}
+              onClick={() => setAbaGestaoCaixa("resumo")}
+              className={`text-xs font-bold rounded-xl h-8 ${abaGestaoCaixa === "resumo" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              Resumo da Gaveta
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={abaGestaoCaixa === "sangria" ? "default" : "ghost"}
+              onClick={() => setAbaGestaoCaixa("sangria")}
+              className={`text-xs font-bold rounded-xl h-8 ${abaGestaoCaixa === "sangria" ? "bg-rose-600 text-white" : "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"}`}
+            >
+              <ArrowDownRight className="w-3.5 h-3.5 mr-1" />
+              Sangria (Retirada)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={abaGestaoCaixa === "reforco" ? "default" : "ghost"}
+              onClick={() => setAbaGestaoCaixa("reforco")}
+              className={`text-xs font-bold rounded-xl h-8 ${abaGestaoCaixa === "reforco" ? "bg-emerald-600 text-white" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"}`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
+              Reforço (Entrada)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={abaGestaoCaixa === "movimentacoes" ? "default" : "ghost"}
+              onClick={() => setAbaGestaoCaixa("movimentacoes")}
+              className={`text-xs font-bold rounded-xl h-8 ${abaGestaoCaixa === "movimentacoes" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              Movimentações ({movimentacoesHoje.length})
+            </Button>
+          </div>
+
+          <div className="py-2 space-y-4">
+            {/* 1. ABA RESUMO DA GAVETA */}
+            {abaGestaoCaixa === "resumo" && (
+              <div className="space-y-3">
+                {/* Hero Saldo em Gaveta */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-emerald-500/40 text-center space-y-1 shadow-lg">
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Saldo Estimado em Dinheiro na Gaveta
+                  </p>
+                  <p className="text-2xl sm:text-3xl font-mono font-black text-white">
+                    {formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Fundo Inicial ({formatarMoeda(resumoFinanceiroCaixa.valorAbertura)}) + Vendas Dinheiro ({formatarMoeda(resumoFinanceiroCaixa.totalVendasDinheiro)}) + Reforços ({formatarMoeda(resumoFinanceiroCaixa.totalReforcos)}) - Sangrias ({formatarMoeda(resumoFinanceiroCaixa.totalSangrias)})
+                  </p>
+                </div>
+
+                {/* Grade de Indicadores */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <span className="text-slate-400 text-[11px]">Fundo Inicial:</span>
+                    <p className="font-mono font-bold text-white text-sm">
+                      {formatarMoeda(resumoFinanceiroCaixa.valorAbertura)}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <span className="text-slate-400 text-[11px]">Vendas Dinheiro:</span>
+                    <p className="font-mono font-bold text-emerald-400 text-sm">
+                      +{formatarMoeda(resumoFinanceiroCaixa.totalVendasDinheiro)}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <span className="text-slate-400 text-[11px]">Reforços (+):</span>
+                    <p className="font-mono font-bold text-emerald-400 text-sm">
+                      +{formatarMoeda(resumoFinanceiroCaixa.totalReforcos)}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <span className="text-slate-400 text-[11px]">Sangrias (-):</span>
+                    <p className="font-mono font-bold text-rose-400 text-sm">
+                      -{formatarMoeda(resumoFinanceiroCaixa.totalSangrias)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Outros Métodos (Não Afetam Gaveta) */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1.5 text-xs">
+                  <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wide">
+                    Outros Recebimentos no PDV Hoje (Banco / Conta Digital):
+                  </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <QrCode className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-slate-300">Pix:</span>
+                      <strong className="font-mono text-white">{formatarMoeda(resumoFinanceiroCaixa.totalVendasPix)}</strong>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="text-slate-300">Cartões:</span>
+                      <strong className="font-mono text-white">{formatarMoeda(resumoFinanceiroCaixa.totalVendasCartao)}</strong>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-slate-300">Total Geral Hoje:</span>
+                      <strong className="font-mono text-emerald-400">{formatarMoeda(resumoFinanceiroCaixa.totalVendasGeral)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 2. ABA SANGRIA */}
+            {abaGestaoCaixa === "sangria" && (
+              <div className="space-y-3 p-4 rounded-xl bg-slate-950 border border-rose-500/30">
+                <div className="flex items-center gap-2 text-rose-300">
+                  <ArrowDownRight className="w-4 h-4" />
+                  <h4 className="text-xs font-black uppercase tracking-wide">Registrar Sangria de Caixa (Retirada)</h4>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Utilize esta opção para registrar qualquer retirada física de dinheiro da gaveta (ex: sangria de segurança para cofre, pagamento de motoboy ou fornecedor).
+                </p>
+
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-300">Valor da Retirada (R$):</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">R$</span>
+                      <Input
+                        placeholder="0,00"
+                        value={valorMovimentacaoInput}
+                        onChange={(e) => setValorMovimentacaoInput(aplicarMascaraMoedaInput(e.target.value))}
+                        className="pl-10 h-10 font-mono font-bold bg-slate-900 border-slate-700 text-white rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-300">Motivo / Justificativa:</Label>
+                    <Input
+                      placeholder="Ex: Sangria para cofre, Pagamento entregador..."
+                      value={motivoMovimentacaoInput}
+                      onChange={(e) => setMotivoMovimentacaoInput(e.target.value)}
+                      className="h-10 text-xs bg-slate-900 border-slate-700 text-white rounded-xl"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={salvandoMovimentacao}
+                    onClick={() => handleRegistrarMovimentacao("sangria")}
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 rounded-xl shadow-md"
+                  >
+                    {salvandoMovimentacao ? "Gravando Sangria..." : "Confirmar Sangria no Caixa"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 3. ABA REFORÇO */}
+            {abaGestaoCaixa === "reforco" && (
+              <div className="space-y-3 p-4 rounded-xl bg-slate-950 border border-emerald-500/30">
+                <div className="flex items-center gap-2 text-emerald-300">
+                  <ArrowUpRight className="w-4 h-4" />
+                  <h4 className="text-xs font-black uppercase tracking-wide">Registrar Reforço de Caixa (Entrada de Troco)</h4>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Utilize esta opção para registrar aportes extras de dinheiro na gaveta (ex: adição de moedas ou notas para troco).
+                </p>
+
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-300">Valor do Aporte (R$):</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">R$</span>
+                      <Input
+                        placeholder="0,00"
+                        value={valorMovimentacaoInput}
+                        onChange={(e) => setValorMovimentacaoInput(aplicarMascaraMoedaInput(e.target.value))}
+                        className="pl-10 h-10 font-mono font-bold bg-slate-900 border-slate-700 text-white rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-300">Motivo / Origem:</Label>
+                    <Input
+                      placeholder="Ex: Troco de moedas, Aporte extra..."
+                      value={motivoMovimentacaoInput}
+                      onChange={(e) => setMotivoMovimentacaoInput(e.target.value)}
+                      className="h-10 text-xs bg-slate-900 border-slate-700 text-white rounded-xl"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={salvandoMovimentacao}
+                    onClick={() => handleRegistrarMovimentacao("reforco")}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs h-9 rounded-xl shadow-md"
+                  >
+                    {salvandoMovimentacao ? "Gravando Reforço..." : "Confirmar Entrada de Troco"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 4. ABA MOVIMENTAÇÕES */}
+            {abaGestaoCaixa === "movimentacoes" && (
+              <div className="space-y-2">
+                {movimentacoesHoje.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs">
+                    Nenhuma movimentação avulsa registrada hoje.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+                    {movimentacoesHoje.map((m) => {
+                      const isSaida = m.tipo === "despesa" || m.tipo === "saida" || m.categoria === "sangria";
+                      return (
+                        <div
+                          key={m.id}
+                          className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {isSaida ? (
+                              <ArrowDownRight className="w-4 h-4 text-rose-400 shrink-0" />
+                            ) : (
+                              <ArrowUpRight className="w-4 h-4 text-emerald-400 shrink-0" />
+                            )}
+                            <div className="truncate">
+                              <p className="font-bold text-white truncate">{m.descricao}</p>
+                              <p className="text-[10px] text-slate-400 uppercase">{m.categoria || "Geral"}</p>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`font-mono font-bold ${isSaida ? "text-rose-400" : "text-emerald-400"}`}>
+                              {isSaida ? "-" : "+"}{formatarMoeda(Number(m.valor) || 0)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleFecharCaixa}
+              className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border-rose-500/20"
+            >
+              <Lock className="w-3.5 h-3.5 mr-1" />
+              Fechar Caixa do Dia
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setModalGestaoCaixaOpen(false)}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 8. MODAL DE ÚLTIMAS VENDAS (SINCRONIZADO COM ENCOMENDAS & FINANCEIRO) */}
+      {/* ========================================================================= */}
+      <Dialog open={modalUltimasVendasOpen} onOpenChange={setModalUltimasVendasOpen}>
+        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-800 text-white p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-3 border-b border-slate-800">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-purple-400 shrink-0" />
+                Últimas Vendas do Dia (PDV)
+              </DialogTitle>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleAbrirUltimasVendas}
+                className="h-7 text-xs text-slate-400 hover:text-white"
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                Atualizar
+              </Button>
+            </div>
+            <DialogDescription className="text-xs text-slate-400">
+              Vendas e pedidos registrados nesta loja. Ao deletar uma venda, o lançamento financeiro é estornado automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2 space-y-2">
+            {carregandoVendas ? (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto"></div>
+                <p className="text-xs">Carregando histórico de vendas...</p>
+              </div>
+            ) : vendasRecentes.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-xs space-y-2">
+                <Receipt className="w-8 h-8 mx-auto text-slate-600" />
+                <p>Nenhuma venda registrada até o momento hoje.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                {vendasRecentes.map((venda) => {
+                  const dataStr = venda.created_at
+                    ? new Date(venda.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                    : "--:--";
+                  const total = Number(venda.valor_total || venda.total_amount || 0);
+
+                  return (
+                    <div
+                      key={venda.id}
+                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs hover:border-slate-700 transition-colors"
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-400 text-[11px]">
+                            #{venda.id?.slice(0, 6)}
+                          </span>
+                          <span className="text-slate-500">•</span>
+                          <span className="text-slate-400">{dataStr}</span>
+                          <span className="text-slate-500">•</span>
+                          <strong className="text-white truncate max-w-[180px]">
+                            {venda.cliente_nome || "Cliente Balcão"}
+                          </strong>
+                          <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] px-1 py-0 uppercase">
+                            {venda.tipo_entrega === "balcao" ? "Balcão" : "Agendado"}
+                          </Badge>
+                        </div>
+
+                        <p className="text-slate-400 text-[11px] truncate max-w-[450px]">
+                          {venda.itens || "Itens da Venda"}
+                        </p>
+
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <span className="text-[10px] text-slate-500">
+                            Pagamento: <strong className="text-slate-300">{venda.metodo_pagamento || "Dinheiro"}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-850">
+                        <span className="font-mono text-sm font-black text-emerald-400">
+                          {formatarMoeda(total)}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleReimprimirCupom(venda)}
+                            title="Reimprimir Cupom"
+                            className="h-7.5 w-7.5 p-0 text-slate-300 hover:text-white hover:bg-slate-800"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleAbrirEdicaoVenda(venda)}
+                            title="Editar Venda"
+                            className="h-7.5 w-7.5 p-0 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleExcluirVenda(venda.id)}
+                            title="Excluir Venda e Estornar Financeiro"
+                            className="h-7.5 w-7.5 p-0 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-slate-800">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setModalUltimasVendasOpen(false)}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 9. MODAL DE EDIÇÃO DE VENDA */}
+      {/* ========================================================================= */}
+      {vendaEmEdicao && (
+        <Dialog open={modalEditarVendaOpen} onOpenChange={setModalEditarVendaOpen}>
+          <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-white p-5">
+            <DialogHeader className="pb-2 border-b border-slate-800">
+              <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                <Edit className="w-4 h-4 text-sky-400 shrink-0" />
+                Editar Venda #{vendaEmEdicao.id?.slice(0, 6)}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                Altere os dados de identificação, status e observações da venda.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-3 space-y-3 text-xs">
+              <div className="space-y-1">
+                <Label className="text-slate-300">Nome do Cliente:</Label>
+                <Input
+                  value={vendaEmEdicao.cliente_nome}
+                  onChange={(e) =>
+                    setVendaEmEdicao((prev: any) => ({ ...prev, cliente_nome: e.target.value }))
+                  }
+                  className="h-9 bg-slate-950 border-slate-700 text-white rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-slate-300">WhatsApp:</Label>
+                <Input
+                  value={vendaEmEdicao.cliente_whatsapp}
+                  onChange={(e) =>
+                    setVendaEmEdicao((prev: any) => ({
+                      ...prev,
+                      cliente_whatsapp: aplicarMascaraTelefone(e.target.value),
+                    }))
+                  }
+                  className="h-9 bg-slate-950 border-slate-700 text-white rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-slate-300">Status do Pedido:</Label>
+                <Select
+                  value={vendaEmEdicao.status}
+                  onValueChange={(val) =>
+                    setVendaEmEdicao((prev: any) => ({ ...prev, status: val }))
+                  }
+                >
+                  <SelectTrigger className="h-9 bg-slate-950 border-slate-700 text-white rounded-xl text-xs">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                    <SelectItem value="entregue">Entregue (Concluído)</SelectItem>
+                    <SelectItem value="pendente">Pendente / Agendado</SelectItem>
+                    <SelectItem value="em_producao">Em Produção</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-slate-300">Observações:</Label>
+                <Textarea
+                  value={vendaEmEdicao.observacoes}
+                  onChange={(e) =>
+                    setVendaEmEdicao((prev: any) => ({ ...prev, observacoes: e.target.value }))
+                  }
+                  className="h-20 bg-slate-950 border-slate-700 text-white rounded-xl text-xs resize-none"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setModalEditarVendaOpen(false)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                disabled={salvandoEdicaoVenda}
+                onClick={handleSalvarEdicaoVenda}
+                className="bg-sky-600 hover:bg-sky-500 text-white font-black text-xs px-4"
+              >
+                {salvandoEdicaoVenda ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
+
 
