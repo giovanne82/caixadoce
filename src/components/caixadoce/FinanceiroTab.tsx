@@ -380,13 +380,32 @@ export function FinanceiroTab({
     })).sort((a, b) => b.total - a.total);
   }, [despesas, metricasDespesas.total]);
 
+  // Helper para identificar movimentações de gaveta do PDV (não são DRE/Receita/Despesa da loja)
+  const isCaixaPdv = (t: { categoria?: string; descricao?: string }) => {
+    const cat = String(t.categoria || "").toLowerCase();
+    const desc = String(t.descricao || "").toLowerCase();
+    return (
+      cat === "sangria" ||
+      cat === "reforco" ||
+      cat === "reforço" ||
+      cat === "abertura_caixa" ||
+      cat === "abertura" ||
+      desc.startsWith("sangria") ||
+      desc.startsWith("reforço") ||
+      desc.startsWith("reforco") ||
+      desc.startsWith("abertura de caixa")
+    );
+  };
+
   // Helpers de Tipo e Status
   const isDespesa = (t: TransacaoFinanceira) => {
+    if (isCaixaPdv(t)) return false;
     const tp = String(t.tipo || "").toLowerCase();
     return tp === "despesa" || tp === "saida";
   };
 
   const isReceita = (t: TransacaoFinanceira) => {
+    if (isCaixaPdv(t)) return false;
     const tp = String(t.tipo || "").toLowerCase();
     return tp === "receita" || tp === "entrada";
   };
@@ -398,8 +417,8 @@ export function FinanceiroTab({
 
   // Consolidação Efetiva de Lançamentos Manuais/Contas (transacoes_financeiras) + Notinhas Escaneadas (despesas)
   const transacoesConsolidadas = useMemo(() => {
-    const lista: TransacaoFinanceira[] = [...transacoes];
-    const idsExistentes = new Set(transacoes.map((t) => t.id));
+    const lista: TransacaoFinanceira[] = transacoes.filter((t) => !isCaixaPdv(t));
+    const idsExistentes = new Set(lista.map((t) => t.id));
 
     if (Array.isArray(despesas)) {
       for (const d of despesas) {
@@ -566,7 +585,7 @@ export function FinanceiroTab({
 
   const totalReceitasAvulsas = useMemo(() => {
     return transacoes
-      .filter((t) => isReceita(t) && isPago(t))
+      .filter((t) => isReceita(t) && isPago(t) && !isCaixaPdv(t))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
   }, [transacoes]);
 
@@ -576,7 +595,7 @@ export function FinanceiroTab({
   const somaDespesasManuais = useMemo(() => {
     if (!Array.isArray(transacoes)) return 0;
     return transacoes
-      .filter((t) => isDespesa(t) && isPago(t))
+      .filter((t) => isDespesa(t) && isPago(t) && !isCaixaPdv(t))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
   }, [transacoes]);
 

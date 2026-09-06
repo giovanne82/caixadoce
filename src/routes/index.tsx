@@ -481,11 +481,22 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       const data = await safeFetchSupabase("transacoes_financeiras", activeCode, "created_at", false);
 
       if (data && Array.isArray(data)) {
-        // Descarta qualquer lançamento de assinatura do CaixaDoce para não poluir o fluxo de caixa pessoal da confeitaria
+        // Descarta qualquer lançamento de assinatura do CaixaDoce e operações de caixa do PDV (sangria, reforço, abertura) para não poluir o fluxo de caixa/DRE
         const validas = data.filter((d: any) => {
           const cat = String(d.categoria || "").toLowerCase();
           const desc = String(d.descricao || "").toLowerCase();
-          return !cat.includes("assinatura") && !desc.includes("assinatura") && !desc.includes("caixadoce");
+          const isAssinatura = cat.includes("assinatura") || desc.includes("assinatura") || desc.includes("caixadoce");
+          const isCaixaPdv =
+            cat === "sangria" ||
+            cat === "reforco" ||
+            cat === "reforço" ||
+            cat === "abertura_caixa" ||
+            cat === "abertura" ||
+            desc.startsWith("sangria") ||
+            desc.startsWith("reforço") ||
+            desc.startsWith("reforco") ||
+            desc.startsWith("abertura de caixa");
+          return !isAssinatura && !isCaixaPdv;
         });
 
         const mapeadas: TransacaoFinanceira[] = validas.map((d: any) => ({

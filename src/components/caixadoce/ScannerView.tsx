@@ -1118,6 +1118,21 @@ export function ScannerView({
     if (Array.isArray(transacoes)) {
       for (const t of transacoes) {
         if (!t || !t.id || idsExistentes.has(t.id)) continue;
+
+        const cat = String(t.categoria || "").toLowerCase();
+        const desc = String(t.descricao || "").toLowerCase();
+        const isCaixaPdv =
+          cat === "sangria" ||
+          cat === "reforco" ||
+          cat === "reforço" ||
+          cat === "abertura_caixa" ||
+          cat === "abertura" ||
+          desc.startsWith("sangria") ||
+          desc.startsWith("reforço") ||
+          desc.startsWith("reforco") ||
+          desc.startsWith("abertura de caixa");
+        if (isCaixaPdv) continue;
+
         const isSaida = String(t.tipo || "").toLowerCase() === "despesa" || String(t.tipo || "").toLowerCase() === "saida";
         const isFromScanner = t.origem?.includes("Scanner") || t.descricao?.toLowerCase().includes("notinha") || isSaida;
 
@@ -1151,7 +1166,7 @@ export function ScannerView({
       };
       return parseDate(b.dataCompra) - parseDate(a.dataCompra);
     });
-  }, [despesas, transacoes]);
+  }, [despesas, transacoes, activeCode]);
 
   return (
     <div className="space-y-6">
