@@ -1255,9 +1255,12 @@ export default {
         }
       }
 
-      // ROTA BACKEND PROXY PIX MERCADO PAGO (/api/create-pix-payment & /api/mercadopago/create-pix-payment)
+      // ROTA BACKEND PROXY PAGAMENTO (PIX / CARTÃO) MERCADO PAGO (/api/create-payment & /api/create-pix-payment)
       if (
-        (url.pathname === "/api/create-pix-payment" || url.pathname === "/api/mercadopago/create-pix-payment") &&
+        (url.pathname === "/api/create-payment" ||
+          url.pathname === "/api/create-pix-payment" ||
+          url.pathname === "/api/mercadopago/create-pix-payment" ||
+          url.pathname === "/api/mercadopago/create-payment") &&
         request.method === "POST"
       ) {
         try {
@@ -1269,6 +1272,12 @@ export default {
           const payerData = body.payer || {};
           const payerEmail = payerData.email || body.payerEmail || body.email || "cliente@caixadoce.com.br";
           const payerFirstName = payerData.first_name || body.payerFirstName || body.clienteNome || "Cliente";
+
+          const isCard = Boolean(body.token);
+          const cardToken = body.token || null;
+          const installments = Number(body.installments || 1);
+          const paymentMethodId = body.payment_method_id || (isCard ? undefined : "pix");
+          const issuerId = body.issuer_id || undefined;
 
           let tokenUso = body.mp_access_token || body.accessToken || body.access_token || "";
 
@@ -1293,33 +1302,47 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          console.log(`[MercadoPago Pix Server] Criando cobrança Pix | Est: ${codeTarget} | Valor: R$ ${amount}`);
+          console.log(`[MercadoPago Server] Criando cobrança ${isCard ? 'Cartão' : 'Pix'} | Est: ${codeTarget} | Valor: R$ ${amount}`);
+
+          const mpPayload: Record<string, any> = {
+            transaction_amount: amount,
+            description,
+          };
+
+          if (isCard) {
+            mpPayload.token = cardToken;
+            mpPayload.installments = installments;
+            if (paymentMethodId) mpPayload.payment_method_id = paymentMethodId;
+            if (issuerId) mpPayload.issuer_id = issuerId;
+            mpPayload.payer = {
+              email: payerEmail,
+              ...(payerData.identification ? { identification: payerData.identification } : {}),
+            };
+          } else {
+            mpPayload.payment_method_id = "pix";
+            mpPayload.payer = {
+              email: payerEmail,
+              first_name: payerFirstName,
+            };
+          }
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${tokenUso}`,
               "Content-Type": "application/json",
-              "X-Idempotency-Key": `${codeTarget}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              "X-Idempotency-Key": `${codeTarget}-${isCard ? 'cc' : 'pix'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             },
-            body: JSON.stringify({
-              transaction_amount: amount,
-              payment_method_id: "pix",
-              description,
-              payer: {
-                email: payerEmail,
-                first_name: payerFirstName,
-              },
-            }),
+            body: JSON.stringify(mpPayload),
           });
 
           const mpData = await mpRes.json();
 
           if (!mpRes.ok || mpData.error) {
-            console.error("[MercadoPago Pix Error Response]", mpData);
+            console.error("[MercadoPago Error Response]", mpData);
             return new Response(
               JSON.stringify({
-                error: mpData.message || mpData.error || "Falha ao gerar QR Code Pix no Mercado Pago.",
+                error: mpData.message || mpData.error || (isCard ? "Falha ao processar pagamento com cartão no Mercado Pago." : "Falha ao gerar QR Code Pix no Mercado Pago."),
                 details: mpData,
               }),
               { status: mpRes.status || 400, headers: { "content-type": "application/json" } }
@@ -1330,7 +1353,7 @@ export default {
           const qrCodeBase64 = pointOfInteraction?.transaction_data?.qr_code_base64 || null;
           const qrCode = pointOfInteraction?.transaction_data?.qr_code || null;
 
-          console.log(`[MercadoPago Pix Success] Payment ID: ${mpData.id} | Status: ${mpData.status}`);
+          console.log(`[MercadoPago Success] Payment ID: ${mpData.id} | Status: ${mpData.status}`);
 
           return new Response(
             JSON.stringify({
@@ -1338,6 +1361,8 @@ export default {
               payment_id: mpData.id,
               id: mpData.id,
               status: mpData.status,
+              status_detail: mpData.status_detail,
+              payment_method_id: mpData.payment_method_id,
               point_of_interaction: pointOfInteraction,
               qr_code_base64: qrCodeBase64,
               qr_code: qrCode,
@@ -1345,9 +1370,9 @@ export default {
             { status: 200, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
-          console.error("[MercadoPago Pix Exception]", err);
+          console.error("[MercadoPago Exception]", err);
           return new Response(
-            JSON.stringify({ error: err.message || "Erro ao gerar Pix no servidor." }),
+            JSON.stringify({ error: err.message || "Erro ao processar pagamento no servidor." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }

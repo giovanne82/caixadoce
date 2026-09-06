@@ -93,7 +93,9 @@ import {
 import {
   gerarPixMercadoPago,
   formatarDataExpiracaoPixMercadoPago,
+  processarPagamentoCartaoMercadoPago,
 } from "@/lib/mercadopago-service";
+import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import {
   obterKitsEstabelecimento,
   converterKitParaProdutoCardapio,
@@ -152,6 +154,7 @@ export interface LojaInfoState {
   aceita_delivery?: boolean;
   usar_mercadopago?: boolean;
   mp_access_token?: string | null;
+  mp_public_key?: string | null;
   chave_pix_manual?: string;
   instagram?: string;
   tiktok?: string;
@@ -411,6 +414,7 @@ export function CardapioLojaView() {
 
   const [observacoes, setObservacoes] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao">("pix");
+  const [metodoPagamentoFinal, setMetodoPagamentoFinal] = useState<"pix" | "cartao">("pix");
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState<number>(1);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
@@ -771,6 +775,7 @@ export function CardapioLojaView() {
             aceita_delivery: delAtivoVal,
             usar_mercadopago: Boolean(estData?.usar_mercadopago),
             mp_access_token: estData?.mp_access_token || null,
+            mp_public_key: estData?.mp_public_key || null,
             chave_pix_manual: estData?.chave_pix_manual || estData?.chave_pix || estData?.chavePix || "",
             instagram: insta,
             tiktok: tk,
@@ -1060,6 +1065,22 @@ export function CardapioLojaView() {
     };
   }, [sucessoModalOpen, mpPaymentId, pagamentoAprovadoMp, pixExpirado, lojaInfo, code, ultimoPedidoId, pedidoCriadoId, totalComFrete]);
 
+  // Inicialização do SDK do Mercado Pago para Pagamentos por Cartão de Crédito
+  const mpPublicKey = useMemo(() => {
+    return lojaInfo?.mp_public_key || (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY || "";
+  }, [lojaInfo]);
+
+  useEffect(() => {
+    if (mpPublicKey) {
+      try {
+        initMercadoPago(mpPublicKey, { locale: "pt-BR" });
+        console.log(`[Mercado Pago SDK] Inicializado com sucesso.`);
+      } catch (err) {
+        console.warn("[Mercado Pago SDK] Aviso ao inicializar:", err);
+      }
+    }
+  }, [mpPublicKey]);
+
   // Inicialização de data mínima e histórico do cliente
   useEffect(() => {
     // Data mínima inicial: amanhã por padrão
@@ -1260,6 +1281,7 @@ export function CardapioLojaView() {
     }
 
     setSalvandoPedido(true);
+    setMetodoPagamentoFinal("pix");
     try {
       const pedidoId = crypto.randomUUID();
       setUltimoPedidoId(pedidoId);
@@ -1743,6 +1765,377 @@ export function CardapioLojaView() {
       toast.error(`Erro ao finalizar pedido: ${err?.message || "Ocorreu uma falha na gravação."}`);
     } finally {
       setSalvandoPedido(false);
+    }
+  };
+
+  // Processamento de Pagamento via Cartão de Crédito (Payment Brick do Mercado Pago)
+  const handleProcessarPagamentoCartao = async (param: any) => {
+    if (!clienteNome.trim()) {
+      toast.error("Por favor, preencha seu Nome Completo acima antes de pagar com cartão.");
+      return;
+    }
+    if (!clienteWhatsapp.trim()) {
+      toast.error("Por favor, preencha seu WhatsApp com DDD acima antes de pagar com cartão.");
+      return;
+    }
+    if (!dataEntrega) {
+      toast.error("Por favor, selecione a Data Desejada para a entrega/retirada.");
+      return;
+    }
+
+    if (tipoEntrega === "delivery") {
+      const temRegras = freteConfig.regrasBairros.filter((b) => b.ativo).length > 0;
+      if (temRegras && !regiaoEntregaId) {
+        toast.error("Por favor, selecione sua Região / Zona de Entrega.");
+        return;
+      }
+      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
+        toast.error("Preencha a rua, número e bairro para a entrega.");
+        return;
+      }
+    }
+
+    const horRes = validarHorarioEntrega(horarioEntrega, regras);
+    if (!horRes.valido) {
+      toast.warning(horRes.motivo || "Horário fora do expediente da loja.");
+    }
+
+    setSalvandoPedido(true);
+    setProcessandoPagamento(true);
+    setMetodoPagamentoFinal("cartao");
+
+    try {
+      const formData = param?.formData || param;
+      const cardToken = formData?.token;
+      const installments = Number(formData?.installments || 1);
+      const paymentMethodId = formData?.payment_method_id;
+      const issuerId = formData?.issuer_id;
+      const payerData = formData?.payer || {};
+
+      if (!cardToken) {
+        toast.error("Não foi possível tokenizar o cartão. Verifique os dados digitados.");
+        setSalvandoPedido(false);
+        setProcessandoPagamento(false);
+        return;
+      }
+
+      const valTotalCarrinho = Math.max(0, Number(totalComFrete) || 0);
+      const tokenLojista = lojaInfo?.mp_access_token;
+
+      const cardPayload = {
+        establishmentCode: code,
+        mp_access_token: tokenLojista || undefined,
+        transaction_amount: valTotalCarrinho,
+        amount: valTotalCarrinho,
+        token: cardToken,
+        installments: installments,
+        payment_method_id: paymentMethodId,
+        issuer_id: issuerId,
+        description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+        payer: {
+          email: payerData?.email || "cliente@caixadoce.com.br",
+          identification: payerData?.identification,
+          first_name: clienteNome || "Cliente",
+        },
+      };
+
+      console.log("[Checkout Cartão] Enviando cobrança tokenizada:", {
+        code,
+        amount: valTotalCarrinho,
+        installments,
+        paymentMethodId,
+      });
+
+      let mpData: any = null;
+      let errorMsg = "";
+
+      // 1.1 Tenta rota backend da aplicação (/api/create-payment)
+      try {
+        const resBackend = await fetch("/api/create-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cardPayload),
+        });
+        if (resBackend.ok) {
+          mpData = await resBackend.json();
+        } else {
+          const errObj = await resBackend.json().catch(() => ({}));
+          errorMsg = errObj.error || errObj.message || "Falha ao processar cartão no servidor.";
+          console.warn("[Checkout Cartão] /api/create-payment retornou erro:", errObj);
+        }
+      } catch (errApi) {
+        console.warn("[Checkout Cartão] Rota /api/create-payment indisponível, tentando Edge Function:", errApi);
+      }
+
+      // 1.2 Fallback para Edge Function do Supabase (create-pix-payment)
+      if (!mpData) {
+        try {
+          const { data: edgeData, error: edgeError } = await supabase.functions.invoke("create-pix-payment", {
+            body: cardPayload,
+          });
+          if (!edgeError && edgeData && !edgeData.error) {
+            mpData = edgeData;
+          } else if (edgeData?.error || edgeError) {
+            errorMsg = edgeData?.error || edgeError?.message || errorMsg;
+          }
+        } catch (errEdge) {
+          console.warn("[Checkout Cartão] Edge Function falhou:", errEdge);
+        }
+      }
+
+      // 1.3 Fallback direto para o serviço de pagamento
+      if (!mpData) {
+        try {
+          const resServ = await processarPagamentoCartaoMercadoPago({
+            establishmentCode: code,
+            amount: valTotalCarrinho,
+            token: cardToken,
+            installments: installments,
+            paymentMethodId: paymentMethodId,
+            issuerId: issuerId,
+            description: `Pedido ${clienteNome.slice(0, 15)} (${code})`,
+            payerEmail: payerData?.email || "cliente@caixadoce.com.br",
+            identification: payerData?.identification,
+            accessToken: tokenLojista || undefined,
+          });
+          if (resServ && resServ.success) {
+            mpData = resServ;
+          }
+        } catch (errServ: any) {
+          errorMsg = errServ?.message || errorMsg;
+        }
+      }
+
+      if (!mpData || mpData.error || (mpData.status !== "approved" && mpData.status !== "in_process")) {
+        const detail = mpData?.status_detail;
+        let friendlyMsg = errorMsg || "Pagamento recusado pela operadora do cartão.";
+        if (detail === "cc_rejected_insufficient_amount") {
+          friendlyMsg = "Saldo ou limite insuficiente no cartão.";
+        } else if (detail === "cc_rejected_bad_filled_security_code") {
+          friendlyMsg = "Código de segurança (CVV) incorreto.";
+        } else if (detail === "cc_rejected_bad_filled_date") {
+          friendlyMsg = "Data de validade do cartão incorreta.";
+        } else if (detail === "cc_rejected_bad_filled_other") {
+          friendlyMsg = "Dados do cartão incorretos. Verifique e tente novamente.";
+        } else if (detail === "cc_rejected_call_for_authorize") {
+          friendlyMsg = "Pagamento não autorizado pelo emissor do cartão. Autorize junto ao seu banco.";
+        } else if (detail === "cc_rejected_card_disabled") {
+          friendlyMsg = "Cartão desabilitado. Contate o emissor do seu cartão.";
+        }
+        toast.error(friendlyMsg);
+        setSalvandoPedido(false);
+        setProcessandoPagamento(false);
+        return;
+      }
+
+      const isApproved = mpData.status === "approved";
+      const statusPagamento = isApproved ? "pago_integral" : "em_analise";
+      const statusPedido = isApproved ? "aprovado" : "pendente";
+      const pedidoId = crypto.randomUUID();
+      const payId = mpData.id || mpData.payment_id;
+
+      setPedidoCriadoId(pedidoId);
+      setUltimoPedidoId(pedidoId);
+      if (payId) setMpPaymentId(payId);
+      setPagamentoAprovadoMp(isApproved);
+
+      const resumoItensTexto = carrinho
+        .map((item) => {
+          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+          return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
+        })
+        .join(", ");
+
+      const itensDetalhesJson = carrinho.map((item) => {
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+        return {
+          id: item.produto.id,
+          nome: item.produto.nome,
+          quantidade: item.quantidade,
+          precoUnitario: unitPrice,
+          subtotal: unitPrice * item.quantidade,
+          opcao_selecionada: item.opcaoSelecionada || null,
+          opcaoNome: item.opcaoSelecionada?.nome || null,
+          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
+          categoria: item.produto.categoria,
+        };
+      });
+
+      const avisoTexto = "⚠️ Confirme a disponibilidade do produto com a loja.";
+      const obsFinal = necessitaConfirmacaoDisponibilidade
+        ? (observacoes.trim() ? `${observacoes.trim()} | ${avisoTexto}` : avisoTexto)
+        : (observacoes.trim() || "");
+
+      // 1. Gestão e Identificação de Clientes no Supabase (tabela clientes_loja)
+      let clienteId: string | null = null;
+      const cleanPhone = limparTelefone(clienteWhatsapp);
+
+      let estDbId: string | null = null;
+      if (lojaInfo?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.id)) {
+        estDbId = lojaInfo.id;
+      } else {
+        try {
+          const { data: estRow } = await supabase
+            .from("estabelecimentos")
+            .select("id")
+            .or(`codigo.eq.${code},estabelecimento_codigo.eq.${code}`)
+            .maybeSingle();
+          if (estRow?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(estRow.id)) {
+            estDbId = estRow.id;
+          }
+        } catch {}
+      }
+
+      try {
+        let clienteExistenteRow: any = null;
+        if (cleanPhone) {
+          if (estDbId) {
+            const { data: byEstPhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_id", estDbId)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
+            if (byEstPhone && byEstPhone.length > 0) clienteExistenteRow = byEstPhone[0];
+          }
+          if (!clienteExistenteRow) {
+            const { data: byCodePhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_codigo", code)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
+            if (byCodePhone && byCodePhone.length > 0) clienteExistenteRow = byCodePhone[0];
+          }
+        }
+
+        if (clienteExistenteRow?.id) {
+          clienteId = clienteExistenteRow.id;
+          const novoTotal = (Number(clienteExistenteRow.total_pedidos) || 0) + 1;
+          const novoGasto = (Number(clienteExistenteRow.total_gasto) || 0) + valTotalCarrinho;
+          await supabase
+            .from("clientes_loja")
+            .update({
+              nome: clienteNome,
+              telefone: cleanPhone,
+              estabelecimento_id: estDbId || undefined,
+              endereco: tipoEntrega === "delivery" ? enderecoEntrega : undefined,
+              total_pedidos: novoTotal,
+              total_gasto: novoGasto,
+              ultimo_pedido_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", clienteId);
+        } else {
+          const novoClienteId = crypto.randomUUID();
+          const { data: criado } = await supabase
+            .from("clientes_loja")
+            .upsert({
+              id: novoClienteId,
+              estabelecimento_id: estDbId,
+              estabelecimento_codigo: code,
+              nome: clienteNome,
+              telefone: cleanPhone,
+              endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
+              total_pedidos: 1,
+              total_gasto: valTotalCarrinho,
+              ultimo_pedido_em: new Date().toISOString(),
+            }, { onConflict: "estabelecimento_codigo,telefone" })
+            .select("id")
+            .maybeSingle();
+          clienteId = criado?.id || novoClienteId;
+        }
+      } catch (eCli) {
+        console.warn("Aviso ao processar tabela clientes_loja no pagamento com cartão:", eCli);
+      }
+
+      // 2. Criação do Pedido em 'encomendas'
+      const payloadInsert: Record<string, any> = {
+        id: pedidoId,
+        estabelecimento_codigo: code,
+        user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+        cliente_id: clienteId,
+        cliente_nome: clienteNome,
+        cliente_whatsapp: clienteWhatsapp,
+        data_entrega: dataEntrega,
+        horario_entrega: horarioEntrega || "15:00",
+        tipo_entrega: tipoEntrega,
+        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
+        status_pagamento: statusPagamento,
+        metodo_pagamento: `Cartão de Crédito (${installments}x)`,
+        forma_pagamento: "Cartão de Crédito",
+        origem_pagamento: "mercadopago",
+        status: statusPedido,
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: valTotalCarrinho,
+        total_amount: valTotalCarrinho,
+        valor_entrada: isApproved ? valTotalCarrinho : 0,
+        valor_restante: isApproved ? 0 : valTotalCarrinho,
+        historico_pagamentos: isApproved ? [
+          {
+            id: `mp_${payId}`,
+            data: new Date().toISOString().split("T")[0],
+            valor: valTotalCarrinho,
+            observacao: `Pagamento aprovado no Cartão de Crédito (${installments}x) via Mercado Pago`,
+          }
+        ] : [],
+        observacoes: obsFinal,
+      };
+
+      let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
+      if (insertError) {
+        console.warn("Insert completo falhou, tentando payload mínimo:", insertError.message);
+        const { itens_detalhes: _id, ...payloadMinimal } = payloadInsert;
+        await supabase.from("encomendas").insert([payloadMinimal]);
+      }
+
+      // 3. Salva memória local
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("caixadoce_user_phone", clienteWhatsapp);
+          localStorage.setItem("caixadoce_user_name", clienteNome);
+          if (tipoEntrega === "delivery" && enderecoEntrega) {
+            localStorage.setItem("caixadoce_user_address", enderecoEntrega);
+          }
+          const nowIso = new Date().toISOString();
+          const novoResumoPedido = {
+            id: pedidoId,
+            data: nowIso,
+            created_at: nowIso,
+            data_entrega: dataEntrega,
+            horario_entrega: horarioEntrega || "15:00",
+            tipo_entrega: tipoEntrega,
+            valor_total: valTotalCarrinho,
+            status: statusPedido,
+            itens: resumoItensTexto,
+            total_itens: totalItensCarrinho,
+            metodo_pagamento: `Cartão de Crédito (${installments}x)`,
+            loja_codigo: code,
+            loja_nome: lojaInfo?.nome || "Confeitaria",
+          };
+          const rawOrders = localStorage.getItem("caixadoce_recent_orders");
+          const pedidosAnteriores = rawOrders ? JSON.parse(rawOrders) : [];
+          const atualizados = [novoResumoPedido, ...pedidosAnteriores.filter((p: any) => p.id !== pedidoId)].slice(0, 3);
+          localStorage.setItem("caixadoce_recent_orders", JSON.stringify(atualizados));
+          setRecentOrders(atualizados);
+        } catch (memErr) {
+          console.warn("Aviso ao salvar histórico do pedido no localStorage:", memErr);
+        }
+      }
+
+      setCartOpen(false);
+      setPedidoConcluido(true);
+      setSucessoModalOpen(true);
+      toast.success(isApproved ? "🎉 Pagamento com Cartão Aprovado!" : "Pagamento recebido e em análise!");
+    } catch (err: any) {
+      console.error("[Checkout Cartão Exception]", err);
+      toast.error(`Erro ao processar cartão: ${err?.message || "Ocorreu uma falha no pagamento."}`);
+    } finally {
+      setSalvandoPedido(false);
+      setProcessandoPagamento(false);
     }
   };
 
@@ -2649,17 +3042,90 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       Forma de Pagamento
                     </Label>
 
-                    <div className="grid grid-cols-1 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
                         type="button"
-                        variant="default"
-                        className="h-9 text-xs font-bold flex items-center justify-center gap-1.5"
+                        variant={metodoPagamento === "pix" ? "default" : "outline"}
+                        onClick={() => setMetodoPagamento("pix")}
+                        className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          metodoPagamento === "pix" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
+                        }`}
                       >
-                        <QrCode className="w-3.5 h-3.5 text-white" />
-                        Pix Direto
+                        <QrCode className="w-3.5 h-3.5" />
+                        Pix
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={metodoPagamento === "cartao" ? "default" : "outline"}
+                        onClick={() => setMetodoPagamento("cartao")}
+                        className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          metodoPagamento === "cartao" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
+                        }`}
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        Cartão de Crédito
                       </Button>
                     </div>
                   </div>
+
+                  {/* FORMULÁRIO PAYMENT BRICK DO MERCADO PAGO PARA CARTÃO DE CRÉDITO */}
+                  {metodoPagamento === "cartao" && (
+                    <div className="space-y-2 pt-2 border-t border-border/60">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                          Dados do Cartão de Crédito
+                        </span>
+                        <Badge variant="outline" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/10">
+                          🔒 Mercado Pago Seguro
+                        </Badge>
+                      </div>
+
+                      {!mpPublicKey ? (
+                        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 text-xs space-y-1">
+                          <p className="font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            Pagamento com cartão indisponível no momento
+                          </p>
+                          <p className="text-[11px] leading-relaxed">
+                            Esta confeitaria ainda não configurou as credenciais do Mercado Pago para cartão. Por favor, selecione <strong>Pix</strong> para finalizar seu pedido.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2 sm:p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-900/40 shadow-xs">
+                          <Payment
+                            key={`mp_brick_${totalComFrete}_${mpPublicKey}`}
+                            initialization={{
+                              amount: totalComFrete,
+                              payer: {
+                                email: "cliente@caixadoce.com.br",
+                              },
+                            }}
+                            customization={{
+                              paymentMethods: {
+                                creditCard: "all",
+                              },
+                              visual: {
+                                style: {
+                                  theme: "default",
+                                  customVariables: {
+                                    themeColor: corTemaDestaque,
+                                  },
+                                },
+                              },
+                            }}
+                            onSubmit={async (param: any) => {
+                              await handleProcessarPagamentoCartao(param);
+                            }}
+                            onError={(error: any) => {
+                              console.error("[MercadoPago Brick Error]", error);
+                              toast.error("Erro ao inicializar o formulário de cartão.");
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-1">
                     <Label htmlFor="chk-obs" className="text-xs">Observações (Opcional)</Label>
@@ -2676,7 +3142,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             )}
           </div>
 
-          {carrinho.length > 0 && (
+          {carrinho.length > 0 && metodoPagamento === "pix" && (
             <SheetFooter className="pt-4 border-t border-border/60">
               <Button
                 type="submit"
@@ -2687,12 +3153,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 {salvandoPedido ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Gravando Pedido...
+                    Gerando Pix...
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    Confirmar Pedido
+                    Confirmar e Pagar via Pix
                   </>
                 )}
               </Button>
@@ -2719,11 +3185,17 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               <CheckCircle2 className={`w-8 h-8 ${pagamentoAprovadoMp ? "animate-pulse stroke-[2.5]" : ""}`} />
             </div>
             <DialogTitle className="text-lg sm:text-xl font-black text-foreground">
-              {pagamentoAprovadoMp ? "🎉 Pagamento Aprovado com Sucesso!" : "🎉 Pedido Registrado com Sucesso!"}
+              {pagamentoAprovadoMp
+                ? "🎉 Pagamento Aprovado com Sucesso!"
+                : metodoPagamentoFinal === "cartao"
+                ? "⏳ Pedido Recebido (Cartão em Processamento)"
+                : "🎉 Pedido Registrado com Sucesso!"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground max-w-sm mx-auto">
               {pagamentoAprovadoMp
                 ? `Seu pagamento via Mercado Pago foi confirmado! O pedido já está aprovado na confeitaria ${lojaInfo?.nome || "CaixaDoce"}.`
+                : metodoPagamentoFinal === "cartao"
+                ? `Seu pedido e os dados do cartão foram enviados com segurança para a confeitaria ${lojaInfo?.nome || "CaixaDoce"}.`
                 : `Sua encomenda foi gravada diretamente no sistema da confeitaria ${lojaInfo?.nome || "CaixaDoce"}.`}
             </DialogDescription>
           </DialogHeader>
@@ -2863,13 +3335,35 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   Pagamento Confirmado no Mercado Pago!
                 </h3>
                 <p className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
-                  Identificamos seu pagamento via Pix automaticamente. Seu pedido foi atualizado para 100% Pago e o lojista já foi notificado.
+                  {metodoPagamentoFinal === "cartao"
+                    ? "Identificamos a aprovação imediata do seu Cartão de Crédito. Seu pedido foi atualizado para 100% Pago e o lojista já foi notificado!"
+                    : "Identificamos seu pagamento via Pix automaticamente. Seu pedido foi atualizado para 100% Pago e o lojista já foi notificado."}
                 </p>
               </div>
               <div className="flex items-center justify-center gap-2">
                 <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold text-xs px-3 py-1 flex items-center gap-1 shadow-xs border-0">
                   <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                   Status: Pago • Mercado Pago
+                </Badge>
+              </div>
+            </div>
+          ) : metodoPagamentoFinal === "cartao" ? (
+            <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700/60 text-center space-y-3 animate-in fade-in zoom-in duration-300 shadow-xs">
+              <div className="w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-blue-600/30">
+                <Clock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-blue-950 dark:text-blue-200">
+                  Pagamento com Cartão em Análise
+                </h3>
+                <p className="text-xs text-blue-800 dark:text-blue-300 font-medium">
+                  Seu pagamento está sendo processado com segurança pelo Mercado Pago. Assim que a operadora aprovar, seu pedido será atualizado automaticamente.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-mono font-bold text-xs px-3 py-1 flex items-center gap-1 shadow-xs border-0">
+                  <Clock className="w-3.5 h-3.5 text-white" />
+                  Status: Em Processamento • Mercado Pago
                 </Badge>
               </div>
             </div>

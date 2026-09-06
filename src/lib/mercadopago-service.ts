@@ -338,3 +338,51 @@ export async function consultarStatusPagamentoPix(params: {
   };
 }
 
+/**
+ * Processa pagamento com Cartão de Crédito tokenizado no Mercado Pago
+ */
+export async function processarPagamentoCartaoMercadoPago(params: {
+  establishmentCode: string;
+  amount: number;
+  token: string;
+  installments?: number;
+  paymentMethodId?: string;
+  issuerId?: string | number;
+  description?: string;
+  payerEmail?: string;
+  identification?: { type: string; number: string };
+  accessToken?: string;
+}): Promise<{
+  success: boolean;
+  payment_id?: string | number;
+  status?: string;
+  status_detail?: string;
+  error?: string;
+}> {
+  const res = await fetch("/api/create-payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      establishmentCode: params.establishmentCode,
+      transaction_amount: params.amount,
+      token: params.token,
+      installments: params.installments || 1,
+      payment_method_id: params.paymentMethodId,
+      issuer_id: params.issuerId,
+      description: params.description,
+      payer: {
+        email: params.payerEmail || "cliente@caixadoce.com.br",
+        identification: params.identification,
+      },
+      mp_access_token: params.accessToken,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "Falha ao processar pagamento com cartão no Mercado Pago.");
+  }
+  return data;
+}
+
+

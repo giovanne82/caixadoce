@@ -38,7 +38,35 @@ serve(async (req) => {
       );
     }
 
-    const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const isCard = Boolean(body.token);
+    const cardToken = body.token || null;
+    const installments = Number(body.installments || 1);
+    const paymentMethodId = body.payment_method_id || (isCard ? undefined : "pix");
+    const issuerId = body.issuer_id || undefined;
+
+    const idempotencyKey = `${isCard ? 'cc' : 'pix'}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const mpPayload: Record<string, any> = {
+      transaction_amount: amount,
+      description,
+    };
+
+    if (isCard) {
+      mpPayload.token = cardToken;
+      mpPayload.installments = installments;
+      if (paymentMethodId) mpPayload.payment_method_id = paymentMethodId;
+      if (issuerId) mpPayload.issuer_id = issuerId;
+      mpPayload.payer = {
+        email: payer.email || "cliente@caixadoce.com.br",
+        ...(payer.identification ? { identification: payer.identification } : {}),
+      };
+    } else {
+      mpPayload.payment_method_id = "pix";
+      mpPayload.payer = {
+        email: payer.email || "cliente@caixadoce.com.br",
+        first_name: payer.first_name || "Cliente",
+      };
+    }
 
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -47,15 +75,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "X-Idempotency-Key": idempotencyKey,
       },
-      body: JSON.stringify({
-        transaction_amount: amount,
-        payment_method_id: "pix",
-        description,
-        payer: {
-          email: payer.email || "cliente@caixadoce.com.br",
-          first_name: payer.first_name || "Cliente",
-        },
-      }),
+      body: JSON.stringify(mpPayload),
     });
 
     const mpData = await mpRes.json();
@@ -64,7 +84,7 @@ serve(async (req) => {
       console.error("[MercadoPago Edge Function Error]", mpData);
       return new Response(
         JSON.stringify({
-          error: mpData.message || mpData.error || "Erro retornado pelo Mercado Pago",
+          error: mpData.message || mpData.error || (isCard ? "Falha ao processar pagamento com cartão no Mercado Pago." : "Erro retornado pelo Mercado Pago"),
           details: mpData,
         }),
         { status: mpRes.status || 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -81,6 +101,8 @@ serve(async (req) => {
         payment_id: mpData.id,
         id: mpData.id,
         status: mpData.status,
+        status_detail: mpData.status_detail,
+        payment_method_id: mpData.payment_method_id,
         point_of_interaction: pointOfInteraction,
         qr_code_base64: qrCodeBase64,
         qr_code: qrCode,
@@ -90,7 +112,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("[create-pix-payment Edge Function Exception]", error);
     return new Response(
-      JSON.stringify({ error: error?.message || "Erro interno ao processar Pix." }),
+      JSON.stringify({ error: error?.message || "Erro interno ao processar pagamento." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
