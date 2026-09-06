@@ -53,6 +53,7 @@ import {
   Printer,
   RotateCcw,
   AlertCircle,
+  AlertTriangle,
   Banknote,
   Smartphone,
   ChevronRight,
@@ -137,6 +138,7 @@ export function PdvView() {
   const [valorRecebidoInput, setValorRecebidoInput] = useState<string>("");
   const [gerandoPixParte, setGerandoPixParte] = useState(false);
   const [pixParteAtual, setPixParteAtual] = useState<{ qrBase64?: string; qrCode?: string; payId?: string } | null>(null);
+  const [alertaPixModalOpen, setAlertaPixModalOpen] = useState(false);
 
   // Finalização e Recibo
   const [salvandoVenda, setSalvandoVenda] = useState(false);
@@ -1462,36 +1464,97 @@ export function PdvView() {
                         size="sm"
                         disabled={gerandoPixParte}
                         onClick={handleGerarPixParte}
-                        className="w-full h-8 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white"
+                        className="w-full h-8 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-xs"
                       >
                         <QrCode className="w-3.5 h-3.5 mr-1.5" />
                         {gerandoPixParte ? "Gerando QR Code..." : `Gerar QR Code Pix de ${valorParteInput ? `R$ ${valorParteInput}` : "Saldo"}`}
                       </Button>
 
                       {pixParteAtual?.qrBase64 && (
-                        <div className="p-3 rounded-xl bg-slate-950 border border-purple-500/40 flex flex-col items-center justify-center space-y-2">
+                        <div className="p-3 rounded-xl bg-slate-950 border border-purple-500/40 flex flex-col items-center justify-center space-y-2.5">
                           <img
                             src={pixParteAtual.qrBase64.startsWith("data:") ? pixParteAtual.qrBase64 : `data:image/png;base64,${pixParteAtual.qrBase64}`}
                             alt="QR Code Pix PDV"
-                            className="w-40 h-40 object-contain rounded-lg bg-white p-1"
+                            className="w-44 h-44 object-contain rounded-lg bg-white p-1"
                           />
                           <p className="text-[11px] font-medium text-slate-300 text-center">
                             Apresente a tela para o cliente escanear no balcão
                           </p>
+
+                          {/* Botão de Fallback com Alerta Anti-Fraude */}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAlertaPixModalOpen(true)}
+                            className="w-full h-8 text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs flex items-center justify-center gap-1.5 mt-1"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Forçar Confirmação Manual</span>
+                          </Button>
+                        </div>
+                      )}
+
+                      {pixParteAtual?.qrCode && !pixParteAtual?.qrBase64 && (
+                        <div className="p-3 rounded-xl bg-slate-950 border border-purple-500/40 space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              readOnly
+                              value={pixParteAtual.qrCode}
+                              className="font-mono text-[10px] h-8 bg-slate-900 border-slate-800 text-slate-200"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                if (navigator.clipboard && pixParteAtual.qrCode) {
+                                  navigator.clipboard.writeText(pixParteAtual.qrCode);
+                                  toast.success("Código Pix Copiado!");
+                                }
+                              }}
+                              className="h-8 px-2 text-xs bg-purple-600 hover:bg-purple-500 text-white shrink-0"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAlertaPixModalOpen(true)}
+                            className="w-full h-8 text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs flex items-center justify-center gap-1.5"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Forçar Confirmação Manual</span>
+                          </Button>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleAdicionarPartePagamento}
-                    className="w-full h-8.5 font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Adicionar Esta Parcela
-                  </Button>
+                  {metodoAtual !== "pix" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAdicionarPartePagamento}
+                      className="w-full h-8.5 font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Adicionar Esta Parcela
+                    </Button>
+                  )}
+
+                  {metodoAtual === "pix" && !pixParteAtual && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setAlertaPixModalOpen(true)}
+                      className="w-full h-8.5 font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Confirmar Pix Recebido
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-center text-xs font-bold flex items-center justify-center gap-2">
@@ -1601,6 +1664,51 @@ export function PdvView() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ========================================================================= */}
+      {/* 5. MODAL DE ALERTA ANTI-FRAUDE PIX */}
+      {/* ========================================================================= */}
+      <Dialog open={alertaPixModalOpen} onOpenChange={setAlertaPixModalOpen}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-amber-500/50 text-white p-5 shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-amber-500/20">
+            <DialogTitle className="text-base font-black text-amber-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              Alerta de Segurança Anti-Fraude
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-3 space-y-3">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs leading-relaxed font-semibold">
+              ATENÇÃO: O Mercado Pago ainda não confirmou este pagamento automaticamente. Se o cliente afirmar que pagou, ABRA O APLICATIVO DO SEU BANCO no celular e confira o extrato ANTES de liberar o pedido. Deseja confirmar o recebimento?
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAlertaPixModalOpen(false)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setAlertaPixModalOpen(false);
+                handleAdicionarPartePagamento();
+              }}
+              className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs px-4 shadow-md"
+            >
+              Sim, confirmar recebimento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
