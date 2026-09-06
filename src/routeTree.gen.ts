@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PdvRouteImport } from './routes/pdv'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
@@ -40,6 +41,11 @@ const LandingRoute = LandingRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PdvRoute = PdvRouteImport.update({
+  id: '/pdv',
+  path: '/pdv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PedidoConfirmadoRoute = PedidoConfirmadoRouteImport.update({
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/landing'
     | '/login'
+    | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/landing'
     | '/login'
+    | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/landing'
     | '/login'
+    | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
+  PdvRoute: typeof PdvRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pdv': {
+      id: '/pdv'
+      path: '/pdv'
+      fullPath: '/pdv'
+      preLoaderRoute: typeof PdvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pedido-confirmado': {
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
+  PdvRoute: PdvRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,

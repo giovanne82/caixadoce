@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { ScannerProvider, useScanner } from "@/context/scanner-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,7 @@ import {
   Lock,
   AlertCircle,
   UtensilsCrossed,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
@@ -1848,8 +1849,20 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 </div>
               </div>
 
-              {/* Bloco Direita: Notificações + Sair/Logout */}
+              {/* Bloco Direita: PDV + Notificações + Sair/Logout */}
               <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                <Link to="/pdv">
+                  <Button
+                    size="sm"
+                    className="h-7 sm:h-8 px-2 sm:px-3 text-xs font-extrabold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 shrink-0"
+                    title="Abrir Ponto de Venda (PDV / Caixa)"
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Abrir Meu PDV</span>
+                    <span className="inline sm:hidden">PDV</span>
+                  </Button>
+                </Link>
+
                 <NotificationBell
                   transacoes={transacoes}
                   despesas={despesas}

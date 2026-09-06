@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import {
@@ -1457,6 +1458,15 @@ export function OrdersView({
             </Button>
           </div>
 
+          <Link to="/pdv">
+            <Button
+              size="sm"
+              className="font-extrabold shadow-md text-xs bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5"
+            >
+              <Store className="w-4 h-4" /> Abrir Meu PDV
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"
@@ -1484,7 +1494,7 @@ export function OrdersView({
             onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Lista Completa ({encomendasAtivas.length})
+            Pedidos ({encomendasAtivas.length})
           </Button>
           <Button
             variant={viewMode === "concluidos" ? "default" : "ghost"}
