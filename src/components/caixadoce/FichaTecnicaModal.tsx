@@ -49,6 +49,7 @@ import {
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
   obterInsumosCadastrados,
+  salvarInsumosCadastradosStorage,
   type ProdutoCardapio,
   type InsumoCadastrado,
   LISTA_SUGESTOES_INSUMOS,

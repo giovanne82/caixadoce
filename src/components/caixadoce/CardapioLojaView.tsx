@@ -94,6 +94,11 @@ import {
   gerarPixMercadoPago,
   formatarDataExpiracaoPixMercadoPago,
 } from "@/lib/mercadopago-service";
+import {
+  obterKitsEstabelecimento,
+  converterKitParaProdutoCardapio,
+  type KitProduto,
+} from "@/lib/kits-service";
 import { toast } from "sonner";
 
 // ==========================================
@@ -657,33 +662,39 @@ export function CardapioLojaView() {
           return;
         }
 
-        let estData: any = null;
         const paramLower = rawParam.toLowerCase();
         const paramUpper = rawParam.toUpperCase();
 
-        // 1. Busca flexível do Estabelecimento por slug OU codigo OU estabelecimento_codigo
-        const { data: dFlex } = await supabase
-          .from("estabelecimentos")
-          .select("*")
-          .or(`slug.eq.${paramLower},codigo.eq.${paramUpper},estabelecimento_codigo.eq.${paramUpper}`)
-          .maybeSingle();
+        // 1. Busca flexível do Estabelecimento por slug OU codigo OU id (se for UUID)
+        let estData: any = null;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawParam)) {
+          const { data: dById } = await supabase
+            .from("estabelecimentos")
+            .select("*")
+            .eq("id", rawParam)
+            .maybeSingle();
+          if (dById) estData = dById;
+        }
 
-        if (dFlex) {
-          estData = dFlex;
-        } else {
-          // Fallback por código direto caso .or() não case
+        if (!estData) {
+          const { data: dFlex } = await supabase
+            .from("estabelecimentos")
+            .select("*")
+            .or(`slug.eq.${paramLower},codigo.eq.${paramUpper}`)
+            .maybeSingle();
+          if (dFlex) estData = dFlex;
+        }
+
+        if (!estData) {
           const { data: d1 } = await supabase
             .from("estabelecimentos")
             .select("*")
             .eq("codigo", paramUpper)
             .maybeSingle();
-
-          if (d1) {
-            estData = d1;
-          }
+          if (d1) estData = d1;
         }
 
-        const resolvedCode = estData?.codigo || estData?.estabelecimento_codigo || paramUpper;
+        const resolvedCode = estData?.codigo || paramUpper;
         if (resolvedCode !== code) {
           setCode(resolvedCode);
         }
@@ -769,13 +780,13 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. NOVA LÓGICA DE CASCATA: BUSCA DOS PRODUTOS PELO ID DO ESTABELECIMENTO
+        // 2. BUSCA DE PRODUTOS E KITS (SUPABASE + FALLBACK)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
         if (estUuid) {
-          console.log(`[Cardápio Público] Buscando produtos em cascata por estabelecimento_id (${estUuid})...`);
+          console.log(`[Cardápio Público] Buscando produtos por estabelecimento_id (${estUuid})...`);
           const { data: pByEstId, error: errEstId } = await supabase
             .from("produtos" as any)
             .select("*")
@@ -787,13 +798,13 @@ export function CardapioLojaView() {
           }
         }
 
-        // Fallback caso estejam vinculados por código de estabelecimento
+        // Fallback por código de estabelecimento
         if (prodsDb.length === 0 && resolvedCode) {
-          console.log(`[Cardápio Público] Fallback: buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
+          console.log(`[Cardápio Público] Buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
           const { data: pByCode } = await supabase
             .from("produtos" as any)
             .select("*")
-            .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`)
+            .eq("estabelecimento_codigo", resolvedCode)
             .order("nome", { ascending: true });
 
           if (pByCode && pByCode.length > 0) {
@@ -801,10 +812,23 @@ export function CardapioLojaView() {
           }
         }
 
+        // 3. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
+        let kitsDb: KitProduto[] = [];
+        if (resolvedCode) {
+          try {
+            console.log(`[Cardápio Público] Buscando kits para o estabelecimento (${resolvedCode})...`);
+            kitsDb = await obterKitsEstabelecimento(resolvedCode);
+          } catch (eKits) {
+            console.warn("[Cardápio Público] Aviso ao carregar kits:", eKits);
+          }
+        }
+
         if (cancelado) return;
 
+        let mapeados: ProdutoCardapio[] = [];
+
         if (prodsDb.length > 0) {
-          const mapeados: ProdutoCardapio[] = prodsDb.map((p: any) => ({
+          mapeados = prodsDb.map((p: any) => ({
             id: String(p.id),
             estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || resolvedCode,
             nome: p.nome || p.name || "Doce Artesanal",
@@ -830,26 +854,37 @@ export function CardapioLojaView() {
               ? p.opcoes
               : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
           }));
-
-          const ativos = mapeados.filter((p) => p.ativo !== false);
-          setProdutos(ativos);
-
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem(`caixadoce_cardapio_${resolvedCode}`, JSON.stringify(mapeados));
-            } catch {}
-          }
         } else {
           // Fallback para localStorage
           const localList = obterProdutosCardapio(resolvedCode);
           if (localList && localList.length > 0) {
-            setProdutos(localList.filter((p) => p.ativo !== false));
-          } else {
-            setProdutos([]);
+            mapeados = localList;
           }
         }
-      } catch (err) {
-        console.warn("[Cardápio Público] Aviso no carregamento do estabelecimento e produtos:", err);
+
+        // 4. UNIFICAÇÃO DE KITS DA TABELA KITS (Respeitando flags de visibilidade e ativo)
+        if (kitsDb && kitsDb.length > 0) {
+          for (const k of kitsDb) {
+            if (k.ativo !== false) {
+              const prodKit = converterKitParaProdutoCardapio(k);
+              const idx = mapeados.findIndex((p) => p.id === prodKit.id);
+              if (idx >= 0) {
+                mapeados[idx] = prodKit;
+              } else {
+                mapeados.push(prodKit);
+              }
+            }
+          }
+        }
+
+        const ativos = mapeados.filter((p) => p.ativo !== false && (p as any).is_active !== false);
+        setProdutos(ativos);
+
+        if (typeof window !== "undefined" && ativos.length > 0) {
+          try {
+            localStorage.setItem(`caixadoce_cardapio_${resolvedCode}`, JSON.stringify(ativos));
+          } catch {}
+        }
       } finally {
         if (!cancelado) {
           setLoadingProdutos(false);
