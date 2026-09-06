@@ -2944,12 +2944,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     return (
                       <div
                         key={itemKey}
-                        className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between gap-2 text-xs"
+                        className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between gap-2.5 text-xs overflow-hidden"
                       >
-                        <div className="truncate flex-1">
-                          <p className="font-bold text-foreground truncate">{item.produto.nome}</p>
+                        <div className="flex-1 min-w-0 pr-1 space-y-0.5">
+                          <p className="font-bold text-foreground break-words whitespace-normal">{item.produto.nome}</p>
                           {nomesOpcoes && (
-                            <p className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold truncate">
+                            <p className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold break-words whitespace-normal leading-tight">
                               {isMulti ? "Opções: " : "Opção: "}
                               {nomesOpcoes}
                             </p>
@@ -3736,7 +3736,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
       {/* MODAL DE SELEÇÃO DE OPÇÕES E PERSONALIZAÇÃO DO PRODUTO */}
       <Dialog open={!!produtoModal} onOpenChange={(open) => !open && setProdutoModal(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-5 sm:p-6 rounded-3xl space-y-4">
+        <DialogContent className="max-w-md w-full max-h-[90vh] overflow-y-auto overflow-x-hidden p-5 sm:p-6 rounded-3xl space-y-4">
           {produtoModal && (
             <>
               <DialogHeader className="border-b border-border/60 pb-3">
@@ -3773,7 +3773,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
               {/* SEÇÃO DE OPÇÕES / SABORES / VARIAÇÕES */}
               {produtoModal.opcoes && produtoModal.opcoes.length > 0 ? (
-                <div className="space-y-2.5 pt-1">
+                <div className="space-y-2.5 pt-1 overflow-x-hidden w-full">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-black text-foreground uppercase tracking-wider">
                       {produtoModal.permite_multiplas_opcoes ? "Escolha as Quantidades por Opção" : "Escolha sua Opção *"}
@@ -3783,7 +3783,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     </span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 overflow-x-hidden w-full">
                     {produtoModal.opcoes.map((opc) => {
                       const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
 
@@ -3795,15 +3795,15 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         return (
                           <div
                             key={opc.id}
-                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 sm:gap-3 overflow-hidden w-full ${
                               isSelected
                                 ? "bg-purple-500/10 border-purple-500 shadow-xs"
                                 : "bg-muted/30 border-border hover:border-purple-300"
                             }`}
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-foreground truncate">
+                            <div className="flex-1 min-w-0 pr-1 space-y-0.5">
+                              <div className="flex items-center flex-wrap gap-1.5">
+                                <span className="text-xs font-bold text-foreground break-words whitespace-normal leading-snug">
                                   {opc.nome}
                                 </span>
                                 {opc.preco_adicional > 0 ? (
@@ -3829,12 +3829,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                 size="sm"
                                 onClick={() => handleAlterarQtdOpcaoModal(opc.id, -1)}
                                 disabled={qtd === 0}
-                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted disabled:opacity-40"
+                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted disabled:opacity-40 shrink-0"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </Button>
 
-                              <span className="font-mono font-black text-xs px-1.5 min-w-[20px] text-center text-foreground">
+                              <span className="font-mono font-black text-xs px-1 min-w-[20px] text-center text-foreground shrink-0">
                                 {qtd}
                               </span>
 
@@ -3843,7 +3843,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleAlterarQtdOpcaoModal(opc.id, 1)}
-                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted"
+                                className="h-7 w-7 p-0 rounded-lg text-foreground hover:bg-muted shrink-0"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </Button>
@@ -3858,15 +3858,15 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         <div
                           key={opc.id}
                           onClick={() => setOpcaoSelecionadaModal(opc)}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 overflow-hidden w-full ${
                             isSelected
                               ? "bg-purple-500/10 border-purple-500 shadow-xs"
                               : "bg-muted/30 border-border hover:border-purple-300"
                           }`}
                         >
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0 pr-1">
                             <div
-                              className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all shrink-0 ${
                                 isSelected
                                   ? "border-purple-600 bg-purple-600"
                                   : "border-muted-foreground/50"
@@ -3874,17 +3874,17 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                             >
                               {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </div>
-                            <span className="text-xs font-bold text-foreground">
+                            <span className="text-xs font-bold text-foreground break-words whitespace-normal leading-snug">
                               {opc.nome}
                             </span>
                           </div>
 
                           {opc.preco_adicional > 0 ? (
-                            <Badge className="bg-purple-600 text-white text-[10px] font-mono font-bold px-2 py-0.5">
+                            <Badge className="bg-purple-600 text-white text-[10px] font-mono font-bold px-2 py-0.5 shrink-0">
                               + {formatarMoeda(opc.preco_adicional)}
                             </Badge>
                           ) : (
-                            <span className="text-[11px] font-medium text-muted-foreground">
+                            <span className="text-[11px] font-medium text-muted-foreground shrink-0">
                               Incluso
                             </span>
                           )}
