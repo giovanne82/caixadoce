@@ -293,6 +293,7 @@ async function seedClientesLojaTableInSupabase() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_estabelecimentos_slug ON public.estabelecimentos(slug);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_loja_code_tel ON public.clientes_loja (estabelecimento_codigo, telefone);
       ALTER TABLE public.produtos ADD COLUMN IF NOT EXISTS opcoes JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE public.produtos ADD COLUMN IF NOT EXISTS permite_multiplas_opcoes BOOLEAN DEFAULT false;
 
       CREATE TABLE IF NOT EXISTS public.kits (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -33,6 +33,7 @@ import {
   Plus,
   Search,
   Edit2,
+  Pencil,
   Trash2,
   ExternalLink,
   Copy,
@@ -265,6 +266,8 @@ export function ProductsView({
   const [opcoes, setOpcoes] = useState<ProdutoOpcao[]>([]);
   const [nomeNovaOpcao, setNomeNovaOpcao] = useState("");
   const [precoAdicionalNovaOpcao, setPrecoAdicionalNovaOpcao] = useState("");
+  const [permiteMultiplasOpcoes, setPermiteMultiplasOpcoes] = useState<boolean>(false);
+  const [editingOpcaoId, setEditingOpcaoId] = useState<string | null>(null);
 
   // Disponibilidade e Agendamento por Produto
   const [availabilityType, setAvailabilityType] = useState<"pronta_entrega" | "encomenda">("encomenda");
@@ -335,25 +338,57 @@ export function ProductsView({
     setModalNovaCatOpen(false);
   };
 
-  const handleAdicionarOpcao = () => {
+  const handleAdicionarOuSalvarOpcao = () => {
     const nomeLimpo = nomeNovaOpcao.trim();
     if (!nomeLimpo) {
       toast.error("Informe o nome da opção (ex: Morango, 1kg, etc).");
       return;
     }
     const precoNum = converterMoedaInputParaNumero(precoAdicionalNovaOpcao);
-    const nova: ProdutoOpcao = {
-      id: crypto.randomUUID(),
-      nome: nomeLimpo,
-      preco_adicional: precoNum >= 0 ? precoNum : 0,
-    };
-    setOpcoes((prev) => [...prev, nova]);
+
+    if (editingOpcaoId) {
+      setOpcoes((prev) =>
+        prev.map((o) =>
+          o.id === editingOpcaoId
+            ? { ...o, nome: nomeLimpo, preco_adicional: precoNum >= 0 ? precoNum : 0 }
+            : o
+        )
+      );
+      setEditingOpcaoId(null);
+      setNomeNovaOpcao("");
+      setPrecoAdicionalNovaOpcao("");
+      toast.success(`Opção "${nomeLimpo}" atualizada!`);
+    } else {
+      const nova: ProdutoOpcao = {
+        id: crypto.randomUUID(),
+        nome: nomeLimpo,
+        preco_adicional: precoNum >= 0 ? precoNum : 0,
+      };
+      setOpcoes((prev) => [...prev, nova]);
+      setNomeNovaOpcao("");
+      setPrecoAdicionalNovaOpcao("");
+      toast.success(`Opção "${nomeLimpo}" adicionada!`);
+    }
+  };
+
+  const handleEditarOpcao = (opc: ProdutoOpcao) => {
+    setEditingOpcaoId(opc.id);
+    setNomeNovaOpcao(opc.nome);
+    setPrecoAdicionalNovaOpcao(
+      opc.preco_adicional > 0 ? `R$ ${opc.preco_adicional.toFixed(2).replace(".", ",")}` : ""
+    );
+  };
+
+  const handleCancelarEdicaoOpcao = () => {
+    setEditingOpcaoId(null);
     setNomeNovaOpcao("");
     setPrecoAdicionalNovaOpcao("");
-    toast.success(`Opção "${nomeLimpo}" adicionada!`);
   };
 
   const handleRemoverOpcao = (idOpcao: string) => {
+    if (editingOpcaoId === idOpcao) {
+      handleCancelarEdicaoOpcao();
+    }
     setOpcoes((prev) => prev.filter((o) => o.id !== idOpcao));
   };
 
@@ -369,6 +404,8 @@ export function ProductsView({
     setOpcoes([]);
     setNomeNovaOpcao("");
     setPrecoAdicionalNovaOpcao("");
+    setPermiteMultiplasOpcoes(false);
+    setEditingOpcaoId(null);
     setAvailabilityType("encomenda");
     setAvailableDays([1, 2, 3, 4, 5, 6]);
     setMinLeadTimeDays(1);
@@ -387,6 +424,8 @@ export function ProductsView({
     setOpcoes(prod.opcoes && Array.isArray(prod.opcoes) ? prod.opcoes : []);
     setNomeNovaOpcao("");
     setPrecoAdicionalNovaOpcao("");
+    setPermiteMultiplasOpcoes(Boolean(prod.permite_multiplas_opcoes));
+    setEditingOpcaoId(null);
     setAvailabilityType(prod.availability_type || "encomenda");
     setAvailableDays(prod.available_days || [1, 2, 3, 4, 5, 6]);
     setMinLeadTimeDays(prod.min_lead_time_days ?? (prod.tempoPreparoHoras ? Math.ceil(prod.tempoPreparoHoras / 24) : 1));
@@ -421,6 +460,7 @@ export function ProductsView({
         available_days: availableDays,
         min_lead_time_days: minLeadTimeDays,
         opcoes,
+        permite_multiplas_opcoes: permiteMultiplasOpcoes,
       };
 
       if (editingId) {
@@ -898,17 +938,22 @@ export function ProductsView({
                 </div>
                 {opcoes.length > 0 && (
                   <Badge variant="secondary" className="text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                    {opcoes.length} {opcoes.length === 1 ? "opção" : "opções"}
+                      {opcoes.length} {opcoes.length === 1 ? "opção" : "opções"}
                   </Badge>
                 )}
               </div>
 
-              {/* Inputs para adicionar nova opção */}
+              {/* Inputs para adicionar ou editar opção */}
               <div className="p-3 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
                   <div className="sm:col-span-6 space-y-1">
-                    <Label htmlFor="nome-opcao" className="text-[11px] font-semibold text-foreground">
-                      Nome da Opção / Sabor *
+                    <Label htmlFor="nome-opcao" className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                      <span>Nome da Opção / Sabor *</span>
+                      {editingOpcaoId && (
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                          ✏️ Editando Opção
+                        </span>
+                      )}
                     </Label>
                     <Input
                       id="nome-opcao"
@@ -918,16 +963,16 @@ export function ProductsView({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          handleAdicionarOpcao();
+                          handleAdicionarOuSalvarOpcao();
                         }
                       }}
                       className="h-8 text-xs bg-background"
                     />
                   </div>
 
-                  <div className="sm:col-span-4 space-y-1">
+                  <div className="sm:col-span-3 space-y-1">
                     <Label htmlFor="preco-opcao" className="text-[11px] font-semibold text-foreground">
-                      Preço Adicional (Opcional)
+                      Preço Extra (Opcional)
                     </Label>
                     <Input
                       id="preco-opcao"
@@ -937,22 +982,41 @@ export function ProductsView({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          handleAdicionarOpcao();
+                          handleAdicionarOuSalvarOpcao();
                         }
                       }}
                       className="h-8 text-xs font-mono bg-background"
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-3 flex items-center gap-1">
                     <Button
                       type="button"
                       size="sm"
-                      onClick={handleAdicionarOpcao}
-                      className="w-full h-8 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1 shadow-xs"
+                      onClick={handleAdicionarOuSalvarOpcao}
+                      className="flex-1 h-8 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1 shadow-xs"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Adicionar
+                      {editingOpcaoId ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" /> Salvar
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" /> Adicionar
+                        </>
+                      )}
                     </Button>
+                    {editingOpcaoId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelarEdicaoOpcao}
+                        className="h-8 px-2 text-xs text-muted-foreground"
+                      >
+                        Cancelar
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -966,7 +1030,11 @@ export function ProductsView({
                       {opcoes.map((opc) => (
                         <div
                           key={opc.id}
-                          className="flex items-center justify-between p-2 rounded-xl bg-background border border-border shadow-2xs text-xs"
+                          className={`flex items-center justify-between p-2 rounded-xl bg-background border shadow-2xs text-xs transition-all ${
+                            editingOpcaoId === opc.id
+                              ? "border-purple-500 ring-2 ring-purple-500/20 bg-purple-50/50 dark:bg-purple-950/20"
+                              : "border-border"
+                          }`}
                         >
                           <div className="truncate flex-1 mr-2">
                             <span className="font-bold text-foreground truncate block">{opc.nome}</span>
@@ -978,24 +1046,50 @@ export function ProductsView({
                               <span className="text-[10px] text-muted-foreground">Sem custo adicional</span>
                             )}
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoverOpcao(opc.id)}
-                            className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg shrink-0"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditarOpcao(opc)}
+                              className="h-6 w-6 p-0 text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg"
+                              title="Editar Opção"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoverOpcao(opc.id)}
+                              className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                              title="Excluir Opção"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground text-center py-1">
-                    Nenhuma opção adicionada. O produto será vendido em versão única.
-                  </p>
-                )}
+                ) : null}
+
+                {/* Toggle / Switch de Múltipla Escolha */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border/80 mt-2">
+                  <div className="space-y-0.5 pr-2">
+                    <Label htmlFor="toggle-multiplas-opcoes" className="text-xs font-bold text-foreground cursor-pointer block">
+                      Permitir que o cliente selecione mais de uma opção
+                    </Label>
+                    <p className="text-[10.5px] text-muted-foreground">
+                      Quando ativado, o cardápio exibe caixas de seleção (Checkboxes) para múltipla escolha.
+                    </p>
+                  </div>
+                  <Switch
+                    id="toggle-multiplas-opcoes"
+                    checked={permiteMultiplasOpcoes}
+                    onCheckedChange={setPermiteMultiplasOpcoes}
+                  />
+                </div>
               </div>
             </div>
 

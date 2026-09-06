@@ -208,6 +208,7 @@ export interface ProdutoCardapio {
   prazoEntregaIndependente?: string;
   itensKit?: KitItemComponente[];
   opcoes?: ProdutoOpcao[];
+  permite_multiplas_opcoes?: boolean;
 }
 
 
@@ -1097,6 +1098,7 @@ export interface ItemPedidoEncomenda {
   precoUnitario?: number;
   subtotal?: number;
   opcao_selecionada?: ProdutoOpcao;
+  opcoes_selecionadas?: ProdutoOpcao[];
   opcaoNome?: string;
   opcaoPrecoAdicional?: number;
   categoria?: string;

@@ -111,6 +111,7 @@ export interface ItemCarrinho {
   produto: ProdutoCardapio;
   quantidade: number;
   opcaoSelecionada?: ProdutoOpcao;
+  opcoesSelecionadas?: ProdutoOpcao[];
   precoUnitario?: number;
 }
 
@@ -361,6 +362,7 @@ export function CardapioLojaView() {
   // Modal de Detalhes / Opções do Produto para o Cliente
   const [produtoModal, setProdutoModal] = useState<ProdutoCardapio | null>(null);
   const [opcaoSelecionadaModal, setOpcaoSelecionadaModal] = useState<ProdutoOpcao | null>(null);
+  const [opcoesSelecionadasModal, setOpcoesSelecionadasModal] = useState<ProdutoOpcao[]>([]);
   const [quantidadeModal, setQuantidadeModal] = useState<number>(1);
 
   // Modais de Resumo e Sucesso do Pedido
@@ -546,7 +548,10 @@ export function CardapioLojaView() {
 
   const totalCarrinho = useMemo(() => {
     return carrinho.reduce((acc, item) => {
-      const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+      const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+        ? item.opcoesSelecionadas.reduce((sum, o) => sum + (Number(o.preco_adicional) || 0), 0)
+        : (item.opcaoSelecionada?.preco_adicional || 0);
+      const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
       return acc + unitPrice * item.quantidade;
     }, 0);
   }, [carrinho]);
@@ -858,6 +863,7 @@ export function CardapioLojaView() {
             opcoes: Array.isArray(p.opcoes)
               ? p.opcoes
               : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
+            permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
           }));
         } else {
           // Fallback para localStorage
@@ -1175,22 +1181,51 @@ export function CardapioLojaView() {
     setQuantidadeModal(1);
     // Trava de Validação: inicializa sem opção selecionada se houver opções cadastradas
     setOpcaoSelecionadaModal(null);
+    setOpcoesSelecionadasModal([]);
+  };
+
+  const handleToggleOpcaoMultipla = (opc: ProdutoOpcao) => {
+    setOpcoesSelecionadasModal((prev) => {
+      const exists = prev.some((o) => o.id === opc.id);
+      if (exists) {
+        return prev.filter((o) => o.id !== opc.id);
+      } else {
+        return [...prev, opc];
+      }
+    });
   };
 
   const handleConfirmarAdicionarCarrinho = () => {
     if (!produtoModal) return;
 
-    if (produtoModal.opcoes && produtoModal.opcoes.length > 0 && !opcaoSelecionadaModal) {
+    const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
+
+    if (!isMulti && produtoModal.opcoes && produtoModal.opcoes.length > 0 && !opcaoSelecionadaModal) {
       toast.error("Por favor, selecione uma opção antes de adicionar ao pedido.");
       return;
     }
 
-    const unitPrice = produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0);
+    const somaOpcoes = isMulti
+      ? opcoesSelecionadasModal.reduce((sum, o) => sum + (Number(o.preco_adicional) || 0), 0)
+      : (opcaoSelecionadaModal?.preco_adicional || 0);
+
+    const unitPrice = produtoModal.preco + somaOpcoes;
+
+    const opcoesIdsKey = isMulti
+      ? opcoesSelecionadasModal.map((o) => o.id).sort().join("_")
+      : (opcaoSelecionadaModal?.id || "default");
 
     setCarrinho((prev) => {
-      const idx = prev.findIndex(
-        (item) => item.produto.id === produtoModal.id && item.opcaoSelecionada?.id === opcaoSelecionadaModal?.id
-      );
+      const idx = prev.findIndex((item) => {
+        if (item.produto.id !== produtoModal.id) return false;
+        if (isMulti) {
+          const itemKeys = (item.opcoesSelecionadas || []).map((o) => o.id).sort().join("_");
+          return itemKeys === opcoesIdsKey;
+        } else {
+          return (item.opcaoSelecionada?.id || "default") === opcoesIdsKey;
+        }
+      });
+
       if (idx >= 0) {
         const novo = [...prev];
         novo[idx].quantidade += quantidadeModal;
@@ -1202,23 +1237,32 @@ export function CardapioLojaView() {
         {
           produto: produtoModal,
           quantidade: quantidadeModal,
-          opcaoSelecionada: opcaoSelecionadaModal
-            ? {
-                id: opcaoSelecionadaModal.id,
-                nome: opcaoSelecionadaModal.nome,
-                preco_adicional: Number(opcaoSelecionadaModal.preco_adicional) || 0,
-              }
+          opcaoSelecionada: !isMulti
+            ? opcaoSelecionadaModal
+              ? {
+                  id: opcaoSelecionadaModal.id,
+                  nome: opcaoSelecionadaModal.nome,
+                  preco_adicional: Number(opcaoSelecionadaModal.preco_adicional) || 0,
+                }
+              : undefined
+            : undefined,
+          opcoesSelecionadas: isMulti
+            ? opcoesSelecionadasModal.map((o) => ({
+                id: o.id,
+                nome: o.nome,
+                preco_adicional: Number(o.preco_adicional) || 0,
+              }))
             : undefined,
           precoUnitario: unitPrice,
         },
       ];
     });
 
-    toast.success(
-      opcaoSelecionadaModal
-        ? `${produtoModal.nome} (${opcaoSelecionadaModal.nome}) adicionado ao pedido!`
-        : `${produtoModal.nome} adicionado ao pedido!`
-    );
+    const descOpcoes = isMulti
+      ? (opcoesSelecionadasModal.length > 0 ? ` (${opcoesSelecionadasModal.map((o) => o.nome).join(", ")})` : "")
+      : (opcaoSelecionadaModal ? ` (${opcaoSelecionadaModal.nome})` : "");
+
+    toast.success(`${produtoModal.nome}${descOpcoes} adicionado ao pedido!`);
     setProdutoModal(null);
   };
 
@@ -1229,7 +1273,12 @@ export function CardapioLojaView() {
     }
 
     setCarrinho((prev) => {
-      const idx = prev.findIndex((item) => item.produto.id === prod.id && !item.opcaoSelecionada);
+      const idx = prev.findIndex(
+        (item) =>
+          item.produto.id === prod.id &&
+          !item.opcaoSelecionada &&
+          (!item.opcoesSelecionadas || item.opcoesSelecionadas.length === 0)
+      );
       if (idx >= 0) {
         const novo = [...prev];
         novo[idx].quantidade += 1;
@@ -1240,11 +1289,11 @@ export function CardapioLojaView() {
     toast.success(`${prod.nome} adicionado ao pedido!`);
   };
 
-  const handleAlterarQuantidade = (prodId: string, opcaoId: string | undefined, delta: number) => {
+  const handleAlterarQuantidade = (index: number, delta: number) => {
     setCarrinho((prev) => {
       return prev
-        .map((item) => {
-          if (item.produto.id === prodId && item.opcaoSelecionada?.id === opcaoId) {
+        .map((item, idx) => {
+          if (idx === index) {
             const novaQtd = item.quantidade + delta;
             return novaQtd > 0 ? { ...item, quantidade: novaQtd } : null;
           }
@@ -1288,23 +1337,36 @@ export function CardapioLojaView() {
       setPedidoCriadoId(pedidoId);
       const resumoItensTexto = carrinho
         .map((item) => {
-          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
-          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+          const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+            ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+            : (item.opcaoSelecionada?.nome || "");
+          const optText = nomesOpcoes ? ` [${nomesOpcoes}]` : "";
+          const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+            ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
+            : (item.opcaoSelecionada?.preco_adicional || 0);
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
           return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
         })
         .join(", ");
 
       const itensDetalhesJson = carrinho.map((item) => {
-        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+        const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+          ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
+          : (item.opcaoSelecionada?.preco_adicional || 0);
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+        const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+          ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+          : (item.opcaoSelecionada?.nome || null);
         return {
           id: item.produto.id,
           nome: item.produto.nome,
           quantidade: item.quantidade,
           precoUnitario: unitPrice,
           subtotal: unitPrice * item.quantidade,
-          opcao_selecionada: item.opcaoSelecionada || null,
-          opcaoNome: item.opcaoSelecionada?.nome || null,
-          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
+          opcao_selecionada: item.opcaoSelecionada || (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0 ? item.opcoesSelecionadas[0] : null),
+          opcoes_selecionadas: item.opcoesSelecionadas || (item.opcaoSelecionada ? [item.opcaoSelecionada] : []),
+          opcaoNome: nomesOpcoes,
+          opcaoPrecoAdicional: somaOpcoes,
           categoria: item.produto.categoria,
         };
       });
@@ -1941,23 +2003,36 @@ export function CardapioLojaView() {
 
       const resumoItensTexto = carrinho
         .map((item) => {
-          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
-          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+          const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+            ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+            : (item.opcaoSelecionada?.nome || "");
+          const optText = nomesOpcoes ? ` [${nomesOpcoes}]` : "";
+          const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+            ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
+            : (item.opcaoSelecionada?.preco_adicional || 0);
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
           return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
         })
         .join(", ");
 
       const itensDetalhesJson = carrinho.map((item) => {
-        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+        const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+          ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
+          : (item.opcaoSelecionada?.preco_adicional || 0);
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+        const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+          ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+          : (item.opcaoSelecionada?.nome || null);
         return {
           id: item.produto.id,
           nome: item.produto.nome,
           quantidade: item.quantidade,
           precoUnitario: unitPrice,
           subtotal: unitPrice * item.quantidade,
-          opcao_selecionada: item.opcaoSelecionada || null,
-          opcaoNome: item.opcaoSelecionada?.nome || null,
-          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
+          opcao_selecionada: item.opcaoSelecionada || (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0 ? item.opcoesSelecionadas[0] : null),
+          opcoes_selecionadas: item.opcoesSelecionadas || (item.opcaoSelecionada ? [item.opcaoSelecionada] : []),
+          opcaoNome: nomesOpcoes,
+          opcaoPrecoAdicional: somaOpcoes,
           categoria: item.produto.categoria,
         };
       });
@@ -2706,9 +2781,15 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               <div className="mt-4 space-y-4">
                 {/* Lista de Itens */}
                 <div className="space-y-2 max-h-48 overflow-y-auto p-1">
-                  {carrinho.map((item) => {
-                    const itemKey = `${item.produto.id}_${item.opcaoSelecionada?.id || "default"}`;
-                    const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+                  {carrinho.map((item, idx) => {
+                    const nomesOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+                      ? item.opcoesSelecionadas.map((o) => o.nome).join(", ")
+                      : item.opcaoSelecionada?.nome;
+                    const somaOpcoes = item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+                      ? item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0)
+                      : (item.opcaoSelecionada?.preco_adicional || 0);
+                    const unitPrice = item.precoUnitario ?? (item.produto.preco + somaOpcoes);
+                    const itemKey = `${item.produto.id}_${idx}`;
                     return (
                       <div
                         key={itemKey}
@@ -2716,9 +2797,10 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       >
                         <div className="truncate flex-1">
                           <p className="font-bold text-foreground truncate">{item.produto.nome}</p>
-                          {item.opcaoSelecionada && (
+                          {nomesOpcoes && (
                             <p className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold truncate">
-                              Opção: {item.opcaoSelecionada.nome}
+                              {item.opcoesSelecionadas && item.opcoesSelecionadas.length > 1 ? "Opções: " : "Opção: "}
+                              {nomesOpcoes}
                             </p>
                           )}
                           <p className="text-[11px] font-mono text-muted-foreground">
@@ -2730,7 +2812,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleAlterarQuantidade(item.produto.id, item.opcaoSelecionada?.id, -1)}
+                            onClick={() => handleAlterarQuantidade(idx, -1)}
                             className="h-6 w-6 p-0"
                           >
                             <Minus className="w-3 h-3" />
@@ -2739,7 +2821,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleAlterarQuantidade(item.produto.id, item.opcaoSelecionada?.id, 1)}
+                            onClick={() => handleAlterarQuantidade(idx, 1)}
                             className="h-6 w-6 p-0"
                           >
                             <Plus className="w-3 h-3" />
@@ -3543,20 +3625,30 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-black text-foreground uppercase tracking-wider">
-                      Escolha sua Opção *
+                      {produtoModal.permite_multiplas_opcoes ? "Escolha suas Opções" : "Escolha sua Opção *"}
                     </Label>
                     <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">
-                      1 obrigatório
+                      {produtoModal.permite_multiplas_opcoes ? "Múltipla escolha" : "1 obrigatório"}
                     </span>
                   </div>
 
                   <div className="space-y-2">
                     {produtoModal.opcoes.map((opc) => {
-                      const isSelected = opcaoSelecionadaModal?.id === opc.id;
+                      const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
+                      const isSelected = isMulti
+                        ? opcoesSelecionadasModal.some((o) => o.id === opc.id)
+                        : opcaoSelecionadaModal?.id === opc.id;
+
                       return (
                         <div
                           key={opc.id}
-                          onClick={() => setOpcaoSelecionadaModal(opc)}
+                          onClick={() => {
+                            if (isMulti) {
+                              handleToggleOpcaoMultipla(opc);
+                            } else {
+                              setOpcaoSelecionadaModal(opc);
+                            }
+                          }}
                           className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                             isSelected
                               ? "bg-purple-500/10 border-purple-500 shadow-xs"
@@ -3564,15 +3656,27 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div
-                              className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                                isSelected
-                                  ? "border-purple-600 bg-purple-600"
-                                  : "border-muted-foreground/50"
-                              }`}
-                            >
-                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </div>
+                            {isMulti ? (
+                              <div
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                                  isSelected
+                                    ? "border-purple-600 bg-purple-600 text-white"
+                                    : "border-muted-foreground/50 bg-background"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                              </div>
+                            ) : (
+                              <div
+                                className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                  isSelected
+                                    ? "border-purple-600 bg-purple-600"
+                                    : "border-muted-foreground/50"
+                                }`}
+                              >
+                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                              </div>
+                            )}
                             <span className="text-xs font-bold text-foreground">
                               {opc.nome}
                             </span>
@@ -3630,7 +3734,13 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     className="text-base sm:text-lg font-black font-mono"
                   >
                     {formatarMoeda(
-                      (produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0)) * quantidadeModal
+                      (() => {
+                        const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
+                        const somaOpcoesModal = isMulti
+                          ? opcoesSelecionadasModal.reduce((acc, o) => acc + (Number(o.preco_adicional) || 0), 0)
+                          : (opcaoSelecionadaModal?.preco_adicional || 0);
+                        return (produtoModal.preco + somaOpcoesModal) * quantidadeModal;
+                      })()
                     )}
                   </p>
                 </div>
@@ -3649,7 +3759,8 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
                 {(() => {
                   const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
-                  const precisaSelecionarOpcao = temOpcoes && !opcaoSelecionadaModal;
+                  const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
+                  const precisaSelecionarOpcao = temOpcoes && !isMulti && !opcaoSelecionadaModal;
 
                   return (
                     <Button

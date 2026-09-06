@@ -706,6 +706,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           opcoes: Array.isArray(p.opcoes)
             ? p.opcoes
             : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
+          permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
         }));
       }
 
@@ -942,6 +943,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         foto_url: novo.fotoUrl || "",
         ativo: novo.ativo !== false,
         opcoes: novo.opcoes || [],
+        permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
       },
     ]);
 
@@ -965,6 +967,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
     if (dados.ativo !== undefined) payload.ativo = dados.ativo;
     if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
+    if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = dados.permite_multiplas_opcoes;
 
     const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
     if (error) {
