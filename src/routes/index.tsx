@@ -945,7 +945,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
 
-    const payloadFull = {
+    const payloadClean = {
       id: novo.id,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
       estabelecimento_codigo: activeCode,
@@ -960,24 +960,22 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       opcoes: novo.opcoes || [],
       permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
       vende_por_peso: Boolean(novo.vende_por_peso),
-      unidade_venda: novo.unidade_venda || (novo.vende_por_peso ? "kg" : "un"),
       visivel_cardapio_digital: Boolean(novo.visivel_cardapio_digital !== false),
       visivel_pdv: Boolean(novo.visivel_pdv !== false),
     };
 
-    const { error } = await supabase.from("produtos").insert([payloadFull]);
+    const { error } = await supabase.from("produtos").insert([payloadClean]);
 
     if (error) {
-      console.warn("[Supabase Error] Falha ao criar produto com payload completo, aplicando fallback:", error.message);
-      // Fallback sem as novas colunas caso o banco ainda não tenha executado a migração
+      console.warn("[Supabase Error] Falha ao criar produto, aplicando fallback:", error.message);
+      // Fallback sem colunas recentes caso o banco esteja em transição
       const {
         vende_por_peso: _vp,
-        unidade_venda: _uv,
         visivel_cardapio_digital: _vcd,
         visivel_pdv: _vpd,
         permite_multiplas_opcoes: _pmo,
         ...payloadBase
-      } = payloadFull;
+      } = payloadClean;
       const { error: errBase } = await supabase.from("produtos").insert([payloadBase]);
       if (errBase) {
         console.warn("[Supabase Error] Falha também no fallback básico de produtos:", errBase.message);
@@ -1002,7 +1000,6 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
     if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = Boolean(dados.permite_multiplas_opcoes);
     if (dados.vende_por_peso !== undefined) payload.vende_por_peso = Boolean(dados.vende_por_peso);
-    if (dados.unidade_venda !== undefined) payload.unidade_venda = dados.unidade_venda;
     if (dados.visivel_cardapio_digital !== undefined) payload.visivel_cardapio_digital = Boolean(dados.visivel_cardapio_digital);
     if (dados.visivel_pdv !== undefined) payload.visivel_pdv = Boolean(dados.visivel_pdv);
 
@@ -1012,7 +1009,6 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       // Fallback sem as novas colunas
       const {
         vende_por_peso: _vp,
-        unidade_venda: _uv,
         visivel_cardapio_digital: _vcd,
         visivel_pdv: _vpd,
         permite_multiplas_opcoes: _pmo,
