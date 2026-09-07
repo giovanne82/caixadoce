@@ -49,7 +49,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 
-type DemoModalType = "notinha" | "lista" | "encomendas" | "cardapio" | "financeiro" | null;
+type DemoModalType = "notinha" | "lista" | "encomendas" | "cardapio" | "financeiro" | "pdv" | null;
 
 export function LandingPageContent() {
   const navigate = useNavigate();
@@ -99,9 +99,13 @@ export function LandingPageContent() {
             <CaixaDoceLogo size="md" />
           </div>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-600">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600">
             <a href="#vitrine" className="hover:text-purple-600 transition-colors">
               Loja &amp; Pix
+            </a>
+            <a href="#pdv" className="hover:text-purple-600 transition-colors flex items-center gap-1.5">
+              PDV de Balcão
+              <Badge className="bg-purple-600 text-white text-[9px] px-1.5 py-0">NOVO</Badge>
             </a>
             <a href="#encomendas" className="hover:text-purple-600 transition-colors">
               Gestão de Encomendas
@@ -363,6 +367,169 @@ export function LandingPageContent() {
                   className="w-full text-xs font-bold border-pink-300 text-pink-800 hover:bg-pink-100/50 rounded-xl"
                 >
                   <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir Demonstração da Loja Virtual
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* SEÇÃO: PDV DE BALCÃO INTEGRADO (NOVO MÓDULO) */}
+        {/* ========================================================================= */}
+        <section id="pdv" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 scroll-mt-24">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-800 text-xs font-bold">
+              <Badge className="bg-purple-600 text-white text-[9px] px-1.5 py-0 font-extrabold">NOVO MÓDULO</Badge>
+              <span>FRENTE DE CAIXA &amp; VENDAS PRESENCIAIS</span>
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              PDV de Balcão Integrado
+            </h2>
+            <p className="text-base text-slate-600 font-normal leading-relaxed">
+              Venda mais rápido e controle seu caixa sem complicação.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Lado Esquerdo: Bullets de Destaque */}
+            <div className="lg:col-span-6 space-y-4">
+              <div className="p-5 rounded-3xl bg-white border border-purple-100 shadow-md shadow-purple-500/5 flex items-start gap-4 hover:border-purple-300 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-slate-900">
+                    Agilidade no Atendimento
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Catálogo inteligente e carrinho otimizado para fechar vendas presenciais em segundos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-white border border-emerald-100 shadow-md shadow-emerald-500/5 flex items-start gap-4 hover:border-emerald-300 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    Múltiplos Pagamentos
+                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">Split &amp; Troco</Badge>
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Aceite Pix Dinâmico (Mercado Pago), Cartão e Dinheiro com cálculo automático de troco.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-white border border-amber-100 shadow-md shadow-amber-500/5 flex items-start gap-4 hover:border-amber-300 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-slate-900">
+                    Gestão de Gaveta
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Controle completo de Abertura, Sangria e Reforço direto no sistema, sem misturar com o seu financeiro.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-white border border-blue-100 shadow-md shadow-blue-500/5 flex items-start gap-4 hover:border-blue-300 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-slate-900">
+                    Tudo Sincronizado
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Cada venda de balcão atualiza automaticamente suas encomendas e seu fluxo de caixa em tempo real.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lado Direito: Mockup Visual do PDV de Balcão */}
+            <div className="lg:col-span-6">
+              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-purple-50 via-slate-50 to-white border-2 border-purple-200/80 shadow-xl space-y-4">
+                {/* Header Mockup */}
+                <div className="flex items-center justify-between pb-3 border-b border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                      <Store className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-slate-900">Frente de Caixa (PDV)</span>
+                      <div className="text-[10px] text-slate-500 font-medium">Turno Aberto • Fundo: R$ 50,00</div>
+                    </div>
+                  </div>
+                  <Badge className="bg-emerald-600 text-white text-[10px] font-bold">🟢 Caixa Aberto</Badge>
+                </div>
+
+                {/* Itens do Cupom do PDV */}
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-lg bg-purple-100 text-purple-700 font-black text-[10px] flex items-center justify-center">2x</span>
+                      <div>
+                        <div className="font-bold text-slate-900">Fatia Torta Holandesa</div>
+                        <div className="text-[10px] text-slate-400">Pronta Entrega</div>
+                      </div>
+                    </div>
+                    <span className="font-mono font-bold text-slate-900">R$ 32,00</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-lg bg-purple-100 text-purple-700 font-black text-[10px] flex items-center justify-center">1x</span>
+                      <div>
+                        <div className="font-bold text-slate-900">Copo da Felicidade Morango</div>
+                        <div className="text-[10px] text-slate-400">Pronta Entrega</div>
+                      </div>
+                    </div>
+                    <span className="font-mono font-bold text-slate-900">R$ 18,00</span>
+                  </div>
+                </div>
+
+                {/* Split de Pagamento */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Subtotal da Venda:</span>
+                    <span className="font-mono font-bold text-slate-900">R$ 50,00</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-purple-100 space-y-1.5">
+                    <div className="text-[10px] font-bold text-purple-900 uppercase tracking-wider flex items-center justify-between">
+                      <span>Divisão de Pagamentos</span>
+                      <span className="text-emerald-700">Total Pago: R$ 50,00</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1 text-slate-700">
+                        <QrCode className="w-3.5 h-3.5 text-emerald-600" /> Pix Mercado Pago:
+                      </span>
+                      <span className="font-mono font-bold text-emerald-700">R$ 30,00</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1 text-slate-700">
+                        <DollarSign className="w-3.5 h-3.5 text-amber-600" /> Dinheiro (Recebido R$ 30,00):
+                      </span>
+                      <span className="font-mono font-bold text-amber-700">R$ 20,00 (Troco: R$ 10,00)</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm">
+                    <CheckCircle2 className="w-4 h-4" /> Venda Concluída • Cupom Pronto para Impressão
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => setModalDemo("pdv")}
+                  variant="outline"
+                  className="w-full text-xs font-bold border-purple-300 text-purple-800 hover:bg-purple-100/50 rounded-xl"
+                >
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir Demonstração do PDV de Balcão
                 </Button>
               </div>
             </div>
@@ -671,7 +838,7 @@ export function LandingPageContent() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {/* ITEM 1: Escanear Notinha */}
             <Card
               onClick={() => setModalDemo("notinha")}
@@ -691,7 +858,29 @@ export function LandingPageContent() {
               </Badge>
             </Card>
 
-            {/* ITEM 2: Lista de Compras */}
+            {/* ITEM 2: PDV de Balcão */}
+            <Card
+              onClick={() => setModalDemo("pdv")}
+              className="bg-white border border-purple-200 hover:border-purple-400 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between text-center space-y-3 relative overflow-hidden"
+            >
+              <div className="p-3.5 bg-purple-100 text-purple-700 rounded-2xl w-fit mx-auto group-hover:scale-110 transition-transform">
+                <Store className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1">
+                  <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-purple-600 transition-colors">
+                    PDV de Balcão
+                  </h4>
+                  <Badge className="bg-purple-600 text-white text-[8px] px-1 py-0 font-extrabold">NOVO</Badge>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Frente de caixa, split de pagamentos e gaveta.</p>
+              </div>
+              <Badge variant="secondary" className="bg-purple-50 text-purple-700 text-[10px] font-bold mx-auto">
+                <Eye className="w-3 h-3 mr-1" /> Ver Exemplo
+              </Badge>
+            </Card>
+
+            {/* ITEM 3: Lista de Compras */}
             <Card
               onClick={() => setModalDemo("lista")}
               className="bg-white border border-slate-200 hover:border-emerald-400 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between text-center space-y-3"
@@ -710,7 +899,7 @@ export function LandingPageContent() {
               </Badge>
             </Card>
 
-            {/* ITEM 3: Encomendas */}
+            {/* ITEM 4: Encomendas */}
             <Card
               onClick={() => setModalDemo("encomendas")}
               className="bg-white border border-slate-200 hover:border-amber-400 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between text-center space-y-3"
@@ -729,13 +918,13 @@ export function LandingPageContent() {
               </Badge>
             </Card>
 
-            {/* ITEM 4: Cardápio Digital */}
+            {/* ITEM 5: Cardápio Digital */}
             <Card
               onClick={() => setModalDemo("cardapio")}
               className="bg-white border border-slate-200 hover:border-pink-400 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between text-center space-y-3"
             >
               <div className="p-3.5 bg-pink-100 text-pink-700 rounded-2xl w-fit mx-auto group-hover:scale-110 transition-transform">
-                <Store className="w-6 h-6" />
+                <ShoppingBag className="w-6 h-6" />
               </div>
               <div>
                 <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-pink-600 transition-colors">
@@ -748,7 +937,7 @@ export function LandingPageContent() {
               </Badge>
             </Card>
 
-            {/* ITEM 5: Financeiro */}
+            {/* ITEM 6: Financeiro */}
             <Card
               onClick={() => setModalDemo("financeiro")}
               className="bg-white border border-slate-200 hover:border-blue-400 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between text-center space-y-3"
@@ -832,6 +1021,10 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="line-through">PDV de Balcão e Frente de Caixa (Bloqueado)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <X className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="line-through">Escanear a Notinha com IA (Bloqueado)</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
@@ -866,7 +1059,7 @@ export function LandingPageContent() {
                     <span>Plano Pro Completo</span>
                     <Badge className="bg-purple-100 text-purple-800 font-bold text-[10px]">Mais Vendido</Badge>
                   </h3>
-                  <p className="text-xs text-purple-700 font-medium">Automação total: Loja Virtual, Pix Automático, Encomendas e Precificação em Cascata.</p>
+                  <p className="text-xs text-purple-700 font-medium">Automação total: Loja Virtual, PDV de Balcão, Pix Automático, Encomendas e Precificação em Cascata.</p>
                 </div>
 
                 <div className="space-y-1">
@@ -883,6 +1076,10 @@ export function LandingPageContent() {
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
                     <span>Loja Virtual personalizada com Pix Mercado Pago automático</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>PDV de Balcão Integrado com Múltiplos Pagamentos e Gaveta</span>
                   </div>
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
@@ -937,12 +1134,16 @@ export function LandingPageContent() {
                 a: "Você cria sua vitrine com seus produtos, fotos e preços em minutos. Ao finalizar a compra, seu cliente paga via Pix do Mercado Pago e o CaixaDoce confirma o pagamento automaticamente, sem que você precise conferir comprovante.",
               },
               {
+                q: "O PDV de Balcão funciona integrado com a Loja Virtual?",
+                a: "Sim! Cada venda de balcão atualiza automaticamente suas encomendas e seu fluxo de caixa em tempo real. Além disso, as operações de gaveta (abertura, sangria e reforço) são controladas sem misturar com o seu financeiro/DRE.",
+              },
+              {
                 q: "O que é a Atualização em Cascata na Ficha Técnica?",
                 a: "Quando você altera o preço de um insumo (como o leite condensado ou chocolate) ou escaneia uma notinha com novo valor, o sistema recalcula instantaneamente o custo e a margem de lucro de todas as receitas que utilizam aquele ingrediente.",
               },
               {
                 q: "Como funciona o teste grátis de 7 dias?",
-                a: "Você cria sua conta gratuitamente e tem 7 dias completos para usar todas as funcionalidades Pro, incluindo a vitrine online, baixa automática de Pix, calendário de encomendas e precificação por IA, sem precisar cadastrar cartão de crédito.",
+                a: "Você cria sua conta gratuitamente e tem 7 dias completos para usar todas as funcionalidades Pro, incluindo a vitrine online, PDV de balcão, baixa automática de Pix, calendário de encomendas e precificação por IA, sem precisar cadastrar cartão de crédito.",
               },
               {
                 q: "Como o sistema me ajuda a não perder prazos de entrega?",
@@ -1245,6 +1446,62 @@ export function LandingPageContent() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL 6: PDV de Balcão */}
+      <Dialog open={modalDemo === "pdv"} onOpenChange={(open) => !open && setModalDemo(null)}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-purple-950">
+              <Store className="w-6 h-6 text-purple-600" /> Demonstração: PDV de Balcão Integrado
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              Frente de caixa ágil para vendas presenciais, múltiplos pagamentos e controle de gaveta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-4 rounded-2xl bg-purple-50 border border-purple-100 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-purple-950">🏪 Venda Balcão #PDV-802</span>
+                <Badge className="bg-emerald-600 text-white text-[10px] font-bold">100% Sincronizado</Badge>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
+                  <div>
+                    <div className="font-bold text-slate-900">Bolo no Pote Ninho c/ Nutella (x2)</div>
+                    <div className="text-[10px] text-purple-700">Categoria: Pronta Entrega</div>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">R$ 28,00</span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
+                  <div>
+                    <div className="font-bold text-slate-900">Brownie com Sorvete Individual</div>
+                    <div className="text-[10px] text-purple-700">Categoria: Sobremesas</div>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">R$ 16,00</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-1.5 text-xs">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span>Total da Venda:</span>
+                  <span className="text-purple-700 font-mono text-sm">R$ 44,00</span>
+                </div>
+                <div className="text-[11px] text-slate-600 flex justify-between">
+                  <span>Forma de Pagamento:</span>
+                  <span className="font-semibold text-emerald-700">Pix Mercado Pago (QR Code Dinâmico)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-100 rounded-xl text-xs text-slate-600 leading-relaxed">
+              💡 <strong>Controle de Gaveta:</strong> Registre Abertura, Sangria e Reforço de troco a qualquer momento. Suas movimentações físicas não alteram o DRE da sua loja.
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* FOOTER */}
       <footer className="border-t border-slate-200 bg-white py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
@@ -1256,6 +1513,9 @@ export function LandingPageContent() {
           <div className="flex flex-wrap items-center gap-6">
             <a href="#vitrine" className="hover:text-purple-700 transition-colors">
               Loja &amp; Pix
+            </a>
+            <a href="#pdv" className="hover:text-purple-700 transition-colors">
+              PDV de Balcão
             </a>
             <a href="#encomendas" className="hover:text-purple-700 transition-colors">
               Encomendas
