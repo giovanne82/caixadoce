@@ -2089,6 +2089,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 onEditarProduto={editarProduto}
                 onExcluirProduto={excluirProduto}
                 onSalvarKit={salvarKit}
+                onIrParaConfiguracoes={() => setActiveTab("config")}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />

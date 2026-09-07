@@ -789,7 +789,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     if (!activeCode) return;
 
     const isUuid = user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-    const filterStr = isUuid ? `user_id.eq.${user.id},codigo.eq.${activeCode}` : `codigo.eq.${activeCode}`;
+    const filterStr = isUuid ? `user_id.eq.${user.id},codigo.ilike.${activeCode.trim()}` : `codigo.ilike.${activeCode.trim()}`;
 
     // 1. Aplica dados de profile imediatamente se disponíveis
     if (profile) {
@@ -850,11 +850,11 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.chave_pix && d.chave_pix !== "contato@caixadoce.com.br") setChavePix(d.chave_pix);
           else if (d.chave_pix === "contato@caixadoce.com.br") setChavePix("");
 
-          if (d.logo_url || d.store_logo_url) setLogoUrl(d.logo_url || d.store_logo_url);
-          if (d.banner_url || d.store_banner_url) setBannerUrl(d.banner_url || d.store_banner_url);
-          if (d.theme_color || d.cor_destaque) setThemeColor(d.theme_color || d.cor_destaque);
-          if (d.titulo_cardapio || d.menu_title) setTituloCardapio(d.titulo_cardapio || d.menu_title);
-          if (d.slogan_cardapio || d.menu_slogan) setSloganCardapio(d.slogan_cardapio || d.menu_slogan);
+          if (d.logo_url || d.store_logo_url || d.logoUrl) setLogoUrl(d.logo_url || d.store_logo_url || d.logoUrl);
+          if (d.banner_url || d.store_banner_url || d.bannerUrl) setBannerUrl(d.banner_url || d.store_banner_url || d.bannerUrl);
+          if (d.theme_color || d.cor_destaque || d.themeColor || d.corTema) setThemeColor(d.theme_color || d.cor_destaque || d.themeColor || d.corTema);
+          if (d.titulo_cardapio || d.menu_title || d.tituloCardapio) setTituloCardapio(d.titulo_cardapio || d.menu_title || d.tituloCardapio);
+          if (d.slogan_cardapio || d.menu_slogan || d.sloganCardapio) setSloganCardapio(d.slogan_cardapio || d.menu_slogan || d.sloganCardapio);
 
           const insta = d.instagram || d.social_instagram || d.social_media?.instagram;
           if (insta) setInstagramEst(insta);

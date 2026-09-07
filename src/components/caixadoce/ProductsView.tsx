@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
@@ -47,11 +48,7 @@ import {
   Calculator,
   Upload,
   Box,
-  Share2,
-  Instagram,
-  Facebook,
   MessageCircle,
-  Music,
   UtensilsCrossed,
   AlertTriangle,
   AlertCircle,
@@ -71,7 +68,6 @@ import {
   type KitProduto,
   type ProdutoOpcao,
 } from "@/lib/caixadoce-data";
-import { PALETAS_CORES_TEMA, type PaletaCorTema } from "@/lib/cardapio-helpers";
 import { toast } from "sonner";
 
 interface ProductsViewProps {
@@ -81,6 +77,7 @@ interface ProductsViewProps {
   onEditarProduto: (id: string, dados: Partial<ProdutoCardapio>) => Promise<void>;
   onExcluirProduto: (id: string) => Promise<void>;
   onSalvarKit?: (kit: KitProduto) => Promise<void>;
+  onIrParaConfiguracoes?: () => void;
 }
 
 const CATEGORIAS_PADRAO = [
@@ -99,7 +96,9 @@ export function ProductsView({
   onEditarProduto,
   onExcluirProduto,
   onSalvarKit,
+  onIrParaConfiguracoes,
 }: ProductsViewProps) {
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [busca, setBusca] = useState("");
@@ -115,7 +114,7 @@ export function ProductsView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
-  // Personalização Visual do Cardápio
+  // Informações do Estabelecimento & Delivery
   const { profile, updateEstablishmentDetails } = useAuth();
   // Configuração da opção de Entrega (Delivery)
   const [deliveryAtivo, setDeliveryAtivo] = useState<boolean>(() => {
@@ -142,104 +141,6 @@ export function ProductsView({
       console.warn("[ProductsView] Erro ao atualizar status de delivery:", err);
       toast.info("Configuração salva no navegador.");
     }
-  };
-
-  const fileInputRefLogo = useRef<HTMLInputElement>(null);
-  const fileInputRefBanner = useRef<HTMLInputElement>(null);
-  const [modalPersonalizarOpen, setModalPersonalizarOpen] = useState(false);
-  const [logoUrlCustom, setLogoUrlCustom] = useState(profile?.logoUrl || profile?.store_logo_url || "");
-  const [bannerUrlCustom, setBannerUrlCustom] = useState(profile?.bannerUrl || profile?.banner_url || profile?.store_banner_url || "");
-  const [themeColorCustom, setThemeColorCustom] = useState(profile?.themeColor || profile?.theme_color || profile?.corTema || "#8E7CC3");
-  const [tituloCardapioCustom, setTituloCardapioCustom] = useState(profile?.tituloCardapio || profile?.menu_title || "");
-  const [sloganCardapioCustom, setSloganCardapioCustom] = useState(profile?.sloganCardapio || profile?.menu_slogan || "");
-  const [instagramCustom, setInstagramCustom] = useState(profile?.instagram || profile?.social_instagram || profile?.social_media?.instagram || "");
-  const [tiktokCustom, setTiktokCustom] = useState(profile?.tiktok || profile?.social_tiktok || profile?.social_media?.tiktok || "");
-  const [facebookCustom, setFacebookCustom] = useState(profile?.facebook || profile?.social_facebook || profile?.social_media?.facebook || "");
-  const [salvandoVisual, setSalvandoVisual] = useState(false);
-  const [enviandoLogo, setEnviandoLogo] = useState(false);
-  const [enviandoBanner, setEnviandoBanner] = useState(false);
-
-  const handleSalvarVisual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSalvandoVisual(true);
-    try {
-      await updateEstablishmentDetails({
-        logoUrl: logoUrlCustom,
-        store_logo_url: logoUrlCustom,
-        bannerUrl: bannerUrlCustom,
-        banner_url: bannerUrlCustom,
-        store_banner_url: bannerUrlCustom,
-        themeColor: themeColorCustom,
-        theme_color: themeColorCustom,
-        cor_destaque: themeColorCustom,
-        tituloCardapio: tituloCardapioCustom,
-        menu_title: tituloCardapioCustom,
-        sloganCardapio: sloganCardapioCustom,
-        menu_slogan: sloganCardapioCustom,
-        instagram: instagramCustom,
-        social_instagram: instagramCustom,
-        tiktok: tiktokCustom,
-        social_tiktok: tiktokCustom,
-        facebook: facebookCustom,
-        social_facebook: facebookCustom,
-      });
-      toast.success("Personalização visual do Cardápio salva com sucesso!");
-      setModalPersonalizarOpen(false);
-    } catch (err: any) {
-      toast.error("Erro ao salvar personalização visual: " + (err.message || ""));
-    } finally {
-      setSalvandoVisual(false);
-    }
-  };
-
-  const handleUploadLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const MAX_PRODUTO_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-    if (file.size > MAX_PRODUTO_SIZE_BYTES) {
-      toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
-      if (e.target) e.target.value = "";
-      return;
-    }
-
-    setEnviandoLogo(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setLogoUrlCustom(reader.result as string);
-      setEnviandoLogo(false);
-      toast.success("Logo carregada! Clique em Salvar para aplicar no cardápio.");
-    };
-    reader.onerror = () => {
-      setEnviandoLogo(false);
-      toast.error("Erro ao ler imagem.");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleUploadBannerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const MAX_BANNER_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-    if (file.size > MAX_BANNER_SIZE_BYTES) {
-      toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
-      if (e.target) e.target.value = "";
-      return;
-    }
-
-    setEnviandoBanner(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBannerUrlCustom(reader.result as string);
-      setEnviandoBanner(false);
-      toast.success("Banner de capa carregado! Clique em Salvar para aplicar no cardápio.");
-    };
-    reader.onerror = () => {
-      setEnviandoBanner(false);
-      toast.error("Erro ao ler imagem do banner.");
-    };
-    reader.readAsDataURL(file);
   };
 
   // Categorias Customizadas
@@ -533,10 +434,11 @@ export function ProductsView({
             variant="secondary"
             size="sm"
             onClick={() => {
-              setLogoUrlCustom(profile?.logoUrl || profile?.store_logo_url || "");
-              setTituloCardapioCustom(profile?.tituloCardapio || profile?.menu_title || "");
-              setSloganCardapioCustom(profile?.sloganCardapio || profile?.menu_slogan || "");
-              setModalPersonalizarOpen(true);
+              if (onIrParaConfiguracoes) {
+                onIrParaConfiguracoes();
+              } else {
+                navigate({ to: "/configuracoes" });
+              }
             }}
             className="h-8.5 font-bold text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 border-0 shadow-sm"
           >
@@ -1503,317 +1405,6 @@ export function ProductsView({
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: PERSONALIZAÇÃO VISUAL DO CARDÁPIO (LOGO, TÍTULO, SLOGAN) */}
-      <Dialog open={modalPersonalizarOpen} onOpenChange={setModalPersonalizarOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" /> Personalização Visual do Cardápio Digital
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Configure a logo, o título público e o slogan exibidos aos clientes no seu cardápio público.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSalvarVisual} className="space-y-4 py-2 font-sans">
-            {/* 1. Upload de Imagem de Capa (Banner) */}
-            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <ImageIcon className="w-4 h-4 text-purple-600" /> Imagem de Capa (Banner do Topo)
-                </Label>
-                <span className="text-[10px] text-muted-foreground">Recomendado: 1200x400</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Exibida como topo panorâmico da sua vitrine pública no cardápio.
-              </p>
-
-              <div className="relative w-full h-28 sm:h-32 rounded-xl overflow-hidden bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center group">
-                {bannerUrlCustom ? (
-                  <>
-                    <img src={bannerUrlCustom} alt="Capa" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => fileInputRefBanner.current?.click()}
-                        className="text-xs font-bold bg-white/90 hover:bg-white text-stone-900"
-                      >
-                        <Upload className="w-3.5 h-3.5 mr-1" /> Trocar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setBannerUrlCustom("")}
-                        className="text-xs font-bold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center p-3 space-y-1.5">
-                    <ImageIcon className="w-6 h-6 text-purple-400 mx-auto" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={enviandoBanner}
-                      onClick={() => fileInputRefBanner.current?.click()}
-                      className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
-                    >
-                      <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      {enviandoBanner ? "Enviando..." : "Enviar Imagem de Capa"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <input
-                ref={fileInputRefBanner}
-                type="file"
-                accept="image/*"
-                onChange={handleUploadBannerFile}
-                className="hidden"
-              />
-
-              {bannerUrlCustom && (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setBannerUrlCustom("")}
-                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Capa
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* 2. Cor Principal de Destaque */}
-            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-purple-600" /> Cor Principal de Destaque
-                </Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-bold text-muted-foreground uppercase">{themeColorCustom}</span>
-                  <div
-                    className="w-5 h-5 rounded-full border border-black/20 shadow-xs shrink-0"
-                    style={{ backgroundColor: themeColorCustom }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                {PALETAS_CORES_TEMA.map((paleta) => {
-                  const isSelected = themeColorCustom.toLowerCase() === paleta.hex.toLowerCase();
-                  return (
-                    <button
-                      type="button"
-                      key={paleta.id}
-                      onClick={() => setThemeColorCustom(paleta.hex)}
-                      className={`flex items-center gap-2 p-1.5 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? "border-purple-600 ring-2 ring-purple-600/30 bg-purple-50 dark:bg-purple-950/40 font-bold"
-                          : "border-border hover:border-border/80 bg-background/60"
-                      }`}
-                    >
-                      <span
-                        className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0 flex items-center justify-center text-white"
-                        style={{ backgroundColor: paleta.hex }}
-                      >
-                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
-                      </span>
-                      <span className="text-[10px] text-foreground truncate">{paleta.nome.split(" ")[0]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <Label className="text-[11px] font-semibold text-muted-foreground shrink-0">
-                  Cor personalizada:
-                </Label>
-                <div className="flex items-center gap-1.5 flex-1 max-w-[160px]">
-                  <input
-                    type="color"
-                    value={themeColorCustom}
-                    onChange={(e) => setThemeColorCustom(e.target.value)}
-                    className="w-7 h-7 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
-                  />
-                  <Input
-                    value={themeColorCustom}
-                    onChange={(e) => setThemeColorCustom(e.target.value)}
-                    placeholder="#8E7CC3"
-                    className="h-7 text-xs font-mono uppercase"
-                    maxLength={7}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Upload de Logo do Estabelecimento */}
-            <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <ImageIcon className="w-4 h-4 text-purple-600" /> Logo do Estabelecimento
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Esta imagem será exibida no cabeçalho do seu cardápio público. Se deixada em branco, será utilizada a marca padrão.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
-                <div className="w-20 h-20 rounded-2xl bg-background border-2 border-dashed border-purple-300 dark:border-purple-800 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative group">
-                  {logoUrlCustom ? (
-                    <img src={logoUrlCustom} alt="Logo da loja" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-center p-1">
-                      <CaixaDoceLogo size="sm" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-center sm:text-left">
-                  <input
-                    ref={fileInputRefLogo}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleUploadLogoFile}
-                    className="hidden"
-                  />
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={enviandoLogo}
-                      onClick={() => fileInputRefLogo.current?.click()}
-                      className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
-                    >
-                      <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
-                    </Button>
-                    {logoUrlCustom && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setLogoUrlCustom("")}
-                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Título e Slogan do Cardápio */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="menu-title-custom" className="text-xs font-bold">
-                  Título do Cardápio (Público)
-                </Label>
-                <Input
-                  id="menu-title-custom"
-                  value={tituloCardapioCustom}
-                  onChange={(e) => setTituloCardapioCustom(e.target.value)}
-                  placeholder="Cardápio de Bolos & Doces Especiais"
-                  className="text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Exibido no cabeçalho do seu cardápio público. Padrão: <em>'Cardápio de Bolos & Doces Especiais'</em>
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="menu-slogan-custom" className="text-xs font-bold">
-                  Slogan / Descrição do Cardápio
-                </Label>
-                <Textarea
-                  id="menu-slogan-custom"
-                  rows={2}
-                  value={sloganCardapioCustom}
-                  onChange={(e) => setSloganCardapioCustom(e.target.value)}
-                  placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
-                  className="text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Exibido como mensagem de apresentação aos clientes.
-                </p>
-              </div>
-
-              {/* 3. Redes Sociais no Cardápio Público */}
-              <div className="pt-3 border-t space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-extrabold flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
-                    <Share2 className="w-3.5 h-3.5" /> Redes Sociais no Cardápio Público
-                  </Label>
-                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[9px] font-bold">
-                    Exibição Automática
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="custom-instagram" className="text-[11px] font-semibold flex items-center gap-1">
-                      <Instagram className="w-3 h-3 text-pink-600" /> Instagram
-                    </Label>
-                    <Input
-                      id="custom-instagram"
-                      placeholder="@suaconfeitaria"
-                      value={instagramCustom}
-                      onChange={(e) => setInstagramCustom(e.target.value)}
-                      className="text-xs h-8"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="custom-tiktok" className="text-[11px] font-semibold flex items-center gap-1">
-                      <Music className="w-3 h-3 text-slate-800 dark:text-slate-200" /> TikTok
-                    </Label>
-                    <Input
-                      id="custom-tiktok"
-                      placeholder="@suaconfeitaria"
-                      value={tiktokCustom}
-                      onChange={(e) => setTiktokCustom(e.target.value)}
-                      className="text-xs h-8"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="custom-facebook" className="text-[11px] font-semibold flex items-center gap-1">
-                      <Facebook className="w-3 h-3 text-blue-600" /> Facebook
-                    </Label>
-                    <Input
-                      id="custom-facebook"
-                      placeholder="facebook.com/..."
-                      value={facebookCustom}
-                      onChange={(e) => setFacebookCustom(e.target.value)}
-                      className="text-xs h-8"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="pt-2 border-t flex items-center justify-between">
-              <Button type="button" variant="outline" size="sm" onClick={() => setModalPersonalizarOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={salvandoVisual} className="font-extrabold text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-md">
-                {salvandoVisual ? "Salvando..." : "Salvar Alterações Visuais"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
       {/* MODAL: FICHA TÉCNICA & PRECIFICAÇÃO */}
       <FichaTecnicaModal
         open={modalFichaOpen}
