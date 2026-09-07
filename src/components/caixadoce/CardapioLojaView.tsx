@@ -895,10 +895,8 @@ export function CardapioLojaView() {
               ? p.opcoes
               : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
             permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
-            vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
-            unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
-            visivel_cardapio_digital: (p.visivel_cardapio_digital ?? true) !== false,
-            visivel_pdv: (p.visivel_pdv ?? true) !== false,
+            visivel_cardapio_digital: p.visivel_cardapio_digital === false || p.visivel_cardapio_digital === "false" ? false : true,
+            visivel_pdv: p.visivel_pdv === false || p.visivel_pdv === "false" ? false : true,
           }));
         } else {
           // Fallback para localStorage
