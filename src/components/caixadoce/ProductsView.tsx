@@ -55,6 +55,8 @@ import {
   UtensilsCrossed,
   AlertTriangle,
   AlertCircle,
+  Scale,
+  Store,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
@@ -261,6 +263,9 @@ export function ProductsView({
   const [fotoUrl, setFotoUrl] = useState("");
   const [destaque, setDestaque] = useState(false);
   const [ativo, setAtivo] = useState(true);
+  const [vendePorPeso, setVendePorPeso] = useState(false);
+  const [visivelCardapioDigital, setVisivelCardapioDigital] = useState(true);
+  const [visivelPdv, setVisivelPdv] = useState(true);
 
   // Opções de Escolha do Produto (Sabores, Tamanhos, etc.)
   const [opcoes, setOpcoes] = useState<ProdutoOpcao[]>([]);
@@ -401,6 +406,9 @@ export function ProductsView({
     setFotoUrl("");
     setDestaque(false);
     setAtivo(true);
+    setVendePorPeso(false);
+    setVisivelCardapioDigital(true);
+    setVisivelPdv(true);
     setOpcoes([]);
     setNomeNovaOpcao("");
     setPrecoAdicionalNovaOpcao("");
@@ -421,6 +429,9 @@ export function ProductsView({
     setFotoUrl(prod.fotoUrl);
     setDestaque(!!prod.destaque);
     setAtivo(prod.ativo !== false);
+    setVendePorPeso(Boolean(prod.vende_por_peso || prod.unidade_venda === "kg"));
+    setVisivelCardapioDigital((prod.visivel_cardapio_digital ?? true) !== false);
+    setVisivelPdv((prod.visivel_pdv ?? true) !== false);
     setOpcoes(prod.opcoes && Array.isArray(prod.opcoes) ? prod.opcoes : []);
     setNomeNovaOpcao("");
     setPrecoAdicionalNovaOpcao("");
@@ -461,6 +472,10 @@ export function ProductsView({
         min_lead_time_days: minLeadTimeDays,
         opcoes,
         permite_multiplas_opcoes: permiteMultiplasOpcoes,
+        vende_por_peso: Boolean(vendePorPeso),
+        unidade_venda: vendePorPeso ? "kg" : "un",
+        visivel_cardapio_digital: Boolean(visivelCardapioDigital),
+        visivel_pdv: Boolean(visivelPdv),
       };
 
       if (editingId) {
@@ -693,6 +708,26 @@ export function ProductsView({
                           <Sparkles className="w-3 h-3" /> Destaque
                         </Badge>
                       )}
+                      {prod.vende_por_peso && (
+                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1">
+                          ⚖️ R$/kg
+                        </Badge>
+                      )}
+                      {prod.visivel_cardapio_digital !== false && (
+                        <Badge variant="outline" className="bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30 text-[9px] font-bold">
+                          🌐 Cardápio
+                        </Badge>
+                      )}
+                      {prod.visivel_pdv !== false && (
+                        <Badge variant="outline" className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[9px] font-bold">
+                          🏪 PDV
+                        </Badge>
+                      )}
+                      {prod.visivel_cardapio_digital === false && prod.visivel_pdv === false && (
+                        <Badge variant="destructive" className="text-[9px] font-bold">
+                          Oculto
+                        </Badge>
+                      )}
                       {prod.isKit || prod.categoria === "Kits & Combos" ? (
                         <Badge className="bg-amber-600 text-white border-0 text-[10px] font-bold flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {prod.prazoEntregaIndependente || "2 dias úteis"}
@@ -755,9 +790,11 @@ export function ProductsView({
 
                   <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
                     <div>
-                      <span className="text-[10px] text-muted-foreground block font-medium">Preço de Venda</span>
+                      <span className="text-[10px] text-muted-foreground block font-medium">
+                        {prod.vende_por_peso ? "Preço do Quilo" : "Preço de Venda"}
+                      </span>
                       <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
-                        {formatarMoeda(prod.preco)}
+                        {formatarMoeda(prod.preco)} {prod.vende_por_peso ? <span className="text-xs font-semibold text-muted-foreground">/kg</span> : ""}
                       </span>
                     </div>
 
@@ -841,6 +878,46 @@ export function ProductsView({
               </div>
             </div>
 
+            {/* Tipo de Venda (Unidade vs Peso/Quilo) */}
+            <div className="space-y-1.5 p-3 rounded-2xl bg-purple-500/5 border border-purple-500/20">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-purple-600" />
+                Modalidade de Venda
+              </Label>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setVendePorPeso(false)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    !vendePorPeso
+                      ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                      : "bg-background border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <span>Por Unidade (R$/un)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVendePorPeso(true)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    vendePorPeso
+                      ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                      : "bg-background border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>Por Peso (R$/kg)</span>
+                </button>
+              </div>
+              <p className="text-[10.5px] text-muted-foreground">
+                {vendePorPeso
+                  ? "⚖️ No PDV de Balcão, o operador poderá digitar a pesagem em gramas (ex: 350g) e o sistema calculará o valor proporcional."
+                  : "📦 Preço cobrado por unidade inteira do item."}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="prod-nome" className="text-xs font-semibold">Nome do Produto *</Label>
@@ -855,10 +932,12 @@ export function ProductsView({
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="prod-preco" className="text-xs font-semibold">Preço de Venda (R$) *</Label>
+                <Label htmlFor="prod-preco" className="text-xs font-semibold">
+                  {vendePorPeso ? "Preço do Quilo (R$/kg) *" : "Preço de Venda (R$) *"}
+                </Label>
                 <Input
                   id="prod-preco"
-                  placeholder="R$ 0,00"
+                  placeholder={vendePorPeso ? "R$ 0,00 /kg" : "R$ 0,00"}
                   value={precoFormatado}
                   onChange={(e) => setPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
                   className="h-8 text-xs font-black text-foreground"
@@ -1213,6 +1292,33 @@ export function ProductsView({
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Canais de Exibição */}
+            <div className="space-y-2 p-3 rounded-2xl bg-muted/30 border border-border">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Store className="w-4 h-4 text-primary" /> Canais de Exibição
+              </Label>
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border">
+                  <div className="space-y-0.5 pr-2">
+                    <Label htmlFor="toggle-visivel-cardapio" className="text-xs font-bold text-foreground cursor-pointer block">
+                      🌐 Exibir no Cardápio Digital
+                    </Label>
+                    <p className="text-[10.5px] text-muted-foreground">Disponível para clientes pedirem online.</p>
+                  </div>
+                  <Switch id="toggle-visivel-cardapio" checked={visivelCardapioDigital} onCheckedChange={setVisivelCardapioDigital} />
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border">
+                  <div className="space-y-0.5 pr-2">
+                    <Label htmlFor="toggle-visivel-pdv" className="text-xs font-bold text-foreground cursor-pointer block">
+                      🏪 Exibir no PDV de Balcão
+                    </Label>
+                    <p className="text-[10.5px] text-muted-foreground">Disponível para operadores venderem na frente de caixa.</p>
+                  </div>
+                  <Switch id="toggle-visivel-pdv" checked={visivelPdv} onCheckedChange={setVisivelPdv} />
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border">

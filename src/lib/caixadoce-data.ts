@@ -216,6 +216,10 @@ export interface ProdutoCardapio {
   itensKit?: KitItemComponente[];
   opcoes?: ProdutoOpcao[];
   permite_multiplas_opcoes?: boolean;
+  vende_por_peso?: boolean;
+  unidade_venda?: "un" | "kg";
+  visivel_cardapio_digital?: boolean;
+  visivel_pdv?: boolean;
 }
 
 

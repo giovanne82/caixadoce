@@ -719,6 +719,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             ? p.opcoes
             : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
           permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
+          vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
+          unidade_venda: p.unidade_venda || (p.vende_por_peso ? "kg" : "un"),
+          visivel_cardapio_digital: (p.visivel_cardapio_digital ?? true) !== false,
+          visivel_pdv: (p.visivel_pdv ?? true) !== false,
         }));
       }
 
@@ -956,6 +960,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         ativo: novo.ativo !== false,
         opcoes: novo.opcoes || [],
         permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
+        vende_por_peso: Boolean(novo.vende_por_peso),
+        unidade_venda: novo.unidade_venda || (novo.vende_por_peso ? "kg" : "un"),
+        visivel_cardapio_digital: novo.visivel_cardapio_digital !== false,
+        visivel_pdv: novo.visivel_pdv !== false,
       },
     ]);
 
@@ -980,6 +988,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.ativo !== undefined) payload.ativo = dados.ativo;
     if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
     if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = dados.permite_multiplas_opcoes;
+    if (dados.vende_por_peso !== undefined) payload.vende_por_peso = dados.vende_por_peso;
+    if (dados.unidade_venda !== undefined) payload.unidade_venda = dados.unidade_venda;
+    if (dados.visivel_cardapio_digital !== undefined) payload.visivel_cardapio_digital = dados.visivel_cardapio_digital;
+    if (dados.visivel_pdv !== undefined) payload.visivel_pdv = dados.visivel_pdv;
 
     const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
     if (error) {

@@ -895,6 +895,10 @@ export function CardapioLojaView() {
               ? p.opcoes
               : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
             permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
+            vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
+            unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
+            visivel_cardapio_digital: (p.visivel_cardapio_digital ?? true) !== false,
+            visivel_pdv: (p.visivel_pdv ?? true) !== false,
           }));
         } else {
           // Fallback para localStorage
@@ -919,7 +923,7 @@ export function CardapioLojaView() {
           }
         }
 
-        const ativos = mapeados.filter((p) => p.ativo !== false && (p as any).is_active !== false);
+        const ativos = mapeados.filter((p) => p.ativo !== false && (p as any).is_active !== false && p.visivel_cardapio_digital !== false);
         setProdutos(ativos);
 
         if (typeof window !== "undefined" && ativos.length > 0) {

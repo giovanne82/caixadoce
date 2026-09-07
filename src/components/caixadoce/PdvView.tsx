@@ -68,6 +68,7 @@ import {
   RefreshCw,
   FileText,
   X,
+  Scale,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -101,6 +102,8 @@ export interface ItemCarrinhoPdv {
     preco_adicional: number;
     quantidade?: number;
   }>;
+  vendePorPeso?: boolean;
+  pesoGramas?: number;
 }
 
 export interface PartePagamentoPdv {
@@ -150,6 +153,11 @@ export function PdvView() {
   const [selectedOptionModal, setSelectedOptionModal] = useState<ProdutoOpcao | null>(null);
   const [quantidadesOpcoesModal, setQuantidadesOpcoesModal] = useState<Record<string, number>>({});
   const [quantidadeGlobalModal, setQuantidadeGlobalModal] = useState<number>(1);
+
+  // Modal de Venda por Peso (Balança / kg)
+  const [produtoPesoModal, setProdutoPesoModal] = useState<ProdutoCardapio | null>(null);
+  const [pesoGramasInput, setPesoGramasInput] = useState<string>("");
+  const [valorDinheiroInput, setValorDinheiroInput] = useState<string>("");
 
   // Modal de Checkout / Finalização do PDV
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
@@ -236,6 +244,10 @@ export function PdvView() {
             ativo: p.ativo !== false,
             opcoes: p.opcoes || [],
             permite_multiplas_opcoes: p.permite_multiplas_opcoes || false,
+            vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
+            unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
+            visivel_cardapio_digital: (p.visivel_cardapio_digital ?? true) !== false,
+            visivel_pdv: (p.visivel_pdv ?? true) !== false,
           }));
           setProdutos(formatados);
         } else {
@@ -262,7 +274,7 @@ export function PdvView() {
     return ["todas", ...cats];
   }, [produtos]);
 
-  // Produtos Filtrados
+  // Produtos Filtrados (respeitando visivel_pdv !== false)
   const produtosFiltrados = useMemo(() => {
     return produtos.filter((p) => {
       const matchCat = categoriaAtiva === "todas" || p.categoria === categoriaAtiva;
@@ -271,13 +283,17 @@ export function PdvView() {
         p.nome.toLowerCase().includes(busca.toLowerCase()) ||
         (p.descricao && p.descricao.toLowerCase().includes(busca.toLowerCase())) ||
         (p.categoria && p.categoria.toLowerCase().includes(busca.toLowerCase()));
-      return matchCat && matchBusca && p.ativo !== false;
+      const visivelNoPdv = p.visivel_pdv !== false;
+      return matchCat && matchBusca && p.ativo !== false && (p as any).is_active !== false && visivelNoPdv;
     });
   }, [produtos, categoriaAtiva, busca]);
 
   // Cálculos do Carrinho
   const totalVenda = useMemo(() => {
     return pdvCart.reduce((acc, item) => {
+      if (item.vendePorPeso) {
+        return acc + item.quantidade * (item.precoUnitario ?? item.produto.preco);
+      }
       if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
         const sub = item.opcoesSelecionadas.reduce((s, o) => {
           const qtd = o.quantidade && o.quantidade > 0 ? o.quantidade : 1;
@@ -292,6 +308,9 @@ export function PdvView() {
 
   const totalItensCarrinho = useMemo(() => {
     return pdvCart.reduce((acc, it) => {
+      if (it.vendePorPeso) {
+        return acc + 1;
+      }
       if (it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0) {
         const sumOpcs = it.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
         return acc + sumOpcs;
@@ -329,9 +348,17 @@ export function PdvView() {
   }, [metodoAtual, valorParteInput, valorRecebidoInput]);
 
   // ==========================================
-  // ADIÇÃO ÁGIL AO CARRINHO DO PDV
+  // ADIÇÃO ÁGIL AO CARRINHO DO PDV & VENDA POR PESO
   // ==========================================
   const handleClicarProduto = (produto: ProdutoCardapio) => {
+    // 1. Se for produto vendido por peso (R$/kg), abre modal de pesagem/balança
+    if (produto.vende_por_peso || produto.unidade_venda === "kg") {
+      setProdutoPesoModal(produto);
+      setPesoGramasInput("");
+      setValorDinheiroInput("");
+      return;
+    }
+
     const temOpcoes = produto.opcoes && produto.opcoes.length > 0;
 
     if (temOpcoes) {
@@ -344,7 +371,7 @@ export function PdvView() {
       // Inserção direta instantânea com 1 clique (+1 no carrinho)
       setPdvCart((prev) => {
         const indexExistente = prev.findIndex(
-          (it) => it.produto.id === produto.id && !it.opcaoSelecionada && (!it.opcoesSelecionadas || it.opcoesSelecionadas.length === 0)
+          (it) => it.produto.id === produto.id && !it.opcaoSelecionada && (!it.opcoesSelecionadas || it.opcoesSelecionadas.length === 0) && !it.vendePorPeso
         );
         if (indexExistente >= 0) {
           const copia = [...prev];
@@ -365,6 +392,68 @@ export function PdvView() {
       });
       toast.success(`${produto.nome} adicionado ao pedido!`, { duration: 1500 });
     }
+  };
+
+  // Funções da Venda por Peso (Dual Input Gramas <-> Reais)
+  const handlePesoGramasChange = (val: string) => {
+    const limpo = val.replace(/[^0-9.]/g, "");
+    setPesoGramasInput(limpo);
+    const g = parseFloat(limpo) || 0;
+    if (produtoPesoModal && g > 0) {
+      const v = (g / 1000) * produtoPesoModal.preco;
+      setValorDinheiroInput(v.toFixed(2).replace(".", ","));
+    } else {
+      setValorDinheiroInput("");
+    }
+  };
+
+  const handleValorDinheiroChange = (val: string) => {
+    const formatado = aplicarMascaraMoedaInput(val);
+    setValorDinheiroInput(formatado);
+    const v = converterMoedaInputParaNumero(formatado);
+    if (produtoPesoModal && produtoPesoModal.preco > 0 && v > 0) {
+      const g = (v / produtoPesoModal.preco) * 1000;
+      setPesoGramasInput(Math.round(g).toString());
+    } else {
+      setPesoGramasInput("");
+    }
+  };
+
+  const handleSetQuickPeso = (gramas: number) => {
+    setPesoGramasInput(gramas.toString());
+    if (produtoPesoModal) {
+      const v = (gramas / 1000) * produtoPesoModal.preco;
+      setValorDinheiroInput(v.toFixed(2).replace(".", ","));
+    }
+  };
+
+  const handleConfirmarPesoModal = () => {
+    if (!produtoPesoModal) return;
+    const g = parseFloat(pesoGramasInput) || 0;
+    if (g <= 0) {
+      toast.error("Informe um peso válido em gramas ou o valor em reais.");
+      return;
+    }
+    const qtdKg = Number((g / 1000).toFixed(3));
+
+    setPdvCart((prev) => [
+      ...prev,
+      {
+        produto: produtoPesoModal,
+        quantidade: qtdKg,
+        precoUnitario: produtoPesoModal.preco,
+        vendePorPeso: true,
+        pesoGramas: g,
+      },
+    ]);
+
+    setProdutoPesoModal(null);
+    setPesoGramasInput("");
+    setValorDinheiroInput("");
+    toast.success(
+      `${produtoPesoModal.nome} (${g >= 1000 ? `${(g / 1000).toFixed(3)} kg` : `${g}g`}) adicionado!`,
+      { duration: 1500 }
+    );
   };
 
   const handleConfirmarOpcoesModal = () => {
@@ -1010,6 +1099,12 @@ export function PdvView() {
       // Formatação do resumo de itens
       const resumoItensTexto = pdvCart
         .map((it) => {
+          if (it.vendePorPeso) {
+            const pesoLabel = it.pesoGramas
+              ? (it.pesoGramas >= 1000 ? `${(it.pesoGramas / 1000).toFixed(3)}kg` : `${it.pesoGramas}g`)
+              : `${it.quantidade}kg`;
+            return `• ${it.produto.nome} (${pesoLabel} a ${formatarMoeda(it.precoUnitario || it.produto.preco)}/kg)`;
+          }
           if (it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0) {
             const opcsStr = it.opcoesSelecionadas
               .map((o) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
@@ -1030,11 +1125,15 @@ export function PdvView() {
         categoria: it.produto.categoria,
         quantidade: it.quantidade,
         precoUnitario: it.precoUnitario || it.produto.preco,
-        subtotal: it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0
+        subtotal: it.vendePorPeso
+          ? it.quantidade * (it.precoUnitario || it.produto.preco)
+          : it.opcoesSelecionadas && it.opcoesSelecionadas.length > 0
           ? it.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1) * (it.produto.preco + (Number(o.preco_adicional) || 0)), 0)
           : (it.precoUnitario || it.produto.preco) * it.quantidade,
         opcaoNome: it.opcaoSelecionada?.nome,
         opcoes_selecionadas: it.opcoesSelecionadas || (it.opcaoSelecionada ? [it.opcaoSelecionada] : []),
+        vende_por_peso: it.vendePorPeso,
+        peso_gramas: it.pesoGramas,
       }));
 
       // Síntese dos métodos de pagamento utilizados
@@ -1414,6 +1513,11 @@ export function PdvView() {
                             Opções
                           </Badge>
                         )}
+                        {(prod.vende_por_peso || prod.unidade_venda === "kg") && (
+                          <Badge className="absolute top-1.5 left-1.5 bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0 border-0 shadow-xs flex items-center gap-0.5">
+                            <Scale className="w-2.5 h-2.5" /> R$/kg
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Nome e Categoria */}
@@ -1431,6 +1535,9 @@ export function PdvView() {
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
                       <span className="font-mono text-xs sm:text-sm font-black text-emerald-400">
                         {formatarMoeda(prod.preco)}
+                        {(prod.vende_por_peso || prod.unidade_venda === "kg") && (
+                          <span className="text-[10px] font-medium text-slate-400">/kg</span>
+                        )}
                       </span>
                       <div className="w-6 h-6 rounded-lg bg-purple-600/20 text-purple-300 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
                         <Plus className="w-3.5 h-3.5 stroke-[3]" />
@@ -1472,13 +1579,14 @@ export function PdvView() {
               </div>
             ) : (
               pdvCart.map((item, idx) => {
-                const subtotalItem =
-                  item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
-                    ? item.opcoesSelecionadas.reduce(
-                        (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
-                        0
-                      ) * item.quantidade
-                    : (item.precoUnitario ?? item.produto.preco) * item.quantidade;
+                const subtotalItem = item.vendePorPeso
+                  ? item.quantidade * (item.precoUnitario ?? item.produto.preco)
+                  : item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0
+                  ? item.opcoesSelecionadas.reduce(
+                      (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+                      0
+                    ) * item.quantidade
+                  : (item.precoUnitario ?? item.produto.preco) * item.quantidade;
 
                 return (
                   <div key={idx} className="pt-2 first:pt-0 flex items-start justify-between gap-2">
@@ -1486,6 +1594,15 @@ export function PdvView() {
                       <h4 className="text-xs font-bold text-white break-words leading-tight">
                         {item.produto.nome}
                       </h4>
+
+                      {/* Sub-rótulo para item pesado */}
+                      {item.vendePorPeso && (
+                        <p className="text-[10.5px] text-amber-400/90 font-mono">
+                          ⚖️ {item.pesoGramas
+                            ? `${item.pesoGramas}g (${(item.pesoGramas / 1000).toFixed(3)}kg)`
+                            : `${item.quantidade}kg`} • {formatarMoeda(item.precoUnitario ?? item.produto.preco)}/kg
+                        </p>
+                      )}
 
                       {/* Opção Selecionada Simples */}
                       {item.opcaoSelecionada && (
@@ -1515,39 +1632,58 @@ export function PdvView() {
                       </div>
                     </div>
 
-                    {/* Controles de Quantidade */}
-                    <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAlterarQuantidadeItem(idx, -1)}
-                        className="h-6 w-6 p-0 rounded-lg bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <span className="font-mono text-xs font-extrabold text-white w-5 text-center">
-                        {item.quantidade}
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAlterarQuantidadeItem(idx, 1)}
-                        className="h-6 w-6 p-0 rounded-lg bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoverItem(idx)}
-                        className="h-6 w-6 p-0 text-slate-500 hover:text-rose-400 ml-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {/* Controles de Quantidade / Remoção */}
+                    {item.vendePorPeso ? (
+                      <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                        <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold px-1.5 py-0.5">
+                          {item.pesoGramas
+                            ? (item.pesoGramas >= 1000 ? `${(item.pesoGramas / 1000).toFixed(3)}kg` : `${item.pesoGramas}g`)
+                            : `${item.quantidade}kg`}
+                        </Badge>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoverItem(idx)}
+                          className="h-6 w-6 p-0 text-slate-500 hover:text-rose-400 ml-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAlterarQuantidadeItem(idx, -1)}
+                          className="h-6 w-6 p-0 rounded-lg bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span className="font-mono text-xs font-extrabold text-white w-5 text-center">
+                          {item.quantidade}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAlterarQuantidadeItem(idx, 1)}
+                          className="h-6 w-6 p-0 rounded-lg bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoverItem(idx)}
+                          className="h-6 w-6 p-0 text-slate-500 hover:text-rose-400 ml-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -1721,6 +1857,155 @@ export function PdvView() {
                 onClick={handleConfirmarOpcoesModal}
                 className="bg-purple-600 hover:bg-purple-500 text-white font-black text-xs px-4"
               >
+                Adicionar ao Pedido
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3.1 MODAL DE VENDA POR PESO (BALANÇA / KG) */}
+      {/* ========================================================================= */}
+      {produtoPesoModal && (
+        <Dialog open={!!produtoPesoModal} onOpenChange={() => setProdutoPesoModal(null)}>
+          <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-white p-5 overflow-x-hidden">
+            <DialogHeader className="pb-3 border-b border-slate-800">
+              <DialogTitle className="text-base font-black text-white flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-amber-400 shrink-0" />
+                  Pesar Produto (R$/kg)
+                </span>
+                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs font-mono font-bold">
+                  {formatarMoeda(produtoPesoModal.preco)}/kg
+                </Badge>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                {produtoPesoModal.nome} • Digite o peso em gramas ou o valor desejado em dinheiro.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              {/* Atalhos Rápidos de Peso */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Pesos Rápidos / Padrão:
+                </Label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[
+                    { label: "100g", g: 100 },
+                    { label: "250g", g: 250 },
+                    { label: "500g", g: 500 },
+                    { label: "750g", g: 750 },
+                    { label: "1 kg", g: 1000 },
+                  ].map((btn) => (
+                    <Button
+                      key={btn.g}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSetQuickPeso(btn.g)}
+                      className={`h-8 text-xs font-bold ${
+                        Number(pesoGramasInput) === btn.g
+                          ? "bg-amber-500 text-slate-950 border-amber-500 font-black shadow-xs"
+                          : "bg-slate-800 border-slate-700 text-slate-200 hover:text-white"
+                      }`}
+                    >
+                      {btn.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Inputs Duplos (Gramas <-> Reais) */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-extrabold text-amber-400 flex items-center gap-1">
+                    <Scale className="w-3.5 h-3.5" /> Peso (em Gramas)
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={pesoGramasInput}
+                      onChange={(e) => handlePesoGramasChange(e.target.value)}
+                      placeholder="Ex: 350"
+                      className="h-10 text-sm font-mono font-black bg-slate-900 border-slate-700 text-white pl-3 pr-8"
+                      autoFocus
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      g
+                    </span>
+                  </div>
+                  {Number(pesoGramasInput) > 0 && (
+                    <p className="text-[10.5px] font-mono text-slate-400">
+                      = {(Number(pesoGramasInput) / 1000).toFixed(3)} kg
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
+                    <DollarSign className="w-3.5 h-3.5" /> Valor Total (R$)
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      R$
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={valorDinheiroInput}
+                      onChange={(e) => handleValorDinheiroChange(e.target.value)}
+                      placeholder="0,00"
+                      className="h-10 text-sm font-mono font-black bg-slate-900 border-slate-700 text-emerald-400 pl-9 pr-3"
+                    />
+                  </div>
+                  {Number(pesoGramasInput) > 0 && (
+                    <p className="text-[10.5px] font-mono text-emerald-400 font-bold">
+                      Subtotal Calculado
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview do Item Pesado */}
+              {Number(pesoGramasInput) > 0 && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                  <div className="text-xs">
+                    <p className="font-bold text-white">{produtoPesoModal.nome}</p>
+                    <p className="text-[11px] text-amber-300 font-mono">
+                      {pesoGramasInput}g ({(Number(pesoGramasInput) / 1000).toFixed(3)} kg) x {formatarMoeda(produtoPesoModal.preco)}/kg
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-extrabold text-slate-400 uppercase block">Total</span>
+                    <span className="font-mono text-sm font-black text-emerald-400">
+                      {formatarMoeda(((parseFloat(pesoGramasInput) || 0) / 1000) * produtoPesoModal.preco)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setProdutoPesoModal(null)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!(parseFloat(pesoGramasInput) > 0)}
+                onClick={handleConfirmarPesoModal}
+                className="bg-amber-600 hover:bg-amber-500 text-white font-black text-xs px-4 h-9 shadow-md disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4 mr-1 stroke-[3]" />
                 Adicionar ao Pedido
               </Button>
             </DialogFooter>
@@ -2138,16 +2423,24 @@ export function PdvView() {
                 <div className="space-y-1 text-[11px]">
                   <p className="text-slate-300 font-bold">Cliente: {reciboUltimaVenda.clienteNome}</p>
                   <div className="divide-y divide-slate-850 pt-1">
-                    {reciboUltimaVenda.itens.map((it: ItemCarrinhoPdv, i: number) => (
-                      <div key={i} className="py-1 flex justify-between text-slate-300">
-                        <span className="truncate max-w-[220px]">
-                          {it.quantidade}x {it.produto.nome}
-                        </span>
-                        <span className="font-bold">
-                          {formatarMoeda((it.precoUnitario || it.produto.preco) * it.quantidade)}
-                        </span>
-                      </div>
-                    ))}
+                    {reciboUltimaVenda.itens.map((it: ItemCarrinhoPdv, i: number) => {
+                      const itemSubtotal = it.vendePorPeso
+                        ? it.quantidade * (it.precoUnitario || it.produto.preco)
+                        : (it.precoUnitario || it.produto.preco) * it.quantidade;
+                      const pesoDesc = it.vendePorPeso
+                        ? (it.pesoGramas ? (it.pesoGramas >= 1000 ? `${(it.pesoGramas / 1000).toFixed(3)}kg` : `${it.pesoGramas}g`) : `${it.quantidade}kg`)
+                        : `${it.quantidade}x`;
+                      return (
+                        <div key={i} className="py-1 flex justify-between text-slate-300">
+                          <span className="truncate max-w-[220px]">
+                            {pesoDesc} {it.produto.nome} {it.vendePorPeso ? `(${formatarMoeda(it.precoUnitario || it.produto.preco)}/kg)` : ""}
+                          </span>
+                          <span className="font-bold">
+                            {formatarMoeda(itemSubtotal)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
