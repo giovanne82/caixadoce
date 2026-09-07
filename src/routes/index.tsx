@@ -945,30 +945,43 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
 
-    const { error } = await supabase.from("produtos").insert([
-      {
-        id: novo.id,
-        user_id: getValidUuid(user?.id, profile?.ownerUserId),
-        estabelecimento_codigo: activeCode,
-        codigo: activeCode,
-        store_id: activeCode,
-        nome: novo.nome,
-        categoria: novo.categoria,
-        preco: Number(novo.preco) || 0,
-        descricao: novo.descricao || "",
-        foto_url: novo.fotoUrl || "",
-        ativo: novo.ativo !== false,
-        opcoes: novo.opcoes || [],
-        permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
-        vende_por_peso: Boolean(novo.vende_por_peso),
-        unidade_venda: novo.unidade_venda || (novo.vende_por_peso ? "kg" : "un"),
-        visivel_cardapio_digital: novo.visivel_cardapio_digital !== false,
-        visivel_pdv: novo.visivel_pdv !== false,
-      },
-    ]);
+    const payloadFull = {
+      id: novo.id,
+      user_id: getValidUuid(user?.id, profile?.ownerUserId),
+      estabelecimento_codigo: activeCode,
+      codigo: activeCode,
+      store_id: activeCode,
+      nome: novo.nome,
+      categoria: novo.categoria,
+      preco: Number(novo.preco) || 0,
+      descricao: novo.descricao || "",
+      foto_url: novo.fotoUrl || "",
+      ativo: novo.ativo !== false,
+      opcoes: novo.opcoes || [],
+      permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
+      vende_por_peso: Boolean(novo.vende_por_peso),
+      unidade_venda: novo.unidade_venda || (novo.vende_por_peso ? "kg" : "un"),
+      visivel_cardapio_digital: Boolean(novo.visivel_cardapio_digital !== false),
+      visivel_pdv: Boolean(novo.visivel_pdv !== false),
+    };
+
+    const { error } = await supabase.from("produtos").insert([payloadFull]);
 
     if (error) {
-      console.warn("[Supabase Error] Falha ao criar produto no banco:", error.message);
+      console.warn("[Supabase Error] Falha ao criar produto com payload completo, aplicando fallback:", error.message);
+      // Fallback sem as novas colunas caso o banco ainda não tenha executado a migração
+      const {
+        vende_por_peso: _vp,
+        unidade_venda: _uv,
+        visivel_cardapio_digital: _vcd,
+        visivel_pdv: _vpd,
+        permite_multiplas_opcoes: _pmo,
+        ...payloadBase
+      } = payloadFull;
+      const { error: errBase } = await supabase.from("produtos").insert([payloadBase]);
+      if (errBase) {
+        console.warn("[Supabase Error] Falha também no fallback básico de produtos:", errBase.message);
+      }
     }
   };
 
@@ -985,17 +998,29 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
     if (dados.descricao !== undefined) payload.descricao = dados.descricao;
     if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
-    if (dados.ativo !== undefined) payload.ativo = dados.ativo;
+    if (dados.ativo !== undefined) payload.ativo = Boolean(dados.ativo);
     if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
-    if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = dados.permite_multiplas_opcoes;
-    if (dados.vende_por_peso !== undefined) payload.vende_por_peso = dados.vende_por_peso;
+    if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = Boolean(dados.permite_multiplas_opcoes);
+    if (dados.vende_por_peso !== undefined) payload.vende_por_peso = Boolean(dados.vende_por_peso);
     if (dados.unidade_venda !== undefined) payload.unidade_venda = dados.unidade_venda;
-    if (dados.visivel_cardapio_digital !== undefined) payload.visivel_cardapio_digital = dados.visivel_cardapio_digital;
-    if (dados.visivel_pdv !== undefined) payload.visivel_pdv = dados.visivel_pdv;
+    if (dados.visivel_cardapio_digital !== undefined) payload.visivel_cardapio_digital = Boolean(dados.visivel_cardapio_digital);
+    if (dados.visivel_pdv !== undefined) payload.visivel_pdv = Boolean(dados.visivel_pdv);
 
     const { error } = await supabase.from("produtos").update(payload).eq("id", id).eq("estabelecimento_codigo", activeCode);
     if (error) {
-      console.warn("[Supabase Error] Falha ao editar produto no banco:", error.message);
+      console.warn("[Supabase Error] Falha ao editar produto no banco com payload completo:", error.message);
+      // Fallback sem as novas colunas
+      const {
+        vende_por_peso: _vp,
+        unidade_venda: _uv,
+        visivel_cardapio_digital: _vcd,
+        visivel_pdv: _vpd,
+        permite_multiplas_opcoes: _pmo,
+        ...payloadBase
+      } = payload;
+      if (Object.keys(payloadBase).length > 0) {
+        await supabase.from("produtos").update(payloadBase).eq("id", id).eq("estabelecimento_codigo", activeCode);
+      }
     }
   };
 

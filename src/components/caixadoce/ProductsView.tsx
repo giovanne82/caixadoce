@@ -693,58 +693,81 @@ export function ProductsView({
                           "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
                       }}
                     />
-                    <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
+
+                    {/* Badges Flutuantes Superiores */}
+                    <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 max-w-[70%]">
                       {prod.isKit || prod.categoria === "Kits & Combos" ? (
-                        <Badge className="bg-purple-700 text-white border-0 text-[10px] font-bold flex items-center gap-1">
-                          <Box className="w-3 h-3" /> Kit ({(prod.itensKit || []).length} itens)
+                        <Badge className="bg-purple-700 text-white border-0 text-[10.5px] font-black flex items-center gap-1 shadow-md">
+                          <Box className="w-3.5 h-3.5" /> Kit ({(prod.itensKit || []).length} itens)
                         </Badge>
                       ) : (
-                        <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[10px] font-semibold">
+                        <Badge className="bg-black/75 backdrop-blur-md text-white border-0 text-[10.5px] font-bold shadow-md">
                           {prod.categoria}
                         </Badge>
                       )}
                       {prod.destaque && (
-                        <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold flex items-center gap-1">
+                        <Badge className="bg-amber-400 text-slate-950 border-0 text-[10px] font-black flex items-center gap-1 shadow-md">
                           <Sparkles className="w-3 h-3" /> Destaque
                         </Badge>
                       )}
-                      {prod.vende_por_peso && (
-                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1">
-                          ⚖️ R$/kg
-                        </Badge>
-                      )}
-                      {prod.visivel_cardapio_digital !== false && (
-                        <Badge variant="outline" className="bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30 text-[9px] font-bold">
-                          🌐 Cardápio
-                        </Badge>
-                      )}
-                      {prod.visivel_pdv !== false && (
-                        <Badge variant="outline" className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[9px] font-bold">
-                          🏪 PDV
-                        </Badge>
-                      )}
-                      {prod.visivel_cardapio_digital === false && prod.visivel_pdv === false && (
-                        <Badge variant="destructive" className="text-[9px] font-bold">
-                          Oculto
-                        </Badge>
-                      )}
-                      {prod.isKit || prod.categoria === "Kits & Combos" ? (
-                        <Badge className="bg-amber-600 text-white border-0 text-[10px] font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {prod.prazoEntregaIndependente || "2 dias úteis"}
-                        </Badge>
-                      ) : prod.availability_type === "pronta_entrega" ? (
-                        <Badge className="bg-emerald-600 text-white border-0 text-[10px] font-bold">
-                          ⚡ Pronta Entrega
+                    </div>
+
+                    {/* Status Ativo / Pausado no Canto Superior Direito */}
+                    <div className="absolute top-2 right-2">
+                      {isAtivo ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-[10.5px] font-black px-2 py-0.5 shadow-md flex items-center gap-1">
+                          <Eye className="w-3 h-3 stroke-[2.5]" /> Ativo
                         </Badge>
                       ) : (
-                        <Badge className="bg-purple-600 text-white border-0 text-[10px] font-bold">
-                          📅 {prod.min_lead_time_days || 1}d Encomenda
+                        <Badge className="bg-rose-600 hover:bg-rose-600 text-white border-0 text-[10.5px] font-black px-2 py-0.5 shadow-md flex items-center gap-1">
+                          <EyeOff className="w-3 h-3 stroke-[2.5]" /> Pausado
                         </Badge>
                       )}
                     </div>
                   </div>
 
-                  <CardHeader className="p-3.5 pb-1">
+                  {/* BARRA DE CANAIS & VISIBILIDADE (ALTO CONTRASTE) */}
+                  <div className="px-3.5 pt-2.5 pb-1 flex items-center gap-1.5 flex-wrap">
+                    {/* Canal Cardápio Digital */}
+                    {prod.visivel_cardapio_digital !== false ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[10.5px] font-black shadow-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        <span>🌐 Cardápio Online</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-950/90 text-rose-300 border border-rose-500/50 text-[10.5px] font-bold shadow-xs">
+                        <EyeOff className="w-3 h-3 text-rose-400" />
+                        <span>🌐 Cardápio: Oculto</span>
+                      </div>
+                    )}
+
+                    {/* Canal PDV de Balcão */}
+                    {prod.visivel_pdv !== false ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10.5px] font-black shadow-xs">
+                        <Store className="w-3 h-3" />
+                        <span>🏪 PDV Balcão</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800 text-slate-400 border border-slate-700 text-[10.5px] font-bold shadow-xs">
+                        <EyeOff className="w-3 h-3 text-slate-400" />
+                        <span>🏪 PDV: Oculto</span>
+                      </div>
+                    )}
+
+                    {/* Modalidade Peso vs Unidade */}
+                    {prod.vende_por_peso ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 text-[10.5px] font-black shadow-xs">
+                        <Scale className="w-3 h-3 stroke-[2.5]" />
+                        <span>⚖️ R$/kg</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] font-bold">
+                        <span>📦 Unidade</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <CardHeader className="p-3.5 pt-1.5 pb-1">
                     <CardTitle className="text-base font-bold text-foreground line-clamp-1">{prod.nome}</CardTitle>
                     <CardDescription className="text-xs line-clamp-2 mt-0.5">{prod.descricao}</CardDescription>
                   </CardHeader>
@@ -788,49 +811,63 @@ export function ProductsView({
                   )}
                 </div>
 
-                  <CardFooter className="p-3.5 pt-2 flex items-center justify-between border-t border-border/50 bg-muted/10">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block font-medium">
-                        {prod.vende_por_peso ? "Preço do Quilo" : "Preço de Venda"}
-                      </span>
-                      <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
-                        {formatarMoeda(prod.preco)} {prod.vende_por_peso ? <span className="text-xs font-semibold text-muted-foreground">/kg</span> : ""}
-                      </span>
-                    </div>
+                <CardFooter className="p-3.5 pt-2.5 flex items-center justify-between border-t border-border/50 bg-muted/10">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">
+                      {prod.vende_por_peso ? "Preço do Quilo" : "Preço de Venda"}
+                    </span>
+                    <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
+                      {formatarMoeda(prod.preco)} {prod.vende_por_peso ? <span className="text-xs font-semibold text-muted-foreground">/kg</span> : ""}
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleToggleAtivo(prod)}
-                        title={isAtivo ? "Pausar Produto" : "Ativar Produto"}
-                      >
-                        {isAtivo ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
-                      </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-8 px-2.5 text-xs font-black gap-1 rounded-xl transition-all ${
+                        isAtivo
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 border-emerald-500/40"
+                          : "bg-rose-500/15 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25 border-rose-500/40"
+                      }`}
+                      onClick={() => handleToggleAtivo(prod)}
+                      title={isAtivo ? "Clique para pausar produto" : "Clique para ativar produto"}
+                    >
+                      {isAtivo ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Ativo</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                          <span>Pausado</span>
+                        </>
+                      )}
+                    </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                        onClick={() => handleAbrirEdicao(prod)}
-                        title="Editar Produto"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 border-blue-500/30"
+                      onClick={() => handleAbrirEdicao(prod)}
+                      title="Editar Produto"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-rose-600 hover:text-rose-700"
-                        onClick={() => onExcluirProduto(prod.id)}
-                        title="Excluir Produto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardFooter>
-                </Card>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border-rose-500/30"
+                      onClick={() => onExcluirProduto(prod.id)}
+                      title="Excluir Produto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
             );
           })
         )}
@@ -1295,28 +1332,84 @@ export function ProductsView({
             </div>
 
             {/* Canais de Exibição */}
-            <div className="space-y-2 p-3 rounded-2xl bg-muted/30 border border-border">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Store className="w-4 h-4 text-primary" /> Canais de Exibição
-              </Label>
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border">
+            <div className="space-y-2.5 p-3.5 rounded-2xl bg-muted/40 border border-border">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-black text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                  <Store className="w-4 h-4 text-primary" /> Canais de Exibição do Produto
+                </Label>
+              </div>
+
+              <div className="space-y-2 pt-0.5">
+                {/* Switch Cardápio Digital */}
+                <div
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                    visivelCardapioDigital
+                      ? "bg-emerald-500/10 border-emerald-500/40 shadow-2xs"
+                      : "bg-rose-500/10 border-rose-500/30 opacity-80"
+                  }`}
+                >
                   <div className="space-y-0.5 pr-2">
-                    <Label htmlFor="toggle-visivel-cardapio" className="text-xs font-bold text-foreground cursor-pointer block">
-                      🌐 Exibir no Cardápio Digital
-                    </Label>
-                    <p className="text-[10.5px] text-muted-foreground">Disponível para clientes pedirem online.</p>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="toggle-visivel-cardapio" className="text-xs font-black text-foreground cursor-pointer block">
+                        🌐 Cardápio Digital (Online)
+                      </Label>
+                      <Badge
+                        className={`text-[9.5px] font-black px-1.5 py-0 border-0 ${
+                          visivelCardapioDigital
+                            ? "bg-emerald-600 text-white"
+                            : "bg-rose-600 text-white"
+                        }`}
+                      >
+                        {visivelCardapioDigital ? "Ativo no Cardápio" : "Oculto no Cardápio"}
+                      </Badge>
+                    </div>
+                    <p className="text-[10.5px] text-muted-foreground">
+                      {visivelCardapioDigital
+                        ? "Visível para clientes navegarem e encomendarem online."
+                        : "Desativado do cardápio público dos clientes."}
+                    </p>
                   </div>
-                  <Switch id="toggle-visivel-cardapio" checked={visivelCardapioDigital} onCheckedChange={setVisivelCardapioDigital} />
+                  <Switch
+                    id="toggle-visivel-cardapio"
+                    checked={visivelCardapioDigital}
+                    onCheckedChange={setVisivelCardapioDigital}
+                  />
                 </div>
-                <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border">
+
+                {/* Switch PDV Balcão */}
+                <div
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                    visivelPdv
+                      ? "bg-indigo-500/10 border-indigo-500/40 shadow-2xs"
+                      : "bg-slate-800/40 border-slate-700/60 opacity-80"
+                  }`}
+                >
                   <div className="space-y-0.5 pr-2">
-                    <Label htmlFor="toggle-visivel-pdv" className="text-xs font-bold text-foreground cursor-pointer block">
-                      🏪 Exibir no PDV de Balcão
-                    </Label>
-                    <p className="text-[10.5px] text-muted-foreground">Disponível para operadores venderem na frente de caixa.</p>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="toggle-visivel-pdv" className="text-xs font-black text-foreground cursor-pointer block">
+                        🏪 PDV de Balcão (Frente de Caixa)
+                      </Label>
+                      <Badge
+                        className={`text-[9.5px] font-black px-1.5 py-0 border-0 ${
+                          visivelPdv
+                            ? "bg-indigo-600 text-white"
+                            : "bg-slate-700 text-slate-300"
+                        }`}
+                      >
+                        {visivelPdv ? "Ativo no PDV" : "Oculto no PDV"}
+                      </Badge>
+                    </div>
+                    <p className="text-[10.5px] text-muted-foreground">
+                      {visivelPdv
+                        ? "Disponível para operadores lançarem vendas na tela de PDV."
+                        : "Ocultado da grade de produtos do PDV."}
+                    </p>
                   </div>
-                  <Switch id="toggle-visivel-pdv" checked={visivelPdv} onCheckedChange={setVisivelPdv} />
+                  <Switch
+                    id="toggle-visivel-pdv"
+                    checked={visivelPdv}
+                    onCheckedChange={setVisivelPdv}
+                  />
                 </div>
               </div>
             </div>
