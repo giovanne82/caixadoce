@@ -1318,40 +1318,42 @@ export function PdvView() {
       {/* 1. HEADER DO PDV (FRENTE DE CAIXA PROFISSIONAL) */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-6 py-2.5 shadow-md">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link to="/" title="Voltar ao Painel">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
+          {/* Lado Esquerdo: Voltar ao Painel & Identificação do Estabelecimento */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link to="/" title="Voltar ao Painel" className="shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 rounded-xl"
               >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline font-bold text-xs">Painel</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline ml-1 font-bold text-xs">Painel</span>
               </Button>
             </Link>
 
-            <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-xs">
-                <Store className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-2 border-l border-slate-800 pl-2 sm:pl-3 min-w-0">
+              <div className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-xs">
+                <Store className="w-3.5 h-3.5 text-white" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-black text-white truncate max-w-[150px] sm:max-w-[240px]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h1 className="text-xs sm:text-sm font-black text-white truncate max-w-[110px] sm:max-w-[200px] md:max-w-[260px]">
                     {activeName}
                   </h1>
-                  <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-mono font-bold px-1.5 py-0 uppercase tracking-wide">
+                  <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] sm:text-[10px] font-mono font-bold px-1.5 py-0 uppercase tracking-wide shrink-0">
                     PDV
                   </Badge>
                 </div>
-                <p className="text-[10px] text-slate-400 font-mono hidden sm:block">
+                <p className="text-[10px] text-slate-400 font-mono hidden md:block">
                   Código: {activeCode}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Lado Direito: Ações Rápidas do Cabeçalho */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Botão de Gestão de Caixa */}
             <Button
               variant="outline"
@@ -1363,7 +1365,7 @@ export function PdvView() {
                   setModalGestaoCaixaOpen(true);
                 }
               }}
-              className={`h-8.5 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors ${
+              className={`h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0 ${
                 caixaAtual?.status === "aberto"
                   ? "bg-slate-800/90 border-emerald-500/40 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
                   : "bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200"
@@ -1374,7 +1376,7 @@ export function PdvView() {
                 {caixaAtual?.status === "aberto" ? (
                   <>
                     <span className="hidden md:inline">Caixa: </span>
-                    <span className="font-mono font-bold text-white">
+                    <span className="font-mono font-bold text-white text-[11px] sm:text-xs">
                       {formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)}
                     </span>
                   </>
@@ -1389,37 +1391,37 @@ export function PdvView() {
               variant="outline"
               size="sm"
               onClick={handleAbrirUltimasVendas}
-              className="h-8.5 px-3 rounded-xl bg-slate-800/90 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 shadow-xs"
+              className="h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl bg-slate-800/90 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
             >
-              <History className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">Últimas Vendas</span>
+              <History className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="hidden md:inline">Últimas Vendas</span>
               {vendasRecentes.length > 0 && (
-                <Badge className="bg-purple-600 text-white text-[9px] px-1 py-0 rounded-full font-mono">
+                <span className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none shrink-0">
                   {vendasRecentes.length}
-                </Badge>
+                </span>
               )}
             </Button>
 
-            {/* Limpar Pedido */}
+            {/* Limpar Pedido (visível apenas quando há itens) */}
             {pdvCart.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleLimparCarrinho}
                 title="Limpar Pedido Atual"
-                className="h-8 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 text-xs font-semibold rounded-xl"
+                className="h-8 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 text-xs font-semibold rounded-xl shrink-0"
               >
-                <Trash2 className="w-3.5 h-3.5 sm:mr-1" />
-                <span className="hidden sm:inline">Limpar</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline ml-1">Limpar</span>
               </Button>
             )}
 
-            {/* Cobrar */}
+            {/* Cobrar (Desktop only no header: hidden lg:flex) */}
             <Button
               size="sm"
               disabled={pdvCart.length === 0}
               onClick={() => setCheckoutModalOpen(true)}
-              className="h-8.5 px-3.5 font-black text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md flex items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-40"
+              className="hidden lg:flex h-8.5 px-3.5 font-black text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-40 shrink-0"
             >
               <Check className="w-4 h-4" />
               <span>Cobrar ({formatarMoeda(totalVenda)})</span>
@@ -1428,11 +1430,10 @@ export function PdvView() {
         </div>
       </header>
 
-
       {/* ========================================================================= */}
       {/* 2. CORPO PRINCIPAL (PRODUTOS NA ESQUERDA + CARRINHO FIXO NA DIREITA) */}
       {/* ========================================================================= */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden pb-20 lg:pb-0">
         {/* LADO ESQUERDO: CATÁLOGO DE PRODUTOS & BUSCA RÁPIDA (65%) */}
         <div className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto space-y-4">
           {/* Barra de Busca e Filtros de Categoria */}
@@ -3116,6 +3117,45 @@ export function PdvView() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ========================================================================= */}
+      {/* 9. BARRA FIXA INFERIOR NO MOBILE (STICKY BOTTOM CHECKOUT) */}
+      {/* ========================================================================= */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/98 backdrop-blur-xl border-t border-slate-800 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xl lg:hidden">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider">
+            {totalItensCarrinho} {totalItensCarrinho === 1 ? "item" : "itens"} no pedido
+          </span>
+          <span className="font-mono text-base font-black text-emerald-400">
+            {formatarMoeda(totalVenda)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {pdvCart.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleLimparCarrinho}
+              className="h-10 px-3 bg-slate-800 border-slate-700 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl"
+              title="Limpar Pedido"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            disabled={pdvCart.length === 0}
+            onClick={() => setCheckoutModalOpen(true)}
+            className="h-10 px-4 sm:px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 active:scale-95 disabled:opacity-40"
+          >
+            <Check className="w-4 h-4 stroke-[3]" />
+            <span>Cobrar {pdvCart.length > 0 ? formatarMoeda(totalVenda) : ""}</span>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
