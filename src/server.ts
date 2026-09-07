@@ -383,7 +383,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   paymentMethod?: string;
   amount?: number;
 }) {
-  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 10.90 } = params;
+  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
   const supabaseKey =
@@ -401,7 +401,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   const isAnual =
     planIdClean === "anual" ||
     planIdClean === "ilimitado" ||
-    Number(amount || 0) > 50;
+    Number(amount || 0) > 60;
 
   const targetPlanId = isAnual ? "anual" : "mensal";
   const duracaoDias = isAnual ? 365 : 30;
@@ -1514,7 +1514,12 @@ export default {
           ).toUpperCase();
 
           const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
-          const amount = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 10.90);
+          const amount = Number(
+            formData.transaction_amount ||
+            payload.transaction_amount ||
+            payload.valor ||
+            (planId === "anual" ? 154.90 : 19.90)
+          );
 
           const token = formData.token || payload.token;
           const installments = Number(formData.installments || payload.installments || 1);
@@ -1669,7 +1674,7 @@ export default {
 
           if (status === "approved" || status === "authorized") {
             const planId = paymentData.metadata?.plan_id || paymentData.metadata?.plano_id || "mensal";
-            const amount = Number(paymentData.transaction_amount || 10.90);
+            const amount = Number(paymentData.transaction_amount || (planId === "anual" ? 154.90 : 19.90));
             const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
             const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
@@ -1817,7 +1822,7 @@ export default {
                     metaPlanoId === "ilimitado" ||
                     desc.includes("anual") ||
                     desc.includes("365") ||
-                    amount > 50;
+                    amount > 60;
 
                   const planId = isAnual ? "anual" : "mensal";
 

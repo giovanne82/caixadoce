@@ -996,9 +996,9 @@ export function LandingPageContent() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto items-stretch">
             {/* PLANO BÁSICO (GRATUITO - APENAS LISTA DE COMPRAS) */}
-            <Card className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-md">
+            <Card className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-md">
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-xl font-bold text-slate-900">Plano Básico</h3>
@@ -1013,27 +1013,27 @@ export function LandingPageContent() {
                 <div className="pt-4 border-t border-slate-100 space-y-3 text-xs text-slate-700">
                   <div className="flex items-center gap-2 font-bold text-emerald-700">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Acesso Exclusivo à Lista de Compras Interativa</span>
+                    <span>Lista de Compras Interativa</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Loja Virtual com Pix Mercado Pago (Bloqueado)</span>
+                    <span className="line-through">Loja Virtual com Pix Mercado Pago</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">PDV de Balcão e Frente de Caixa (Bloqueado)</span>
+                    <span className="line-through">PDV de Balcão e Frente de Caixa</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Escanear a Notinha com IA (Bloqueado)</span>
+                    <span className="line-through">Escanear a Notinha com IA</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Ficha Técnica &amp; Precificação em Cascata (Bloqueado)</span>
+                    <span className="line-through">Ficha Técnica &amp; Precificação</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Calendário de Encomendas &amp; Gestão Visual (Bloqueado)</span>
+                    <span className="line-through">Calendário de Encomendas</span>
                   </div>
                 </div>
               </div>
@@ -1041,74 +1041,132 @@ export function LandingPageContent() {
               <Button
                 onClick={irParaLogin}
                 variant="outline"
-                className="w-full h-12 text-sm font-bold bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 rounded-xl"
+                className="w-full h-11 text-sm font-bold bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 rounded-xl"
               >
                 Criar Conta Gratuita
               </Button>
             </Card>
 
-            {/* PLANO PRO (MENSAL COMPLETO - R$ 10,90 / MÊS) */}
-            <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15 transform lg:-translate-y-2">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 font-black text-xs px-4 py-1 rounded-full shadow-md flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5 text-slate-950" /> 7 DIAS GRÁTIS DE TESTE
+            {/* PLANO MENSAL PRO (R$ 19,90 / MÊS) */}
+            <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-purple-600 text-white font-black text-[11px] px-3.5 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                <Sparkles className="w-3 h-3 text-amber-300" /> FLEXIBILIDADE MENSAL
               </div>
 
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-1">
                 <div className="space-y-1">
                   <h3 className="text-xl font-extrabold text-slate-900 flex items-center justify-between">
-                    <span>Plano Pro Completo</span>
-                    <Badge className="bg-purple-100 text-purple-800 font-bold text-[10px]">Mais Vendido</Badge>
+                    <span>Plano Mensal</span>
+                    <Badge className="bg-purple-100 text-purple-800 font-bold text-[10px]">Sem Fidelidade</Badge>
                   </h3>
-                  <p className="text-xs text-purple-700 font-medium">Automação total: Loja Virtual, PDV de Balcão, Pix Automático, Encomendas e Precificação em Cascata.</p>
+                  <p className="text-xs text-purple-700 font-medium">Acesso total a todas as ferramentas com renovação mês a mês.</p>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 19,90/mês</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-purple-700">
-                      R$ 10,90
+                      R$ 19,90
                     </span>
-                    <span className="text-xs text-slate-600 font-semibold">/ mês (com 7 dias grátis)</span>
+                    <span className="text-xs text-slate-600 font-semibold">/ mês</span>
                   </div>
+                  <p className="text-[11px] text-emerald-700 font-bold">7 dias grátis sem compromisso</p>
                 </div>
 
                 <div className="pt-4 border-t border-purple-100 space-y-2.5 text-xs text-slate-700">
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Loja Virtual personalizada com Pix Mercado Pago automático</span>
+                    <span>Loja Virtual com Pix Mercado Pago</span>
                   </div>
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>PDV de Balcão Integrado com Múltiplos Pagamentos e Gaveta</span>
+                    <span>PDV de Balcão e Gaveta de Caixa</span>
                   </div>
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Gestão visual de Encomendas (Status financeiro &amp; Entrega Hoje)</span>
+                    <span>Gestão Visual de Encomendas</span>
                   </div>
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Ficha Técnica com Atualização de Preços em Cascata</span>
+                    <span>Ficha Técnica &amp; Precificação em Cascata</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Escanear a Notinha com IA (Ilimitado)</span>
+                    <span>Escanear Notinha com IA (Ilimitado)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Controle financeiro, fluxo de caixa e lucro líquido</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Compartilhamento de conta com outro usuário</span>
+                    <span>Controle Financeiro &amp; DRE</span>
                   </div>
                 </div>
               </div>
 
               <Button
                 onClick={irParaLogin}
-                className="w-full h-12 text-sm font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-600/30 transition-all"
+                className="w-full h-11 text-sm font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-600/30 transition-all"
               >
-                Testar 7 Dias Grátis Agora
+                Assinar Mensal
+              </Button>
+            </Card>
+
+            {/* PLANO ANUAL PRO (R$ 154,90 / ANO - DESTAQUE DE ECONOMIA) */}
+            <Card className="bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-emerald-500/15 transform lg:-translate-y-2 ring-2 ring-emerald-500/20">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-[11px] px-4 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                <Crown className="w-3.5 h-3.5 text-amber-300" /> MELHOR VALOR • 35% OFF
+              </div>
+
+              <div className="space-y-4 pt-1">
+                <div className="space-y-1">
+                  <h3 className="text-xl font-extrabold text-slate-900 flex items-center justify-between">
+                    <span>Plano Anual</span>
+                    <Badge className="bg-emerald-100 text-emerald-800 font-bold text-[10px]">Mais Econômico</Badge>
+                  </h3>
+                  <p className="text-xs text-emerald-800 font-medium">1 ano completo de acesso sem interrupções com o menor custo.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 238,80/ano</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-emerald-600">
+                      R$ 154,90
+                    </span>
+                    <span className="text-xs text-slate-600 font-semibold">/ ano</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 font-bold font-mono">Equivale a apenas R$ 12,91/mês</p>
+                </div>
+
+                <div className="pt-4 border-t border-emerald-100 space-y-2.5 text-xs text-slate-700">
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Tudo do Plano Pro por 365 Dias</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Loja Virtual + Pix Mercado Pago Automático</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>PDV de Balcão e Frente de Caixa</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Ficha Técnica &amp; Precificação em Cascata</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Escanear Notinhas Ilimitadas com IA</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Economia real de R$ 83,90 no ano</span>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={irParaLogin}
+                className="w-full h-11 text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
+              >
+                Assinar Anual (35% OFF)
               </Button>
             </Card>
           </div>
