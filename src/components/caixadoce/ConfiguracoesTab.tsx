@@ -332,6 +332,22 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   }, [activeCode, checarMpStatus, queryClient]);
 
+  // Rolagem automática para âncoras (ex: #identidade-visual)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash === "#identidade-visual" || hash.includes("identidade-visual")) {
+        const timer = setTimeout(() => {
+          const el = document.getElementById("identidade-visual");
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
+
   const handleConectarMercadoPago = () => {
     const rawClientId =
       (typeof import.meta !== "undefined" && import.meta.env && (import.meta.env.VITE_MP_CLIENT_ID || import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID)) ||
@@ -1890,7 +1906,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                 </div>
 
                 {/* 🎨 IDENTIDADE VISUAL & PERSONALIZAÇÃO DO CARDÁPIO */}
-                <div className="pt-4 border-t space-y-4">
+                <div id="identidade-visual" className="pt-4 border-t space-y-4 scroll-mt-24">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-purple-600" /> Identidade Visual &amp; Personalização do Cardápio

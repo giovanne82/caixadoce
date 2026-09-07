@@ -2089,7 +2089,15 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 onEditarProduto={editarProduto}
                 onExcluirProduto={excluirProduto}
                 onSalvarKit={salvarKit}
-                onIrParaConfiguracoes={() => setActiveTab("config")}
+                onIrParaConfiguracoes={() => {
+                  setActiveTab("config");
+                  setTimeout(() => {
+                    const el = document.getElementById("identidade-visual");
+                    if (el) {
+                      el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  }, 100);
+                }}
               />
             ) : (
               <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
