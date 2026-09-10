@@ -1859,89 +1859,120 @@ export function ScannerView({
                   </div>
                 </div>
 
-                {/* TABELA SIMPLIFICADA DE ITENS IDENTIFICADOS (NOME, QUANTIDADE E VALOR TOTAL) */}
-                <div className="space-y-1.5">
+                {/* LISTA RESPONSIVA (MOBILE-FIRST) DE ITENS IDENTIFICADOS */}
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-foreground">
                       Itens Identificados na Notinha ({itensExtraidos.length}):
                     </Label>
                   </div>
 
-                  <div className="rounded-xl border border-border overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-muted/40">
-                        <TableRow>
-                          <TableHead className="text-xs">Nome do Item / Descrição</TableHead>
-                          <TableHead className="text-xs w-16 text-center">Qtd</TableHead>
-                          <TableHead className="text-xs w-24 text-right">Valor Total</TableHead>
-                          <TableHead className="text-xs min-w-[160px]">Insumo Cadastrado (Vínculo)</TableHead>
-                          <TableHead className="text-xs text-right w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {itensExtraidos.map((item) => (
-                          <TableRow key={item.id} className="hover:bg-muted/20">
-                            <TableCell>
+                  <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+                    {itensExtraidos.length === 0 ? (
+                      <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-xl">
+                        Nenhum item adicionado ainda.
+                      </div>
+                    ) : (
+                      itensExtraidos.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-xl border border-border/80 bg-card hover:bg-muted/20 transition-colors space-y-2.5 md:space-y-0 md:flex md:items-center md:gap-2.5"
+                        >
+                          {/* LINHA 1 MOBILE (FULL WIDTH): Nome do Item / Descrição + Botão Excluir */}
+                          <div className="flex items-center gap-2 w-full md:flex-1 md:w-auto">
+                            <div className="w-full">
+                              <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-1">
+                                Nome do Item / Descrição
+                              </Label>
                               <Input
                                 value={item.nome}
                                 onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
-                                className="h-7 text-xs font-medium"
+                                placeholder="Descrição do item"
+                                className="h-8 md:h-7 text-xs font-medium w-full"
                               />
-                            </TableCell>
-                            <TableCell>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoverItem(item.id)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg shrink-0 md:hidden cursor-pointer"
+                              title="Remover item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+
+                          {/* LINHA 2 MOBILE: Qtd e Valor Total Lado a Lado */}
+                          <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                            <div className="w-1/2 md:w-20">
+                              <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-1">
+                                Qtd
+                              </Label>
                               <Input
                                 type="number"
                                 value={item.quantidade}
                                 onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
-                                className="h-7 text-xs text-center"
+                                className="h-8 md:h-7 text-xs text-center font-bold"
                               />
-                            </TableCell>
-                            <TableCell>
+                            </div>
+
+                            <div className="w-1/2 md:w-28">
+                              <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-1">
+                                Valor Total (R$)
+                              </Label>
                               <Input
                                 type="number"
                                 step="0.01"
                                 value={item.valorTotal}
                                 onChange={(e) => handleEditarItem(item.id, "valorTotal", e.target.value)}
-                                className="h-7 text-xs text-right font-bold"
+                                className="h-8 md:h-7 text-xs text-right font-bold text-emerald-600"
                               />
-                            </TableCell>
-                            <TableCell>
-                              <CustomInsumoSelect
-                                value={item.insumoVinculadoId || "_none"}
-                                insumos={insumosCadastrados}
-                                onSelect={(val) => {
-                                  if (val === "_novo_insumo") {
-                                    setInsumoParaCadastroRapido({
-                                      despesaId: "",
-                                      itemId: item.id,
-                                      nome: item.nome,
-                                      valor: item.valorTotal / (item.quantidade || 1)
-                                    });
-                                    setModalInsumoOpen(true);
-                                  } else {
-                                    const insObj = insumosCadastrados.find((i) => i.id === val);
-                                    handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
-                                    if (insObj) {
-                                      handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
-                                    }
+                            </div>
+                          </div>
+
+                          {/* LINHA 3 MOBILE: Insumo Cadastrado (Vínculo De-Para) */}
+                          <div className="w-full md:w-[200px] shrink-0">
+                            <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-1">
+                              Insumo Cadastrado (Vínculo)
+                            </Label>
+                            <CustomInsumoSelect
+                              value={item.insumoVinculadoId || "_none"}
+                              insumos={insumosCadastrados}
+                              onSelect={(val) => {
+                                if (val === "_novo_insumo") {
+                                  setInsumoParaCadastroRapido({
+                                    despesaId: "",
+                                    itemId: item.id,
+                                    nome: item.nome,
+                                    valor: item.valorTotal / (item.quantidade || 1),
+                                  });
+                                  setModalInsumoOpen(true);
+                                } else {
+                                  const insObj = insumosCadastrados.find((i) => i.id === val);
+                                  handleEditarItem(item.id, "insumoVinculadoId" as any, val === "_none" ? undefined : val);
+                                  if (insObj) {
+                                    handleEditarItem(item.id, "insumoVinculadoNome" as any, insObj.nome);
                                   }
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoverItem(item.id)}
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                                }
+                              }}
+                            />
+                          </div>
+
+                          {/* Botão de Excluir no Desktop */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverItem(item.id)}
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg shrink-0 hidden md:inline-flex cursor-pointer"
+                            title="Remover item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <div className="pt-1">
@@ -2028,57 +2059,73 @@ export function ScannerView({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs font-bold text-foreground">
                   Itens da Notinha ({registroDetalhes.itens?.length || 0}):
                 </Label>
-                <div className="rounded-xl border border-border overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-muted/40">
-                      <TableRow>
-                        <TableHead className="text-xs font-bold">Descrição do Item</TableHead>
-                        <TableHead className="text-xs font-bold text-center w-12">Qtd</TableHead>
-                        <TableHead className="text-xs font-bold text-right w-20">Total</TableHead>
-                        <TableHead className="text-xs font-bold min-w-[150px]">Vínculo De-Para (Insumo Cadastrado)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(!registroDetalhes.itens || registroDetalhes.itens.length === 0) ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">
-                            Nenhum item discriminado nesta notinha.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        registroDetalhes.itens.map((item, idx) => (
-                          <TableRow key={item.id || idx}>
-                            <TableCell className="text-xs font-medium text-foreground">{item.nome}</TableCell>
-                            <TableCell className="text-xs font-bold text-center">{item.quantidade}</TableCell>
-                            <TableCell className="text-xs font-bold text-right text-foreground">
+
+                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                  {(!registroDetalhes.itens || registroDetalhes.itens.length === 0) ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-xl">
+                      Nenhum item discriminado nesta notinha.
+                    </div>
+                  ) : (
+                    registroDetalhes.itens.map((item, idx) => (
+                      <div
+                        key={item.id || idx}
+                        className="p-3 rounded-xl border border-border/80 bg-card hover:bg-muted/20 transition-colors space-y-2 md:space-y-0 md:flex md:items-center md:gap-2.5"
+                      >
+                        {/* Nome do Item */}
+                        <div className="w-full md:flex-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-0.5">
+                            Descrição do Item
+                          </Label>
+                          <p className="text-xs font-medium text-foreground leading-tight">{item.nome}</p>
+                        </div>
+
+                        {/* Qtd & Total */}
+                        <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto shrink-0">
+                          <div>
+                            <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-0.5">
+                              Qtd
+                            </Label>
+                            <p className="text-xs font-bold text-center md:w-12">{item.quantidade}</p>
+                          </div>
+
+                          <div>
+                            <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-0.5">
+                              Total
+                            </Label>
+                            <p className="text-xs font-bold text-emerald-600 text-right md:w-20">
                               {formatarMoeda(item.valorTotal)}
-                            </TableCell>
-                            <TableCell>
-                              <CustomInsumoSelect
-                                value={item.insumoVinculadoId || "_none"}
-                                insumos={insumosCadastrados}
-                                onSelect={(val) =>
-                                  handleVincularInsumoNota(
-                                    registroDetalhes.id,
-                                    item.id,
-                                    item.nome,
-                                    registroDetalhes.fornecedorNome,
-                                    val,
-                                    item.valorTotal,
-                                    item.quantidade
-                                  )
-                                }
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Vínculo De-Para */}
+                        <div className="w-full md:w-[200px] shrink-0">
+                          <Label className="text-[10px] font-semibold text-muted-foreground block md:hidden mb-1">
+                            Vínculo De-Para
+                          </Label>
+                          <CustomInsumoSelect
+                            value={item.insumoVinculadoId || "_none"}
+                            insumos={insumosCadastrados}
+                            onSelect={(val) =>
+                              handleVincularInsumoNota(
+                                registroDetalhes.id,
+                                item.id,
+                                item.nome,
+                                registroDetalhes.fornecedorNome,
+                                val,
+                                item.valorTotal,
+                                item.quantidade
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

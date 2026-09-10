@@ -535,95 +535,131 @@ export function ExpensesScannerView({
                   </div>
                 </div>
 
-                {/* Tabela de Itens */}
-                <div className="rounded-lg border border-border/70 overflow-hidden max-h-[300px] overflow-y-auto">
-                  <Table>
-                    <TableHeader className="bg-muted/40">
-                      <TableRow>
-                        <TableHead className="text-xs">Item / Descrição</TableHead>
-                        <TableHead className="text-xs w-20">Qtd</TableHead>
-                        <TableHead className="text-xs w-24">Unit. (R$)</TableHead>
-                        <TableHead className="text-xs w-24">Total (R$)</TableHead>
-                        <TableHead className="text-xs w-44">Categoria</TableHead>
-                        <TableHead className="text-xs text-right w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {itensExtraidos.map((item) => (
-                        <TableRow key={item.id} className="hover:bg-muted/20">
-                          <TableCell>
+                {/* Lista Responsiva (Mobile-First) de Itens Extraídos */}
+                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                  {itensExtraidos.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-xl">
+                      Nenhum item discriminado.
+                    </div>
+                  ) : (
+                    itensExtraidos.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl border border-border/80 bg-card hover:bg-muted/20 transition-colors space-y-2.5 lg:space-y-0 lg:flex lg:items-center lg:gap-2.5"
+                      >
+                        {/* Linha 1 Mobile: Nome do Item / Descrição + Excluir */}
+                        <div className="flex items-center gap-2 w-full lg:flex-1 lg:w-auto">
+                          <div className="w-full">
+                            <Label className="text-[10px] font-semibold text-muted-foreground block lg:hidden mb-1">
+                              Item / Descrição
+                            </Label>
                             <Input
                               value={item.nome}
                               onChange={(e) => handleEditarItem(item.id, "nome", e.target.value)}
-                              className="h-7 text-xs font-medium"
+                              placeholder="Nome do produto"
+                              className="h-8 lg:h-7 text-xs font-medium w-full"
                             />
-                          </TableCell>
-                          <TableCell>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverItem(item.id)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg shrink-0 lg:hidden cursor-pointer"
+                            title="Remover item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        {/* Linha 2 Mobile: Qtd, Valor Unitário e Valor Total Lado a Lado */}
+                        <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:flex lg:items-center shrink-0">
+                          <div>
+                            <Label className="text-[10px] font-semibold text-muted-foreground block lg:hidden mb-1">
+                              Qtd
+                            </Label>
                             <Input
                               type="number"
                               value={item.quantidade}
                               onChange={(e) => handleEditarItem(item.id, "quantidade", e.target.value)}
-                              className="h-7 text-xs text-center"
+                              className="h-8 lg:h-7 text-xs text-center font-bold lg:w-16"
                             />
-                          </TableCell>
-                          <TableCell>
+                          </div>
+
+                          <div>
+                            <Label className="text-[10px] font-semibold text-muted-foreground block lg:hidden mb-1">
+                              Unit. (R$)
+                            </Label>
                             <Input
                               type="number"
                               step="0.01"
                               value={item.valorUnitario}
                               onChange={(e) => handleEditarItem(item.id, "valorUnitario", e.target.value)}
-                              className="h-7 text-xs"
+                              className="h-8 lg:h-7 text-xs lg:w-20"
                             />
-                          </TableCell>
-                          <TableCell className="font-bold text-xs text-foreground">
-                            {formatarMoeda(item.valorTotal)}
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={item.categoria}
-                              onValueChange={(v: any) => handleMudarCategoriaItem(item.id, v)}
-                            >
-                              <SelectTrigger className="h-7 text-[11px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="producao">
-                                  <span className="flex items-center gap-1.5 text-amber-600 font-semibold">
-                                    <Cookie className="w-3.5 h-3.5" /> Produção (Custo)
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="utensilios">
-                                  <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
-                                    <UtensilsCrossed className="w-3.5 h-3.5" /> Utensílios
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="consumo_proprio">
-                                  <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
-                                    <User className="w-3.5 h-3.5" /> Consumo Pessoal
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="outros">
-                                  <span className="flex items-center gap-1.5 text-stone-600 font-semibold">
-                                    <Package className="w-3.5 h-3.5" /> Genérico / Outros
-                                  </span>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoverItem(item.id)}
-                              className="h-6 w-6 p-0 text-muted-foreground hover:text-rose-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </div>
+
+                          <div>
+                            <Label className="text-[10px] font-semibold text-muted-foreground block lg:hidden mb-1">
+                              Total (R$)
+                            </Label>
+                            <div className="h-8 lg:h-7 flex items-center justify-end px-2 rounded-md border border-muted bg-muted/30 font-extrabold text-xs text-emerald-600 lg:w-20">
+                              {formatarMoeda(item.valorTotal)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Linha 3 Mobile: Categoria */}
+                        <div className="w-full lg:w-[170px] shrink-0">
+                          <Label className="text-[10px] font-semibold text-muted-foreground block lg:hidden mb-1">
+                            Categoria
+                          </Label>
+                          <Select
+                            value={item.categoria}
+                            onValueChange={(v: any) => handleMudarCategoriaItem(item.id, v)}
+                          >
+                            <SelectTrigger className="h-8 lg:h-7 text-[11px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="producao">
+                                <span className="flex items-center gap-1.5 text-amber-600 font-semibold">
+                                  <Cookie className="w-3.5 h-3.5" /> Produção (Custo)
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="utensilios">
+                                <span className="flex items-center gap-1.5 text-blue-600 font-semibold">
+                                  <UtensilsCrossed className="w-3.5 h-3.5" /> Utensílios
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="consumo_proprio">
+                                <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
+                                  <User className="w-3.5 h-3.5" /> Consumo Pessoal
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="outros">
+                                <span className="flex items-center gap-1.5 text-stone-600 font-semibold">
+                                  <Package className="w-3.5 h-3.5" /> Genérico / Outros
+                                </span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Botão de Excluir no Desktop */}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoverItem(item.id)}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg shrink-0 hidden lg:inline-flex cursor-pointer"
+                          title="Remover item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center pt-1">
