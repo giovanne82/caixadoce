@@ -562,6 +562,30 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   const cleanCupomCode = cupomUtilizado ? String(cupomUtilizado).toUpperCase().trim() : null;
 
+  let targetAfiliadoId: string | null = null;
+  if (cleanCupomCode && cleanCupomCode !== "CUPOM_DESCONTO") {
+    try {
+      const afilRes = await fetch(
+        `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cleanCupomCode)}&select=id`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+      if (afilRes.ok) {
+        const afilList = await afilRes.json();
+        if (Array.isArray(afilList) && afilList.length > 0) {
+          targetAfiliadoId = afilList[0].id;
+          console.log(`[Ativar Plano Supabase] Cupom '${cleanCupomCode}' vinculado ao Afiliado ID: ${targetAfiliadoId}`);
+        }
+      }
+    } catch (errAfil) {
+      console.warn("[Ativar Plano Supabase] Erro ao buscar id do afiliado por cupom:", errAfil);
+    }
+  }
+
   const patchPayloads = [
     {
       status: "ativo",
@@ -573,6 +597,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       metodo_pagamento: paymentMethod,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
     {
       status: "ativo",
@@ -580,6 +605,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano_exp: dataExpiracao,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
     {
       status_assinatura: "ativo",
@@ -587,6 +613,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano_expira_em: dataExpiracao,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
   ];
 
@@ -609,7 +636,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
         const resData = await patchRes.json();
         if (Array.isArray(resData) && resData.length > 0) {
           atualizadoComSucesso = true;
-          console.log(`[Ativar Plano Supabase] ✅ PATCH bem-sucedido para '${code}' com payload:`, Object.keys(payload));
+          console.log(`[Ativar Plano Supabase] ✅ PATCH bem-sucedido para '${code}' com cupom: ${cleanCupomCode || 'Nenhum'}`);
           break;
         }
       }
@@ -629,6 +656,8 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano: planId,
       plano_id: planId,
       updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     };
 
     for (const [col, val] of Object.entries(individualColumns)) {
@@ -1923,10 +1952,13 @@ export default {
               estabelecimento_codigo: establishmentCode,
               estabelecimentoCodigo: establishmentCode,
               establishmentCode: establishmentCode,
+              loja_id: establishmentCode,
               planId,
               plano_id: planId,
               plan_type: planId,
+              cupom_afiliado: cupomEnviado || null,
               cupom_utilizado: cupomEnviado || (transaction_amount <= 19.90 ? "CUPOM_DESCONTO" : null),
+              cupom: cupomEnviado || null,
             },
           };
 
@@ -2045,7 +2077,7 @@ export default {
             const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
             const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
-            const cupomMeta = paymentData.metadata?.cupom_utilizado || paymentData.metadata?.cupom || undefined;
+            const cupomMeta = paymentData.metadata?.cupom_afiliado || paymentData.metadata?.cupom_utilizado || paymentData.metadata?.cupom || undefined;
 
             // Dispara ativação em tempo real no Supabase
             await ativarPlanoEstabelecimentoNoSupabase({
@@ -2212,7 +2244,7 @@ export default {
                   const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
                   const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
-                  const cupomMeta = meta.cupom_utilizado || meta.cupom || undefined;
+                  const cupomMeta = meta.cupom_afiliado || meta.cupom_utilizado || meta.cupom || undefined;
 
                   await ativarPlanoEstabelecimentoNoSupabase({
                     establishmentCode,

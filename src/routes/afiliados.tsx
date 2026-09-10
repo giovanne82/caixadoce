@@ -155,15 +155,29 @@ function AfiliadosComponent() {
 
       const { data: estData } = await supabase
         .from("estabelecimentos")
-        .select("codigo, nome, email, plano_status, status_assinatura, created_at, cupom_utilizado, afiliado_id")
+        .select("id, codigo, nome, email, status, plano_status, status_assinatura, is_pro, created_at, cupom_utilizado, afiliado_id")
         .or(`cupom_utilizado.ilike.${afiliadoEncontrado.cupom_exclusivo},afiliado_id.eq.${afiliadoEncontrado.id}`);
 
       if (estData) {
-        lojasEncontradas = estData.map((est: any) => ({
+        const ativasEConvertidas = estData.filter((est: any) => {
+          const statusAtivo =
+            est.status === "ativo" ||
+            est.status_assinatura === "ativo" ||
+            est.plano_status === "ativo" ||
+            est.is_pro === true;
+          const cupomBate =
+            (est.cupom_utilizado && String(est.cupom_utilizado).trim().toUpperCase() === String(afiliadoEncontrado.cupom_exclusivo).trim().toUpperCase()) ||
+            (est.afiliado_id && String(est.afiliado_id) === String(afiliadoEncontrado.id));
+
+          return statusAtivo && cupomBate;
+        });
+
+        lojasEncontradas = ativasEConvertidas.map((est: any) => ({
+          id: est.id,
           codigo: est.codigo || "CD-1000",
           nome: est.nome || "Estabelecimento",
           email: est.email || "",
-          plano_status: est.plano_status || est.status_assinatura || "ativo",
+          plano_status: est.plano_status || est.status_assinatura || est.status || "ativo",
           criado_em: est.created_at,
           cupom_utilizado: est.cupom_utilizado,
         }));
