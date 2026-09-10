@@ -20,6 +20,7 @@ interface MercadoPagoBrickProps {
   planoId: string;
   valor: number;
   nomePlano: string;
+  cupom?: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -30,6 +31,7 @@ export function MercadoPagoBrick({
   planoId,
   valor,
   nomePlano,
+  cupom,
   onSuccess,
   onCancel,
 }: MercadoPagoBrickProps) {
@@ -425,10 +427,12 @@ export function MercadoPagoBrick({
             transaction_amount: valor,
             description: descPlano,
             payer: { email: emailValido },
+            cupom: cupom || null,
             metadata: {
               plan_type: planoId,
               plano_id: planoId,
               estabelecimento_codigo: estabelecimentoCodigo,
+              cupom_utilizado: cupom || null,
             },
           },
           selectedPaymentMethod: "pix",
@@ -436,6 +440,7 @@ export function MercadoPagoBrick({
           userEmail: emailValido,
           planoId,
           valor,
+          cupom: cupom || null,
         }),
       });
 

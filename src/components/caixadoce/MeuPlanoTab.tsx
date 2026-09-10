@@ -790,6 +790,7 @@ export function MeuPlanoTab() {
             estabelecimentoCodigo={activeCode}
             userEmail={user?.email || ""}
             planoId={planoSelecionadoCheckout}
+            cupom={cupomAplicado?.codigo}
             nomePlano={
               planoSelecionadoCheckout === "anual"
                 ? cupomAplicado

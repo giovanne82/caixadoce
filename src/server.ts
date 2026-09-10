@@ -1639,10 +1639,25 @@ export default {
             tokenUso = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
           }
 
-          console.log(`[MercadoPago Server] Criando cobrança ${isCard ? 'Cartão' : 'Pix'} | Est: ${codeTarget} | Valor: R$ ${amount}`);
+          const cupomEnviadoTarget = String(body.cupom || body.code || "").trim().toUpperCase();
+          const planTarget = body.planId || body.plano_id;
+          let transaction_amount = Number(body.transaction_amount || body.amount || body.valor || 0);
+
+          if (planTarget === "mensal" && (body.planId || body.plano_id || body.cupom)) {
+            const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(codeTarget, supabaseUrl, supabaseKey);
+            if (!checkAntiFraude.elegivel) {
+              transaction_amount = 24.90;
+            } else if (cupomEnviadoTarget || transaction_amount <= 19.90) {
+              transaction_amount = 19.90;
+            } else {
+              transaction_amount = 24.90;
+            }
+          }
+
+          console.log(`[MercadoPago Server] Criando cobrança ${isCard ? 'Cartão' : 'Pix'} | Est: ${codeTarget} | Valor: R$ ${transaction_amount}`);
 
           const mpPayload: Record<string, any> = {
-            transaction_amount: amount,
+            transaction_amount: transaction_amount,
             description,
           };
 
@@ -1662,6 +1677,8 @@ export default {
               first_name: payerFirstName,
             };
           }
+
+          console.log("Valor enviado ao MP:", transaction_amount);
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
@@ -1850,34 +1867,36 @@ export default {
           ).toUpperCase();
 
           const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
-          const cupomEnviado = String(payload.cupom || formData.cupom || payload.code || "").trim().toUpperCase();
-
-          let amount = Number(
-            formData.transaction_amount ||
-            payload.transaction_amount ||
-            payload.valor ||
-            (planId === "anual" ? 154.90 : 24.90)
-          );
+          const cupomEnviado = String(payload.cupom || formData.cupom || payload.code || payload.cupomCodigo || "").trim().toUpperCase();
 
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
 
-          // RE-CHECAGEM ANTI-FRAUDE E PRECIFICAÇÃO ESTRITA NO MOMENTO DA COBRANÇA
-          if (planId === "mensal") {
+          let transaction_amount = 24.90;
+
+          if (planId === "anual") {
+            transaction_amount = Number(
+              formData.transaction_amount ||
+              payload.transaction_amount ||
+              payload.valor ||
+              154.90
+            );
+          } else {
+            // RE-CHECAGEM ANTI-FRAUDE E PRECIFICAÇÃO ESTRITA NO MOMENTO DA COBRANÇA DO PLANO MENSAL
             const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(establishmentCode, supabaseUrl, supabaseKey);
 
             if (!checkAntiFraude.elegivel) {
               console.warn(`[Anti-Fraude Process-Payment] Estabelecimento '${establishmentCode}' inelegível para desconto. Forçando valor cheio R$ 24,90.`);
-              amount = 24.90;
-            } else if (cupomEnviado || amount <= 19.90) {
-              amount = 19.90;
+              transaction_amount = 24.90;
+            } else if (cupomEnviado || (formData.transaction_amount && Number(formData.transaction_amount) <= 19.90) || (payload.valor && Number(payload.valor) <= 19.90)) {
+              transaction_amount = 19.90;
             } else {
-              amount = 24.90;
+              transaction_amount = 24.90;
             }
           }
 
           const token = formData.token || payload.token;
           const installments = Number(formData.installments || payload.installments || 1);
-          const payment_method_id = formData.payment_method_id || payload.payment_method_id;
+          const payment_method_id = formData.payment_method_id || payload.payment_method_id || "pix";
           const rawIssuerId = formData.issuer_id || payload.issuer_id;
           const issuer_id = rawIssuerId ? String(rawIssuerId) : undefined;
 
@@ -1889,12 +1908,9 @@ export default {
               : `Plano Mensal PRO — CaixaDoce (${establishmentCode})`);
 
           const mpPaymentPayload: Record<string, any> = {
-            transaction_amount: amount,
-            token: token,
+            transaction_amount: transaction_amount,
             description: descPlano,
-            installments: installments,
             payment_method_id: payment_method_id,
-            issuer_id: issuer_id,
             payer: {
               email: formData.payer?.email || payload.userEmail || payload.email || "contato@caixadoce.com.br",
               first_name: formData.payer?.first_name || payload.first_name || "Assinante",
@@ -1910,13 +1926,19 @@ export default {
               planId,
               plano_id: planId,
               plan_type: planId,
-              cupom_utilizado: cupomEnviado || (amount <= 19.90 ? "CUPOM_DESCONTO" : null),
+              cupom_utilizado: cupomEnviado || (transaction_amount <= 19.90 ? "CUPOM_DESCONTO" : null),
             },
           };
 
+          if (token) mpPaymentPayload.token = token;
+          if (installments) mpPaymentPayload.installments = installments;
+          if (issuer_id) mpPaymentPayload.issuer_id = issuer_id;
+
           console.log(
-            `[MercadoPago Server] Processando cartão | Est: ${establishmentCode} | Valor: R$ ${amount} | Parcelas: ${installments}x | Bandeira: ${payment_method_id || "n/a"} | Issuer: ${issuer_id || "n/a"}`
+            `[MercadoPago Server] Processando ${payment_method_id === 'pix' ? 'Pix' : 'Cartão'} | Est: ${establishmentCode} | Valor: R$ ${transaction_amount} | Cupom: ${cupomEnviado || 'Nenhum'}`
           );
+
+          console.log("Valor enviado ao MP:", transaction_amount);
 
           const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
             method: "POST",
