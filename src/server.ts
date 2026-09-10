@@ -1269,7 +1269,7 @@ export default {
             });
 
             const count = lojasConvertidas.length;
-            const comissao = count * 10.90;
+            const comissao = count * 18.91;
 
             return {
               afiliado,

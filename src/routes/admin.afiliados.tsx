@@ -142,7 +142,7 @@ function AdminAfiliadosComponent() {
         return {
           afiliado: afil,
           lojasConvertidasCount: count,
-          comissaoEstimada: Number((count * 10.9).toFixed(2)),
+          comissaoEstimada: Number((count * 18.91).toFixed(2)),
           lojas: convertidas.map((l) => ({
             codigo: l.codigo || "CD-1000",
             nome: l.nome || "Loja",
@@ -333,7 +333,7 @@ function AdminAfiliadosComponent() {
               <p className="text-3xl font-extrabold text-emerald-400">
                 R$ {totalComissoesGeral.toFixed(2).replace(".", ",")}
               </p>
-              <p className="text-xs text-slate-400">Acerto total a pagar (R$ 10,90 / loja)</p>
+              <p className="text-xs text-slate-400">Acerto total a pagar (R$ 18,91 / loja)</p>
             </div>
             <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <DollarSign className="w-6 h-6" />
@@ -560,7 +560,7 @@ function AdminAfiliadosComponent() {
                         <p className="text-xs text-slate-400">Código: <span className="font-mono text-amber-400">{loja?.codigo || "N/I"}</span> {loja?.email ? `• ${loja.email}` : ""}</p>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-emerald-400">Comissão: R$ 10,90</span>
+                        <span className="text-xs font-bold text-emerald-400">Comissão: R$ 18,91</span>
                         <p className="text-[10px] text-slate-500">
                           {loja?.criado_em ? new Date(loja.criado_em).toLocaleDateString("pt-BR") : "Data N/I"}
                         </p>

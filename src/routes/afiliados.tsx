@@ -205,7 +205,7 @@ function AfiliadosComponent() {
     }
   }
 
-  const comissaoTotal = lojasConvertidas.length * 10.9;
+  const comissaoTotal = lojasConvertidas.length * 18.91;
   const linkIndicacao = afiliadoAtivo ? `https://www.caixadoce.com.br/?cupom=${afiliadoAtivo.cupom_exclusivo}` : "";
 
   return (
@@ -313,7 +313,7 @@ function AfiliadosComponent() {
               </form>
 
               <div className="border-t border-slate-700/60 pt-4 space-y-2 text-xs text-slate-400">
-                <p>Ganhe <strong className="text-amber-400 font-bold">R$ 10,90</strong> em cada primeira mensalidade convertida por lojistas indicados!</p>
+                <p>Ganhe <strong className="text-amber-400 font-bold">R$ 18,91</strong> em cada primeira mensalidade convertida por lojistas indicados!</p>
               </div>
             </div>
           </div>
@@ -425,7 +425,7 @@ function AfiliadosComponent() {
                     R$ {comissaoTotal.toFixed(2).replace(".", ",")}
                   </p>
                   <p className="text-xs font-medium text-slate-400">
-                    {lojasConvertidas.length} × R$ 10,90 por primeira mensalidade
+                    {lojasConvertidas.length} x R$ 18,91 (já deduzida a taxa de 5% do Mercado Pago)
                   </p>
                 </div>
 
@@ -442,7 +442,7 @@ function AfiliadosComponent() {
             <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl overflow-hidden shadow-xl">
               <div className="p-6 border-b border-slate-700/80 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Minhas Lojas Indicadas</h2>
+                  <h2 className="text-lg font-bold text-white">Meus parceiros indicados</h2>
                   <p className="text-xs text-slate-400">Histórico de estabelecimentos convertidos através da sua parceria.</p>
                 </div>
                 <span className="px-3 py-1 text-xs font-semibold rounded-full bg-slate-700 text-slate-300">
@@ -457,7 +457,7 @@ function AfiliadosComponent() {
                   </div>
                   <h3 className="text-base font-semibold text-white">Nenhuma loja cadastrada ainda</h3>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Compartilhe seu cupom exclusivo <strong className="text-amber-400">{afiliadoAtivo.cupom_exclusivo}</strong> com confeiteiras para acumular comissões de R$ 10,90 por loja!
+                    Compartilhe seu cupom exclusivo <strong className="text-amber-400">{afiliadoAtivo.cupom_exclusivo}</strong> com confeiteiras para acumular comissões de R$ 18,91 por loja!
                   </p>
                   <button
                     onClick={() => copiarTexto(linkIndicacao, "link")}
@@ -469,24 +469,20 @@ function AfiliadosComponent() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm text-slate-300">
-                    <thead className="bg-slate-900/60 text-xs font-semibold uppercase text-slate-400 border-b border-slate-700/60">
-                      <tr>
-                        <th className="py-3.5 px-6">Código Loja</th>
-                        <th className="py-3.5 px-6">Estabelecimento</th>
-                        <th className="py-3.5 px-6">Data de Cadastro</th>
-                        <th className="py-3.5 px-6 text-center">Status</th>
-                        <th className="py-3.5 px-6 text-right">Sua Comissão</th>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-700/60 bg-slate-900/50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        <th className="py-3 px-6">Loja / Parceiro</th>
+                        <th className="py-3 px-6">Data de Entrada</th>
+                        <th className="py-3 px-6 text-center">Status</th>
+                        <th className="py-3 px-6 text-right">Comissão Estimada</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-700/50">
-                      {lojasConvertidas.map((loja, idx) => (
-                        <tr key={loja.codigo || idx} className="hover:bg-slate-700/30 transition-colors">
-                          <td className="py-4 px-6 font-mono font-bold text-amber-400">
-                            {loja.codigo}
-                          </td>
-                          <td className="py-4 px-6 font-medium text-white">
-                            {loja.nome}
+                    <tbody className="divide-y divide-slate-700/40 text-sm">
+                      {lojasConvertidas.map((loja, index) => (
+                        <tr key={loja.id || index} className="hover:bg-slate-700/20 transition-colors">
+                          <td className="py-4 px-6 font-semibold text-white">
+                            <span className="block">{loja.nome || "Estabelecimento Parceiro"}</span>
                             {loja.email && <span className="block text-xs text-slate-400 font-normal">{loja.email}</span>}
                           </td>
                           <td className="py-4 px-6 text-xs text-slate-400">
@@ -499,7 +495,7 @@ function AfiliadosComponent() {
                             </span>
                           </td>
                           <td className="py-4 px-6 text-right font-bold text-emerald-400">
-                            R$ 10,90
+                            R$ 18,91
                           </td>
                         </tr>
                       ))}
