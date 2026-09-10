@@ -124,12 +124,21 @@ function AdminAfiliadosComponent() {
         .select("*")
         .order("criado_em", { ascending: false });
 
-      const { data: dbEstabelecimentos } = await supabase
-        .from("estabelecimentos")
-        .select("codigo, nome, email, plano_status, status_assinatura, created_at, cupom_utilizado");
+      let listaLojas: any[] = [];
+      try {
+        const { data: dbEstabelecimentos, error: estErr } = await supabase
+          .from("estabelecimentos")
+          .select("id, nome, codigo, cupom_utilizado");
+
+        if (estErr) {
+          console.log("[Admin Estabelecimentos Query Error]", estErr.message, estErr.details);
+        }
+        listaLojas = (dbEstabelecimentos as any[]) || [];
+      } catch (err: any) {
+        console.log("[Admin Estabelecimentos Exception]", err?.message, err?.details);
+      }
 
       const listaAfiliados: Afiliado[] = (dbAfiliados as any[]) || [];
-      const listaLojas = (dbEstabelecimentos as any[]) || [];
 
       const resultado: RelatorioAfiliado[] = listaAfiliados.map((afil) => {
         const convertidas = listaLojas.filter((est) => {

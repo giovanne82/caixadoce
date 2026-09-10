@@ -1256,7 +1256,7 @@ export default {
 
           const afiliadosList = resAfil.ok ? await resAfil.json() : [];
 
-          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=codigo,nome,email,plano_status,status_assinatura,created_at,cupom_utilizado`, {
+          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=id,nome,codigo,cupom_utilizado`, {
             headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
           });
 
@@ -1275,11 +1275,12 @@ export default {
               lojasConvertidasCount: count,
               comissaoEstimada: Number(comissao.toFixed(2)),
               lojas: lojasConvertidas.map((l: any) => ({
-                codigo: l.codigo,
-                nome: l.nome,
-                email: l.email,
-                plano_status: l.plano_status || l.status_assinatura || "ativo",
-                criado_em: l.created_at,
+                id: l.id,
+                codigo: l.codigo || "CD-1000",
+                nome: l.nome || "Estabelecimento",
+                email: "",
+                plano_status: "ativo",
+                criado_em: "",
                 cupom_utilizado: l.cupom_utilizado,
               })),
             };
@@ -1344,49 +1345,51 @@ export default {
             );
           }
 
-          // Consulta ESTRITAMENTE pela coluna cupom_utilizado no Supabase usando Admin Key (bypassing RLS)
-          const queryUrl = `${supabaseUrl}/rest/v1/estabelecimentos?cupom_utilizado=ilike.${encodeURIComponent(cupom)}&select=id,codigo,nome,email,status,plano_status,status_assinatura,is_pro,created_at,cupom_utilizado`;
+          // Consulta ESTRITAMENTE pela coluna cupom_utilizado usando Supabase Admin Client
+          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
-          const estRes = await fetch(queryUrl, {
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-            },
-          });
+          let count = 0;
+          try {
+            const { count: countResult, error: countErr } = await supabaseAdmin
+              .from("estabelecimentos")
+              .select("id", { count: "exact", head: true })
+              .eq("cupom_utilizado", cupom);
 
-          if (!estRes.ok) {
-            const errBody = await estRes.text();
-            console.error("[Backend Stats API Supabase Error]", estRes.status, errBody);
-            return new Response(
-              JSON.stringify({ sucesso: false, count: 0, lojasConvertidasCount: 0, lojas: [], error: errBody }),
-              { status: estRes.status || 500, headers: { "content-type": "application/json" } }
-            );
+            if (countErr) {
+              console.log("[API Estatisticas Supabase Count Error]", countErr.message, countErr.details);
+            } else if (countResult !== null && countResult !== undefined) {
+              count = countResult;
+            }
+          } catch (cErr: any) {
+            console.log("[API Estatisticas Count Exception]", cErr?.message, cErr?.details);
           }
 
-          const estList = await estRes.json();
+          let lojas: any[] = [];
+          try {
+            const { data: estData, error: dataErr } = await supabaseAdmin
+              .from("estabelecimentos")
+              .select("id, nome, codigo, cupom_utilizado")
+              .eq("cupom_utilizado", cupom);
 
-          const ativas = (estList || []).filter((est: any) => {
-            const isAtivo =
-              est.status === "ativo" ||
-              est.status_assinatura === "ativo" ||
-              est.plano_status === "ativo" ||
-              est.is_pro === true;
-            const matchesCupom = est.cupom_utilizado && String(est.cupom_utilizado).trim().toUpperCase() === cupom;
-
-            return isAtivo && matchesCupom;
-          });
-
-          const count = ativas.length;
-          const lojas = ativas.map((est: any) => ({
-            id: est.id,
-            codigo: est.codigo || "CD-1000",
-            nome: est.nome || "Estabelecimento",
-            email: est.email || "",
-            plano_status: est.plano_status || est.status_assinatura || est.status || "ativo",
-            criado_em: est.created_at,
-            cupom_utilizado: est.cupom_utilizado,
-          }));
+            if (dataErr) {
+              console.log("[API Estatisticas Supabase Data Error]", dataErr.message, dataErr.details);
+            } else if (estData) {
+              lojas = estData.map((est: any) => ({
+                id: est.id,
+                codigo: est.codigo || "CD-1000",
+                nome: est.nome || "Estabelecimento",
+                email: "",
+                plano_status: "ativo",
+                criado_em: "",
+                cupom_utilizado: est.cupom_utilizado,
+              }));
+              if (!count) {
+                count = estData.length;
+              }
+            }
+          } catch (dErr: any) {
+            console.log("[API Estatisticas Data Exception]", dErr?.message, dErr?.details);
+          }
 
           return new Response(
             JSON.stringify({
@@ -1399,9 +1402,9 @@ export default {
             { status: 200, headers: { "content-type": "application/json" } }
           );
         } catch (err: any) {
-          console.error("[Backend Stats API Error]", err);
+          console.log("[Backend Stats API Error]", err?.message, err?.details);
           return new Response(
-            JSON.stringify({ sucesso: false, count: 0, error: err.message }),
+            JSON.stringify({ sucesso: false, count: 0, error: err?.message, details: err?.details }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }

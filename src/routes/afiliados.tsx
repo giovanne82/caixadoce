@@ -169,33 +169,29 @@ function AfiliadosComponent() {
 
       // Fallback para Supabase Client-side caso o backend não responda
       if (lojasEncontradas.length === 0) {
-        const { data: estData } = await supabase
-          .from("estabelecimentos")
-          .select("id, codigo, nome, email, status, plano_status, status_assinatura, is_pro, created_at, cupom_utilizado")
-          .ilike("cupom_utilizado", afiliadoEncontrado.cupom_exclusivo);
+        try {
+          const { data: estData, error: estError } = await supabase
+            .from("estabelecimentos")
+            .select("id, nome, codigo, cupom_utilizado")
+            .eq("cupom_utilizado", afiliadoEncontrado.cupom_exclusivo);
 
-        if (estData) {
-          const ativasEConvertidas = estData.filter((est: any) => {
-            const statusAtivo =
-              est.status === "ativo" ||
-              est.status_assinatura === "ativo" ||
-              est.plano_status === "ativo" ||
-              est.is_pro === true;
-            const cupomBate =
-              est.cupom_utilizado && String(est.cupom_utilizado).trim().toUpperCase() === String(afiliadoEncontrado.cupom_exclusivo).trim().toUpperCase();
+          if (estError) {
+            console.log("[Estabelecimentos Frontend Query Error]", estError.message, estError.details);
+          }
 
-            return statusAtivo && cupomBate;
-          });
-
-          lojasEncontradas = ativasEConvertidas.map((est: any) => ({
-            id: est.id,
-            codigo: est.codigo || "CD-1000",
-            nome: est.nome || "Estabelecimento",
-            email: est.email || "",
-            plano_status: est.plano_status || est.status_assinatura || est.status || "ativo",
-            criado_em: est.created_at,
-            cupom_utilizado: est.cupom_utilizado,
-          }));
+          if (estData) {
+            lojasEncontradas = estData.map((est: any) => ({
+              id: est.id,
+              codigo: est.codigo || "CD-1000",
+              nome: est.nome || "Estabelecimento",
+              email: "",
+              plano_status: "ativo",
+              criado_em: "",
+              cupom_utilizado: est.cupom_utilizado,
+            }));
+          }
+        } catch (errEst: any) {
+          console.log("[Estabelecimentos Catch Error]", errEst?.message, errEst?.details);
         }
       }
 
