@@ -3246,16 +3246,16 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         </div>
                       )}
 
-                      {(prod.serve_pessoas || prod.peso_detalhe) && (
+                      {((Boolean(prod.serve_pessoas) && Number(prod.serve_pessoas) > 0) || Boolean(prod.peso_detalhe && prod.peso_detalhe.trim())) && (
                         <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                          {prod.serve_pessoas ? (
-                            <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md border border-purple-500/20">
-                              <Users className="w-2.5 h-2.5" /> {prod.serve_pessoas} {prod.serve_pessoas === 1 ? "pessoa" : "pessoas"}
+                          {prod.serve_pessoas && Number(prod.serve_pessoas) > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold text-purple-900 dark:text-purple-200 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/50">
+                              <span className="text-[10px] select-none">👥</span> {prod.serve_pessoas} {prod.serve_pessoas === 1 ? "pessoa" : "pessoas"}
                             </span>
                           ) : null}
-                          {prod.peso_detalhe ? (
-                            <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20">
-                              <Scale className="w-2.5 h-2.5" /> {prod.peso_detalhe}
+                          {prod.peso_detalhe && prod.peso_detalhe.trim() ? (
+                            <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold text-purple-900 dark:text-purple-200 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/50">
+                              <span className="text-[10px] select-none">⚖️</span> {prod.peso_detalhe.trim()}
                             </span>
                           ) : null}
                         </div>
@@ -4237,21 +4237,21 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               />
 
               {/* ÁREA DE DETALHES (RENDIMENTO E PESO) */}
-              {(produtoModal.serve_pessoas || produtoModal.peso_detalhe) && (
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 pb-0.5">
-                  {produtoModal.serve_pessoas ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 text-purple-800 dark:text-purple-300 border border-purple-500/20 text-xs font-bold shadow-2xs">
-                      <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+              {((Boolean(produtoModal.serve_pessoas) && Number(produtoModal.serve_pessoas) > 0) || Boolean(produtoModal.peso_detalhe && produtoModal.peso_detalhe.trim())) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+                  {produtoModal.serve_pessoas && Number(produtoModal.serve_pessoas) > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-900 dark:bg-purple-950/50 dark:text-purple-200 border border-purple-200 dark:border-purple-800/60 text-xs font-bold shadow-2xs">
+                      <span className="text-sm select-none">👥</span>
                       <span>
                         Serve até {produtoModal.serve_pessoas}{" "}
                         {produtoModal.serve_pessoas === 1 ? "pessoa" : "pessoas"}
                       </span>
                     </span>
                   ) : null}
-                  {produtoModal.peso_detalhe ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs font-bold shadow-2xs">
-                      <Scale className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                      <span>Peso: {produtoModal.peso_detalhe}</span>
+                  {produtoModal.peso_detalhe && produtoModal.peso_detalhe.trim() ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-900 dark:bg-purple-950/50 dark:text-purple-200 border border-purple-200 dark:border-purple-800/60 text-xs font-bold shadow-2xs">
+                      <span className="text-sm select-none">⚖️</span>
+                      <span>Peso/Tamanho: {produtoModal.peso_detalhe.trim()}</span>
                     </span>
                   ) : null}
                 </div>
