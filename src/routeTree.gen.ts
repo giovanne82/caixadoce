@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AfiliadosRouteImport } from './routes/afiliados'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
@@ -17,6 +18,7 @@ import { Route as PdvRouteImport } from './routes/pdv'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
+import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
 import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
 import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
@@ -26,6 +28,11 @@ import { Route as PainelConfiguracoesRouteImport } from './routes/painel.configu
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AfiliadosRoute = AfiliadosRouteImport.update({
+  id: '/afiliados',
+  path: '/afiliados',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
@@ -63,6 +70,11 @@ const TermosRoute = TermosRouteImport.update({
   path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAfiliadosRoute = AdminAfiliadosRouteImport.update({
+  id: '/admin/afiliados',
+  path: '/admin/afiliados',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgendarStoreSlugRoute = AgendarStoreSlugRouteImport.update({
   id: '/agendar/$storeSlug',
   path: '/agendar/$storeSlug',
@@ -91,6 +103,7 @@ const PainelConfiguracoesRoute = PainelConfiguracoesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -98,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -106,6 +120,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -113,6 +128,7 @@ export interface FileRoutesByTo {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -122,6 +138,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -129,6 +146,7 @@ export interface FileRoutesById {
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
+  '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
@@ -139,6 +157,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/afiliados'
     | '/configuracoes'
     | '/landing'
     | '/login'
@@ -146,6 +165,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
+    | '/admin/afiliados'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -154,6 +174,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/afiliados'
     | '/configuracoes'
     | '/landing'
     | '/login'
@@ -161,6 +182,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
+    | '/admin/afiliados'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -169,6 +191,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/afiliados'
     | '/configuracoes'
     | '/landing'
     | '/login'
@@ -176,6 +199,7 @@ export interface FileRouteTypes {
     | '/pedido-confirmado'
     | '/privacidade'
     | '/termos'
+    | '/admin/afiliados'
     | '/agendar/$storeSlug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
@@ -185,6 +209,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AfiliadosRoute: typeof AfiliadosRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
@@ -192,6 +217,7 @@ export interface RootRouteChildren {
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
+  AdminAfiliadosRoute: typeof AdminAfiliadosRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
   CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
   PagarCobrancaIdRoute: typeof PagarCobrancaIdRoute
@@ -206,6 +232,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/afiliados': {
+      id: '/afiliados'
+      path: '/afiliados'
+      fullPath: '/afiliados'
+      preLoaderRoute: typeof AfiliadosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/configuracoes': {
@@ -257,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/afiliados': {
+      id: '/admin/afiliados'
+      path: '/admin/afiliados'
+      fullPath: '/admin/afiliados'
+      preLoaderRoute: typeof AdminAfiliadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agendar/$storeSlug': {
       id: '/agendar/$storeSlug'
       path: '/agendar/$storeSlug'
@@ -297,6 +337,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AfiliadosRoute: AfiliadosRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
@@ -304,6 +345,7 @@ const rootRouteChildren: RootRouteChildren = {
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
+  AdminAfiliadosRoute: AdminAfiliadosRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
   CardapioStoreCodeRoute: CardapioStoreCodeRoute,
   PagarCobrancaIdRoute: PagarCobrancaIdRoute,

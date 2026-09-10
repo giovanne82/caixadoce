@@ -261,6 +261,7 @@ async function seedClientesLojaTableInSupabase() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
@@ -372,7 +373,55 @@ async function seedClientesLojaTableInSupabase() {
 }
 seedClientesLojaTableInSupabase();
 
-// Cache global em memória para trava de idempotência de pagamentos processados
+// Injeção de Inicialização da Tabela afiliados e Colunas de Afiliado no Supabase
+async function seedAfiliadosTableInSupabase() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    const createSql = `
+      CREATE TABLE IF NOT EXISTS public.afiliados (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        nome TEXT NOT NULL,
+        cupom_exclusivo TEXT UNIQUE NOT NULL,
+        email TEXT NOT NULL,
+        chave_pix TEXT NOT NULL,
+        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS cupom_utilizado TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS afiliado_id UUID;
+      CREATE INDEX IF NOT EXISTS idx_afiliados_cupom ON public.afiliados(cupom_exclusivo);
+      CREATE INDEX IF NOT EXISTS idx_estabelecimentos_afiliado ON public.estabelecimentos(afiliado_id);
+      ALTER TABLE public.afiliados ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em afiliados" ON public.afiliados;
+      CREATE POLICY "Permitir leitura total em afiliados" ON public.afiliados FOR SELECT USING (true);
+      DROP POLICY IF EXISTS "Permitir insercao em afiliados" ON public.afiliados;
+      CREATE POLICY "Permitir insercao em afiliados" ON public.afiliados FOR INSERT WITH CHECK (true);
+      DROP POLICY IF EXISTS "Permitir atualizacao em afiliados" ON public.afiliados;
+      CREATE POLICY "Permitir atualizacao em afiliados" ON public.afiliados FOR UPDATE USING (true);
+      DROP POLICY IF EXISTS "Permitir exclusao em afiliados" ON public.afiliados;
+      CREATE POLICY "Permitir exclusao em afiliados" ON public.afiliados FOR DELETE USING (true);
+      GRANT ALL ON TABLE public.afiliados TO anon, authenticated, service_role;
+    `;
+
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: createSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed Afiliados Table Log]", err);
+  }
+}
+seedAfiliadosTableInSupabase();
 const processedPaymentsSet = new Set<string>();
 
 // Helper global para ativacao resiliente de plano no Supabase (Webhook + Process Payment)
@@ -767,6 +816,42 @@ export default {
             console.error("[Supabase Live Cupons Fetch Error]", errDb);
           }
 
+          // 1.5. CONSULTA NA TABELA 'afiliados' DO SUPABASE CASO SEJA CUPOM DE PARCEIRO
+          if (!cupomEncontrado) {
+            try {
+              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+              const supabaseKey =
+                process.env.VITE_SUPABASE_ANON_KEY ||
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+              const resAfil = await fetch(
+                `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cupomDigitado)}&select=id,nome,cupom_exclusivo`,
+                {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+              if (resAfil.ok) {
+                const afilRows = await resAfil.json();
+                if (Array.isArray(afilRows) && afilRows.length > 0) {
+                  const item = afilRows[0];
+                  cupomEncontrado = {
+                    tipoDesconto: "dias_gratis",
+                    percentualDesconto: 0,
+                    diasGratis: 30,
+                    descricao: `Cupom de Parceria (${item.nome}) +30 Dias Grátis`,
+                    afiliado_id: item.id,
+                  } as any;
+                  console.log(`[Validate Promo Live DB] Cupom Afiliado '${item.cupom_exclusivo}' de ${item.nome} ativado!`);
+                }
+              }
+            } catch (errAfil) {
+              console.error("[Supabase Live Afiliados Fetch Error]", errAfil);
+            }
+          }
+
           // 2. FALLBACK SECUNDÁRIO CASO O SUPABASE ESTEJA OFFLINE OU O CUPOM NÃO ESTEJA NO BANCO
           if (!cupomEncontrado) {
             const cuponsEstaticos: Record<string, CupomInfo> = {
@@ -796,10 +881,11 @@ export default {
                 tipoDesconto: cupomEncontrado.tipoDesconto,
                 percentualDesconto: cupomEncontrado.percentualDesconto,
                 diasGratis: cupomEncontrado.diasGratis,
+                afiliado_id: (cupomEncontrado as any).afiliado_id || null,
                 descricao: cupomEncontrado.descricao,
                 mensagem: isDias
                   ? `🎉 Cupom "${cupomDigitado}" ativado com sucesso! Você ganhou +${cupomEncontrado.diasGratis} dias grátis de acesso PRO!`
-                  : `🎉 Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto aplicado com sucesso!`,
+                  : `🎉 Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto applied com sucesso!`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -875,6 +961,47 @@ export default {
           const novaExp = new Date(dataAtualExp.getTime() + dias * 24 * 60 * 60 * 1000);
           const novaExpIso = novaExp.toISOString();
 
+          const patchEstPayload: any = {
+            plano_expira_em: novaExpIso,
+            plano_exp: novaExpIso,
+            plano_status: "ativo",
+            status_assinatura: "ativo",
+            is_pro: true,
+            plano_id: "mensal",
+          };
+
+          const cupomCode = String(payload.cupom || payload.code || payload.cupomDigitado || "").trim();
+          if (cupomCode) {
+            patchEstPayload.cupom_utilizado = cupomCode.toUpperCase();
+          }
+
+          let afiliadoId = payload.afiliadoId || payload.afiliado_id || null;
+          if (!afiliadoId && cupomCode) {
+            try {
+              const resAfilLookup = await fetch(
+                `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cupomCode)}&select=id`,
+                {
+                  headers: {
+                    apikey: supabaseKey,
+                    Authorization: `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+              if (resAfilLookup.ok) {
+                const rows = await resAfilLookup.json();
+                if (Array.isArray(rows) && rows.length > 0) {
+                  afiliadoId = rows[0].id;
+                }
+              }
+            } catch (eLookup) {
+              console.error("[Aplicar Cupom Trial Afiliado Lookup Error]", eLookup);
+            }
+          }
+
+          if (afiliadoId) {
+            patchEstPayload.afiliado_id = afiliadoId;
+          }
+
           try {
             await fetch(
               `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode)}`,
@@ -886,14 +1013,7 @@ export default {
                   "Content-Type": "application/json",
                   Prefer: "return=minimal",
                 },
-                body: JSON.stringify({
-                  plano_expira_em: novaExpIso,
-                  plano_exp: novaExpIso,
-                  plano_status: "ativo",
-                  status_assinatura: "ativo",
-                  is_pro: true,
-                  plano_id: "mensal",
-                }),
+                body: JSON.stringify(patchEstPayload),
               }
             );
             console.log(`[Aplicar Cupom Trial] Estabelecimento '${estCode}' atualizado com +${dias} dias grátis! Nova expiração: ${novaExpIso}`);
@@ -902,7 +1022,6 @@ export default {
           }
 
           // Incrementar usos_atuais no cupom de assinatura no Supabase
-          const cupomCode = String(payload.cupom || payload.code || "").trim();
           if (cupomCode) {
             try {
               const resCup = await fetch(
@@ -947,6 +1066,7 @@ export default {
               estabelecimentoCodigo: estCode,
               diasAdicionados: dias,
               novaDataExpiracao: novaExpIso,
+              afiliado_id: afiliadoId,
             }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
@@ -956,6 +1076,146 @@ export default {
             JSON.stringify({ sucesso: false, mensagem: "Erro ao processar cupom trial." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
+        }
+      }
+
+      // =========================================================================
+      // ENDPOINTS DO MÓDULO DE AFILIADOS E PARCERIAS (/api/afiliados, /api/afiliados/relatorio)
+      // =========================================================================
+      if (url.pathname === "/api/afiliados" && request.method === "GET") {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+          const cupom = url.searchParams.get("cupom") || "";
+          const email = url.searchParams.get("email") || "";
+          const id = url.searchParams.get("id") || "";
+
+          let queryUrl = `${supabaseUrl}/rest/v1/afiliados?select=*`;
+          if (cupom) {
+            queryUrl += `&cupom_exclusivo=ilike.${encodeURIComponent(cupom)}`;
+          } else if (email) {
+            queryUrl += `&email=ilike.${encodeURIComponent(email)}`;
+          } else if (id) {
+            queryUrl += `&id=eq.${encodeURIComponent(id)}`;
+          } else {
+            queryUrl += `&order=criado_em.desc`;
+          }
+
+          const res = await fetch(queryUrl, {
+            headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+          });
+
+          if (!res.ok) {
+            return new Response(JSON.stringify({ sucesso: false, error: "Erro ao buscar afiliados." }), { status: res.status });
+          }
+          const data = await res.json();
+          return new Response(JSON.stringify({ sucesso: true, afiliados: data }), { status: 200, headers: { "content-type": "application/json" } });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ sucesso: false, error: err.message }), { status: 500 });
+        }
+      }
+
+      if (url.pathname === "/api/afiliados" && request.method === "POST") {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          const bodyText = await request.text();
+          let body: any = {};
+          try { body = JSON.parse(bodyText); } catch {}
+          const { nome, cupom_exclusivo, email, chave_pix } = body;
+
+          if (!nome || !cupom_exclusivo || !email || !chave_pix) {
+            return new Response(
+              JSON.stringify({ sucesso: false, mensagem: "Todos os campos (nome, cupom, email, chave_pix) são obrigatórios." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const cleanCupom = String(cupom_exclusivo).toUpperCase().trim().replace(/[^A-Z0-9_-]/g, "");
+
+          const res = await fetch(`${supabaseUrl}/rest/v1/afiliados`, {
+            method: "POST",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify({
+              nome: String(nome).trim(),
+              cupom_exclusivo: cleanCupom,
+              email: String(email).trim().toLowerCase(),
+              chave_pix: String(chave_pix).trim(),
+            }),
+          });
+
+          if (!res.ok) {
+            const errBody = await res.text();
+            return new Response(
+              JSON.stringify({ sucesso: false, mensagem: "Erro ao cadastrar afiliado (cupom ou e-mail já existente).", detalhe: errBody }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const created = await res.json();
+          return new Response(
+            JSON.stringify({ sucesso: true, afiliado: created[0] || created }),
+            { status: 201, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(JSON.stringify({ sucesso: false, mensagem: err.message }), { status: 500 });
+        }
+      }
+
+      if (url.pathname === "/api/afiliados/relatorio" && request.method === "GET") {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          const resAfil = await fetch(`${supabaseUrl}/rest/v1/afiliados?select=*&order=criado_em.desc`, {
+            headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+          });
+
+          const afiliadosList = resAfil.ok ? await resAfil.json() : [];
+
+          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=codigo,nome,email,plano_status,status_assinatura,created_at,cupom_utilizado,afiliado_id`, {
+            headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+          });
+
+          const estabelecimentosList = resEst.ok ? await resEst.json() : [];
+
+          const relatorio = (afiliadosList || []).map((afiliado: any) => {
+            const lojasConvertidas = (estabelecimentosList || []).filter((est: any) => {
+              const matchesId = est.afiliado_id && String(est.afiliado_id) === String(afiliado.id);
+              const matchesCupom = est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afiliado.cupom_exclusivo).toUpperCase();
+              return matchesId || matchesCupom;
+            });
+
+            const count = lojasConvertidas.length;
+            const comissao = count * 10.90;
+
+            return {
+              afiliado,
+              lojasConvertidasCount: count,
+              comissaoEstimada: Number(comissao.toFixed(2)),
+              lojas: lojasConvertidas.map((l: any) => ({
+                codigo: l.codigo,
+                nome: l.nome,
+                email: l.email,
+                plano_status: l.plano_status || l.status_assinatura || "ativo",
+                criado_em: l.created_at,
+                cupom_utilizado: l.cupom_utilizado,
+              })),
+            };
+          });
+
+          return new Response(
+            JSON.stringify({ sucesso: true, relatorio }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(JSON.stringify({ sucesso: false, mensagem: err.message }), { status: 500 });
         }
       }
 

@@ -1696,7 +1696,31 @@ export interface RegrasAgendamento {
   horarioFechamento: string; // Ex: "18:00"
 }
 
+// ==============================================================================
+// MARKETING DE AFILIADOS & PARCERIAS
+// ==============================================================================
 
+export interface Afiliado {
+  id?: string;
+  nome: string;
+  cupom_exclusivo: string;
+  email: string;
+  chave_pix: string;
+  criado_em?: string;
+}
 
+export interface LojaConvertida {
+  codigo: string;
+  nome: string;
+  email?: string;
+  plano_status?: string;
+  criado_em?: string;
+  cupom_utilizado?: string;
+}
 
-
+export interface RelatorioAfiliado {
+  afiliado: Afiliado;
+  lojasConvertidasCount: number;
+  comissaoEstimada: number;
+  lojas: LojaConvertida[];
+}
