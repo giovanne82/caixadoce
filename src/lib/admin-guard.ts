@@ -1,9 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Whitelist oficial de e-mails de administradores/sócios autorizados
+ * E-mail Master de Administrador / Sócios
  */
+export const MASTER_ADMIN_EMAIL = "giovannecoelho@gmail.com";
+
 export const ADMIN_EMAILS_WHITELIST: string[] = [
+  "giovannecoelho@gmail.com",
   "giovannedoceria@gmail.com",
   "giovannesousa82@gmail.com",
   "artfesta@gmail.com",
@@ -18,7 +21,6 @@ export function isEmailAdmin(email?: string | null): boolean {
   if (!email || typeof email !== "string") return false;
   const cleanEmail = email.trim().toLowerCase();
 
-  // Permite e-mails configurados via variável de ambiente VITE_ADMIN_EMAILS (separados por vírgula)
   const envAdminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "")
     .split(",")
     .map((e: string) => e.trim().toLowerCase())

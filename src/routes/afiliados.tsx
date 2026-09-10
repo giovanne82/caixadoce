@@ -15,10 +15,14 @@ import {
   CreditCard,
   ShieldCheck,
   Cake,
+  UserX,
+  RefreshCw,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Afiliado, LojaConvertida } from "@/lib/caixadoce-data";
+import { useAuth } from "@/context/auth-context";
 
 export const Route = createFileRoute("/afiliados")({
   head: () => ({
@@ -31,36 +35,73 @@ export const Route = createFileRoute("/afiliados")({
 });
 
 function AfiliadosComponent() {
+  const { user, authLoading } = useAuth();
   const [inputBusca, setInputBusca] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [verificandoSessao, setVerificandoSessao] = useState(true);
+  const [naoEParceiro, setNaoEParceiro] = useState(false);
+  const [emailUsuarioLogado, setEmailUsuarioLogado] = useState<string | null>(null);
+
   const [afiliadoAtivo, setAfiliadoAtivo] = useState<Afiliado | null>(null);
   const [lojasConvertidas, setLojasConvertidas] = useState<LojaConvertida[]>([]);
   const [copiouCupom, setCopiouCupom] = useState(false);
   const [copiouLink, setCopiouLink] = useState(false);
 
-  // Carregar parceiro ao montar caso exista na URL (?cupom=... ou ?email=...) ou localStorage
+  // Captura o e-mail do usuário logado via Supabase Auth e isola os dados por parceiro
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const cupomParam = params.get("cupom") || params.get("c");
-    const emailParam = params.get("email");
-    const localCupom = localStorage.getItem("caixadoce_afiliado_cupom");
+    async function inicializarPainelAfiliado() {
+      if (authLoading) return;
+      setVerificandoSessao(true);
 
-    const query = cupomParam || emailParam || localCupom;
-    if (query) {
-      buscarAfiliado(query, false);
+      let emailLogado: string | null = null;
+      try {
+        const { data: { user: spUser } } = await supabase.auth.getUser();
+        emailLogado = spUser?.email || null;
+        if (!emailLogado) {
+          const { data: { session } } = await supabase.auth.getSession();
+          emailLogado = session?.user?.email || null;
+        }
+      } catch (err) {
+        console.error("[Auth Session Fetch Error]", err);
+      }
+
+      if (!emailLogado && user?.email) {
+        emailLogado = user.email;
+      }
+
+      setEmailUsuarioLogado(emailLogado);
+
+      const params = new URLSearchParams(window.location.search);
+      const cupomParam = params.get("cupom") || params.get("c");
+      const emailParam = params.get("email");
+      const localCupom = localStorage.getItem("caixadoce_afiliado_cupom");
+
+      const queryTerm = emailLogado || emailParam || cupomParam || localCupom;
+
+      if (queryTerm) {
+        const achou = await buscarAfiliado(queryTerm, false);
+        if (!achou) {
+          setNaoEParceiro(true);
+        }
+      } else {
+        setNaoEParceiro(true);
+      }
+      setVerificandoSessao(false);
     }
-  }, []);
 
-  async function buscarAfiliado(termo: string, exibirToastSucesso = true) {
+    inicializarPainelAfiliado();
+  }, [authLoading, user]);
+
+  async function buscarAfiliado(termo: string, exibirToastSucesso = true): Promise<boolean> {
     const cleanTerm = termo.trim();
     if (!cleanTerm) {
-      toast.error("Por favor, digite seu cupom exclusivo ou e-mail cadastrado.");
-      return;
+      if (exibirToastSucesso) toast.error("Por favor, digite seu cupom exclusivo ou e-mail cadastrado.");
+      return false;
     }
 
     setCarregando(true);
     try {
-      // 1. Buscar afiliado via API server ou Supabase client direct
+      // 1. Buscar afiliado na tabela 'afiliados' onde o email ou cupom bate com a busca
       let afiliadoEncontrado: Afiliado | null = null;
 
       const resApi = await fetch(`/api/afiliados?cupom=${encodeURIComponent(cleanTerm)}`).catch(() => null);
@@ -72,7 +113,6 @@ function AfiliadosComponent() {
       }
 
       if (!afiliadoEncontrado) {
-        // Tentar busca por e-mail
         const resEmail = await fetch(`/api/afiliados?email=${encodeURIComponent(cleanTerm)}`).catch(() => null);
         if (resEmail && resEmail.ok) {
           const dataEmail = await resEmail.json();
@@ -96,21 +136,27 @@ function AfiliadosComponent() {
       }
 
       if (!afiliadoEncontrado) {
-        toast.error("Afiliado não encontrado. Verifique o cupom/e-mail digitado ou entre em contato com o suporte.");
+        if (exibirToastSucesso) {
+          toast.error("Afiliado não encontrado para o e-mail/cupom fornecido.");
+        }
+        setAfiliadoAtivo(null);
+        setLojasConvertidas([]);
+        setNaoEParceiro(true);
         setCarregando(false);
-        return;
+        return false;
       }
 
       setAfiliadoAtivo(afiliadoEncontrado);
+      setNaoEParceiro(false);
       localStorage.setItem("caixadoce_afiliado_cupom", afiliadoEncontrado.cupom_exclusivo);
 
-      // 2. Buscar lojas convertidas
+      // 2. Query na tabela de estabelecimentos/assinaturas ESTRITAMENTE por cupom_utilizado = cupom_do_usuario
       let lojasEncontradas: LojaConvertida[] = [];
 
       const { data: estData } = await supabase
         .from("estabelecimentos")
         .select("codigo, nome, email, plano_status, status_assinatura, created_at, cupom_utilizado, afiliado_id")
-        .or(`afiliado_id.eq.${afiliadoEncontrado.id},cupom_utilizado.ilike.${afiliadoEncontrado.cupom_exclusivo}`);
+        .or(`cupom_utilizado.ilike.${afiliadoEncontrado.cupom_exclusivo},afiliado_id.eq.${afiliadoEncontrado.id}`);
 
       if (estData) {
         lojasEncontradas = estData.map((est: any) => ({
@@ -126,11 +172,13 @@ function AfiliadosComponent() {
       setLojasConvertidas(lojasEncontradas);
 
       if (exibirToastSucesso) {
-        toast.success(`Bem-vindo(a), ${afiliadoEncontrado.nome}! Painel carregado com sucesso.`);
+        toast.success(`Bem-vindo(a), ${afiliadoEncontrado.nome}! Painel do parceiro carregado.`);
       }
+      return true;
     } catch (err: any) {
       console.error("[Afiliado Dashboard Error]", err);
-      toast.error("Erro ao carregar dados do afiliado. Tente novamente.");
+      if (exibirToastSucesso) toast.error("Erro ao carregar dados do afiliado. Tente novamente.");
+      return false;
     } finally {
       setCarregando(false);
     }
@@ -139,6 +187,7 @@ function AfiliadosComponent() {
   function sairPainel() {
     setAfiliadoAtivo(null);
     setLojasConvertidas([]);
+    setNaoEParceiro(true);
     localStorage.removeItem("caixadoce_afiliado_cupom");
     toast.info("Você saiu do painel do afiliado.");
   }
@@ -199,62 +248,72 @@ function AfiliadosComponent() {
 
       {/* Conteúdo Principal */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-8 space-y-8">
-        {!afiliadoAtivo ? (
-          /* Tela de Login / Busca do Parceiro */
-          <div className="max-w-md mx-auto my-12">
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
-              <div className="text-center space-y-2">
-                <div className="inline-flex p-3 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <h1 className="text-2xl font-bold text-white">Acessar Painel do Afiliado</h1>
-                <p className="text-sm text-slate-400">
-                  Informe seu cupom exclusivo ou e-mail cadastrado para visualizar suas indicações e saldo de comissões.
+        {verificandoSessao ? (
+          <div className="p-16 text-center text-slate-400 space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-400" />
+            <p className="text-sm font-semibold text-white">Verificando sessão de parceiro afiliado...</p>
+          </div>
+        ) : !afiliadoAtivo ? (
+          /* Tela quando o usuário não é um parceiro cadastrado */
+          <div className="max-w-md mx-auto my-12 animate-in fade-in duration-300">
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 text-center">
+              <div className="inline-flex p-4 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">
+                <UserX className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-2">
+                <h1 className="text-2xl font-extrabold text-white">Você ainda não é um parceiro afiliado</h1>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {emailUsuarioLogado ? (
+                    <>
+                      O e-mail <strong className="text-amber-400 font-mono">{emailUsuarioLogado}</strong> não foi encontrado na base de parceiros cadastrados.
+                    </>
+                  ) : (
+                    <>Sua conta atualmente não possui um cadastro no Programa de Afiliados CaixaDoce.</>
+                  )}
                 </p>
               </div>
 
+              {/* Form secundário para busca manual por cupom ou e-mail */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  buscarAfiliado(inputBusca);
+                  buscarAfiliado(inputBusca, true);
                 }}
-                className="space-y-4"
+                className="space-y-3 pt-2 text-left"
               >
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1.5">
-                    Cupom Exclusivo ou E-mail
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={inputBusca}
-                      onChange={(e) => setInputBusca(e.target.value)}
-                      placeholder="Ex: CUPOMVIP ou seu@email.com"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 text-sm"
-                    />
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                  </div>
+                <label className="block text-xs font-semibold uppercase text-slate-400">
+                  Já tem um cupom? Digite para acessar:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={inputBusca}
+                    onChange={(e) => setInputBusca(e.target.value)}
+                    placeholder="Ex: SEUCUPOMVIP ou outro@email.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-xs"
+                  />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 </div>
 
                 <button
                   type="submit"
                   disabled={carregando}
-                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {carregando ? (
                     <span>Buscando...</span>
                   ) : (
                     <>
-                      <span>Entrar no Dashboard</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <span>Acessar com Cupom</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>
               </form>
 
-              <div className="border-t border-slate-700/60 pt-4 space-y-2 text-center text-xs text-slate-400">
-                <p>Ganhe <strong className="text-amber-400">R$ 10,90</strong> em cada primeira mensalidade convertida por lojistas indicados!</p>
-                <p className="text-slate-500">Dúvidas? Entre em contato com nossa equipe de suporte.</p>
+              <div className="border-t border-slate-700/60 pt-4 space-y-2 text-xs text-slate-400">
+                <p>Ganhe <strong className="text-amber-400 font-bold">R$ 10,90</strong> em cada primeira mensalidade convertida por lojistas indicados!</p>
               </div>
             </div>
           </div>
