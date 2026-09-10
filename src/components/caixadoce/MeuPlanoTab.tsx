@@ -92,7 +92,14 @@ export function MeuPlanoTab() {
               diasRestantesTrial: 0,
             });
           }
-        } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
+        } else if (
+          statusBanco === "ativo" ||
+          data.is_pro === true ||
+          data.plano === "pro" ||
+          data.mercadopago_pagamento_id ||
+          data.mercadopago_assinatura_id ||
+          data.stripe_subscription_id
+        ) {
           salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
             planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
@@ -115,6 +122,58 @@ export function MeuPlanoTab() {
   useEffect(() => {
     recarregarPlano();
   }, [recarregarPlano]);
+
+  // Polling em tempo real do status do plano enquanto o modal de checkout estiver aberto
+  useEffect(() => {
+    if (!modalCheckoutOpen || !activeCode) return;
+
+    let isMounted = true;
+    const intervalId = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from("estabelecimentos")
+          .select("id, status, status_assinatura, plano_status, is_pro, plano, mercadopago_pagamento_id")
+          .eq("codigo", activeCode.toUpperCase())
+          .maybeSingle();
+
+        if (isMounted && data) {
+          const isAtivo =
+            data.status === "ativo" ||
+            data.status_assinatura === "ativo" ||
+            data.plano_status === "ativo" ||
+            data.is_pro === true ||
+            data.plano === "pro" ||
+            data.plano === "mensal" ||
+            data.plano === "anual" ||
+            Boolean(data.mercadopago_pagamento_id);
+
+          if (isAtivo) {
+            clearInterval(intervalId);
+            const duracaoDias = planoSelecionadoCheckout === "anual" ? 365 : 30;
+            const novaExp = calcularDataExpiracaoAcumulada(infoPlano.dataExpiracao, duracaoDias);
+            salvarDadosPlanoEstabelecimento(activeCode, {
+              planoId: planoSelecionadoCheckout,
+              status: "ativo",
+              dataExpiracao: novaExp,
+            });
+            if (updateEstablishmentPlan) {
+              updateEstablishmentPlan(planoSelecionadoCheckout as any, true);
+            }
+            recarregarPlano();
+            setModalCheckoutOpen(false);
+            toast.success("🎉 Pagamento aprovado! Seu acesso ao plano PRO foi ativado instantaneamente.");
+          }
+        }
+      } catch (err) {
+        console.warn("[MeuPlanoTab Polling Error]", err);
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [modalCheckoutOpen, activeCode, planoSelecionadoCheckout, infoPlano.dataExpiracao, updateEstablishmentPlan, recarregarPlano]);
 
   const handleValidarCupom = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

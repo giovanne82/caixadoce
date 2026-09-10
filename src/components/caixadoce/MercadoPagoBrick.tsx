@@ -117,37 +117,105 @@ export function MercadoPagoBrick({
     };
   }, []);
 
-  // EFETUA O POLLING DO PIX EM TEMPO REAL (A CADA 3 SEG) QUANDO O PIX ESTÁ ATIVO NA ETAPA 2
+  // EFETUA O POLLING E REALTIME DO PIX E STATUS DO BANCO EM TEMPO REAL (A CADA 3 SEG)
   useEffect(() => {
-    if (!dadosPix?.paymentId) return;
-
     let isMounted = true;
-    console.log(`[Pix Polling] Inspecionando pagamento #${dadosPix.paymentId}...`);
+    if (!estabelecimentoCodigo) return;
 
+    const cleanCode = estabelecimentoCodigo.trim().toUpperCase();
+
+    // Supabase Realtime channel subscription para o estabelecimento logado
+    const channelName = `realtime-checkout-${cleanCode}-${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "estabelecimentos",
+          filter: `codigo=eq.${cleanCode}`,
+        },
+        (payload: any) => {
+          const newRow = payload.new;
+          if (newRow && isMounted) {
+            const isAtivo =
+              newRow.status === "ativo" ||
+              newRow.status_assinatura === "ativo" ||
+              newRow.plano_status === "ativo" ||
+              newRow.is_pro === true ||
+              newRow.plano === "pro" ||
+              newRow.plano === "mensal" ||
+              newRow.plano === "anual" ||
+              Boolean(newRow.mercadopago_pagamento_id);
+
+            if (isAtivo) {
+              console.log("[Supabase Realtime] Pagamento/Status ativado no banco!");
+              toast.success("🎉 Pagamento Pix Confirmado em Tempo Real! Seu acesso PRO foi ativado.");
+              onSuccess();
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Polling a cada 3 segundos no backend + Supabase direct check
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(
-          `/api/mercadopago/check-status?payment_id=${dadosPix.paymentId}&estabelecimentoCodigo=${encodeURIComponent(
-            estabelecimentoCodigo
-          )}`
-        );
+        // 1. Verifica se houve aprovação via API de check-status (se houver paymentId)
+        if (dadosPix?.paymentId) {
+          const res = await fetch(
+            `/api/mercadopago/check-status?payment_id=${dadosPix.paymentId}&estabelecimentoCodigo=${encodeURIComponent(
+              cleanCode
+            )}`
+          );
 
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && (data.approved || data.status === "approved")) {
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted && (data.approved || data.status === "approved")) {
+              clearInterval(intervalId);
+              supabase.removeChannel(channel);
+              toast.success("🎉 Pagamento Pix Confirmado em Tempo Real! Seu acesso PRO foi ativado.");
+              onSuccess();
+              return;
+            }
+          }
+        }
+
+        // 2. Consulta direta à tabela estabelecimentos do Supabase para capturar updates manuais/webhooks em tempo real
+        const { data: estRow } = await supabase
+          .from("estabelecimentos")
+          .select("id, codigo, status, plano_status, status_assinatura, is_pro, plano, mercadopago_pagamento_id")
+          .eq("codigo", cleanCode)
+          .maybeSingle();
+
+        if (isMounted && estRow) {
+          const isAtivo =
+            estRow.status === "ativo" ||
+            estRow.status_assinatura === "ativo" ||
+            estRow.plano_status === "ativo" ||
+            estRow.is_pro === true ||
+            estRow.plano === "pro" ||
+            estRow.plano === "mensal" ||
+            estRow.plano === "anual" ||
+            Boolean(estRow.mercadopago_pagamento_id);
+
+          if (isAtivo) {
             clearInterval(intervalId);
-            toast.success("🎉 Pagamento Pix Confirmado em Tempo Real! Seu acesso PRO foi ativado.");
+            supabase.removeChannel(channel);
+            toast.success("🎉 Pagamento aprovado! Bem-vindo ao plano PRO!");
             onSuccess();
           }
         }
       } catch (err) {
-        console.warn("[Pix Polling Exception]", err);
+        console.warn("[Checkout Polling/Realtime Exception]", err);
       }
     }, 3000);
 
     return () => {
       isMounted = false;
       clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
   }, [dadosPix?.paymentId, estabelecimentoCodigo, onSuccess]);
 

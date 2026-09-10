@@ -312,7 +312,14 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
               diasRestantesTrial: 0,
             }));
           }
-        } else if (statusBanco === "ativo" && (row.mercadopago_pagamento_id || row.mercadopago_assinatura_id || row.stripe_subscription_id)) {
+        } else if (
+          statusBanco === "ativo" ||
+          row.is_pro === true ||
+          row.plano === "pro" ||
+          row.mercadopago_pagamento_id ||
+          row.mercadopago_assinatura_id ||
+          row.stripe_subscription_id
+        ) {
           alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
             status: "ativo",
             planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
@@ -355,7 +362,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "estabelecimentos",
           filter: `codigo=eq.${activeCode}`,
@@ -365,13 +372,23 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           if (newRow) {
             const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || newRow.data_expiracao;
             const expMs = dataExpiracao ? new Date(dataExpiracao).getTime() : 0;
-            const isValido = !isNaN(expMs) && expMs > Date.now();
+            const isValido = !dataExpiracao || (!isNaN(expMs) && expMs > Date.now());
 
-            if (isValido && (newRow.status_assinatura === "ativo" || newRow.status === "ativo" || newRow.plano === "pro" || newRow.plano === "mensal" || newRow.plano === "anual")) {
+            const isAtivo =
+              newRow.status === "ativo" ||
+              newRow.status_assinatura === "ativo" ||
+              newRow.plano_status === "ativo" ||
+              newRow.is_pro === true ||
+              newRow.plano === "pro" ||
+              newRow.plano === "mensal" ||
+              newRow.plano === "anual" ||
+              Boolean(newRow.mercadopago_pagamento_id);
+
+            if (isAtivo && isValido) {
               salvarDadosPlanoEstabelecimento(activeCode, {
                 status: "ativo",
                 planoId: newRow.plano || newRow.plano_id || "mensal",
-                dataExpiracao,
+                dataExpiracao: dataExpiracao || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               });
               toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
               setPlanoTick((prev) => prev + 1);
