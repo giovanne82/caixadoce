@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Afiliado, RelatorioAfiliado } from "@/lib/caixadoce-data";
 import { useAuth } from "@/context/auth-context";
-import { isEmailAdmin, checkCurrentSupabaseUserIsAdmin } from "@/lib/admin-guard";
+import { isEmailAdmin, checkCurrentSupabaseUserIsAdmin, sanitizeEmail } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/admin/afiliados")({
   head: () => ({
@@ -56,24 +56,52 @@ function AdminAfiliadosComponent() {
   const [copiouChave, setCopiouChave] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     async function validarAcessoAdmin() {
-      if (authLoading) return;
+      // 1. Sincronia de Carregamento (Loading State): Não bloqueia enquanto a sessão estiver carregando
+      if (authLoading) {
+        return;
+      }
 
-      const { isAdmin, email: supabaseEmail } = await checkCurrentSupabaseUserIsAdmin();
-      const isUserAuthAdmin = isEmailAdmin(user?.email);
+      setVerificandoAdmin(true);
 
-      if (isAdmin || isUserAuthAdmin) {
+      // 2. Consulta resiliente com sanitização (.toLowerCase().trim()) e busca multi-caminhos
+      const { isAdmin, email: emailDetectado } = await checkCurrentSupabaseUserIsAdmin(user);
+
+      if (!active) return;
+
+      if (isAdmin) {
         setIsAdminAutorizado(true);
         setVerificandoAdmin(false);
         carregarRelatorio();
       } else {
-        const userEmailTentado = supabaseEmail || user?.email || "Sem e-mail";
-        toast.error(`Acesso Restrito: O e-mail "${userEmailTentado}" não possui permissão de administrador.`);
+        // Se a sessão ainda estiver reidratando no localStorage, aguarda 350ms adicionais antes de confirmar o bloqueio
+        if (typeof window !== "undefined" && (localStorage.getItem("caixadoce_user") || localStorage.getItem("caixadoce_profile"))) {
+          await new Promise((r) => setTimeout(r, 350));
+          if (!active) return;
+          const retryCheck = await checkCurrentSupabaseUserIsAdmin(user);
+          if (retryCheck.isAdmin) {
+            setIsAdminAutorizado(true);
+            setVerificandoAdmin(false);
+            carregarRelatorio();
+            return;
+          }
+        }
+
+        const userEmailTentado = sanitizeEmail(emailDetectado || user?.email);
+        toast.error(`Acesso Restrito: O e-mail "${userEmailTentado || "não autenticado"}" não possui permissão de administrador.`);
+        setIsAdminAutorizado(false);
+        setVerificandoAdmin(false);
         navigate({ to: "/" });
       }
     }
 
     validarAcessoAdmin();
+
+    return () => {
+      active = false;
+    };
   }, [user, authLoading, navigate]);
 
   async function carregarRelatorio() {

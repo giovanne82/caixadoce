@@ -15,19 +15,27 @@ export const ADMIN_EMAILS_WHITELIST: string[] = [
 ];
 
 /**
- * Helper para verificar se um e-mail possui permissão de Administrador
+ * Helper com sanitização estrita de string (.toLowerCase().trim())
+ */
+export function sanitizeEmail(email?: string | null): string {
+  if (!email || typeof email !== "string") return "";
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Helper de comparação segura e case-insensitive sem espaços residuais
  */
 export function isEmailAdmin(email?: string | null): boolean {
-  if (!email || typeof email !== "string") return false;
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = sanitizeEmail(email);
+  if (!cleanEmail) return false;
 
   const envAdminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "")
     .split(",")
-    .map((e: string) => e.trim().toLowerCase())
+    .map((e: string) => sanitizeEmail(e))
     .filter(Boolean);
 
   const allowedSet = new Set([
-    ...ADMIN_EMAILS_WHITELIST.map((e) => e.toLowerCase()),
+    ...ADMIN_EMAILS_WHITELIST.map((e) => sanitizeEmail(e)),
     ...envAdminEmails,
   ]);
 
@@ -35,22 +43,76 @@ export function isEmailAdmin(email?: string | null): boolean {
 }
 
 /**
- * Consulta assíncrona para obter e verificar o e-mail do usuário autenticado no Supabase
+ * Extração resiliente de e-mail a partir de múltiplos caminhos de objetos Supabase e LocalStorage
  */
-export async function checkCurrentSupabaseUserIsAdmin(): Promise<{ isAdmin: boolean; email: string | null }> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && user.email) {
-      return { isAdmin: isEmailAdmin(user.email), email: user.email };
-    }
+export function extractUserEmailFromAllSources(sessionObj?: any, userObj?: any, contextUserObj?: any): string | null {
+  const candidates = [
+    sessionObj?.user?.email,
+    userObj?.email,
+    contextUserObj?.email,
+  ];
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.email) {
-      return { isAdmin: isEmailAdmin(session.user.email), email: session.user.email };
+  // Tentar restaurar do localStorage do aplicativo e do Supabase
+  try {
+    if (typeof window !== "undefined") {
+      const caixadoceUser = localStorage.getItem("caixadoce_user");
+      if (caixadoceUser) {
+        const parsed = JSON.parse(caixadoceUser);
+        if (parsed?.email) candidates.push(parsed.email);
+      }
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("sb-") || key.includes("auth-token"))) {
+          const val = localStorage.getItem(key);
+          if (val) {
+            try {
+              const parsedSb = JSON.parse(val);
+              if (parsedSb?.user?.email) candidates.push(parsedSb.user.email);
+              if (parsedSb?.currentSession?.user?.email) candidates.push(parsedSb.currentSession.user.email);
+            } catch {}
+          }
+        }
+      }
     }
-  } catch (err) {
-    console.error("[Admin Check Error]", err);
+  } catch {}
+
+  for (const cand of candidates) {
+    const clean = sanitizeEmail(cand);
+    if (clean) return clean;
   }
 
-  return { isAdmin: false, email: null };
+  return null;
+}
+
+/**
+ * Consulta assíncrona com retentativas (retry) para evitar falso negativo por latência de carregamento
+ */
+export async function checkCurrentSupabaseUserIsAdmin(contextUser?: any): Promise<{ isAdmin: boolean; email: string | null; loading: boolean }> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const extractedEmail = extractUserEmailFromAllSources(session, user, contextUser);
+
+      if (extractedEmail) {
+        const isAdmin = isEmailAdmin(extractedEmail);
+        return { isAdmin, email: extractedEmail, loading: false };
+      }
+    } catch (err) {
+      console.warn(`[Admin Guard Retry ${attempt}] Error:`, err);
+    }
+
+    if (attempt < 3) {
+      await new Promise((res) => setTimeout(res, 150));
+    }
+  }
+
+  const fallbackEmail = extractUserEmailFromAllSources(null, null, contextUser);
+  if (fallbackEmail) {
+    return { isAdmin: isEmailAdmin(fallbackEmail), email: fallbackEmail, loading: false };
+  }
+
+  return { isAdmin: false, email: null, loading: false };
 }
