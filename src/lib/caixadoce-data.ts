@@ -63,6 +63,7 @@ export interface Estabelecimento {
     facebook?: string;
     whatsapp?: string;
   };
+  modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
 }
 
 import {

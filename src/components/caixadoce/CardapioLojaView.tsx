@@ -172,6 +172,7 @@ export interface LojaInfoState {
   tiktok?: string;
   facebook?: string;
   social_media?: any;
+  modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
 }
 
 // ==========================================
@@ -544,6 +545,11 @@ export function CardapioLojaView() {
   const [pagamentoAprovadoMp, setPagamentoAprovadoMp] = useState<boolean>(false);
   const [pixSegundosRestantes, setPixSegundosRestantes] = useState<number>(300); // 5 minutos = 300 segundos
   const [pixExpirado, setPixExpirado] = useState<boolean>(false);
+
+  // Modo de Compra / Intenção do Cliente ('pedido' | 'orcamento')
+  const [purchaseIntent, setPurchaseIntent] = useState<"pedido" | "orcamento">("pedido");
+  const [modalBoasVindasOpen, setModalBoasVindasOpen] = useState<boolean>(false);
+  const intencaoInicialDefinidaRef = useRef<boolean>(false);
 
   // Estados de Identificação e Retenção do Cliente (Local Storage)
   const [savedUserPhone, setSavedUserPhone] = useState<string>("");
@@ -974,6 +980,16 @@ export function CardapioLojaView() {
             tiktok: tk,
             facebook: fb,
             social_media: estData?.social_media || { instagram: insta, tiktok: tk, facebook: fb, whatsapp: wa },
+            modo_venda: (estData?.modo_venda || (typeof window !== "undefined" && (() => {
+              try {
+                const savedProfileStr = localStorage.getItem("caixadoce_profile");
+                if (savedProfileStr) {
+                  const p = JSON.parse(savedProfileStr);
+                  if (p.establishmentCode === resolvedCode || p.codigo === resolvedCode) return p.modo_venda;
+                }
+              } catch {}
+              return undefined;
+            })()) || "ambos") as "apenas_pedido" | "apenas_orcamento" | "ambos",
           });
         }
 
@@ -1111,6 +1127,26 @@ export function CardapioLojaView() {
       setTipoEntrega("retirada");
     }
   }, [lojaInfo]);
+
+  // Sincronização do Modo de Venda e Inicialização da Intenção de Compra
+  useEffect(() => {
+    if (!lojaInfo) return;
+    const modo = lojaInfo.modo_venda || "ambos";
+
+    if (modo === "apenas_pedido") {
+      setPurchaseIntent("pedido");
+      setModalBoasVindasOpen(false);
+      intencaoInicialDefinidaRef.current = true;
+    } else if (modo === "apenas_orcamento") {
+      setPurchaseIntent("orcamento");
+      setModalBoasVindasOpen(false);
+      intencaoInicialDefinidaRef.current = true;
+    } else if (modo === "ambos") {
+      if (!intencaoInicialDefinidaRef.current) {
+        setModalBoasVindasOpen(true);
+      }
+    }
+  }, [lojaInfo?.modo_venda]);
 
   // =========================================================================
   // 1. CONTAGEM REGRESSIVA VISUAL DE 5 MINUTOS (300s) & EXPIRAÇÃO DO PIX
@@ -2891,20 +2927,62 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             </div>
           </div>
 
-          {/* Botão do Carrinho Flutuante 'Meu Pedido' no Topo */}
-          <Button
-            onClick={() => setCartOpen(true)}
-            style={{ backgroundColor: corTemaDestaque }}
-            className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity"
-          >
-            <ShoppingCart className="w-4 h-4 mr-1.5 shrink-0" />
-            <span className="hidden sm:inline">Meu Pedido</span>
-            {totalItensCarrinho > 0 && (
-              <span className="ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
-                {totalItensCarrinho}
-              </span>
+          <div className="flex items-center gap-2">
+            {/* TOGGLE / CONTROLE DE MODO (APENAS SE MODO_VENDA === 'AMBOS') */}
+            {lojaInfo?.modo_venda === "ambos" && (
+              <div className="flex items-center bg-muted/80 p-0.5 sm:p-1 rounded-2xl border border-border/80 shrink-0 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseIntent("pedido");
+                    intencaoInicialDefinidaRef.current = true;
+                  }}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all ${
+                    purchaseIntent === "pedido"
+                      ? "bg-purple-600 text-white font-extrabold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground font-semibold"
+                  }`}
+                >
+                  <span className="text-xs">🛒</span>
+                  <span className="hidden md:inline">Modo Pedido</span>
+                  <span className="md:hidden text-[10.5px]">Pedido</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseIntent("orcamento");
+                    intencaoInicialDefinidaRef.current = true;
+                  }}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all ${
+                    purchaseIntent === "orcamento"
+                      ? "bg-amber-600 text-white font-extrabold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground font-semibold"
+                  }`}
+                >
+                  <span className="text-xs">📝</span>
+                  <span className="hidden md:inline">Modo Orçamento</span>
+                  <span className="md:hidden text-[10.5px]">Orçamento</span>
+                </button>
+              </div>
             )}
-          </Button>
+
+            {/* Botão do Carrinho Flutuante 'Meu Pedido' / 'Meu Orçamento' no Topo */}
+            <Button
+              onClick={() => setCartOpen(true)}
+              style={{ backgroundColor: purchaseIntent === "orcamento" ? "#D97706" : corTemaDestaque }}
+              className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-3 sm:px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity"
+            >
+              <ShoppingCart className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />
+              <span className="hidden sm:inline">
+                {purchaseIntent === "orcamento" ? "Meu Orçamento" : "Meu Pedido"}
+              </span>
+              {totalItensCarrinho > 0 && (
+                <span className="ml-1 sm:ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
+                  {totalItensCarrinho}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -2921,10 +2999,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <Badge
-                    style={{ backgroundColor: corTemaDestaque }}
+                    style={{ backgroundColor: purchaseIntent === "orcamento" ? "#D97706" : corTemaDestaque }}
                     className="text-white border-0 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 shadow-sm"
                   >
-                    {modeloNegocio === "pronta_entrega"
+                    {purchaseIntent === "orcamento"
+                      ? "📝 Modo Orçamento — Solicitação Sem Compromisso"
+                      : modeloNegocio === "pronta_entrega"
                       ? "⚡ Apenas Pronta-Entrega"
                       : modeloNegocio === "encomendas"
                       ? "🎂 Apenas Sob Encomenda"
@@ -2935,7 +3015,9 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
                 </h2>
                 <p className="text-xs sm:text-sm text-stone-200 max-w-xl drop-shadow-sm font-medium line-clamp-2">
-                  {lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos com ingredientes nobres e amor em cada detalhe."}
+                  {purchaseIntent === "orcamento"
+                    ? "Monte sua lista de itens personalizados para receber uma cotação direta da nossa equipe."
+                    : (lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos com ingredientes nobres e amor em cada detalhe.")}
                 </p>
               </div>
 
@@ -2955,8 +3037,14 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
       ) : (
         /* Banner de Boas-Vindas Padrão (Sem Foto de Capa) */
         <div className="max-w-5xl mx-auto px-4 pt-6 pb-2 text-center space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-primary/20 bg-primary/5 text-primary">
-            {modeloNegocio === "pronta_entrega"
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+            purchaseIntent === "orcamento"
+              ? "border-amber-400/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+              : "border-primary/20 bg-primary/5 text-primary"
+          }`}>
+            {purchaseIntent === "orcamento"
+              ? "📝 Modo Orçamento — Solicitação Sem Compromisso"
+              : modeloNegocio === "pronta_entrega"
               ? "⚡ Vitrine de Pronta-Entrega Diária"
               : modeloNegocio === "encomendas"
               ? "🎂 Vitrine de Doces Sob Encomenda"
@@ -2967,7 +3055,9 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
           </h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-            {lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."}
+            {purchaseIntent === "orcamento"
+              ? "Monte sua lista de itens personalizados para receber uma cotação direta da nossa equipe."
+              : (lojaInfo?.slogan_cardapio || lojaInfo?.menu_slogan || "Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe.")}
           </p>
 
           <SocialLinks
@@ -3714,95 +3804,99 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     </div>
                   )}
 
-                  {/* FORMA DE PAGAMENTO */}
-                  <div className="space-y-2 pt-2 border-t border-border/60">
-                    <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Forma de Pagamento
-                    </Label>
+                  {/* SELEÇÃO DE FORMA DE PAGAMENTO (APENAS NO MODO PEDIDO DIRETO) */}
+                  {purchaseIntent === "pedido" && (
+                    <>
+                      <div className="space-y-2 pt-2 border-t border-border/60">
+                        <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                          Forma de Pagamento
+                        </Label>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant={metodoPagamento === "pix" ? "default" : "outline"}
-                        onClick={() => setMetodoPagamento("pix")}
-                        className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                          metodoPagamento === "pix" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
-                        }`}
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        Pix
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={metodoPagamento === "cartao" ? "default" : "outline"}
-                        onClick={() => setMetodoPagamento("cartao")}
-                        className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                          metodoPagamento === "cartao" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
-                        }`}
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        Cartão de Crédito
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* FORMULÁRIO PAYMENT BRICK DO MERCADO PAGO PARA CARTÃO DE CRÉDITO */}
-                  {metodoPagamento === "cartao" && (
-                    <div className="space-y-2 pt-2 border-t border-border/60">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
-                          Dados do Cartão de Crédito
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/10">
-                          🔒 Mercado Pago Seguro
-                        </Badge>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={metodoPagamento === "pix" ? "default" : "outline"}
+                            onClick={() => setMetodoPagamento("pix")}
+                            className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                              metodoPagamento === "pix" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
+                            }`}
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                            Pix
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={metodoPagamento === "cartao" ? "default" : "outline"}
+                            onClick={() => setMetodoPagamento("cartao")}
+                            className={`h-9 text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                              metodoPagamento === "cartao" ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : "hover:bg-muted"
+                            }`}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            Cartão de Crédito
+                          </Button>
+                        </div>
                       </div>
 
-                      {!mpPublicKey ? (
-                        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 text-xs space-y-1">
-                          <p className="font-bold flex items-center gap-1.5">
-                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                            Pagamento com cartão indisponível no momento
-                          </p>
-                          <p className="text-[11px] leading-relaxed">
-                            Esta confeitaria ainda não configurou as credenciais do Mercado Pago para cartão. Por favor, selecione <strong>Pix</strong> para finalizar seu pedido.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-2 sm:p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-900/40 shadow-xs">
-                          <Payment
-                            key={`mp_brick_${totalComFrete}_${mpPublicKey}`}
-                            initialization={{
-                              amount: totalComFrete,
-                              payer: {
-                                email: "cliente@caixadoce.com.br",
-                              },
-                            }}
-                            customization={{
-                              paymentMethods: {
-                                creditCard: "all",
-                              },
-                              visual: {
-                                style: {
-                                  theme: "default",
-                                  customVariables: {
-                                    themeColor: corTemaDestaque,
+                      {/* FORMULÁRIO PAYMENT BRICK DO MERCADO PAGO PARA CARTÃO DE CRÉDITO */}
+                      {metodoPagamento === "cartao" && (
+                        <div className="space-y-2 pt-2 border-t border-border/60">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                              <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                              Dados do Cartão de Crédito
+                            </span>
+                            <Badge variant="outline" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/10">
+                              🔒 Mercado Pago Seguro
+                            </Badge>
+                          </div>
+
+                          {!mpPublicKey ? (
+                            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 text-xs space-y-1">
+                              <p className="font-bold flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                Pagamento com cartão indisponível no momento
+                              </p>
+                              <p className="text-[11px] leading-relaxed">
+                                Esta confeitaria ainda não configurou as credenciais do Mercado Pago para cartão. Por favor, selecione <strong>Pix</strong> para finalizar seu pedido.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-2 sm:p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-900/40 shadow-xs">
+                              <Payment
+                                key={`mp_brick_${totalComFrete}_${mpPublicKey}`}
+                                initialization={{
+                                  amount: totalComFrete,
+                                  payer: {
+                                    email: "cliente@caixadoce.com.br",
                                   },
-                                },
-                              },
-                            }}
-                            onSubmit={async (param: any) => {
-                              await handleProcessarPagamentoCartao(param);
-                            }}
-                            onError={(error: any) => {
-                              console.error("[MercadoPago Brick Error]", error);
-                              toast.error("Erro ao inicializar o formulário de cartão.");
-                            }}
-                          />
+                                }}
+                                customization={{
+                                  paymentMethods: {
+                                    creditCard: "all",
+                                  },
+                                  visual: {
+                                    style: {
+                                      theme: "default",
+                                      customVariables: {
+                                        themeColor: corTemaDestaque,
+                                      },
+                                    },
+                                  },
+                                }}
+                                onSubmit={async (param: any) => {
+                                  await handleProcessarPagamentoCartao(param);
+                                }}
+                                onError={(error: any) => {
+                                  console.error("[MercadoPago Brick Error]", error);
+                                  toast.error("Erro ao inicializar o formulário de cartão.");
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
-                    </div>
+                    </>
                   )}
 
                   <div className="space-y-1">
@@ -3822,45 +3916,47 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
           {carrinho.length > 0 && (
             <SheetFooter className="pt-4 border-t border-border/60 flex flex-col gap-2 sm:flex-col">
-              {metodoPagamento === "pix" && (
+              {purchaseIntent === "orcamento" ? (
                 <Button
-                  type="submit"
-                  form="form-checkout"
+                  type="button"
                   disabled={salvandoPedido || salvandoOrcamento}
-                  className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
+                  onClick={handleSolicitarOrcamento}
+                  className="w-full font-black text-xs sm:text-sm h-11 bg-amber-600 hover:bg-amber-700 text-white flex items-center justify-center gap-2 rounded-xl shadow-md transition-all"
                 >
-                  {salvandoPedido ? (
+                  {salvandoOrcamento ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Gerando Pix...
+                      Enviando Orçamento...
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Confirmar e Pagar via Pix
+                      <span className="text-base">📝</span>
+                      Enviar Solicitação de Orçamento
                     </>
                   )}
                 </Button>
+              ) : (
+                metodoPagamento === "pix" && (
+                  <Button
+                    type="submit"
+                    form="form-checkout"
+                    disabled={salvandoPedido || salvandoOrcamento}
+                    className="w-full font-black text-xs h-11 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5 rounded-xl"
+                  >
+                    {salvandoPedido ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Gerando Pix...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Confirmar e Pagar via Pix
+                      </>
+                    )}
+                  </Button>
+                )
               )}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={salvandoPedido || salvandoOrcamento}
-                onClick={handleSolicitarOrcamento}
-                className="w-full font-bold text-xs h-10 border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-              >
-                {salvandoOrcamento ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Enviando Orçamento...
-                  </>
-                ) : (
-                  <>
-                    <span>📝</span>
-                    Solicitar Apenas Orçamento
-                  </>
-                )}
-              </Button>
             </SheetFooter>
           )}
         </SheetContent>
@@ -4557,6 +4653,77 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           >
             Fechar
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE BOAS-VINDAS / ESCOLHA DE INTENÇÃO (QUANDO MODO_VENDA === 'AMBOS') */}
+      <Dialog
+        open={modalBoasVindasOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            intencaoInicialDefinidaRef.current = true;
+            setModalBoasVindasOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md w-full p-6 sm:p-7 rounded-3xl space-y-4">
+          <DialogHeader className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto shadow-xs">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <DialogTitle className="text-xl sm:text-2xl font-black text-foreground">
+              Como podemos te ajudar hoje?
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground max-w-xs mx-auto">
+              Bem-vindo(a) à <strong>{lojaInfo?.nome || "nossa confeitaria"}</strong>! Escolha como prefere navegar pelo nosso cardápio:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPurchaseIntent("pedido");
+                intencaoInicialDefinidaRef.current = true;
+                setModalBoasVindasOpen(false);
+              }}
+              className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-left space-y-2.5 transition-all group hover:scale-[1.02] shadow-xs cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xl shadow-xs">
+                🛒
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-foreground group-hover:text-purple-600">
+                  🛒 Fazer Pedido
+                </h4>
+                <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                  Comprar direto com fechamento por Pix ou Cartão de Crédito.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPurchaseIntent("orcamento");
+                intencaoInicialDefinidaRef.current = true;
+                setModalBoasVindasOpen(false);
+              }}
+              className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-left space-y-2.5 transition-all group hover:scale-[1.02] shadow-xs cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center text-xl shadow-xs">
+                📝
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-foreground group-hover:text-amber-600">
+                  📝 Solicitar Orçamento
+                </h4>
+                <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                  Montar lista personalizada e enviar para cotação sem pagar agora.
+                </p>
+              </div>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

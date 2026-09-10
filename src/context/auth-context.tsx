@@ -74,6 +74,7 @@ export type UpdateEstablishmentDetailsInput = {
   deliveryHabilitado?: boolean;
   usar_mercadopago?: boolean;
   chave_pix_manual?: string;
+  modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
 };
 
 export type StaffProfile = {
@@ -122,6 +123,7 @@ export type StaffProfile = {
   deliveryHabilitado?: boolean;
   usar_mercadopago?: boolean;
   chave_pix_manual?: string;
+  modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -393,6 +395,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                 menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
                 sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                 menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
+                modo_venda: data.modo_venda || baseProf.modo_venda || "ambos",
                 ownerUserId: data.user_id || u.id,
                 userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
               };
@@ -976,6 +979,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
       if (details.chave_pix_manual !== undefined) {
         updatePayload.chave_pix_manual = details.chave_pix_manual || null;
+      }
+
+      if (details.modo_venda !== undefined) {
+        updatePayload.modo_venda = details.modo_venda;
       }
 
       if (
