@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Users,
@@ -16,10 +16,13 @@ import {
   ChevronRight,
   Shield,
   Cake,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Afiliado, RelatorioAfiliado } from "@/lib/caixadoce-data";
+import { useAuth } from "@/context/auth-context";
+import { isEmailAdmin, checkCurrentSupabaseUserIsAdmin } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/admin/afiliados")({
   head: () => ({
@@ -32,6 +35,12 @@ export const Route = createFileRoute("/admin/afiliados")({
 });
 
 function AdminAfiliadosComponent() {
+  const navigate = useNavigate();
+  const { user, authLoading } = useAuth();
+
+  const [verificandoAdmin, setVerificandoAdmin] = useState(true);
+  const [isAdminAutorizado, setIsAdminAutorizado] = useState(false);
+
   const [relatorio, setRelatorio] = useState<RelatorioAfiliado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -47,8 +56,25 @@ function AdminAfiliadosComponent() {
   const [copiouChave, setCopiouChave] = useState<string | null>(null);
 
   useEffect(() => {
-    carregarRelatorio();
-  }, []);
+    async function validarAcessoAdmin() {
+      if (authLoading) return;
+
+      const { isAdmin, email: supabaseEmail } = await checkCurrentSupabaseUserIsAdmin();
+      const isUserAuthAdmin = isEmailAdmin(user?.email);
+
+      if (isAdmin || isUserAuthAdmin) {
+        setIsAdminAutorizado(true);
+        setVerificandoAdmin(false);
+        carregarRelatorio();
+      } else {
+        const userEmailTentado = supabaseEmail || user?.email || "Sem e-mail";
+        toast.error(`Acesso Restrito: O e-mail "${userEmailTentado}" não possui permissão de administrador.`);
+        navigate({ to: "/" });
+      }
+    }
+
+    validarAcessoAdmin();
+  }, [user, authLoading, navigate]);
 
   async function carregarRelatorio() {
     setCarregando(true);
@@ -190,7 +216,22 @@ function AdminAfiliadosComponent() {
 
   const totalAfiliados = relatorio.length;
   const totalLojasConvertidas = relatorio.reduce((acc, curr) => acc + curr.lojasConvertidasCount, 0);
-  const totalComissoesGeral = relatorio.reduce((acc, curr) => acc + curr.comissaoEstimada, 0);
+  if (verificandoAdmin || !isAdminAutorizado) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-slate-100 font-sans">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full text-center space-y-4 shadow-2xl animate-in fade-in duration-200">
+          <div className="p-4 rounded-full bg-amber-500/10 text-amber-400 w-16 h-16 mx-auto flex items-center justify-center border border-amber-500/20">
+            <Shield className="w-8 h-8 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Verificando Credenciais</h2>
+          <p className="text-xs text-slate-400">Validando autorização de acesso ao módulo administrativo CaixaDoce...</p>
+          <div className="flex justify-center pt-2">
+            <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">

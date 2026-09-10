@@ -1,0 +1,54 @@
+import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Whitelist oficial de e-mails de administradores/sócios autorizados
+ */
+export const ADMIN_EMAILS_WHITELIST: string[] = [
+  "giovannedoceria@gmail.com",
+  "giovannesousa82@gmail.com",
+  "artfesta@gmail.com",
+  "admin@caixadoce.com.br",
+  "contato@caixadoce.com.br",
+];
+
+/**
+ * Helper para verificar se um e-mail possui permissão de Administrador
+ */
+export function isEmailAdmin(email?: string | null): boolean {
+  if (!email || typeof email !== "string") return false;
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Permite e-mails configurados via variável de ambiente VITE_ADMIN_EMAILS (separados por vírgula)
+  const envAdminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "")
+    .split(",")
+    .map((e: string) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const allowedSet = new Set([
+    ...ADMIN_EMAILS_WHITELIST.map((e) => e.toLowerCase()),
+    ...envAdminEmails,
+  ]);
+
+  return allowedSet.has(cleanEmail);
+}
+
+/**
+ * Consulta assíncrona para obter e verificar o e-mail do usuário autenticado no Supabase
+ */
+export async function checkCurrentSupabaseUserIsAdmin(): Promise<{ isAdmin: boolean; email: string | null }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && user.email) {
+      return { isAdmin: isEmailAdmin(user.email), email: user.email };
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.email) {
+      return { isAdmin: isEmailAdmin(session.user.email), email: session.user.email };
+    }
+  } catch (err) {
+    console.error("[Admin Check Error]", err);
+  }
+
+  return { isAdmin: false, email: null };
+}

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from "@tanstack/react-router";
+import { isEmailAdmin } from "@/lib/admin-guard";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +34,7 @@ import {
   Lock,
   QrCode,
   ShieldAlert,
+  Shield,
   Save,
   Trash2,
   CheckCircle2,
@@ -1160,6 +1163,36 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           </Card>
         );
       })()}
+
+      {/* CARD / BANNER EXCLUSIVO: PAINEL DE ADMINISTRAÇÃO & AFILIADOS (SOMENTE PARA SÓCIOS/WHITELIST) */}
+      {isEmailAdmin(user?.email) && (
+        <Card className="border-amber-400/50 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-500/10 shadow-sm">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Painel de Administração</h4>
+                  <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">Exclusivo Sócios</Badge>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Gestão do programa de afiliados, cupons exclusivos e relatórios de repasses financeiros.
+                </p>
+              </div>
+            </div>
+            <Link to="/admin/afiliados">
+              <Button
+                type="button"
+                className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-md rounded-xl shrink-0 border border-amber-400/40"
+              >
+                <Shield className="w-4 h-4 mr-1.5 fill-slate-950/20" /> Acessar Painel Admin
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="empresa" className="space-y-6">
         <div className="w-full overflow-x-auto scrollbar-none pb-1">
