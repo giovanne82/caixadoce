@@ -226,24 +226,33 @@ function AdminAfiliadosComponent() {
   }
 
   function copiarPix(pix: string, id: string) {
-    navigator.clipboard.writeText(pix);
+    navigator.clipboard.writeText(pix || "");
     setCopiouChave(id);
     setTimeout(() => setCopiouChave(null), 2500);
     toast.success(`Chave PIX "${pix}" copiada!`);
   }
 
-  const relatorioFiltrado = relatorio.filter((item) => {
+  const relatorioSeguro = Array.isArray(relatorio) ? relatorio : [];
+
+  const relatorioFiltrado = relatorioSeguro.filter((item) => {
     if (!filtro.trim()) return true;
     const term = filtro.toLowerCase().trim();
-    return (
-      item.afiliado.nome.toLowerCase().includes(term) ||
-      item.afiliado.cupom_exclusivo.toLowerCase().includes(term) ||
-      item.afiliado.email.toLowerCase().includes(term)
-    );
+    const nomeAfil = item?.afiliado?.nome?.toLowerCase() || "";
+    const cupomAfil = item?.afiliado?.cupom_exclusivo?.toLowerCase() || "";
+    const emailAfil = item?.afiliado?.email?.toLowerCase() || "";
+    return nomeAfil.includes(term) || cupomAfil.includes(term) || emailAfil.includes(term);
   });
 
-  const totalAfiliados = relatorio.length;
-  const totalLojasConvertidas = relatorio.reduce((acc, curr) => acc + curr.lojasConvertidasCount, 0);
+  const totalAfiliados = relatorioSeguro.length;
+  const totalLojasConvertidas = relatorioSeguro.reduce(
+    (acc, curr) => acc + (Number(curr?.lojasConvertidasCount) || 0),
+    0
+  );
+  const totalComissoesGeral = relatorioSeguro.reduce(
+    (acc, curr) => acc + (Number(curr?.comissaoEstimada) || 0),
+    0
+  );
+
   if (verificandoAdmin || !isAdminAutorizado) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-slate-100 font-sans">
@@ -460,26 +469,28 @@ function AdminAfiliadosComponent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {relatorioFiltrado.map((item) => {
-                    const idKey = item.afiliado.id || item.afiliado.cupom_exclusivo;
+                  {relatorioFiltrado.map((item, idx) => {
+                    const idKey = item?.afiliado?.id || item?.afiliado?.cupom_exclusivo || `afil_${idx}`;
+                    const comissaoVal = Number(item?.comissaoEstimada) || 0;
+                    const countLojas = Number(item?.lojasConvertidasCount) || 0;
                     return (
                       <tr key={idKey} className="hover:bg-slate-700/30 transition-colors">
                         <td className="py-4 px-6">
-                          <p className="font-semibold text-white">{item.afiliado.nome}</p>
-                          <p className="text-xs text-slate-400">{item.afiliado.email}</p>
+                          <p className="font-semibold text-white">{item?.afiliado?.nome || "Sem Nome"}</p>
+                          <p className="text-xs text-slate-400">{item?.afiliado?.email || ""}</p>
                         </td>
                         <td className="py-4 px-6">
                           <span className="px-2.5 py-1 rounded bg-slate-900 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs uppercase">
-                            {item.afiliado.cupom_exclusivo}
+                            {item?.afiliado?.cupom_exclusivo || "N/I"}
                           </span>
                         </td>
                         <td className="py-4 px-6 text-xs">
                           <div className="flex items-center gap-1.5">
                             <code className="bg-slate-900 px-2 py-0.5 rounded text-slate-300 font-mono">
-                              {item.afiliado.chave_pix}
+                              {item?.afiliado?.chave_pix || "N/I"}
                             </code>
                             <button
-                              onClick={() => copiarPix(item.afiliado.chave_pix, idKey)}
+                              onClick={() => copiarPix(item?.afiliado?.chave_pix || "", idKey)}
                               className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition-colors"
                               title="Copiar Chave PIX"
                             >
@@ -489,18 +500,18 @@ function AdminAfiliadosComponent() {
                         </td>
                         <td className="py-4 px-6 text-center font-bold text-white">
                           <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs">
-                            {item.lojasConvertidasCount} lojas
+                            {countLojas} lojas
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right font-extrabold text-emerald-400 text-base">
-                          R$ {item.comissaoEstimada.toFixed(2).replace(".", ",")}
+                          R$ {comissaoVal.toFixed(2).replace(".", ",")}
                         </td>
                         <td className="py-4 px-6 text-center">
                           <button
                             onClick={() => setAfiliadoSelecionadoModal(item)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition-colors"
                           >
-                            Ver Lojas ({item.lojasConvertidasCount})
+                            Ver Lojas ({countLojas})
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </td>
@@ -521,10 +532,10 @@ function AdminAfiliadosComponent() {
             <div className="p-6 border-b border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  Lojas de {afiliadoSelecionadoModal.afiliado.nome}
+                  Lojas de {afiliadoSelecionadoModal?.afiliado?.nome || "Afiliado"}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal.afiliado.cupom_exclusivo}</strong> — {afiliadoSelecionadoModal.lojasConvertidasCount} conversões
+                  Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal?.afiliado?.cupom_exclusivo || "N/I"}</strong> — {afiliadoSelecionadoModal?.lojasConvertidasCount || 0} conversões
                 </p>
               </div>
               <button
@@ -536,7 +547,7 @@ function AdminAfiliadosComponent() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-3 flex-1">
-              {afiliadoSelecionadoModal.lojas.length === 0 ? (
+              {(!afiliadoSelecionadoModal?.lojas || afiliadoSelecionadoModal.lojas.length === 0) ? (
                 <p className="text-center text-xs text-slate-500 py-6">
                   Nenhuma loja convertida com este cupom até o momento.
                 </p>
@@ -545,13 +556,13 @@ function AdminAfiliadosComponent() {
                   {afiliadoSelecionadoModal.lojas.map((loja, i) => (
                     <div key={i} className="py-3 flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-white">{loja.nome}</p>
-                        <p className="text-xs text-slate-400">Código: <span className="font-mono text-amber-400">{loja.codigo}</span> {loja.email ? `• ${loja.email}` : ""}</p>
+                        <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
+                        <p className="text-xs text-slate-400">Código: <span className="font-mono text-amber-400">{loja?.codigo || "N/I"}</span> {loja?.email ? `• ${loja.email}` : ""}</p>
                       </div>
                       <div className="text-right">
                         <span className="text-xs font-bold text-emerald-400">Comissão: R$ 10,90</span>
                         <p className="text-[10px] text-slate-500">
-                          {loja.criado_em ? new Date(loja.criado_em).toLocaleDateString("pt-BR") : "Data N/I"}
+                          {loja?.criado_em ? new Date(loja.criado_em).toLocaleDateString("pt-BR") : "Data N/I"}
                         </p>
                       </div>
                     </div>
@@ -561,8 +572,8 @@ function AdminAfiliadosComponent() {
             </div>
 
             <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between text-xs text-slate-400">
-              <span>Chave PIX: <code className="text-amber-300 font-mono">{afiliadoSelecionadoModal.afiliado.chave_pix}</code></span>
-              <span className="font-bold text-emerald-400">Total: R$ {afiliadoSelecionadoModal.comissaoEstimada.toFixed(2).replace(".", ",")}</span>
+              <span>Chave PIX: <code className="text-amber-300 font-mono">{afiliadoSelecionadoModal?.afiliado?.chave_pix || "N/I"}</code></span>
+              <span className="font-bold text-emerald-400">Total: R$ {(Number(afiliadoSelecionadoModal?.comissaoEstimada) || 0).toFixed(2).replace(".", ",")}</span>
             </div>
           </div>
         </div>
