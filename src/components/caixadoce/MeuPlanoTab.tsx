@@ -129,7 +129,7 @@ export function MeuPlanoTab() {
       const res = await fetch("/api/validate-promo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cupom: codigoLimpo }),
+        body: JSON.stringify({ cupom: codigoLimpo, estabelecimentoCodigo: activeCode }),
       });
 
       const data = await res.json();
@@ -222,20 +222,27 @@ export function MeuPlanoTab() {
     toast.info("Código promocional removido.");
   };
 
-  const valorOriginalPlanoMensal = 19.90;
+  const valorOriginalPlanoMensal = 24.90;
   const valorPlanoMensalComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoMensal;
-    const fator = (100 - cupomAplicado.percentualDesconto) / 100;
-    const calc = valorOriginalPlanoMensal * fator;
-    return parseFloat(calc.toFixed(2));
+    if (cupomAplicado.tipoDesconto === "dias_gratis") return 0;
+    if (cupomAplicado.percentualDesconto && cupomAplicado.percentualDesconto > 0) {
+      const fator = (100 - cupomAplicado.percentualDesconto) / 100;
+      const calc = valorOriginalPlanoMensal * fator;
+      return parseFloat(calc.toFixed(2));
+    }
+    return 19.90;
   }, [cupomAplicado]);
 
   const valorOriginalPlanoAnual = 154.90;
   const valorPlanoAnualComDesconto = useMemo(() => {
     if (!cupomAplicado) return valorOriginalPlanoAnual;
-    const fator = (100 - cupomAplicado.percentualDesconto) / 100;
-    const calc = valorOriginalPlanoAnual * fator;
-    return parseFloat(calc.toFixed(2));
+    if (cupomAplicado.percentualDesconto && cupomAplicado.percentualDesconto > 0) {
+      const fator = (100 - cupomAplicado.percentualDesconto) / 100;
+      const calc = valorOriginalPlanoAnual * fator;
+      return parseFloat(calc.toFixed(2));
+    }
+    return valorOriginalPlanoAnual;
   }, [cupomAplicado]);
 
   // CÁLCULOS DINÂMICOS REATIVOS PARA O CARD DO PLANO ANUAL (MODIFICAÇÃO AUTOMÁTICA AO APLICAR CUPOM)
@@ -244,14 +251,14 @@ export function MeuPlanoTab() {
   }, [valorPlanoAnualComDesconto]);
 
   const percentualEconomiaAnual = useMemo(() => {
-    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const precoCheio12Meses = 24.90 * 12; // R$ 298,80
     if (precoCheio12Meses <= 0) return 0;
     const desconto = ((precoCheio12Meses - valorPlanoAnualComDesconto) / precoCheio12Meses) * 100;
     return Math.round(Math.max(0, desconto));
   }, [valorPlanoAnualComDesconto]);
 
   const economiaEmReaisAnual = useMemo(() => {
-    const precoCheio12Meses = 19.90 * 12; // R$ 238,80
+    const precoCheio12Meses = 24.90 * 12; // R$ 298,80
     const economizado = precoCheio12Meses - valorPlanoAnualComDesconto;
     return parseFloat(Math.max(0, economizado).toFixed(2));
   }, [valorPlanoAnualComDesconto]);
@@ -598,30 +605,32 @@ export function MeuPlanoTab() {
                       <span className="text-xs text-muted-foreground font-semibold"> por {cupomAplicado.diasGratis || 30} dias</span>
                     </div>
                   ) : (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-black text-emerald-600 font-mono">
-                        R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
-                      </span>
-                      <span className="text-sm line-through text-muted-foreground font-mono">
-                        R$ 19,90
-                      </span>
-                      <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
+                    <div className="space-y-0.5">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm line-through text-slate-400 font-medium font-mono">
+                          De R$ 24,90
+                        </span>
+                        <span className="text-3xl font-black text-emerald-600 font-mono">
+                          R$ {valorPlanoMensalComDesconto.toFixed(2).replace(".", ",")}
+                        </span>
+                        <span className="text-xs text-muted-foreground font-semibold"> / mês com cupom</span>
+                      </div>
                     </div>
                   )}
                   <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold shadow-sm px-2.5 py-1">
                     {cupomAplicado.tipoDesconto === "dias_gratis"
                       ? `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (+${cupomAplicado.diasGratis || 30} Dias Grátis)`
-                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (-${cupomAplicado.percentualDesconto}% OFF)`}
+                      : `🎉 Cupom Aplicado! ${cupomAplicado.codigo} (De R$ 24,90 por R$ 19,90)`}
                   </Badge>
                 </div>
               ) : (
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black text-[#7C3AED]">R$ 19,90</span>
+                  <span className="text-3xl font-black text-[#7C3AED]">R$ 24,90</span>
                   <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
                 </div>
               )}
               <p className="text-[11px] font-bold text-[#7C3AED] mt-1">
-                Preço promocional • Cancele quando quiser
+                De R$ 24,90 por R$ 19,90 com cupom • Cancele quando quiser
               </p>
             </div>
           </CardHeader>

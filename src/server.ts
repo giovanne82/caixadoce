@@ -424,6 +424,61 @@ async function seedAfiliadosTableInSupabase() {
 seedAfiliadosTableInSupabase();
 const processedPaymentsSet = new Set<string>();
 
+// Helper de Segurança Anti-Fraude: Verifica se o estabelecimento já utilizou qualquer cupom no passado ou já foi assinante
+async function verificarElegibilidadeCupomEAntiFraude(
+  estabelecimentoCodigo: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<{ elegivel: boolean; motivo?: string; cupomUtilizadoExistente?: string | null }> {
+  const code = String(estabelecimentoCodigo || "").trim().toUpperCase();
+  if (!code) {
+    return { elegivel: true };
+  }
+
+  try {
+    const resEstCheck = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo,status,status_assinatura,plano_status,is_pro,cupom_utilizado,plano_expira_em,plano_exp`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      }
+    );
+
+    if (resEstCheck.ok) {
+      const estRows = await resEstCheck.json();
+      if (Array.isArray(estRows) && estRows.length > 0) {
+        const estData = estRows[0];
+
+        // 1. Já utilizou qualquer cupom no passado?
+        const jaUsouCupom = Boolean(estData.cupom_utilizado && String(estData.cupom_utilizado).trim().length > 0);
+
+        // 2. Já foi/é um assinante? (histórico de assinatura anterior)
+        const jaFoiAssinante =
+          estData.status === "ativo" ||
+          estData.status_assinatura === "ativo" ||
+          estData.plano_status === "ativo" ||
+          estData.is_pro === true;
+
+        if (jaUsouCupom || jaFoiAssinante) {
+          console.warn(`[Trava Anti-Fraude] Estabelecimento '${code}' bloqueado para cupom (jaUsouCupom: ${jaUsouCupom}, jaFoiAssinante: ${jaFoiAssinante})`);
+          return {
+            elegivel: false,
+            motivo: "Este cupom é válido apenas para a primeira assinatura.",
+            cupomUtilizadoExistente: estData.cupom_utilizado || null,
+          };
+        }
+      }
+    }
+  } catch (errCheck) {
+    console.error("[Anti-Fraude Cupom Check Error]", errCheck);
+  }
+
+  return { elegivel: true };
+}
+
 // Helper global para ativacao resiliente de plano no Supabase (Webhook + Process Payment)
 async function ativarPlanoEstabelecimentoNoSupabase(params: {
   establishmentCode: string;
@@ -431,8 +486,9 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   paymentId: string | number;
   paymentMethod?: string;
   amount?: number;
+  cupomUtilizado?: string;
 }) {
-  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 19.90 } = params;
+  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 24.90, cupomUtilizado } = params;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
   const supabaseKey =
@@ -504,6 +560,8 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   const filterQuery = targetId ? `id=eq.${targetId}` : `codigo=ilike.${encodeURIComponent(code)}`;
 
+  const cleanCupomCode = cupomUtilizado ? String(cupomUtilizado).toUpperCase().trim() : null;
+
   const patchPayloads = [
     {
       status: "ativo",
@@ -514,18 +572,21 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       is_pro: true,
       metodo_pagamento: paymentMethod,
       updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
     },
     {
       status: "ativo",
       plano: targetPlanId,
       plano_exp: dataExpiracao,
       updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
     },
     {
       status_assinatura: "ativo",
       plano_id: targetPlanId,
       plano_expira_em: dataExpiracao,
       updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
     },
   ];
 
@@ -742,12 +803,35 @@ export default {
           } catch {}
 
           const cupomDigitado = String(payload.cupom || payload.code || "").trim().toUpperCase();
+          const estCode = String(
+            payload.estabelecimentoCodigo || payload.establishmentCode || payload.codigo || payload.estCode || ""
+          ).trim().toUpperCase();
 
           if (!cupomDigitado) {
             return new Response(
               JSON.stringify({ valido: false, mensagem: "Por favor, digite um código promocional." }),
               { status: 400, headers: { "content-type": "application/json" } }
             );
+          }
+
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseKey =
+            process.env.VITE_SUPABASE_ANON_KEY ||
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+          // TRAVA DE SEGURANÇA ANTI-FRAUDE: Verifica se o cliente já utilizou qualquer cupom no passado ou já foi assinante
+          if (estCode) {
+            const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(estCode, supabaseUrl, supabaseKey);
+            if (!checkAntiFraude.elegivel) {
+              return new Response(
+                JSON.stringify({
+                  valido: false,
+                  bloqueadoAntiFraude: true,
+                  mensagem: checkAntiFraude.motivo || "Este cupom é válido apenas para a primeira assinatura.",
+                }),
+                { status: 400, headers: { "content-type": "application/json" } }
+              );
+            }
           }
 
           interface CupomInfo {
@@ -761,11 +845,6 @@ export default {
 
           // 1. CONSULTA EM TEMPO REAL NA TABELA 'cupons_assinatura' DO SUPABASE (PRIORIDADE MÁXIMA)
           try {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-            const supabaseKey =
-              process.env.VITE_SUPABASE_ANON_KEY ||
-              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-
             const resDb = await fetch(
               `${supabaseUrl}/rest/v1/cupons_assinatura?codigo=ilike.${encodeURIComponent(cupomDigitado)}&ativo=eq.true&select=codigo,valor,tipo_desconto,ativo`,
               {
@@ -801,14 +880,14 @@ export default {
                   };
                   console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de +${dias} dias grátis ativado!`);
                 } else {
-                  const perc = val > 0 ? val : 50;
+                  const perc = val > 0 ? val : 20;
                   cupomEncontrado = {
                     tipoDesconto: "percentual",
                     percentualDesconto: perc,
                     diasGratis: 0,
-                    descricao: `Cupom ${item.codigo} (${perc}% de desconto)`,
+                    descricao: `Cupom ${item.codigo} (De R$ 24,90 por R$ 19,90/mês)`,
                   };
-                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de ${perc}% de desconto ativado!`);
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de R$ 19,90/mês ativado!`);
                 }
               }
             }
@@ -819,11 +898,6 @@ export default {
           // 1.5. CONSULTA NA TABELA 'afiliados' DO SUPABASE CASO SEJA CUPOM DE PARCEIRO
           if (!cupomEncontrado) {
             try {
-              const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-              const supabaseKey =
-                process.env.VITE_SUPABASE_ANON_KEY ||
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-
               const resAfil = await fetch(
                 `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cupomDigitado)}&select=id,nome,cupom_exclusivo`,
                 {
@@ -838,10 +912,10 @@ export default {
                 if (Array.isArray(afilRows) && afilRows.length > 0) {
                   const item = afilRows[0];
                   cupomEncontrado = {
-                    tipoDesconto: "dias_gratis",
-                    percentualDesconto: 0,
-                    diasGratis: 30,
-                    descricao: `Cupom de Parceria (${item.nome}) +30 Dias Grátis`,
+                    tipoDesconto: "percentual",
+                    percentualDesconto: 20,
+                    diasGratis: 0,
+                    descricao: `Cupom de Parceria (${item.nome}) - De R$ 24,90 por R$ 19,90/mês`,
                     afiliado_id: item.id,
                   } as any;
                   console.log(`[Validate Promo Live DB] Cupom Afiliado '${item.cupom_exclusivo}' de ${item.nome} ativado!`);
@@ -883,9 +957,11 @@ export default {
                 diasGratis: cupomEncontrado.diasGratis,
                 afiliado_id: (cupomEncontrado as any).afiliado_id || null,
                 descricao: cupomEncontrado.descricao,
+                valorOriginal: 24.90,
+                valorComDesconto: isDias ? 0 : 19.90,
                 mensagem: isDias
                   ? `🎉 Cupom "${cupomDigitado}" ativado com sucesso! Você ganhou +${cupomEncontrado.diasGratis} dias grátis de acesso PRO!`
-                  : `🎉 Cupom "${cupomDigitado}" de ${cupomEncontrado.percentualDesconto}% de desconto applied com sucesso!`,
+                  : `🎉 Cupom "${cupomDigitado}" aplicado com sucesso! De R$ 24,90 por R$ 19,90/mês.`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -1774,12 +1850,30 @@ export default {
           ).toUpperCase();
 
           const planId = payload.planId || payload.plano_id || formData.planId || formData.plano_id || "mensal";
-          const amount = Number(
+          const cupomEnviado = String(payload.cupom || formData.cupom || payload.code || "").trim().toUpperCase();
+
+          let amount = Number(
             formData.transaction_amount ||
             payload.transaction_amount ||
             payload.valor ||
-            (planId === "anual" ? 154.90 : 19.90)
+            (planId === "anual" ? 154.90 : 24.90)
           );
+
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+
+          // RE-CHECAGEM ANTI-FRAUDE E PRECIFICAÇÃO ESTRITA NO MOMENTO DA COBRANÇA
+          if (planId === "mensal") {
+            const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(establishmentCode, supabaseUrl, supabaseKey);
+
+            if (!checkAntiFraude.elegivel) {
+              console.warn(`[Anti-Fraude Process-Payment] Estabelecimento '${establishmentCode}' inelegível para desconto. Forçando valor cheio R$ 24,90.`);
+              amount = 24.90;
+            } else if (cupomEnviado || amount <= 19.90) {
+              amount = 19.90;
+            } else {
+              amount = 24.90;
+            }
+          }
 
           const token = formData.token || payload.token;
           const installments = Number(formData.installments || payload.installments || 1);
@@ -1816,6 +1910,7 @@ export default {
               planId,
               plano_id: planId,
               plan_type: planId,
+              cupom_utilizado: cupomEnviado || (amount <= 19.90 ? "CUPOM_DESCONTO" : null),
             },
           };
 
@@ -1846,30 +1941,20 @@ export default {
             );
           }
 
-          // Se o pagamento foi APROVADO (cartão), atualizar status no Supabase
+          // Se o pagamento foi APROVADO (cartão), atualizar status e gravar cupom permanentemente no Supabase
           if (mpData.status === "approved") {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-            const supabaseKey =
-              process.env.VITE_SUPABASE_ANON_KEY ||
-              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
-
             try {
-              await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=eq.${encodeURIComponent(establishmentCode)}`, {
-                method: "PATCH",
-                headers: {
-                  apikey: supabaseKey,
-                  Authorization: `Bearer ${supabaseKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  status_assinatura: "ativo",
-                  plano: planId,
-                  updated_at: new Date().toISOString(),
-                }),
+              await ativarPlanoEstabelecimentoNoSupabase({
+                establishmentCode,
+                planId,
+                paymentId: mpData.id,
+                paymentMethod: "cartao_credito",
+                amount,
+                cupomUtilizado: cupomEnviado || (amount <= 19.90 ? "CUPOM_DESCONTO" : undefined),
               });
-              console.log(`[Supabase] Estabelecimento ${establishmentCode} atualizado para status='ativo' e plano='${planId}'`);
+              console.log(`[Supabase] Estabelecimento ${establishmentCode} ativado com sucesso após pagamento por cartão aprovado.`);
             } catch (dbErr) {
-              console.error("[Supabase Error] Falha ao atualizar estabelecimento:", dbErr);
+              console.error("[Supabase Error] Falha ao ativar estabelecimento:", dbErr);
             }
           }
 
@@ -1938,6 +2023,8 @@ export default {
             const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
             const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
+            const cupomMeta = paymentData.metadata?.cupom_utilizado || paymentData.metadata?.cupom || undefined;
+
             // Dispara ativação em tempo real no Supabase
             await ativarPlanoEstabelecimentoNoSupabase({
               establishmentCode,
@@ -1945,6 +2032,7 @@ export default {
               paymentId,
               paymentMethod: tipoPag,
               amount,
+              cupomUtilizado: cupomMeta,
             });
 
             return new Response(
@@ -2102,12 +2190,15 @@ export default {
                   const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
                   const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
+                  const cupomMeta = meta.cupom_utilizado || meta.cupom || undefined;
+
                   await ativarPlanoEstabelecimentoNoSupabase({
                     establishmentCode,
                     planId,
                     paymentId,
                     paymentMethod: tipoPag,
                     amount,
+                    cupomUtilizado: cupomMeta,
                   });
                 }
               }

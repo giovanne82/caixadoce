@@ -28,8 +28,8 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     id: "mensal",
     nome: "Plano Mensal Completo",
     badge: "🔥 ACESSO COMPLETO PRO",
-    precoMensal: 19.90,
-    faturamento: "R$ 19,90 / mês",
+    precoMensal: 24.90,
+    faturamento: "R$ 24,90 / mês",
     descricao: "Acesso total ilimitado a todas as ferramentas da plataforma sem fidelidade.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
@@ -79,8 +79,8 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
   pro: {
     id: "mensal",
     nome: "Plano Mensal Completo",
-    precoMensal: 19.90,
-    faturamento: "R$ 19,90 / mês",
+    precoMensal: 24.90,
+    faturamento: "R$ 24,90 / mês",
     descricao: "Acesso total ilimitado.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",

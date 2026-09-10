@@ -28,7 +28,7 @@ export async function processarPagamentoMercadoPago(
       formData,
       establishmentCode,
       planId,
-      amount: formData?.transaction_amount || (planId === "anual" ? 154.90 : 19.90),
+      amount: formData?.transaction_amount || (planId === "anual" ? 154.90 : 24.90),
       description:
         planId === "anual"
           ? `Assinatura Plano Anual PRO — CaixaDoce (${establishmentCode})`

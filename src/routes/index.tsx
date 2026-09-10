@@ -128,7 +128,7 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
           Seu período de testes de 7 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-          Assine o Plano Mensal Completo (R$ 19,90/mês) ou Anual (R$ 154,90/ano) para desbloquear todos os módulos.
+          Assine o Plano Mensal Completo (R$ 24,90/mês) ou Anual (R$ 154,90/ano) para desbloquear todos os módulos.
         </p>
       </div>
 

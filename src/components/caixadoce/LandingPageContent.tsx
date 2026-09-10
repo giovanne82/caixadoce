@@ -1047,7 +1047,7 @@ export function LandingPageContent() {
               </Button>
             </Card>
 
-            {/* PLANO MENSAL PRO (R$ 19,90 / MÊS) */}
+            {/* PLANO MENSAL PRO (R$ 24,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-purple-600 text-white font-black text-[11px] px-3.5 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
                 <Sparkles className="w-3 h-3 text-amber-300" /> FLEXIBILIDADE MENSAL
@@ -1065,11 +1065,11 @@ export function LandingPageContent() {
                 <div className="space-y-1">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-purple-700">
-                      R$ 19,90
+                      R$ 24,90
                     </span>
                     <span className="text-xs text-slate-600 font-semibold">/ mês</span>
                   </div>
-                  <p className="text-[11px] text-emerald-700 font-bold">7 dias grátis sem compromisso</p>
+                  <p className="text-[11px] text-emerald-700 font-bold">Por R$ 19,90 com cupom de parceiro</p>
                 </div>
 
                 <div className="pt-4 border-t border-purple-100 space-y-2.5 text-xs text-slate-700">
