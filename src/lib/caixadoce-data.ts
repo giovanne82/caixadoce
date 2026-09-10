@@ -1710,12 +1710,16 @@ export interface Afiliado {
 }
 
 export interface LojaConvertida {
+  id?: string;
   codigo: string;
   nome: string;
   email?: string;
   plano_status?: string;
   criado_em?: string;
+  created_at?: string;
   cupom_utilizado?: string;
+  status_repasse?: "pendente" | "pago" | string;
+  data_repasse?: string | null;
 }
 
 export interface RelatorioAfiliado {

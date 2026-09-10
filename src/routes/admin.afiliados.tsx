@@ -34,6 +34,28 @@ export const Route = createFileRoute("/admin/afiliados")({
   component: AdminAfiliadosComponent,
 });
 
+function formatarDataHoraBR(isoString?: string | null): string {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "—";
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const ano = d.getFullYear();
+  const hora = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dia}/${mes}/${ano} às ${hora}:${min}`;
+}
+
+function formatarDataBR(isoString?: string | null): string {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "—";
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const ano = d.getFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
 function AdminAfiliadosComponent() {
   const navigate = useNavigate();
   const { user, authLoading } = useAuth();
@@ -128,7 +150,7 @@ function AdminAfiliadosComponent() {
       try {
         const { data: dbEstabelecimentos, error: estErr } = await supabase
           .from("estabelecimentos")
-          .select("id, nome, codigo, cupom_utilizado");
+          .select("id, nome, codigo, created_at, status_repasse, data_repasse, cupom_utilizado");
 
         if (estErr) {
           console.log("[Admin Estabelecimentos Query Error]", estErr.message, estErr.details);
@@ -151,12 +173,16 @@ function AdminAfiliadosComponent() {
           lojasConvertidasCount: count,
           comissaoEstimada: Number((count * 18.91).toFixed(2)),
           lojas: convertidas.map((l) => ({
+            id: l.id,
             codigo: l.codigo || "CD-1000",
             nome: l.nome || "Loja",
             email: l.email || "",
             plano_status: l.plano_status || l.status_assinatura || "ativo",
-            criado_em: l.created_at,
+            criado_em: l.created_at || l.criado_em || "",
+            created_at: l.created_at || l.criado_em || "",
             cupom_utilizado: l.cupom_utilizado,
+            status_repasse: l.status_repasse || "pendente",
+            data_repasse: l.data_repasse || null,
           })),
         };
       });
@@ -167,6 +193,63 @@ function AdminAfiliadosComponent() {
       toast.error("Erro ao carregar relatório de afiliados.");
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function marcarRepasseComoPago(loja: any) {
+    if (!loja?.id && !loja?.codigo) return;
+
+    try {
+      let ok = false;
+      const res = await fetch("/api/afiliados/marcar-pago", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lojaId: loja.id, codigo: loja.codigo }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        ok = true;
+      }
+
+      if (!ok) {
+        const nowIso = new Date().toISOString();
+        let q = supabase
+          .from("estabelecimentos")
+          .update({ status_repasse: "pago", data_repasse: nowIso });
+
+        if (loja.id) {
+          q = q.eq("id", loja.id);
+        } else {
+          q = q.eq("codigo", loja.codigo);
+        }
+
+        const { error } = await q;
+        if (error) {
+          console.error("[Marcar Pago Direct Error]", error);
+          throw error;
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      toast.success(`Repasse da loja "${loja.nome || loja.codigo}" marcado como PAGO!`);
+
+      if (afiliadoSelecionadoModal) {
+        const lojasAtualizadas = (afiliadoSelecionadoModal.lojas || []).map((l: any) => {
+          if ((l.id && l.id === loja.id) || (l.codigo && l.codigo === loja.codigo)) {
+            return { ...l, status_repasse: "pago", data_repasse: nowIso };
+          }
+          return l;
+        });
+        setAfiliadoSelecionadoModal({
+          ...afiliadoSelecionadoModal,
+          lojas: lojasAtualizadas,
+        });
+      }
+
+      carregarRelatorio();
+    } catch (err: any) {
+      console.error("[Marcar Pago Error]", err);
+      toast.error("Falha ao marcar repasse como pago.");
     }
   }
 
@@ -560,20 +643,53 @@ function AdminAfiliadosComponent() {
                 </p>
               ) : (
                 <div className="divide-y divide-slate-800">
-                  {afiliadoSelecionadoModal.lojas.map((loja, i) => (
-                    <div key={i} className="py-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
-                        <p className="text-xs text-slate-400">Código: <span className="font-mono text-amber-400">{loja?.codigo || "N/I"}</span> {loja?.email ? `• ${loja.email}` : ""}</p>
+                  {afiliadoSelecionadoModal.lojas.map((loja: any, i: number) => {
+                    const isPago = loja?.status_repasse === "pago";
+                    const dataCriacaoStr = formatarDataHoraBR(loja?.created_at || loja?.criado_em);
+
+                    return (
+                      <div key={loja?.id || i} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 last:border-0">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
+                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-amber-400">
+                              {loja?.codigo || "N/I"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Entrada: <span className="text-slate-300 font-mono">{dataCriacaoStr}</span> {loja?.email ? `• ${loja.email}` : ""}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3 sm:justify-end">
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-emerald-400 block">Comissão: R$ 18,91</span>
+                            {isPago ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Pago em {formatarDataBR(loja?.data_repasse)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 mt-0.5">
+                                <AlertCircle className="w-3 h-3" />
+                                Pendente
+                              </span>
+                            )}
+                          </div>
+
+                          {!isPago && (
+                            <button
+                              onClick={() => marcarRepasseComoPago(loja)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1 shrink-0"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Marcar como Pago
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-emerald-400">Comissão: R$ 18,91</span>
-                        <p className="text-[10px] text-slate-500">
-                          {loja?.criado_em ? new Date(loja.criado_em).toLocaleDateString("pt-BR") : "Data N/I"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -1256,7 +1256,7 @@ export default {
 
           const afiliadosList = resAfil.ok ? await resAfil.json() : [];
 
-          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=id,nome,codigo,cupom_utilizado`, {
+          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=id,nome,codigo,created_at,cupom_utilizado,status_repasse,data_repasse`, {
             headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
           });
 
@@ -1278,10 +1278,13 @@ export default {
                 id: l.id,
                 codigo: l.codigo || "CD-1000",
                 nome: l.nome || "Estabelecimento",
-                email: "",
+                email: l.email || "",
                 plano_status: "ativo",
-                criado_em: "",
+                criado_em: l.created_at || l.criado_em || "",
+                created_at: l.created_at || l.criado_em || "",
                 cupom_utilizado: l.cupom_utilizado,
+                status_repasse: l.status_repasse || "pendente",
+                data_repasse: l.data_repasse || null,
               })),
             };
           });
@@ -1368,7 +1371,7 @@ export default {
           try {
             const { data: estData, error: dataErr } = await supabaseAdmin
               .from("estabelecimentos")
-              .select("id, nome, codigo, cupom_utilizado")
+              .select("id, nome, codigo, created_at, cupom_utilizado, status_repasse, data_repasse")
               .eq("cupom_utilizado", cupom);
 
             if (dataErr) {
@@ -1378,10 +1381,13 @@ export default {
                 id: est.id,
                 codigo: est.codigo || "CD-1000",
                 nome: est.nome || "Estabelecimento",
-                email: "",
+                email: est.email || "",
                 plano_status: "ativo",
-                criado_em: "",
+                criado_em: est.created_at || est.criado_em || "",
+                created_at: est.created_at || est.criado_em || "",
                 cupom_utilizado: est.cupom_utilizado,
+                status_repasse: est.status_repasse || "pendente",
+                data_repasse: est.data_repasse || null,
               }));
               if (!count) {
                 count = estData.length;
@@ -1405,6 +1411,58 @@ export default {
           console.log("[Backend Stats API Error]", err?.message, err?.details);
           return new Response(
             JSON.stringify({ sucesso: false, count: 0, error: err?.message, details: err?.details }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // ROTA BACKEND PARA MARCAR REPASSE DE LOJA COMO PAGO
+      if (url.pathname === "/api/afiliados/marcar-pago" && request.method === "POST") {
+        try {
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          const bodyText = await request.text();
+          const body = bodyText ? JSON.parse(bodyText) : {};
+          const lojaId = body.lojaId || body.id;
+          const codigo = body.codigo;
+
+          if (!lojaId && !codigo) {
+            return new Response(
+              JSON.stringify({ sucesso: false, error: "Identificador da loja é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+          const nowIso = new Date().toISOString();
+
+          let query = supabaseAdmin
+            .from("estabelecimentos")
+            .update({ status_repasse: "pago", data_repasse: nowIso });
+
+          if (lojaId) {
+            query = query.eq("id", lojaId);
+          } else {
+            query = query.eq("codigo", codigo);
+          }
+
+          const { error } = await query;
+
+          if (error) {
+            console.log("[API Marcar Pago Error]", error.message, error.details);
+            return new Response(
+              JSON.stringify({ sucesso: false, error: error.message, details: error.details }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ sucesso: true, status_repasse: "pago", data_repasse: nowIso }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.log("[API Marcar Pago Exception]", err?.message, err?.details);
+          return new Response(
+            JSON.stringify({ sucesso: false, error: err?.message, details: err?.details }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
