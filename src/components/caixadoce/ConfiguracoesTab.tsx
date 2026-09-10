@@ -119,6 +119,33 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   const queryClient = useQueryClient();
 
+  // Verificação de Afiliado
+  const [isAfiliado, setIsAfiliado] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function checarAfiliado() {
+      if (!user?.email) return;
+      try {
+        const { data } = await supabase
+          .from("afiliados")
+          .select("id")
+          .ilike("email", user.email.trim())
+          .maybeSingle();
+
+        if (active && data) {
+          setIsAfiliado(true);
+        }
+      } catch (err) {
+        console.warn("[Checar Afiliado Error]", err);
+      }
+    }
+    checarAfiliado();
+    return () => {
+      active = false;
+    };
+  }, [user?.email]);
+
   // Modo de Recebimento Pix & Mercado Pago
   const [estId, setEstId] = useState<string | null>(null);
   const [usarMercadopago, setUsarMercadopago] = useState<boolean>(Boolean(profile?.usar_mercadopago));
@@ -1163,6 +1190,36 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           </Card>
         );
       })()}
+
+      {/* CARD / BANNER: MEU PAINEL DE PARCEIRO / AFILIADO */}
+      {(isAfiliado || isEmailAdmin(user?.email)) && (
+        <Card className="border-emerald-400/50 bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-emerald-500/10 shadow-sm">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Meu Painel de Parceiro / Afiliado</h4>
+                  <Badge className="bg-emerald-500 text-slate-950 font-bold text-[10px]">Parceiro</Badge>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Acompanhe suas indicações, lojas convertidas e estimativa de comissões.
+                </p>
+              </div>
+            </div>
+            <Link to="/afiliados">
+              <Button
+                type="button"
+                className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-md rounded-xl shrink-0 border border-emerald-400/40"
+              >
+                <Users className="w-4 h-4 mr-1.5" /> Meu Painel de Parceiro / Afiliado
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* CARD / BANNER EXCLUSIVO: PAINEL DE ADMINISTRAÇÃO & AFILIADOS (SOMENTE PARA SÓCIOS/WHITELIST) */}
       {isEmailAdmin(user?.email) && (

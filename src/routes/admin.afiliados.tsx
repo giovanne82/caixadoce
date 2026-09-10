@@ -68,6 +68,8 @@ function AdminAfiliadosComponent() {
   const [salvando, setSalvando] = useState(false);
   const [filtro, setFiltro] = useState("");
   const [afiliadoSelecionadoModal, setAfiliadoSelecionadoModal] = useState<RelatorioAfiliado | null>(null);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [processandoLote, setProcessandoLote] = useState(false);
 
   // Form de cadastro
   const [nome, setNome] = useState("");
@@ -250,6 +252,55 @@ function AdminAfiliadosComponent() {
     } catch (err: any) {
       console.error("[Marcar Pago Error]", err);
       toast.error("Falha ao marcar repasse como pago.");
+    }
+  }
+
+  async function pagarSelecionados() {
+    if (!selecionados.length || !afiliadoSelecionadoModal) return;
+
+    setProcessandoLote(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const ids = selecionados;
+
+      // Direct Supabase Batch Update
+      const { error } = await supabase
+        .from("estabelecimentos")
+        .update({ status_repasse: "pago", data_repasse: nowIso })
+        .in("id", ids);
+
+      if (error) {
+        console.error("[Pagar Selecionados Direct Error]", error);
+        // Fallback for codes if IDs don't match
+        await supabase
+          .from("estabelecimentos")
+          .update({ status_repasse: "pago", data_repasse: nowIso })
+          .in("codigo", ids);
+      }
+
+      toast.success(`${selecionados.length} repasse(s) marcado(s) como PAGO!`);
+
+      // Update modal list locally
+      const lojasAtualizadas = (afiliadoSelecionadoModal.lojas || []).map((l: any) => {
+        const key = l.id || l.codigo;
+        if (selecionados.includes(key)) {
+          return { ...l, status_repasse: "pago", data_repasse: nowIso };
+        }
+        return l;
+      });
+
+      setAfiliadoSelecionadoModal({
+        ...afiliadoSelecionadoModal,
+        lojas: lojasAtualizadas,
+      });
+
+      setSelecionados([]);
+      carregarRelatorio();
+    } catch (err: any) {
+      console.error("[Pagar Selecionados Error]", err);
+      toast.error("Falha ao processar repasses em lote.");
+    } finally {
+      setProcessandoLote(false);
     }
   }
 
@@ -616,91 +667,171 @@ function AdminAfiliadosComponent() {
       </main>
 
       {/* Modal de Detalhes de Lojas do Afiliado */}
-      {afiliadoSelecionadoModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  Lojas de {afiliadoSelecionadoModal?.afiliado?.nome || "Afiliado"}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal?.afiliado?.cupom_exclusivo || "N/I"}</strong> — {afiliadoSelecionadoModal?.lojasConvertidasCount || 0} conversões
-                </p>
+      {afiliadoSelecionadoModal && (() => {
+        const lojasModal = afiliadoSelecionadoModal?.lojas || [];
+        const lojasPendentes = lojasModal.filter((l: any) => l.status_repasse !== "pago");
+        const todasPendentesSelecionadas =
+          lojasPendentes.length > 0 &&
+          lojasPendentes.every((l: any) => {
+            const key = l.id || l.codigo;
+            return selecionados.includes(key);
+          });
+
+        const toggleSelecionarTodas = () => {
+          if (todasPendentesSelecionadas) {
+            setSelecionados([]);
+          } else {
+            const todosKeys = lojasPendentes.map((l: any) => l.id || l.codigo).filter(Boolean);
+            setSelecionados(todosKeys);
+          }
+        };
+
+        const toggleSelecionarLoja = (key: string) => {
+          if (selecionados.includes(key)) {
+            setSelecionados(selecionados.filter((k) => k !== key));
+          } else {
+            setSelecionados([...selecionados, key]);
+          }
+        };
+
+        const totalSelecionadoValor = (selecionados.length * 18.91).toFixed(2).replace(".", ",");
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    Lojas de {afiliadoSelecionadoModal?.afiliado?.nome || "Afiliado"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal?.afiliado?.cupom_exclusivo || "N/I"}</strong> — {afiliadoSelecionadoModal?.lojasConvertidasCount || 0} conversões
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setAfiliadoSelecionadoModal(null);
+                    setSelecionados([]);
+                  }}
+                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                >
+                  Fechar
+                </button>
               </div>
-              <button
-                onClick={() => setAfiliadoSelecionadoModal(null)}
-                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-              >
-                Fechar
-              </button>
-            </div>
 
-            <div className="p-6 overflow-y-auto space-y-3 flex-1">
-              {(!afiliadoSelecionadoModal?.lojas || afiliadoSelecionadoModal.lojas.length === 0) ? (
-                <p className="text-center text-xs text-slate-500 py-6">
-                  Nenhuma loja convertida com este cupom até o momento.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-800">
-                  {afiliadoSelecionadoModal.lojas.map((loja: any, i: number) => {
-                    const isPago = loja?.status_repasse === "pago";
-                    const dataCriacaoStr = formatarDataHoraBR(loja?.created_at || loja?.criado_em);
-
-                    return (
-                      <div key={loja?.id || i} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 last:border-0">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
-                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-amber-400">
-                              {loja?.codigo || "N/I"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-1">
-                            Entrada: <span className="text-slate-300 font-mono">{dataCriacaoStr}</span> {loja?.email ? `• ${loja.email}` : ""}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-3 sm:justify-end">
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-emerald-400 block">Comissão: R$ 18,91</span>
-                            {isPago ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Pago em {formatarDataBR(loja?.data_repasse)}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 mt-0.5">
-                                <AlertCircle className="w-3 h-3" />
-                                Pendente
-                              </span>
-                            )}
-                          </div>
-
-                          {!isPago && (
-                            <button
-                              onClick={() => marcarRepasseComoPago(loja)}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1 shrink-0"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Marcar como Pago
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+              {lojasPendentes.length > 0 && (
+                <div className="flex items-center justify-between bg-slate-950/60 px-6 py-2.5 border-b border-slate-800 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white font-medium select-none">
+                    <input
+                      type="checkbox"
+                      checked={todasPendentesSelecionadas}
+                      onChange={toggleSelecionarTodas}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500 cursor-pointer"
+                    />
+                    <span>Selecionar Todos ({lojasPendentes.length} pendente{lojasPendentes.length > 1 ? "s" : ""})</span>
+                  </label>
+                  {selecionados.length > 0 && (
+                    <span className="text-amber-400 font-bold">
+                      {selecionados.length} selecionada(s)
+                    </span>
+                  )}
                 </div>
               )}
-            </div>
 
-            <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between text-xs text-slate-400">
-              <span>Chave PIX: <code className="text-amber-300 font-mono">{afiliadoSelecionadoModal?.afiliado?.chave_pix || "N/I"}</code></span>
-              <span className="font-bold text-emerald-400">Total: R$ {(Number(afiliadoSelecionadoModal?.comissaoEstimada) || 0).toFixed(2).replace(".", ",")}</span>
+              <div className="p-6 overflow-y-auto space-y-3 flex-1">
+                {lojasModal.length === 0 ? (
+                  <p className="text-center text-xs text-slate-500 py-6">
+                    Nenhuma loja convertida com este cupom até o momento.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-slate-800">
+                    {lojasModal.map((loja: any, i: number) => {
+                      const isPago = loja?.status_repasse === "pago";
+                      const key = loja?.id || loja?.codigo || `loja_${i}`;
+                      const isChecked = selecionados.includes(key);
+                      const dataCriacaoStr = formatarDataHoraBR(loja?.created_at || loja?.criado_em);
+
+                      return (
+                        <div key={key} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 last:border-0">
+                          <div className="flex items-center gap-3">
+                            {!isPago && (
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleSelecionarLoja(key)}
+                                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500 cursor-pointer"
+                              />
+                            )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
+                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-amber-400">
+                                  {loja?.codigo || "N/I"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Entrada: <span className="text-slate-300 font-mono">{dataCriacaoStr}</span> {loja?.email ? `• ${loja.email}` : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 sm:justify-end">
+                            <div className="text-right">
+                              <span className="text-xs font-bold text-emerald-400 block">Comissão: R$ 18,91</span>
+                              {isPago ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Pago em {formatarDataBR(loja?.data_repasse)}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 mt-0.5">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Pendente
+                                </span>
+                              )}
+                            </div>
+
+                            {!isPago && (
+                              <button
+                                onClick={() => marcarRepasseComoPago(loja)}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1 shrink-0"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Marcar como Pago
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+                <div>
+                  Chave PIX: <code className="text-amber-300 font-mono select-all">{afiliadoSelecionadoModal?.afiliado?.chave_pix || "N/I"}</code>
+                </div>
+                <div className="flex items-center gap-4">
+                  {selecionados.length > 0 && (
+                    <span className="font-extrabold text-amber-400 text-sm">
+                      Total Selecionado: R$ {totalSelecionadoValor}
+                    </span>
+                  )}
+                  <button
+                    onClick={pagarSelecionados}
+                    disabled={selecionados.length === 0 || processandoLote}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {processandoLote ? "Processando..." : `Pagar Selecionados (${selecionados.length})`}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Footer */}
       <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
