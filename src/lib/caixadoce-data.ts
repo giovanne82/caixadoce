@@ -1706,7 +1706,25 @@ export interface Afiliado {
   cupom_exclusivo: string;
   email: string;
   chave_pix: string;
+  termos_aceitos?: boolean;
+  data_aceite?: string | null;
   criado_em?: string;
+}
+
+export interface HistoricoComissao {
+  id?: string;
+  afiliado_id?: string;
+  cupom: string;
+  loja_id: string;
+  loja_nome?: string;
+  estabelecimento_codigo?: string;
+  tipo_comissao: "adesao" | "recorrente" | string;
+  valor_comissao: number;
+  valor_transacao?: number;
+  status_repasse: "pendente" | "pago" | string;
+  data_repasse?: string | null;
+  payment_id?: string | null;
+  created_at?: string;
 }
 
 export interface LojaConvertida {
@@ -1720,6 +1738,8 @@ export interface LojaConvertida {
   cupom_utilizado?: string;
   status_repasse?: "pendente" | "pago" | string;
   data_repasse?: string | null;
+  tipo_comissao?: "adesao" | "recorrente" | string;
+  valor_comissao?: number;
 }
 
 export interface RelatorioAfiliado {
@@ -1727,4 +1747,5 @@ export interface RelatorioAfiliado {
   lojasConvertidasCount: number;
   comissaoEstimada: number;
   lojas: LojaConvertida[];
+  historicoComissoes?: HistoricoComissao[];
 }

@@ -390,12 +390,35 @@ async function seedAfiliadosTableInSupabase() {
         cupom_exclusivo TEXT UNIQUE NOT NULL,
         email TEXT NOT NULL,
         chave_pix TEXT NOT NULL,
+        termos_aceitos BOOLEAN DEFAULT false,
+        data_aceite TIMESTAMPTZ,
         criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE public.afiliados ADD COLUMN IF NOT EXISTS termos_aceitos BOOLEAN DEFAULT false;
+      ALTER TABLE public.afiliados ADD COLUMN IF NOT EXISTS data_aceite TIMESTAMPTZ;
+
+      CREATE TABLE IF NOT EXISTS public.historico_comissoes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        afiliado_id UUID,
+        cupom TEXT NOT NULL,
+        loja_id TEXT NOT NULL,
+        loja_nome TEXT,
+        estabelecimento_codigo TEXT,
+        tipo_comissao TEXT NOT NULL DEFAULT 'adesao',
+        valor_comissao NUMERIC(10,2) NOT NULL DEFAULT 18.91,
+        valor_transacao NUMERIC(10,2),
+        status_repasse TEXT NOT NULL DEFAULT 'pendente',
+        data_repasse TIMESTAMPTZ,
+        payment_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS cupom_utilizado TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS afiliado_id UUID;
       CREATE INDEX IF NOT EXISTS idx_afiliados_cupom ON public.afiliados(cupom_exclusivo);
       CREATE INDEX IF NOT EXISTS idx_estabelecimentos_afiliado ON public.estabelecimentos(afiliado_id);
+      CREATE INDEX IF NOT EXISTS idx_historico_comissoes_cupom ON public.historico_comissoes(cupom);
+      CREATE INDEX IF NOT EXISTS idx_historico_comissoes_loja ON public.historico_comissoes(loja_id);
+
       ALTER TABLE public.afiliados ENABLE ROW LEVEL SECURITY;
       DROP POLICY IF EXISTS "Permitir leitura total em afiliados" ON public.afiliados;
       CREATE POLICY "Permitir leitura total em afiliados" ON public.afiliados FOR SELECT USING (true);
@@ -406,6 +429,17 @@ async function seedAfiliadosTableInSupabase() {
       DROP POLICY IF EXISTS "Permitir exclusao em afiliados" ON public.afiliados;
       CREATE POLICY "Permitir exclusao em afiliados" ON public.afiliados FOR DELETE USING (true);
       GRANT ALL ON TABLE public.afiliados TO anon, authenticated, service_role;
+
+      ALTER TABLE public.historico_comissoes ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em historico_comissoes" ON public.historico_comissoes;
+      CREATE POLICY "Permitir leitura total em historico_comissoes" ON public.historico_comissoes FOR SELECT USING (true);
+      DROP POLICY IF EXISTS "Permitir insercao em historico_comissoes" ON public.historico_comissoes;
+      CREATE POLICY "Permitir insercao em historico_comissoes" ON public.historico_comissoes FOR INSERT WITH CHECK (true);
+      DROP POLICY IF EXISTS "Permitir atualizacao em historico_comissoes" ON public.historico_comissoes;
+      CREATE POLICY "Permitir atualizacao em historico_comissoes" ON public.historico_comissoes FOR UPDATE USING (true);
+      DROP POLICY IF EXISTS "Permitir exclusao em historico_comissoes" ON public.historico_comissoes;
+      CREATE POLICY "Permitir exclusao em historico_comissoes" ON public.historico_comissoes FOR DELETE USING (true);
+      GRANT ALL ON TABLE public.historico_comissoes TO anon, authenticated, service_role;
     `;
 
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
@@ -695,6 +729,160 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     console.log(`[Ativar Plano Supabase] 🧹 Limpeza de lançamentos financeiros de assinatura efetuada com sucesso para ${code}!`);
   } catch (errClean) {
     console.warn("[Ativar Plano Supabase] Aviso ao executar limpeza de transações:", errClean);
+  }
+
+  // 3. PROCESSAMENTO DE COMISSÃO DE AFILIADO (ADESÃO R$ 18,91 OU RECORRÊNCIA 10%)
+  try {
+    await processarComissaoAfiliadoNoSupabase({
+      establishmentCode: code,
+      amount,
+      cupomUtilizado: cleanCupomCode,
+      paymentId,
+    });
+  } catch (errCom) {
+    console.warn("[Ativar Plano Supabase] Erro ao processar comissão de afiliado:", errCom);
+  }
+}
+
+// Helper Backend: Processamento de Comissões de Adesão (R$ 18,91) e Recorrência (10%) no historico_comissoes
+async function processarComissaoAfiliadoNoSupabase(params: {
+  establishmentCode: string;
+  amount?: number;
+  cupomUtilizado?: string | null;
+  paymentId?: string | number;
+}) {
+  const { establishmentCode, amount = 24.90, cupomUtilizado, paymentId } = params;
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+
+  const code = (establishmentCode || "").toUpperCase().trim();
+  if (!code) return;
+
+  try {
+    // 1. Consulta o estabelecimento para obter ID, Nome e Cupom Utilizado (caso não informado)
+    let cupomFinal = (cupomUtilizado || "").trim().toUpperCase();
+    let lojaIdTarget = code;
+    let lojaNomeTarget = `Loja ${code}`;
+
+    const estRes = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,nome,codigo,cupom_utilizado`,
+      {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+      }
+    );
+
+    if (estRes.ok) {
+      const estData = await estRes.json();
+      if (Array.isArray(estData) && estData.length > 0) {
+        const estab = estData[0];
+        lojaIdTarget = String(estab.id || estab.codigo || code);
+        lojaNomeTarget = estab.nome || `Loja ${code}`;
+        if (!cupomFinal && estab.cupom_utilizado) {
+          cupomFinal = String(estab.cupom_utilizado).trim().toUpperCase();
+        }
+      }
+    }
+
+    if (!cupomFinal) {
+      console.log(`[Comissão Afiliado] Estabelecimento '${code}' não possui cupom de afiliado vinculado. Ignorando.`);
+      return;
+    }
+
+    // 2. Busca o afiliado dono deste cupom
+    const afilRes = await fetch(
+      `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cupomFinal)}&select=id,nome,cupom_exclusivo`,
+      {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+      }
+    );
+
+    if (!afilRes.ok) return;
+    const afilData = await afilRes.json();
+    if (!Array.isArray(afilData) || afilData.length === 0) {
+      console.warn(`[Comissão Afiliado] Cupom '${cupomFinal}' não corresponde a nenhum afiliado cadastrado.`);
+      return;
+    }
+
+    const afiliado = afilData[0];
+
+    // 3. Verifica se já existe comissão de 'adesao' gravada no historico_comissoes para esta loja
+    let temAdesao = false;
+    const comissaoCheckRes = await fetch(
+      `${supabaseUrl}/rest/v1/historico_comissoes?or=(loja_id.eq.${encodeURIComponent(lojaIdTarget)},estabelecimento_codigo.ilike.${encodeURIComponent(code)})&tipo_comissao=eq.adesao&select=id`,
+      {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+      }
+    );
+
+    if (comissaoCheckRes.ok) {
+      const comData = await comissaoCheckRes.json();
+      if (Array.isArray(comData) && comData.length > 0) {
+        temAdesao = true;
+      }
+    }
+
+    const agora = new Date().toISOString();
+    let tipoComissao: "adesao" | "recorrente" = "adesao";
+    let valorComissao = 18.91;
+
+    if (temAdesao) {
+      // Regra de Recorrência: 10% do valor da mensalidade paga
+      tipoComissao = "recorrente";
+      const valorTransacaoNum = Number(amount || 0);
+      valorComissao = Number((valorTransacaoNum * 0.10).toFixed(2));
+      if (valorComissao <= 0) valorComissao = 2.49;
+    }
+
+    // Evita duplicidade se a mesma notificação (payment_id) já tiver sido processada
+    if (paymentId) {
+      const dupCheckRes = await fetch(
+        `${supabaseUrl}/rest/v1/historico_comissoes?payment_id=eq.${encodeURIComponent(String(paymentId))}&select=id`,
+        {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+        }
+      );
+      if (dupCheckRes.ok) {
+        const dupData = await dupCheckRes.json();
+        if (Array.isArray(dupData) && dupData.length > 0) {
+          console.log(`[Comissão Afiliado] Payment ID '${paymentId}' já gravado em historico_comissoes. Ignorando.`);
+          return;
+        }
+      }
+    }
+
+    // 4. Inserção na tabela historico_comissoes
+    const insertPayload = {
+      afiliado_id: afiliado.id,
+      cupom: cupomFinal,
+      loja_id: lojaIdTarget,
+      loja_nome: lojaNomeTarget,
+      estabelecimento_codigo: code,
+      tipo_comissao: tipoComissao,
+      valor_comissao: valorComissao,
+      valor_transacao: amount,
+      status_repasse: "pendente",
+      payment_id: paymentId ? String(paymentId) : null,
+      created_at: agora,
+    };
+
+    const insertRes = await fetch(`${supabaseUrl}/rest/v1/historico_comissoes`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(insertPayload),
+    });
+
+    if (insertRes.ok) {
+      console.log(`[Comissão Afiliado] ✅ Comissão '${tipoComissao}' (R$ ${valorComissao}) gravada no historico_comissoes para ${afiliado.nome}!`);
+    } else {
+      const errTxt = await insertRes.text();
+      console.error("[Comissão Afiliado Error] Falha ao inserir historico_comissoes:", errTxt);
+    }
+  } catch (err) {
+    console.error("[Comissão Afiliado Exception]", err);
   }
 }
 
@@ -1245,35 +1433,104 @@ export default {
         }
       }
 
+      // ROTA BACKEND PARA ACEITAR TERMOS DO AFILIADO
+      if (url.pathname === "/api/afiliados/aceitar-termos" && request.method === "POST") {
+        try {
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          const bodyText = await request.text();
+          const body = bodyText ? JSON.parse(bodyText) : {};
+          const email = String(body.email || "").trim().toLowerCase();
+          const cupom = String(body.cupom || body.cupom_exclusivo || "").trim().toUpperCase();
+          const id = body.id;
+
+          if (!email && !cupom && !id) {
+            return new Response(
+              JSON.stringify({ sucesso: false, mensagem: "Parâmetro (email, cupom ou id) é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+          const nowIso = new Date().toISOString();
+
+          let query = supabaseAdmin
+            .from("afiliados")
+            .update({ termos_aceitos: true, data_aceite: nowIso });
+
+          if (id) {
+            query = query.eq("id", id);
+          } else if (email) {
+            query = query.ilike("email", email);
+          } else if (cupom) {
+            query = query.ilike("cupom_exclusivo", cupom);
+          }
+
+          const { error } = await query;
+          if (error) {
+            return new Response(
+              JSON.stringify({ sucesso: false, error: error.message }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ sucesso: true, termos_aceitos: true, data_aceite: nowIso }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ sucesso: false, error: err.message }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
       if (url.pathname === "/api/afiliados/relatorio" && request.method === "GET") {
         try {
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
-          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
-          const resAfil = await fetch(`${supabaseUrl}/rest/v1/afiliados?select=*&order=criado_em.desc`, {
-            headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
-          });
+          const { data: afiliadosList } = await supabaseAdmin
+            .from("afiliados")
+            .select("*")
+            .order("criado_em", { ascending: false });
 
-          const afiliadosList = resAfil.ok ? await resAfil.json() : [];
+          const { data: estabelecimentosList } = await supabaseAdmin
+            .from("estabelecimentos")
+            .select("id, nome, codigo, created_at, cupom_utilizado, status_repasse, data_repasse");
 
-          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=id,nome,codigo,created_at,cupom_utilizado,status_repasse,data_repasse`, {
-            headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
-          });
-
-          const estabelecimentosList = resEst.ok ? await resEst.json() : [];
+          const { data: comissoesList } = await supabaseAdmin
+            .from("historico_comissoes")
+            .select("*")
+            .order("created_at", { ascending: false });
 
           const relatorio = (afiliadosList || []).map((afiliado: any) => {
+            const cupomUpper = String(afiliado.cupom_exclusivo || "").toUpperCase();
+
+            // Historico de comissões do afiliado
+            const historico = (comissoesList || []).filter(
+              (c: any) =>
+                (c.cupom && String(c.cupom).toUpperCase() === cupomUpper) ||
+                (c.afiliado_id && c.afiliado_id === afiliado.id)
+            );
+
+            // Lojas que usaram o cupom
             const lojasConvertidas = (estabelecimentosList || []).filter((est: any) => {
-              return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afiliado.cupom_exclusivo).toUpperCase();
+              return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === cupomUpper;
             });
 
-            const count = lojasConvertidas.length;
-            const comissao = count * 18.91;
+            // Soma real do histórico de comissões (ou fallback de R$ 18,91 por loja)
+            let totalComissoes = 0;
+            if (historico.length > 0) {
+              totalComissoes = historico.reduce((acc: number, item: any) => acc + (Number(item.valor_comissao) || 0), 0);
+            } else {
+              totalComissoes = lojasConvertidas.length * 18.91;
+            }
 
             return {
               afiliado,
-              lojasConvertidasCount: count,
-              comissaoEstimada: Number(comissao.toFixed(2)),
+              lojasConvertidasCount: lojasConvertidas.length,
+              comissaoEstimada: Number(totalComissoes.toFixed(2)),
               lojas: lojasConvertidas.map((l: any) => ({
                 id: l.id,
                 codigo: l.codigo || "CD-1000",
@@ -1286,6 +1543,7 @@ export default {
                 status_repasse: l.status_repasse || "pendente",
                 data_repasse: l.data_repasse || null,
               })),
+              historicoComissoes: historico,
             };
           });
 
@@ -1306,6 +1564,7 @@ export default {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           let cupom = "";
+          let emailQuery = "";
 
           if (request.method === "POST") {
             try {
@@ -1313,6 +1572,7 @@ export default {
               if (bodyText) {
                 const body = JSON.parse(bodyText);
                 cupom = String(body.cupom || body.cupom_exclusivo || body.code || "").trim().toUpperCase();
+                emailQuery = String(body.email || "").trim().toLowerCase();
               }
             } catch {}
           } else {
@@ -1322,21 +1582,29 @@ export default {
               url.searchParams.get("code") ||
               ""
             ).trim().toUpperCase();
+            emailQuery = String(url.searchParams.get("email") || "").trim().toLowerCase();
           }
 
-          // Se cupom não foi informado diretamente no parâmetro 'cupom', tenta buscar pelo parâmetro 'email'
-          if (!cupom) {
-            const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
-            if (email) {
-              const afilRes = await fetch(`${supabaseUrl}/rest/v1/afiliados?email=ilike.${encodeURIComponent(email)}`, {
-                headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
-              });
-              if (afilRes.ok) {
-                const afilData = await afilRes.json();
-                if (Array.isArray(afilData) && afilData.length > 0) {
-                  cupom = String(afilData[0].cupom_exclusivo || "").trim().toUpperCase();
-                }
-              }
+          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+          let afiliadoObj: any = null;
+
+          // Se cupom não foi informado diretamente, tenta buscar pelo e-mail
+          if (!cupom && emailQuery) {
+            const { data: afilRows } = await supabaseAdmin
+              .from("afiliados")
+              .select("*")
+              .ilike("email", emailQuery);
+            if (afilRows && afilRows.length > 0) {
+              afiliadoObj = afilRows[0];
+              cupom = String(afiliadoObj.cupom_exclusivo || "").trim().toUpperCase();
+            }
+          } else if (cupom && !afiliadoObj) {
+            const { data: afilRows } = await supabaseAdmin
+              .from("afiliados")
+              .select("*")
+              .ilike("cupom_exclusivo", cupom);
+            if (afilRows && afilRows.length > 0) {
+              afiliadoObj = afilRows[0];
             }
           }
 
@@ -1348,35 +1616,16 @@ export default {
             );
           }
 
-          // Consulta ESTRITAMENTE pela coluna cupom_utilizado usando Supabase Admin Client
-          const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-
-          let count = 0;
-          try {
-            const { count: countResult, error: countErr } = await supabaseAdmin
-              .from("estabelecimentos")
-              .select("id", { count: "exact", head: true })
-              .eq("cupom_utilizado", cupom);
-
-            if (countErr) {
-              console.log("[API Estatisticas Supabase Count Error]", countErr.message, countErr.details);
-            } else if (countResult !== null && countResult !== undefined) {
-              count = countResult;
-            }
-          } catch (cErr: any) {
-            console.log("[API Estatisticas Count Exception]", cErr?.message, cErr?.details);
-          }
-
+          // 1. Busca estabelecimentos vinculados
           let lojas: any[] = [];
+          let count = 0;
           try {
             const { data: estData, error: dataErr } = await supabaseAdmin
               .from("estabelecimentos")
               .select("id, nome, codigo, created_at, cupom_utilizado, status_repasse, data_repasse")
               .eq("cupom_utilizado", cupom);
 
-            if (dataErr) {
-              console.log("[API Estatisticas Supabase Data Error]", dataErr.message, dataErr.details);
-            } else if (estData) {
+            if (!dataErr && estData) {
               lojas = estData.map((est: any) => ({
                 id: est.id,
                 codigo: est.codigo || "CD-1000",
@@ -1389,21 +1638,78 @@ export default {
                 status_repasse: est.status_repasse || "pendente",
                 data_repasse: est.data_repasse || null,
               }));
-              if (!count) {
-                count = estData.length;
-              }
+              count = estData.length;
             }
           } catch (dErr: any) {
-            console.log("[API Estatisticas Data Exception]", dErr?.message, dErr?.details);
+            console.log("[API Estatisticas Data Exception]", dErr?.message);
+          }
+
+          // 2. Busca histórico de comissões (Adesões vs Recorrências)
+          let historico: any[] = [];
+          let totalAdesoesCount = 0;
+          let rendimentoAdesaoTotal = 0;
+          let totalRecorrentesCount = 0;
+          let rendimentoRecorrenteTotal = 0;
+          let rendimentoTotal = 0;
+
+          try {
+            const { data: comData } = await supabaseAdmin
+              .from("historico_comissoes")
+              .select("*")
+              .ilike("cupom", cupom)
+              .order("created_at", { ascending: false });
+
+            if (comData && comData.length > 0) {
+              historico = comData;
+              for (const item of comData) {
+                const val = Number(item.valor_comissao) || 0;
+                rendimentoTotal += val;
+                if (item.tipo_comissao === "recorrente") {
+                  totalRecorrentesCount += 1;
+                  rendimentoRecorrenteTotal += val;
+                } else {
+                  totalAdesoesCount += 1;
+                  rendimentoAdesaoTotal += val;
+                }
+              }
+            } else if (lojas.length > 0) {
+              // Fallback para lojas existentes caso historico_comissoes ainda não tenha sido populado
+              totalAdesoesCount = lojas.length;
+              rendimentoAdesaoTotal = Number((lojas.length * 18.91).toFixed(2));
+              rendimentoTotal = rendimentoAdesaoTotal;
+              historico = lojas.map((l: any) => ({
+                id: l.id,
+                cupom: cupom,
+                loja_id: l.id,
+                loja_nome: l.nome,
+                estabelecimento_codigo: l.codigo,
+                tipo_comissao: "adesao",
+                valor_comissao: 18.91,
+                status_repasse: l.status_repasse || "pendente",
+                data_repasse: l.data_repasse || null,
+                created_at: l.created_at || new Date().toISOString(),
+              }));
+            }
+          } catch (cErr: any) {
+            console.log("[API Estatisticas Comissões Exception]", cErr?.message);
           }
 
           return new Response(
             JSON.stringify({
               sucesso: true,
+              afiliado: afiliadoObj,
+              termos_aceitos: Boolean(afiliadoObj?.termos_aceitos),
+              data_aceite: afiliadoObj?.data_aceite || null,
               count: count,
               lojasConvertidasCount: count,
               total: count,
               lojas: lojas,
+              historico: historico,
+              total_adesoes: totalAdesoesCount,
+              rendimento_adesao: Number(rendimentoAdesaoTotal.toFixed(2)),
+              total_recorrentes: totalRecorrentesCount,
+              rendimento_recorrente: Number(rendimentoRecorrenteTotal.toFixed(2)),
+              rendimento_total: Number(rendimentoTotal.toFixed(2)),
             }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
@@ -1416,43 +1722,53 @@ export default {
         }
       }
 
-      // ROTA BACKEND PARA MARCAR REPASSE DE LOJA COMO PAGO
+      // ROTA BACKEND PARA MARCAR REPASSE DE COMISSÃO OU LOJA COMO PAGO
       if (url.pathname === "/api/afiliados/marcar-pago" && request.method === "POST") {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const bodyText = await request.text();
           const body = bodyText ? JSON.parse(bodyText) : {};
-          const lojaId = body.lojaId || body.id;
+          const ids: string[] = body.ids || body.comissaoIds || (body.id ? [body.id] : []);
+          const lojaId = body.lojaId;
           const codigo = body.codigo;
-
-          if (!lojaId && !codigo) {
-            return new Response(
-              JSON.stringify({ sucesso: false, error: "Identificador da loja é obrigatório." }),
-              { status: 400, headers: { "content-type": "application/json" } }
-            );
-          }
 
           const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
           const nowIso = new Date().toISOString();
 
-          let query = supabaseAdmin
-            .from("estabelecimentos")
-            .update({ status_repasse: "pago", data_repasse: nowIso });
+          // 1. Atualizar historico_comissoes por IDs
+          if (ids.length > 0) {
+            await supabaseAdmin
+              .from("historico_comissoes")
+              .update({ status_repasse: "pago", data_repasse: nowIso })
+              .in("id", ids);
 
-          if (lojaId) {
-            query = query.eq("id", lojaId);
-          } else {
-            query = query.eq("codigo", codigo);
+            // Também tenta atualizar em estabelecimentos caso seja ID de estabelecimento
+            await supabaseAdmin
+              .from("estabelecimentos")
+              .update({ status_repasse: "pago", data_repasse: nowIso })
+              .in("id", ids);
           }
 
-          const { error } = await query;
+          // 2. Atualizar por lojaId ou código
+          if (lojaId || codigo) {
+            let qEst = supabaseAdmin
+              .from("estabelecimentos")
+              .update({ status_repasse: "pago", data_repasse: nowIso });
 
-          if (error) {
-            console.log("[API Marcar Pago Error]", error.message, error.details);
-            return new Response(
-              JSON.stringify({ sucesso: false, error: error.message, details: error.details }),
-              { status: 400, headers: { "content-type": "application/json" } }
-            );
+            let qHis = supabaseAdmin
+              .from("historico_comissoes")
+              .update({ status_repasse: "pago", data_repasse: nowIso });
+
+            if (lojaId) {
+              qEst = qEst.eq("id", lojaId);
+              qHis = qHis.eq("loja_id", lojaId);
+            } else if (codigo) {
+              qEst = qEst.eq("codigo", codigo);
+              qHis = qHis.eq("estabelecimento_codigo", codigo);
+            }
+
+            await qEst;
+            await qHis;
           }
 
           return new Response(

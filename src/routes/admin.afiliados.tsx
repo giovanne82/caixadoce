@@ -150,30 +150,51 @@ function AdminAfiliadosComponent() {
 
       let listaLojas: any[] = [];
       try {
-        const { data: dbEstabelecimentos, error: estErr } = await supabase
+        const { data: dbEstabelecimentos } = await supabase
           .from("estabelecimentos")
           .select("id, nome, codigo, created_at, status_repasse, data_repasse, cupom_utilizado");
-
-        if (estErr) {
-          console.log("[Admin Estabelecimentos Query Error]", estErr.message, estErr.details);
-        }
         listaLojas = (dbEstabelecimentos as any[]) || [];
       } catch (err: any) {
-        console.log("[Admin Estabelecimentos Exception]", err?.message, err?.details);
+        console.log("[Admin Estabelecimentos Exception]", err?.message);
+      }
+
+      let listaComissoes: any[] = [];
+      try {
+        const { data: dbCom } = await supabase
+          .from("historico_comissoes")
+          .select("*")
+          .order("created_at", { ascending: false });
+        listaComissoes = (dbCom as any[]) || [];
+      } catch (err: any) {
+        console.log("[Admin Comissões Exception]", err?.message);
       }
 
       const listaAfiliados: Afiliado[] = (dbAfiliados as any[]) || [];
 
       const resultado: RelatorioAfiliado[] = listaAfiliados.map((afil) => {
+        const cupomUpper = String(afil.cupom_exclusivo || "").toUpperCase();
         const convertidas = listaLojas.filter((est) => {
-          return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afil.cupom_exclusivo).toUpperCase();
+          return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === cupomUpper;
         });
+
+        const historico = listaComissoes.filter(
+          (c) =>
+            (c.cupom && String(c.cupom).toUpperCase() === cupomUpper) ||
+            (c.afiliado_id && c.afiliado_id === afil.id)
+        );
+
+        let totalComissoes = 0;
+        if (historico.length > 0) {
+          totalComissoes = historico.reduce((acc, curr) => acc + (Number(curr.valor_comissao) || 0), 0);
+        } else {
+          totalComissoes = convertidas.length * 18.91;
+        }
 
         const count = convertidas.length;
         return {
           afiliado: afil,
           lojasConvertidasCount: count,
-          comissaoEstimada: Number((count * 18.91).toFixed(2)),
+          comissaoEstimada: Number(totalComissoes.toFixed(2)),
           lojas: convertidas.map((l) => ({
             id: l.id,
             codigo: l.codigo || "CD-1000",
@@ -186,6 +207,7 @@ function AdminAfiliadosComponent() {
             status_repasse: l.status_repasse || "pendente",
             data_repasse: l.data_repasse || null,
           })),
+          historicoComissoes: historico,
         };
       });
 
@@ -198,52 +220,53 @@ function AdminAfiliadosComponent() {
     }
   }
 
-  async function marcarRepasseComoPago(loja: any) {
-    if (!loja?.id && !loja?.codigo) return;
+  async function marcarRepasseComoPago(item: any) {
+    if (!item?.id && !item?.codigo && !item?.lojaId) return;
 
     try {
-      let ok = false;
+      const nowIso = new Date().toISOString();
+      const itemId = item.id || item.lojaId;
+
       const res = await fetch("/api/afiliados/marcar-pago", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lojaId: loja.id, codigo: loja.codigo }),
+        body: JSON.stringify({
+          ids: itemId ? [itemId] : [],
+          lojaId: item.loja_id || item.id,
+          codigo: item.estabelecimento_codigo || item.codigo,
+        }),
       }).catch(() => null);
 
-      if (res && res.ok) {
-        ok = true;
-      }
+      if (itemId) {
+        await supabase
+          .from("historico_comissoes")
+          .update({ status_repasse: "pago", data_repasse: nowIso })
+          .eq("id", itemId);
 
-      if (!ok) {
-        const nowIso = new Date().toISOString();
-        let q = supabase
+        await supabase
           .from("estabelecimentos")
-          .update({ status_repasse: "pago", data_repasse: nowIso });
-
-        if (loja.id) {
-          q = q.eq("id", loja.id);
-        } else {
-          q = q.eq("codigo", loja.codigo);
-        }
-
-        const { error } = await q;
-        if (error) {
-          console.error("[Marcar Pago Direct Error]", error);
-          throw error;
-        }
+          .update({ status_repasse: "pago", data_repasse: nowIso })
+          .eq("id", itemId);
       }
 
-      const nowIso = new Date().toISOString();
-      toast.success(`Repasse da loja "${loja.nome || loja.codigo}" marcado como PAGO!`);
+      toast.success(`Repasse de "${item.loja_nome || item.nome || item.codigo || 'Comissão'}" marcado como PAGO!`);
 
       if (afiliadoSelecionadoModal) {
+        const comissoesAtualizadas = (afiliadoSelecionadoModal.historicoComissoes || []).map((c: any) => {
+          if (c.id === itemId || (c.loja_id && c.loja_id === item.loja_id)) {
+            return { ...c, status_repasse: "pago", data_repasse: nowIso };
+          }
+          return c;
+        });
         const lojasAtualizadas = (afiliadoSelecionadoModal.lojas || []).map((l: any) => {
-          if ((l.id && l.id === loja.id) || (l.codigo && l.codigo === loja.codigo)) {
+          if (l.id === itemId || l.codigo === item.codigo) {
             return { ...l, status_repasse: "pago", data_repasse: nowIso };
           }
           return l;
         });
         setAfiliadoSelecionadoModal({
           ...afiliadoSelecionadoModal,
+          historicoComissoes: comissoesAtualizadas,
           lojas: lojasAtualizadas,
         });
       }
@@ -263,27 +286,36 @@ function AdminAfiliadosComponent() {
       const nowIso = new Date().toISOString();
       const ids = selecionados;
 
+      await fetch("/api/afiliados/marcar-pago", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      }).catch(() => null);
+
       // Direct Supabase Batch Update
-      const { error } = await supabase
+      await supabase
+        .from("historico_comissoes")
+        .update({ status_repasse: "pago", data_repasse: nowIso })
+        .in("id", ids);
+
+      await supabase
         .from("estabelecimentos")
         .update({ status_repasse: "pago", data_repasse: nowIso })
         .in("id", ids);
 
-      if (error) {
-        console.error("[Pagar Selecionados Direct Error]", error);
-        // Fallback for codes if IDs don't match
-        await supabase
-          .from("estabelecimentos")
-          .update({ status_repasse: "pago", data_repasse: nowIso })
-          .in("codigo", ids);
-      }
-
       toast.success(`${selecionados.length} repasse(s) marcado(s) como PAGO!`);
 
       // Update modal list locally
+      const comissoesAtualizadas = (afiliadoSelecionadoModal.historicoComissoes || []).map((c: any) => {
+        if (ids.includes(c.id)) {
+          return { ...c, status_repasse: "pago", data_repasse: nowIso };
+        }
+        return c;
+      });
+
       const lojasAtualizadas = (afiliadoSelecionadoModal.lojas || []).map((l: any) => {
         const key = l.id || l.codigo;
-        if (selecionados.includes(key)) {
+        if (ids.includes(key)) {
           return { ...l, status_repasse: "pago", data_repasse: nowIso };
         }
         return l;
@@ -291,6 +323,7 @@ function AdminAfiliadosComponent() {
 
       setAfiliadoSelecionadoModal({
         ...afiliadoSelecionadoModal,
+        historicoComissoes: comissoesAtualizadas,
         lojas: lojasAtualizadas,
       });
 
@@ -666,14 +699,29 @@ function AdminAfiliadosComponent() {
         </div>
       </main>
 
-      {/* Modal de Detalhes de Lojas do Afiliado */}
+      {/* Modal de Detalhes de Lojas e Comissões do Afiliado */}
       {afiliadoSelecionadoModal && (() => {
-        const lojasModal = afiliadoSelecionadoModal?.lojas || [];
-        const lojasPendentes = lojasModal.filter((l: any) => l.status_repasse !== "pago");
+        const comissoesModal =
+          Array.isArray(afiliadoSelecionadoModal?.historicoComissoes) &&
+          afiliadoSelecionadoModal.historicoComissoes.length > 0
+            ? afiliadoSelecionadoModal.historicoComissoes
+            : (afiliadoSelecionadoModal?.lojas || []).map((l: any) => ({
+                id: l.id || l.codigo,
+                loja_id: l.id,
+                loja_nome: l.nome,
+                estabelecimento_codigo: l.codigo,
+                tipo_comissao: l.tipo_comissao || "adesao",
+                valor_comissao: Number(l.valor_comissao) || 18.91,
+                status_repasse: l.status_repasse || "pendente",
+                data_repasse: l.data_repasse || null,
+                created_at: l.created_at || l.criado_em,
+              }));
+
+        const pendentes = comissoesModal.filter((c: any) => c.status_repasse !== "pago");
         const todasPendentesSelecionadas =
-          lojasPendentes.length > 0 &&
-          lojasPendentes.every((l: any) => {
-            const key = l.id || l.codigo;
+          pendentes.length > 0 &&
+          pendentes.every((c: any) => {
+            const key = c.id || c.estabelecimento_codigo;
             return selecionados.includes(key);
           });
 
@@ -681,12 +729,12 @@ function AdminAfiliadosComponent() {
           if (todasPendentesSelecionadas) {
             setSelecionados([]);
           } else {
-            const todosKeys = lojasPendentes.map((l: any) => l.id || l.codigo).filter(Boolean);
+            const todosKeys = pendentes.map((c: any) => c.id || c.estabelecimento_codigo).filter(Boolean);
             setSelecionados(todosKeys);
           }
         };
 
-        const toggleSelecionarLoja = (key: string) => {
+        const toggleSelecionarItem = (key: string) => {
           if (selecionados.includes(key)) {
             setSelecionados(selecionados.filter((k) => k !== key));
           } else {
@@ -694,7 +742,11 @@ function AdminAfiliadosComponent() {
           }
         };
 
-        const totalSelecionadoValor = (selecionados.length * 18.91).toFixed(2).replace(".", ",");
+        const totalSelecionadoValorNum = comissoesModal
+          .filter((c: any) => selecionados.includes(c.id || c.estabelecimento_codigo))
+          .reduce((acc: number, curr: any) => acc + (Number(curr.valor_comissao) || 0), 0);
+
+        const totalSelecionadoValorStr = totalSelecionadoValorNum.toFixed(2).replace(".", ",");
 
         return (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -702,10 +754,10 @@ function AdminAfiliadosComponent() {
               <div className="p-6 border-b border-slate-800 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-white">
-                    Lojas de {afiliadoSelecionadoModal?.afiliado?.nome || "Afiliado"}
+                    Extrato de {afiliadoSelecionadoModal?.afiliado?.nome || "Afiliado"}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal?.afiliado?.cupom_exclusivo || "N/I"}</strong> — {afiliadoSelecionadoModal?.lojasConvertidasCount || 0} conversões
+                    Cupom: <strong className="text-amber-400 font-mono">{afiliadoSelecionadoModal?.afiliado?.cupom_exclusivo || "N/I"}</strong> — {comissoesModal.length} registro(s) de comissão
                   </p>
                 </div>
                 <button
@@ -719,7 +771,7 @@ function AdminAfiliadosComponent() {
                 </button>
               </div>
 
-              {lojasPendentes.length > 0 && (
+              {pendentes.length > 0 && (
                 <div className="flex items-center justify-between bg-slate-950/60 px-6 py-2.5 border-b border-slate-800 text-xs">
                   <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white font-medium select-none">
                     <input
@@ -728,7 +780,7 @@ function AdminAfiliadosComponent() {
                       onChange={toggleSelecionarTodas}
                       className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500 cursor-pointer"
                     />
-                    <span>Selecionar Todos ({lojasPendentes.length} pendente{lojasPendentes.length > 1 ? "s" : ""})</span>
+                    <span>Selecionar Todos ({pendentes.length} pendente{pendentes.length > 1 ? "s" : ""})</span>
                   </label>
                   {selecionados.length > 0 && (
                     <span className="text-amber-400 font-bold">
@@ -739,17 +791,19 @@ function AdminAfiliadosComponent() {
               )}
 
               <div className="p-6 overflow-y-auto space-y-3 flex-1">
-                {lojasModal.length === 0 ? (
+                {comissoesModal.length === 0 ? (
                   <p className="text-center text-xs text-slate-500 py-6">
-                    Nenhuma loja convertida com este cupom até o momento.
+                    Nenhuma comissão registrada para este cupom até o momento.
                   </p>
                 ) : (
                   <div className="divide-y divide-slate-800">
-                    {lojasModal.map((loja: any, i: number) => {
-                      const isPago = loja?.status_repasse === "pago";
-                      const key = loja?.id || loja?.codigo || `loja_${i}`;
+                    {comissoesModal.map((item: any, i: number) => {
+                      const isPago = item?.status_repasse === "pago";
+                      const key = item?.id || item?.estabelecimento_codigo || `com_${i}`;
                       const isChecked = selecionados.includes(key);
-                      const dataCriacaoStr = formatarDataHoraBR(loja?.created_at || loja?.criado_em);
+                      const dataCriacaoStr = formatarDataHoraBR(item?.created_at);
+                      const isRecorrente = item?.tipo_comissao === "recorrente";
+                      const valorNum = Number(item?.valor_comissao) || 0;
 
                       return (
                         <div key={key} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 last:border-0">
@@ -758,30 +812,41 @@ function AdminAfiliadosComponent() {
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                onChange={() => toggleSelecionarLoja(key)}
+                                onChange={() => toggleSelecionarItem(key)}
                                 className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500 cursor-pointer"
                               />
                             )}
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-white">{loja?.nome || "Loja"}</p>
-                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-amber-400">
-                                  {loja?.codigo || "N/I"}
-                                </span>
+                                <p className="text-sm font-semibold text-white">
+                                  {item?.loja_nome || `Loja ${item?.estabelecimento_codigo || ''}`}
+                                </p>
+                                {isRecorrente ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                    Recorrência (10%)
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    Adesão Inicial
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-slate-400 mt-1">
-                                Entrada: <span className="text-slate-300 font-mono">{dataCriacaoStr}</span> {loja?.email ? `• ${loja.email}` : ""}
+                                Data: <span className="text-slate-300 font-mono">{dataCriacaoStr}</span>
+                                {item?.estabelecimento_codigo ? ` • Código: ${item.estabelecimento_codigo}` : ""}
                               </p>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3 sm:justify-end">
                             <div className="text-right">
-                              <span className="text-xs font-bold text-emerald-400 block">Comissão: R$ 18,91</span>
+                              <span className="text-xs font-extrabold text-emerald-400 block">
+                                R$ {valorNum.toFixed(2).replace(".", ",")}
+                              </span>
                               {isPago ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
                                   <CheckCircle2 className="w-3 h-3" />
-                                  Pago em {formatarDataBR(loja?.data_repasse)}
+                                  Pago em {formatarDataBR(item?.data_repasse)}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 mt-0.5">
@@ -793,7 +858,7 @@ function AdminAfiliadosComponent() {
 
                             {!isPago && (
                               <button
-                                onClick={() => marcarRepasseComoPago(loja)}
+                                onClick={() => marcarRepasseComoPago(item)}
                                 className="px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1 shrink-0"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -815,7 +880,7 @@ function AdminAfiliadosComponent() {
                 <div className="flex items-center gap-4">
                   {selecionados.length > 0 && (
                     <span className="font-extrabold text-amber-400 text-sm">
-                      Total Selecionado: R$ {totalSelecionadoValor}
+                      Total Selecionado: R$ {totalSelecionadoValorStr}
                     </span>
                   )}
                   <button
