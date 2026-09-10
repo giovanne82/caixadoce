@@ -189,6 +189,7 @@ export function PdvView() {
   // =========================================================================
   const [caixaAtual, setCaixaAtual] = useState<CaixaTurno | null>(null);
   const [modalAberturaCaixaOpen, setModalAberturaCaixaOpen] = useState(false);
+  const [modalFechamentoCaixaOpen, setModalFechamentoCaixaOpen] = useState(false);
   const [valorAberturaInput, setValorAberturaInput] = useState("0,00");
   const [modalGestaoCaixaOpen, setModalGestaoCaixaOpen] = useState(false);
   const [abaGestaoCaixa, setAbaGestaoCaixa] = useState<"resumo" | "sangria" | "reforco" | "movimentacoes">("resumo");
@@ -698,7 +699,7 @@ export function PdvView() {
     }
   };
 
-  // Verificação inicial de abertura de caixa ao abrir o PDV
+  // Verificação inicial de abertura de caixa ao abrir o PDV (Sem abertura automática de modal)
   useEffect(() => {
     if (!activeCode) return;
 
@@ -707,18 +708,11 @@ export function PdvView() {
       try {
         const parsed: CaixaTurno = JSON.parse(storedCaixa);
         setCaixaAtual(parsed);
-        if (parsed.status === "aberto") {
-          setModalAberturaCaixaOpen(false);
-        } else {
-          setModalAberturaCaixaOpen(true);
-        }
       } catch {
-        setModalAberturaCaixaOpen(true);
+        setCaixaAtual(null);
       }
     } else {
-      // Se ainda não abriu caixa hoje, abre modal obrigatório de abertura
       setCaixaAtual(null);
-      setModalAberturaCaixaOpen(true);
     }
 
     carregarDadosCaixaETurnos();
@@ -832,30 +826,72 @@ export function PdvView() {
     }
   };
 
-  // Fechamento de Caixa
+  // Trava de Venda (Verifica estado do Caixa)
+  const handleVerificarECobrar = () => {
+    if (!caixaAtual || caixaAtual.status !== "aberto") {
+      toast.error("O caixa está FECHADO. Clique em 'Abrir Caixa' para autorizar e registrar vendas.");
+      setModalAberturaCaixaOpen(true);
+      return;
+    }
+    setCheckoutModalOpen(true);
+  };
+
+  // Abrir Modal de Relatório de Fechamento de Caixa
   const handleFecharCaixa = () => {
-    if (!caixaAtual) return;
+    setModalGestaoCaixaOpen(false);
+    setModalFechamentoCaixaOpen(true);
+  };
+
+  // Confirmar e Gravar Fechamento de Caixa
+  const handleConfirmarFechamentoCaixa = async () => {
     const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const caixaFechado: CaixaTurno = {
       ...caixaAtual,
+      data: hoje,
       status: "fechado",
       horaFechamento: horaAgora,
     };
+
     setCaixaAtual(caixaFechado);
     try {
       localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(caixaFechado));
     } catch {}
+
+    // Registra fechamento na tabela transacoes_financeiras
+    try {
+      const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
+      const payloadFin = {
+        estabelecimento_codigo: activeCode,
+        user_id: finUserId,
+        descricao: `Fechamento de Caixa (Turno) - Total Gaveta: ${formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)} (Vendas: ${formatarMoeda(resumoFinanceiroCaixa.totalVendasGeral)})`,
+        categoria: "fechamento_caixa",
+        tipo: "despesa",
+        valor: resumoFinanceiroCaixa.saldoDinheiroGaveta,
+        metodo_pagamento: "dinheiro",
+        status: "concluida",
+        cliente_ou_fornecedor: "Operador Caixa",
+        data: hoje,
+        origem: "PDV",
+      };
+      await supabase.from("transacoes_financeiras").insert([payloadFin]);
+    } catch (errFin) {
+      console.warn("[PDV Fechamento Financeiro Error]", errFin);
+    }
+
+    setValorAberturaInput("0,00");
+    setModalFechamentoCaixaOpen(false);
     setModalGestaoCaixaOpen(false);
-    toast.info("Caixa do dia fechado com sucesso!");
+    toast.success("🔒 Caixa fechado com sucesso! Para realizar novas vendas, abra um novo turno.");
   };
 
-  // Cálculo Dinâmico do Resumo Financeiro da Gaveta
+  // Cálculo Dinâmico do Resumo Financeiro da Gaveta & Métodos
   const resumoFinanceiroCaixa = useMemo(() => {
     const valorAbertura = Number(caixaAtual?.valorAbertura) || 0;
 
     let totalVendasDinheiro = 0;
     let totalVendasPix = 0;
-    let totalVendasCartao = 0;
+    let totalVendasCredito = 0;
+    let totalVendasDebito = 0;
     let totalVendasGeral = 0;
 
     for (const v of vendasRecentes) {
@@ -873,14 +909,18 @@ export function PdvView() {
           const met = String(p.metodo || "").toLowerCase();
           if (met === "dinheiro") totalVendasDinheiro += val;
           else if (met === "pix") totalVendasPix += val;
-          else if (met.includes("cartao") || met.includes("card") || met.includes("credit") || met.includes("debit")) totalVendasCartao += val;
+          else if (met.includes("debito") || met === "cartao_debito") totalVendasDebito += val;
+          else if (met.includes("credito") || met === "cartao_credito") totalVendasCredito += val;
+          else if (met.includes("cartao") || met.includes("card")) totalVendasCredito += val;
           else totalVendasDinheiro += val;
         }
       } else {
         const met = String(v.metodo_pagamento || "").toLowerCase();
         if (met === "dinheiro") totalVendasDinheiro += total;
         else if (met === "pix") totalVendasPix += total;
-        else if (met.includes("cartao") || met.includes("credit") || met.includes("debit")) totalVendasCartao += total;
+        else if (met.includes("debito") || met === "cartao_debito") totalVendasDebito += total;
+        else if (met.includes("credito") || met === "cartao_credito") totalVendasCredito += total;
+        else if (met.includes("cartao") || met.includes("card")) totalVendasCredito += total;
         else totalVendasDinheiro += total;
       }
     }
@@ -906,7 +946,9 @@ export function PdvView() {
       valorAbertura,
       totalVendasDinheiro,
       totalVendasPix,
-      totalVendasCartao,
+      totalVendasCredito,
+      totalVendasDebito,
+      totalVendasCartao: totalVendasCredito + totalVendasDebito,
       totalVendasGeral,
       totalReforcos,
       totalSangrias,
@@ -1073,6 +1115,12 @@ export function PdvView() {
   // FINALIZAÇÃO E GRAVAÇÃO DA VENDA NO BANCO
   // ==========================================
   const handleFinalizarVendaPdv = async () => {
+    if (!caixaAtual || caixaAtual.status !== "aberto") {
+      toast.error("O caixa está FECHADO. Você precisa abrir o caixa para realizar vendas.");
+      setModalAberturaCaixaOpen(true);
+      return;
+    }
+
     if (totalVenda <= 0) {
       toast.error("O carrinho está vazio.");
       return;
@@ -1354,37 +1402,45 @@ export function PdvView() {
 
           {/* Lado Direito: Ações Rápidas do Cabeçalho */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Botão de Gestão de Caixa */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!caixaAtual || caixaAtual.status === "fechado") {
-                  setModalAberturaCaixaOpen(true);
-                } else {
-                  setModalGestaoCaixaOpen(true);
-                }
-              }}
-              className={`h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0 ${
-                caixaAtual?.status === "aberto"
-                  ? "bg-slate-800/90 border-emerald-500/40 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
-                  : "bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200"
-              }`}
-            >
-              <Wallet className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                {caixaAtual?.status === "aberto" ? (
-                  <>
+            {/* Botão de Gestão de Caixa & Fechamento */}
+            {caixaAtual?.status === "aberto" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalGestaoCaixaOpen(true)}
+                  className="h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl border border-emerald-500/40 bg-slate-800/90 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200 text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
+                >
+                  <Wallet className="w-3.5 h-3.5 shrink-0" />
+                  <span>
                     <span className="hidden md:inline">Caixa: </span>
                     <span className="font-mono font-bold text-white text-[11px] sm:text-xs">
                       {formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)}
                     </span>
-                  </>
-                ) : (
-                  "Abrir Caixa"
-                )}
-              </span>
-            </Button>
+                  </span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalFechamentoCaixaOpen(true)}
+                  className="h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
+                >
+                  <Lock className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span className="hidden sm:inline">Fechar Caixa</span>
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setModalAberturaCaixaOpen(true)}
+                className="h-8 sm:h-8.5 px-3 sm:px-4 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 text-xs font-black flex items-center gap-1.5 shadow-xs shrink-0 animate-pulse"
+              >
+                <Unlock className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                <span>Abrir Caixa</span>
+              </Button>
+            )}
 
             {/* Botão de Últimas Vendas */}
             <Button
@@ -1420,7 +1476,7 @@ export function PdvView() {
             <Button
               size="sm"
               disabled={pdvCart.length === 0}
-              onClick={() => setCheckoutModalOpen(true)}
+              onClick={handleVerificarECobrar}
               className="hidden lg:flex h-8.5 px-3.5 font-black text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-40 shrink-0"
             >
               <Check className="w-4 h-4" />
@@ -1436,6 +1492,29 @@ export function PdvView() {
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden pb-20 lg:pb-0">
         {/* LADO ESQUERDO: CATÁLOGO DE PRODUTOS & BUSCA RÁPIDA (65%) */}
         <div className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto space-y-4">
+          {/* Alerta de Caixa Fechado */}
+          {(!caixaAtual || caixaAtual.status !== "aberto") && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 sm:p-4 flex items-center justify-between gap-3 text-amber-200 text-xs shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-xs sm:text-sm">Caixa Fechado (Turno Inativo)</p>
+                  <p className="text-[11px] text-amber-300/80">Abra o caixa informando o fundo de troco para autorizar a realização de vendas.</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setModalAberturaCaixaOpen(true)}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8.5 px-3.5 rounded-xl shrink-0 shadow-md flex items-center gap-1.5"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                Abrir Caixa
+              </Button>
+            </div>
+          )}
+
           {/* Barra de Busca e Filtros de Categoria */}
           <div className="space-y-3">
             <div className="relative">
@@ -1707,7 +1786,7 @@ export function PdvView() {
 
             <Button
               disabled={pdvCart.length === 0}
-              onClick={() => setCheckoutModalOpen(true)}
+              onClick={handleVerificarECobrar}
               className="w-full h-11 font-black text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-40"
             >
               <Receipt className="w-4 h-4" />
@@ -2883,6 +2962,155 @@ export function PdvView() {
       </Dialog>
 
       {/* ========================================================================= */}
+      {/* MODAL DE RELATÓRIO DE FECHAMENTO DE CAIXA (CÁLCULO DE TURNO) */}
+      {/* ========================================================================= */}
+      <Dialog open={modalFechamentoCaixaOpen} onOpenChange={setModalFechamentoCaixaOpen}>
+        <DialogContent className="sm:max-w-lg bg-slate-900 border-rose-500/40 text-white p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-3 border-b border-slate-800">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                <Lock className="w-5 h-5 text-rose-400 shrink-0" />
+                Relatório de Fechamento de Caixa
+              </DialogTitle>
+              <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30 text-[10px] uppercase font-bold">
+                Turno Diário
+              </Badge>
+            </div>
+            <DialogDescription className="text-xs text-slate-400">
+              Confira o resumo financeiro do turno antes de confirmar o encerramento do caixa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-4 text-xs">
+            {/* Operador e Horários */}
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Operador Responsável:</span>
+                <strong className="text-white">{caixaAtual?.operador || profile?.responsavel || "Operador"}</strong>
+              </div>
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Aberto às:</span>
+                <span className="font-mono text-white">{caixaAtual?.horaAbertura || "--:--"}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Hora do Fechamento:</span>
+                <span className="font-mono text-rose-400">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            </div>
+
+            {/* Subtotais por Modalidade de Pagamento */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Vendas por Modalidade de Pagamento
+              </h4>
+              <div className="space-y-1.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-400" /> Dinheiro
+                  </span>
+                  <span className="font-mono font-bold text-emerald-400">
+                    {formatarMoeda(resumoFinanceiroCaixa.totalVendasDinheiro)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <QrCode className="w-3.5 h-3.5 text-purple-400" /> PIX
+                  </span>
+                  <span className="font-mono font-bold text-purple-300">
+                    {formatarMoeda(resumoFinanceiroCaixa.totalVendasPix)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <CreditCard className="w-3.5 h-3.5 text-sky-400" /> Cartão de Crédito
+                  </span>
+                  <span className="font-mono font-bold text-sky-300">
+                    {formatarMoeda(resumoFinanceiroCaixa.totalVendasCredito)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <CreditCard className="w-3.5 h-3.5 text-indigo-400" /> Cartão de Débito
+                  </span>
+                  <span className="font-mono font-bold text-indigo-300">
+                    {formatarMoeda(resumoFinanceiroCaixa.totalVendasDebito)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 font-bold text-xs">
+                  <span className="text-white uppercase tracking-wider">Total Geral de Vendas:</span>
+                  <span className="font-mono text-emerald-400 text-sm">
+                    {formatarMoeda(resumoFinanceiroCaixa.totalVendasGeral)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Movimentações de Gaveta */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Fundo & Movimentações Físicas
+              </h4>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Fundo Inicial</span>
+                  <span className="font-mono font-bold text-white text-xs">
+                    {formatarMoeda(resumoFinanceiroCaixa.valorAbertura)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Reforços (+)</span>
+                  <span className="font-mono font-bold text-emerald-400 text-xs">
+                    +{formatarMoeda(resumoFinanceiroCaixa.totalReforcos)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Sangrias (-)</span>
+                  <span className="font-mono font-bold text-rose-400 text-xs">
+                    -{formatarMoeda(resumoFinanceiroCaixa.totalSangrias)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Esperado em Dinheiro na Gaveta */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-rose-500/40 text-center space-y-1 shadow-lg">
+              <span className="text-xs font-bold uppercase tracking-wider text-rose-300 block">
+                Total Esperado em Dinheiro na Gaveta
+              </span>
+              <p className="text-2xl sm:text-3xl font-mono font-black text-white">
+                {formatarMoeda(resumoFinanceiroCaixa.saldoDinheiroGaveta)}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Fundo ({formatarMoeda(resumoFinanceiroCaixa.valorAbertura)}) + Vendas Dinheiro ({formatarMoeda(resumoFinanceiroCaixa.totalVendasDinheiro)}) + Reforços ({formatarMoeda(resumoFinanceiroCaixa.totalReforcos)}) - Sangrias ({formatarMoeda(resumoFinanceiroCaixa.totalSangrias)})
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setModalFechamentoCaixaOpen(false)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmarFechamentoCaixa}
+              className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs px-5 h-9 shadow-md flex items-center gap-1.5"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Confirmar Fechamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
       {/* 8. MODAL DE ÚLTIMAS VENDAS (SINCRONIZADO COM ENCOMENDAS & FINANCEIRO) */}
       {/* ========================================================================= */}
       <Dialog open={modalUltimasVendasOpen} onOpenChange={setModalUltimasVendasOpen}>
@@ -3148,7 +3376,7 @@ export function PdvView() {
           <Button
             type="button"
             disabled={pdvCart.length === 0}
-            onClick={() => setCheckoutModalOpen(true)}
+            onClick={handleVerificarECobrar}
             className="h-10 px-4 sm:px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 active:scale-95 disabled:opacity-40"
           >
             <Check className="w-4 h-4 stroke-[3]" />
