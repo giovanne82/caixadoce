@@ -50,6 +50,7 @@ import {
   formatarMoeda,
   aplicarMascaraMoedaInput,
   converterMoedaInputParaNumero,
+  calcularCustoProporcional,
   obterInsumosCadastrados,
   salvarInsumosCadastradosStorage,
   atualizarCustoInsumoECascataFichas,
@@ -424,16 +425,11 @@ export function InsumosView({
               {/* LAYOUT MOBILE (CARDS EMPILHADOS RESPONSIVOS - sm:hidden) */}
               <div className="space-y-3 p-3 sm:hidden">
                 {insumosFiltrados.map((ins) => {
-                  const custUnit =
-                    ins.qtdEmbalagemOriginal > 0
-                      ? ins.custoAtual / ins.qtdEmbalagemOriginal
-                      : ins.custoAtual;
-                  const unidProp =
-                    ins.unidadeMedida === "kg"
-                      ? "g"
-                      : ins.unidadeMedida === "l"
-                      ? "ml"
-                      : ins.unidadeMedida;
+                  const prop = calcularCustoProporcional(
+                    ins.custoAtual,
+                    ins.qtdEmbalagemOriginal,
+                    ins.unidadeMedida
+                  );
 
                   return (
                     <Card key={ins.id} className="p-3.5 border-border shadow-2xs space-y-2 bg-card rounded-xl">
@@ -484,7 +480,7 @@ export function InsumosView({
                         <div className="text-right">
                           <span className="text-[10px] text-muted-foreground font-bold uppercase block">Proporcional</span>
                           <span className="font-semibold font-mono text-muted-foreground text-[11px]">
-                            {formatarMoeda(custUnit)}/{unidProp}
+                            {prop.textoFormatado}
                           </span>
                         </div>
                       </div>
@@ -508,10 +504,11 @@ export function InsumosView({
                   </TableHeader>
                   <TableBody>
                     {insumosFiltrados.map((ins) => {
-                      const custUnit =
-                        ins.qtdEmbalagemOriginal > 0
-                          ? ins.custoAtual / ins.qtdEmbalagemOriginal
-                          : ins.custoAtual;
+                      const prop = calcularCustoProporcional(
+                        ins.custoAtual,
+                        ins.qtdEmbalagemOriginal,
+                        ins.unidadeMedida
+                      );
 
                       return (
                         <TableRow key={ins.id} className="hover:bg-muted/30">
@@ -525,7 +522,7 @@ export function InsumosView({
                             {formatarMoeda(ins.custoAtual)}
                           </TableCell>
                           <TableCell className="text-xs text-right font-mono text-muted-foreground">
-                            {formatarMoeda(custUnit)} / {ins.unidadeMedida === "kg" ? "g" : ins.unidadeMedida === "l" ? "ml" : ins.unidadeMedida}
+                            {prop.textoFormatado}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {ins.fornecedor || "—"}
@@ -698,6 +695,19 @@ export function InsumosView({
                 required
               />
             </div>
+
+            {custoAtualFormatado && (
+              <div className="p-2.5 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-800/50 flex items-center justify-between text-xs">
+                <span className="text-purple-900 dark:text-purple-200 font-semibold">Custo Proporcional:</span>
+                <span className="font-black font-mono text-purple-700 dark:text-purple-300">
+                  {calcularCustoProporcional(
+                    converterMoedaInputParaNumero(custoAtualFormatado),
+                    parseFloat(qtdEmbalagemStr) || 1,
+                    unidadeMedida
+                  ).textoFormatado}
+                </span>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="ins-fornec" className="text-xs font-semibold">

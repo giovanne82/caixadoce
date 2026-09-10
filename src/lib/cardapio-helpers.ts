@@ -62,6 +62,86 @@ export function converterMoedaInputParaNumero(valorFormatado: string | number): 
   return Number(apenasDigitos) / 100;
 }
 
+export interface ResultadoCustoProporcional {
+  valor: number;
+  sufixo: string;
+  unidadeBase: string;
+  textoFormatado: string;
+}
+
+/**
+ * Calcula e formata o custo proporcional com base na quantidade da embalagem e unidade de medida.
+ * - kg: multiplica por 1000 -> divide custo por gramas -> sufixo '/g'
+ * - L: multiplica por 1000 -> divide custo por ml -> sufixo '/ml'
+ * - g, ml, un: divide custo pela quantidade -> sufixo correspondente
+ * - Valores < R$ 0,10 são formatados com 3 a 4 casas decimais para precisão.
+ */
+export function calcularCustoProporcional(
+  custoPago: number,
+  quantidadeEmbalagem: number,
+  unidadeMedida: string
+): ResultadoCustoProporcional {
+  const custo = Number(custoPago) || 0;
+  const qtdEmb = Number(quantidadeEmbalagem) > 0 ? Number(quantidadeEmbalagem) : 1;
+  const u = (unidadeMedida || "un").toLowerCase().trim();
+
+  let totalFracao = qtdEmb;
+  let sufixo = `/${u}`;
+  let unidadeBase = u;
+
+  if (u === "kg" || u === "quilo" || u === "quilos") {
+    totalFracao = qtdEmb * 1000;
+    sufixo = "/g";
+    unidadeBase = "g";
+  } else if (u === "l" || u === "litro" || u === "litros") {
+    totalFracao = qtdEmb * 1000;
+    sufixo = "/ml";
+    unidadeBase = "ml";
+  } else if (u === "g" || u === "grama" || u === "gramas") {
+    totalFracao = qtdEmb;
+    sufixo = "/g";
+    unidadeBase = "g";
+  } else if (u === "ml" || u === "mililitro" || u === "mililitros") {
+    totalFracao = qtdEmb;
+    sufixo = "/ml";
+    unidadeBase = "ml";
+  } else if (u === "un" || u === "und" || u === "unidade" || u === "unidades") {
+    totalFracao = qtdEmb;
+    sufixo = "/un";
+    unidadeBase = "un";
+  } else {
+    totalFracao = qtdEmb;
+    sufixo = `/${unidadeMedida || "un"}`;
+    unidadeBase = unidadeMedida || "un";
+  }
+
+  const valorProporcional = totalFracao > 0 ? custo / totalFracao : custo;
+
+  let valorFormatadoStr = "";
+  if (valorProporcional < 0.10 && valorProporcional > 0) {
+    const casas = valorProporcional < 0.01 ? 4 : 3;
+    const numStr = valorProporcional.toLocaleString("pt-BR", {
+      minimumFractionDigits: casas,
+      maximumFractionDigits: 4,
+    });
+    valorFormatadoStr = `R$ ${numStr}`;
+  } else {
+    valorFormatadoStr = valorProporcional.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  return {
+    valor: valorProporcional,
+    sufixo,
+    unidadeBase,
+    textoFormatado: `${valorFormatadoStr}${sufixo}`,
+  };
+}
+
 export function formatarWhatsappLink(whatsapp: string, mensagem?: string): string {
   const cleanPhone = (whatsapp || "").replace(/\D/g, "");
   const textEncoded = mensagem ? encodeURIComponent(mensagem) : "";

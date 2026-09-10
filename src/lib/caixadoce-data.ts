@@ -18,6 +18,8 @@ export {
   validarHorarioEntrega,
   formatarBadgeDisponibilidadeProduto,
   calcularRegrasAgendamentoCarrinho,
+  calcularCustoProporcional,
+  type ResultadoCustoProporcional,
 } from "./cardapio-helpers";
 
 export interface Estabelecimento {
