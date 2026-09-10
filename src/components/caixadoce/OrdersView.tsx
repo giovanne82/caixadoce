@@ -84,6 +84,7 @@ import {
   Users,
   CheckCircle2,
   RotateCcw,
+  Copy,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -615,30 +616,36 @@ export function OrdersView({
     calcularSugestaoFicha();
   }, [itensTags, listaProdutos]);
 
-  const handleImportarSugestaoParaPedido = () => {
-    if (sugestaoCompraInsumos.length === 0) return;
+  const handleCopiarListaSugestaoInsumos = () => {
+    if (sugestaoCompraInsumos.length === 0) {
+      toast.warning("Nenhum insumo sugerido para copiar.");
+      return;
+    }
 
-    let adicionados = 0;
-    setInsumosTags((prev) => {
-      const novos = [...prev];
-      for (const sug of sugestaoCompraInsumos) {
-        const jaExiste = novos.find(
-          (t) => t.nome.toLowerCase() === sug.insumoNome.toLowerCase()
-        );
-        if (!jaExiste) {
-          novos.push({
-            id: crypto.randomUUID(),
-            nome: sug.insumoNome,
-            quantidade: `${sug.quantidadeTotal} ${sug.unidadeMedida}`,
-            comprado: false,
-          });
-          adicionados++;
-        }
-      }
-      return novos;
+    const identificador = clienteNome.trim() || (editingId ? `Pedido #${editingId.slice(0, 6)}` : "Novo Pedido");
+    const linhas = sugestaoCompraInsumos.map((sug) => {
+      return `- ${sug.quantidadeTotal}${sug.unidadeMedida}: ${sug.insumoNome}`;
     });
 
-    toast.success(`${adicionados} insumo(s) da Ficha Técnica importado(s) para o pedido!`);
+    const textoFormatado = `🛒 *Lista de Insumos - Pedido [${identificador}]*\n${linhas.join("\n")}`;
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(textoFormatado)
+        .then(() => {
+          toast.success("Lista copiada para a área de transferência!");
+        })
+        .catch(() => {
+          const el = document.createElement("textarea");
+          el.value = textoFormatado;
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand("copy");
+          document.body.removeChild(el);
+          toast.success("Lista copiada para a área de transferência!");
+        });
+    } else {
+      toast.success("Lista copiada para a área de transferência!");
+    }
   };
 
   // Modal de Seleção Rápida de Conta Pix no momento do Envio
@@ -3213,10 +3220,10 @@ export function OrdersView({
                     <Button
                       type="button"
                       size="sm"
-                      onClick={handleImportarSugestaoParaPedido}
+                      onClick={handleCopiarListaSugestaoInsumos}
                       className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 rounded-xl shadow-xs"
                     >
-                      <PlusCircle className="w-3.5 h-3.5" /> Colocar na Lista de Insumos Necessários
+                      <Copy className="w-3.5 h-3.5" /> 📋 Copiar Lista
                     </Button>
                   </div>
 

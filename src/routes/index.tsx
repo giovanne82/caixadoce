@@ -45,6 +45,7 @@ import {
   AlertCircle,
   UtensilsCrossed,
   Store,
+  Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { obterPlanoEfetivoEstabelecimento, verificarAcessoModulo, formatarDataExpiracao, salvarDadosPlanoEstabelecimento } from "@/lib/planos-utils";
@@ -256,7 +257,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     return LISTAS_COMPRAS_PADRAO;
   });
 
-  const ABAS_PERMITIDAS_COLABORADOR = ["despesas", "produtos", "encomendas"];
+  const ABAS_PERMITIDAS_COLABORADOR = ["insumos", "despesas", "produtos", "encomendas"];
 
   const podeAcessarAba = useCallback((abaId: string): boolean => {
     if (!profile || profile.role === "admin") return true;
@@ -268,7 +269,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
-      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Lista de Compras, Cardápio e Encomendas.");
+      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Insumos, Cardápio e Encomendas.");
       setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
@@ -2038,9 +2039,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                   <Camera className="w-4 h-4" /> Escanear
                 </TabsTrigger>
               )}
-              {podeAcessarAba("despesas") && (
-                <TabsTrigger value="despesas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Layers className="w-4 h-4" /> Compras
+              {(podeAcessarAba("insumos") || podeAcessarAba("despesas")) && (
+                <TabsTrigger value="insumos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Scale className="w-4 h-4" /> Insumos
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -2092,20 +2093,26 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             )}
           </TabsContent>
 
-          {/* 2. Aba Dedicada: Compras (Lista de Compras & Cadastro de Insumos Integrados) */}
+          {/* 2. Aba Dedicada: Insumos (Cadastro & Gestão de Ingredientes e Preços) */}
+          <TabsContent value="insumos">
+            {verificarAcessoModulo("insumos", infoPlano) ? (
+              <InsumosView
+                estabelecimentoCodigo={activeCode}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
+          </TabsContent>
+
+          {/* Redirecionamento de compatibilidade da aba antiga despesas para Insumos */}
           <TabsContent value="despesas">
-            <DespesasView
-              despesas={despesas}
-              encomendas={encomendas}
-              clientes={clientes}
-              produtos={produtos}
-              estabelecimentoCodigo={activeCode}
-              onExcluirDespesa={excluirDespesa}
-              onEditarDespesa={editarDespesa}
-              onReatribuirEstabelecimento={reatribuirEstabelecimentoDespesas}
-              listasCompras={listasCompras}
-              onAtualizarListasCompras={setListasCompras}
-            />
+            {verificarAcessoModulo("insumos", infoPlano) ? (
+              <InsumosView
+                estabelecimentoCodigo={activeCode}
+              />
+            ) : (
+              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
+            )}
           </TabsContent>
 
           {/* 3. Encomendas & Calendário (com Histórico Permanente) */}
@@ -2207,17 +2214,17 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             </button>
           )}
 
-          {podeAcessarAba("despesas") && (
+          {(podeAcessarAba("insumos") || podeAcessarAba("despesas")) && (
             <button
-              onClick={() => setActiveTab("despesas")}
+              onClick={() => setActiveTab("insumos")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-                activeTab === "despesas"
+                activeTab === "insumos" || activeTab === "despesas"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
                   : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Layers className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "despesas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Compras</span>
+              <Scale className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "insumos" || activeTab === "despesas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Insumos</span>
             </button>
           )}
 

@@ -236,7 +236,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
 
     if (isColab) {
-      abasPermitidas = ["despesas", "produtos", "encomendas"];
+      abasPermitidas = ["insumos", "despesas", "produtos", "encomendas"];
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
@@ -637,7 +637,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       establishmentAddress: estEndereco,
       chavePix: estLocal?.chavePix || "",
       tipoChavePix: estLocal?.tipoChavePix || "cpf",
-      abasPermitidas: colabEncontrado.abas_permitidas || colabEncontrado.allowed_tabs || colabEncontrado.abasPermitidas || ["despesas", "produtos", "encomendas"],
+      abasPermitidas: colabEncontrado.abas_permitidas || colabEncontrado.allowed_tabs || colabEncontrado.abasPermitidas || ["insumos", "despesas", "produtos", "encomendas"],
     };
 
     setUser(colabUser);

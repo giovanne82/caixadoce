@@ -252,11 +252,11 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
 }
 
 export function verificarAcessoModulo(
-  modulo: "despesas" | "scanner" | "encomendas" | "produtos" | "financeiro",
+  modulo: "despesas" | "insumos" | "scanner" | "encomendas" | "produtos" | "financeiro",
   infoPlano: InfoPlanoEstabelecimento
 ): boolean {
-  // 1. O plano gratuito permite EXCLUSIVAMENTE a Lista de Compras ('despesas')
-  if (modulo === "despesas") return true;
+  // 1. O plano gratuito permite EXCLUSIVAMENTE Insumos ('insumos' / 'despesas')
+  if (modulo === "despesas" || modulo === "insumos") return true;
 
   // 2. No período de teste de 7 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;

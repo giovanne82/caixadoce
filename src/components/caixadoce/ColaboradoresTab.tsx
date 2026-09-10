@@ -34,7 +34,7 @@ import { type Colaborador } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
 const ABAS_DISPONIVEIS = [
-  { id: "despesas", label: "Lista de Compras & Notinhas" },
+  { id: "insumos", label: "Cadastro de Insumos" },
   { id: "produtos", label: "Cardápio Digital" },
   { id: "encomendas", label: "Gestão de Encomendas" },
 ];
