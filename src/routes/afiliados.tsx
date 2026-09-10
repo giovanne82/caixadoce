@@ -275,47 +275,100 @@ function AfiliadosComponent() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans relative">
-      {/* MODAL DE BLOQUEIO INCONTORNÁVEL — ACEITE DE TERMOS */}
+      {/* MODAL DE BLOQUEIO INCONTORNÁVEL — ACEITE DE TERMOS DEFINITIVO */}
       {precisaAceitarTermos && (
         <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col p-5 sm:p-7 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3 shrink-0">
               <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-extrabold text-white">Termos do Programa de Parceiros</h2>
+                <h2 className="text-lg sm:text-xl font-extrabold text-white">Termos do Programa de Parceiros</h2>
                 <p className="text-xs text-amber-400 font-medium">Aceite obrigatório para liberar o painel de comissões</p>
               </div>
             </div>
 
-            <div className="space-y-4 text-xs text-slate-300 max-h-60 overflow-y-auto pr-2 leading-relaxed bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-              <p className="font-bold text-white text-sm">Contrato de Adesão & Regras do Programa CaixaDoce:</p>
-              
-              <ul className="space-y-2 list-disc list-inside text-slate-300">
-                <li>
-                  <strong className="text-white">Comissão de Adesão Inicial:</strong> Você receberá <strong className="text-emerald-400">R$ 18,91</strong> por cada nova loja que se cadastrar com seu cupom exclusivo e realizar o primeiro pagamento ativando o plano PRO.
-                </li>
-                <li>
-                  <strong className="text-white">Comissão Recorrente Mensal:</strong> A partir da segunda mensalidade da loja indicada, você receberá <strong className="text-emerald-400">10% de comissão recorrente</strong> sobre todos os pagamentos mensais ativos daquela loja.
-                </li>
-                <li>
-                  <strong className="text-white">Pagamentos & Repasses:</strong> Os pagamentos das comissões acumuladas são consolidados periodicamente e transferidos via PIX para a chave cadastrada em seu perfil.
-                </li>
-                <li>
-                  <strong className="text-white">Política Antifraude & Auto-indicação:</strong> É expressamente proibida a auto-indicação (utilização do próprio cupom em estabelecimentos próprios ou sob o mesmo CPF/CNPJ) para fins de simulação de comissão.
-                </li>
-                <li>
-                  <strong className="text-white">Alteração de Regras:</strong> O CaixaDoce reserva-se o direito de atualizar as diretrizes do programa mediante notificação prévia aos parceiros cadastrados.
-                </li>
-              </ul>
+            <div className="space-y-4 text-xs text-slate-300 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto pr-3 leading-relaxed bg-slate-950/70 p-4 sm:p-5 rounded-xl border border-slate-800 scrollbar-thin">
+              <p className="font-extrabold text-white text-sm tracking-tight border-b border-slate-800 pb-2">
+                TERMO DE CONSENTIMENTO E REGRAS DO PROGRAMA DE AFILIADOS CAIXADOCE
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="font-bold text-amber-400 text-xs uppercase tracking-wide mb-1">
+                    1. Comissionamento e Pagamento
+                  </p>
+                  <p>
+                    O afiliado fará jus a duas modalidades de comissão por cada cliente convertido através de seu cupom:
+                  </p>
+                  <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-slate-300">
+                    <li>
+                      <strong className="text-white">a) Adesão:</strong> Comissão fixa repassada sobre o primeiro pagamento do indicado.
+                    </li>
+                    <li>
+                      <strong className="text-white">b) Recorrência:</strong> Comissão contínua de 10% sobre o valor líquido das mensalidades seguintes, creditada enquanto o indicado mantiver a assinatura ativa e adimplente.
+                    </li>
+                  </ul>
+                  <p className="mt-1.5">
+                    O fechamento e o pagamento das comissões (via PIX) ocorrerão uma vez ao mês, englobando todas as conversões e recorrências com status &quot;pago&quot; no sistema até a data de corte.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-amber-400 text-xs uppercase tracking-wide mb-1">
+                    2. Independência e Custos de Publicidade (Tráfego Pago)
+                  </p>
+                  <p>
+                    O afiliado atua de forma autônoma. Todo e qualquer investimento em marketing, incluindo, mas não se limitando a, anúncios em redes sociais (Tráfego Pago no Meta Ads, Google Ads, TikTok, etc.), é de inteira responsabilidade e risco financeiro do afiliado. O CaixaDoce não reembolsará custos de campanhas sob nenhuma hipótese, independentemente do resultado das vendas.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-amber-400 text-xs uppercase tracking-wide mb-1">
+                    3. Natureza do Serviço e Estabilidade
+                  </p>
+                  <p>
+                    O CaixaDoce é um sistema de tecnologia (SaaS) e, como tal, está sujeito a manutenções programadas, atualizações, ou eventuais instabilidades e quedas temporárias de servidor. O CaixaDoce não se responsabiliza civil ou financeiramente por potenciais perdas de conversão, cliques ou vendas não rastreadas decorrentes de instabilidades sistêmicas, quedas de provedor ou falhas no gateway de pagamento.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-amber-400 text-xs uppercase tracking-wide mb-1">
+                    4. Uso da Marca e Prevenção à Fraude
+                  </p>
+                  <p>
+                    É estritamente proibido criar perfis ou páginas que se passem pelo perfil oficial do CaixaDoce, causando confusão ao consumidor. Também é vedada a prática de autocadastro (assinar o próprio sistema para obter desconto/comissão) ou métodos fraudulentos de clonagem. A violação desta regra resultará no banimento imediato do afiliado e no cancelamento irreversível de todos os saldos pendentes.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-amber-400 text-xs uppercase tracking-wide mb-1">
+                    5. Encerramento de Atividades e Alteração do Programa
+                  </p>
+                  <p>
+                    O CaixaDoce reserva-se o direito de, a seu exclusivo critério e a qualquer momento, modificar as regras deste programa, alterar as taxas de comissionamento ou até mesmo encerrar o Programa de Afiliados e/ou as atividades do próprio aplicativo. Em caso de descontinuidade do sistema ou encerramento das operações do CaixaDoce:
+                  </p>
+                  <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1 text-slate-300">
+                    <li>
+                      <strong className="text-white">a)</strong> O direito do afiliado a futuras comissões (incluindo as recorrentes) será imediatamente extinto;
+                    </li>
+                    <li>
+                      <strong className="text-white">b)</strong> O CaixaDoce se compromete a repassar o saldo de comissões pendentes já consolidadas até a data oficial do encerramento;
+                    </li>
+                    <li>
+                      <strong className="text-white">c)</strong> O afiliado declara ciência de que não terá direito a nenhum tipo de indenização, multa ou compensação por lucros cessantes, perdas de investimento em anúncios ou expectativas de ganhos futuros.
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
-            <div className="pt-2 space-y-3">
+            <div className="pt-2 space-y-2 shrink-0">
               <button
                 onClick={aceitarTermos}
                 disabled={aceitandoTermos}
-                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {aceitandoTermos ? (
                   <>
@@ -330,7 +383,7 @@ function AfiliadosComponent() {
                 )}
               </button>
               <p className="text-[11px] text-slate-400 text-center">
-                Ao clicar em &quot;Li e Aceito os Termos de Parceiro&quot;, você concorda integralmente com as regras descritas acima.
+                Ao clicar em &quot;Li e Aceito&quot;, você concorda integralmente com as regras estipuladas acima.
               </p>
             </div>
           </div>
