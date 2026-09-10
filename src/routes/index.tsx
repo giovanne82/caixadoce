@@ -722,7 +722,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           nome: p.nome || p.name,
           descricao: p.descricao || p.description || "",
           preco: Number(p.preco ?? p.price ?? 0),
-          fotoUrl: p.foto_url || p.image_url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+          fotoUrl: p.foto_url || p.image_url || (Array.isArray(p.galeria_fotos) && p.galeria_fotos[0]) || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+          galeria_fotos: Array.isArray(p.galeria_fotos) ? p.galeria_fotos : (p.foto_url ? [p.foto_url] : []),
+          serve_pessoas: p.serve_pessoas !== null && p.serve_pessoas !== undefined ? Number(p.serve_pessoas) : undefined,
+          peso_detalhe: p.peso_detalhe || undefined,
           categoria: p.categoria || p.category || "Bolos Decorados",
           destaque: false,
           tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
@@ -973,7 +976,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       categoria: novo.categoria,
       preco: Number(novo.preco) || 0,
       descricao: novo.descricao || "",
-      foto_url: novo.fotoUrl || "",
+      foto_url: novo.fotoUrl || (novo.galeria_fotos && novo.galeria_fotos[0]) || "",
+      galeria_fotos: Array.isArray(novo.galeria_fotos) ? novo.galeria_fotos : (novo.fotoUrl ? [novo.fotoUrl] : []),
+      serve_pessoas: novo.serve_pessoas !== undefined && novo.serve_pessoas !== null ? Number(novo.serve_pessoas) : null,
+      peso_detalhe: novo.peso_detalhe || null,
       ativo: novo.ativo !== false,
       opcoes: novo.opcoes || [],
       permite_multiplas_opcoes: Boolean(novo.permite_multiplas_opcoes),
@@ -992,6 +998,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         visivel_cardapio_digital: _vcd,
         visivel_pdv: _vpd,
         permite_multiplas_opcoes: _pmo,
+        galeria_fotos: _gf,
+        serve_pessoas: _sp,
+        peso_detalhe: _pd,
         ...payloadBase
       } = payloadClean;
       const { error: errBase } = await supabase.from("produtos").insert([payloadBase]);
@@ -1014,6 +1023,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
     if (dados.descricao !== undefined) payload.descricao = dados.descricao;
     if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
+    if (dados.galeria_fotos !== undefined) payload.galeria_fotos = dados.galeria_fotos;
+    if (dados.serve_pessoas !== undefined) payload.serve_pessoas = dados.serve_pessoas !== null ? Number(dados.serve_pessoas) : null;
+    if (dados.peso_detalhe !== undefined) payload.peso_detalhe = dados.peso_detalhe || null;
     if (dados.ativo !== undefined) payload.ativo = Boolean(dados.ativo);
     if (dados.opcoes !== undefined) payload.opcoes = dados.opcoes;
     if (dados.permite_multiplas_opcoes !== undefined) payload.permite_multiplas_opcoes = Boolean(dados.permite_multiplas_opcoes);
@@ -1030,6 +1042,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         visivel_cardapio_digital: _vcd,
         visivel_pdv: _vpd,
         permite_multiplas_opcoes: _pmo,
+        galeria_fotos: _gf,
+        serve_pessoas: _sp,
+        peso_detalhe: _pd,
         ...payloadBase
       } = payload;
       if (Object.keys(payloadBase).length > 0) {

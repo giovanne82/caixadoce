@@ -220,6 +220,9 @@ export interface ProdutoCardapio {
   unidade_venda?: "un" | "kg";
   visivel_cardapio_digital?: boolean;
   visivel_pdv?: boolean;
+  galeria_fotos?: string[];
+  serve_pessoas?: number;
+  peso_detalhe?: string;
 }
 
 

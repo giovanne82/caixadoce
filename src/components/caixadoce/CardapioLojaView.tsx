@@ -56,6 +56,10 @@ import {
   CheckCircle2,
   MapPin,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  Scale,
   X,
   AlertTriangle,
   HeartHandshake,
@@ -341,6 +345,158 @@ export function SocialLinks({
           <span className="hidden sm:inline">WhatsApp</span>
         </a>
       )}
+    </div>
+  );
+}
+
+// ==========================================
+// 2.1 CARROSSEL DE IMAGENS DO PRODUTO (SLIDER / SWIPE)
+// ==========================================
+
+export interface ProductImageCarouselProps {
+  fotos: string[];
+  nome: string;
+  preco: number;
+  vendePorPeso?: boolean;
+}
+
+export function ProductImageCarousel({
+  fotos,
+  nome,
+  preco,
+  vendePorPeso,
+}: ProductImageCarouselProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [fotos]);
+
+  if (!fotos || fotos.length === 0) {
+    return null;
+  }
+
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1));
+  };
+
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentIndex((prev) => (prev === fotos.length - 1 ? 0 : prev + 1));
+  };
+
+  const minSwipeDistance = 40;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe) {
+      handleNext();
+    } else if (isRightSwipe) {
+      handlePrev();
+    }
+  };
+
+  if (fotos.length === 1) {
+    return (
+      <div className="relative h-48 sm:h-56 w-full overflow-hidden rounded-2xl bg-muted border border-border/80 shadow-xs">
+        <img
+          src={fotos[0]}
+          alt={nome}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm">
+          Base: {formatarMoeda(preco)}{vendePorPeso ? "/kg" : ""}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative h-48 sm:h-56 w-full overflow-hidden rounded-2xl bg-muted border border-border/80 select-none group shadow-xs"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* Slides Container */}
+      <div
+        className="flex h-full w-full transition-transform duration-300 ease-out"
+        style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+      >
+        {fotos.map((url, idx) => (
+          <div key={`${url}_${idx}`} className="w-full h-full shrink-0 relative">
+            <img
+              src={url}
+              alt={`${nome} - Foto ${idx + 1}`}
+              className="w-full h-full object-cover pointer-events-none"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Setas Laterais */}
+      <button
+        type="button"
+        onClick={handlePrev}
+        aria-label="Foto anterior"
+        className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-95 z-10"
+      >
+        <ChevronLeft className="w-5 h-5" />
+      </button>
+
+      <button
+        type="button"
+        onClick={handleNext}
+        aria-label="Próxima foto"
+        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-95 z-10"
+      >
+        <ChevronRight className="w-5 h-5" />
+      </button>
+
+      {/* Contador de Fotos no Topo Direito */}
+      <div className="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-full text-white text-[10px] font-bold z-10 font-mono">
+        {currentIndex + 1} / {fotos.length}
+      </div>
+
+      {/* Indicadores de Paginação (Bolinhas) */}
+      <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full">
+        {fotos.map((_, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCurrentIndex(idx);
+            }}
+            aria-label={`Ir para foto ${idx + 1}`}
+            className={`transition-all rounded-full ${
+              idx === currentIndex
+                ? "w-4 h-1.5 bg-white shadow-xs"
+                : "w-1.5 h-1.5 bg-white/50 hover:bg-white/80"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Preço Base no Canto Inferior Direito */}
+      <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm z-10">
+        Base: {formatarMoeda(preco)}{vendePorPeso ? "/kg" : ""}
+      </div>
     </div>
   );
 }
@@ -875,7 +1031,10 @@ export function CardapioLojaView() {
             nome: p.nome || p.name || "Doce Artesanal",
             descricao: p.descricao || p.description || "",
             preco: Number(p.preco ?? p.price ?? 0),
-            fotoUrl: p.foto_url || p.image_url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+            fotoUrl: p.foto_url || p.image_url || (Array.isArray(p.galeria_fotos) && p.galeria_fotos[0]) || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+            galeria_fotos: Array.isArray(p.galeria_fotos) ? p.galeria_fotos : (p.foto_url ? [p.foto_url] : []),
+            serve_pessoas: p.serve_pessoas !== null && p.serve_pessoas !== undefined ? Number(p.serve_pessoas) : undefined,
+            peso_detalhe: p.peso_detalhe || undefined,
             categoria: p.categoria || p.category || "Doces & Bolos",
             destaque: Boolean(p.destaque),
             tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
@@ -895,6 +1054,8 @@ export function CardapioLojaView() {
               ? p.opcoes
               : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
             permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
+            vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
+            unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
             visivel_cardapio_digital: p.visivel_cardapio_digital === false || p.visivel_cardapio_digital === "false" ? false : true,
             visivel_pdv: p.visivel_pdv === false || p.visivel_pdv === "false" ? false : true,
           }));
@@ -2829,6 +2990,21 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           </span>
                         </div>
                       )}
+
+                      {(prod.serve_pessoas || prod.peso_detalhe) && (
+                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                          {prod.serve_pessoas ? (
+                            <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md border border-purple-500/20">
+                              <Users className="w-2.5 h-2.5" /> {prod.serve_pessoas} {prod.serve_pessoas === 1 ? "pessoa" : "pessoas"}
+                            </span>
+                          ) : null}
+                          {prod.peso_detalhe ? (
+                            <span className="inline-flex items-center gap-0.5 text-[9.5px] sm:text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20">
+                              <Scale className="w-2.5 h-2.5" /> {prod.peso_detalhe}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
                     </CardHeader>
                   </div>
 
@@ -3772,16 +3948,36 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 </DialogDescription>
               </DialogHeader>
 
-              {produtoModal.fotoUrl && (
-                <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-muted">
-                  <img
-                    src={produtoModal.fotoUrl}
-                    alt={produtoModal.nome}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs">
-                    Base: {formatarMoeda(produtoModal.preco)}
-                  </div>
+              {/* CARROSSEL / IMAGEM DO PRODUTO */}
+              <ProductImageCarousel
+                fotos={
+                  Array.isArray(produtoModal.galeria_fotos) && produtoModal.galeria_fotos.length > 0
+                    ? produtoModal.galeria_fotos
+                    : (produtoModal.fotoUrl ? [produtoModal.fotoUrl] : [])
+                }
+                nome={produtoModal.nome}
+                preco={produtoModal.preco}
+                vendePorPeso={Boolean(produtoModal.vende_por_peso || produtoModal.unidade_venda === "kg")}
+              />
+
+              {/* ÁREA DE DETALHES (RENDIMENTO E PESO) */}
+              {(produtoModal.serve_pessoas || produtoModal.peso_detalhe) && (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 pb-0.5">
+                  {produtoModal.serve_pessoas ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 text-purple-800 dark:text-purple-300 border border-purple-500/20 text-xs font-bold shadow-2xs">
+                      <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span>
+                        Serve até {produtoModal.serve_pessoas}{" "}
+                        {produtoModal.serve_pessoas === 1 ? "pessoa" : "pessoas"}
+                      </span>
+                    </span>
+                  ) : null}
+                  {produtoModal.peso_detalhe ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs font-bold shadow-2xs">
+                      <Scale className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Peso: {produtoModal.peso_detalhe}</span>
+                    </span>
+                  ) : null}
                 </div>
               )}
 

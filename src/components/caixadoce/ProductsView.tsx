@@ -51,10 +51,13 @@ import {
   MessageCircle,
   UtensilsCrossed,
   AlertTriangle,
-  AlertCircle,
   Scale,
   Store,
+  Users,
+  X,
+  Loader2,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { FichaTecnicaModal } from "./FichaTecnicaModal";
@@ -162,6 +165,10 @@ export function ProductsView({
   const [precoFormatado, setPrecoFormatado] = useState("");
   const [categoria, setCategoria] = useState<string>("Bolos");
   const [fotoUrl, setFotoUrl] = useState("");
+  const [galeriaFotos, setGaleriaFotos] = useState<string[]>([]);
+  const [enviandoFotos, setEnviandoFotos] = useState(false);
+  const [servePessoas, setServePessoas] = useState<number | "">("");
+  const [pesoDetalhe, setPesoDetalhe] = useState("");
   const [destaque, setDestaque] = useState(false);
   const [ativo, setAtivo] = useState(true);
   const [vendePorPeso, setVendePorPeso] = useState(false);
@@ -207,23 +214,79 @@ export function ProductsView({
     }
   };
 
-  // Upload de foto do produto
-  const handleUploadFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const MAX_PRODUTO_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-      if (file.size > MAX_PRODUTO_SIZE_BYTES) {
-        toast.error("A imagem é muito pesada. Para que seu cardápio carregue rápido para os clientes, envie fotos de no máximo 2 MB.");
-        if (e.target) e.target.value = "";
-        return;
+  // Upload múltiplo de fotos do produto para o Storage com fallback
+  const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const MAX_PRODUTO_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+    setEnviandoFotos(true);
+    try {
+      const urlsAdicionadas: string[] = [];
+      for (const file of files) {
+        if (file.size > MAX_PRODUTO_SIZE_BYTES) {
+          toast.warning(`A imagem "${file.name}" é muito pesada (>5MB) e foi ignorada.`);
+          continue;
+        }
+
+        let uploadedUrl = "";
+        try {
+          const fileExt = file.name.split(".").pop() || "jpg";
+          const filePath = `produtos/${estabelecimentoCodigo || "CD-1001"}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("public")
+            .upload(filePath, file, { upsert: true });
+
+          if (!uploadError && uploadData) {
+            const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+            if (publicUrlData?.publicUrl) {
+              uploadedUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (errUpload) {
+          console.warn("[Upload Storage Fallback]", errUpload);
+        }
+
+        if (!uploadedUrl) {
+          // Fallback base64
+          uploadedUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+        }
+
+        if (uploadedUrl) {
+          urlsAdicionadas.push(uploadedUrl);
+        }
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        setFotoUrl(reader.result as string);
-        toast.success("Foto carregada com sucesso!");
-      };
-      reader.readAsDataURL(file);
+
+      if (urlsAdicionadas.length > 0) {
+        setGaleriaFotos((prev) => {
+          const combined = [...prev, ...urlsAdicionadas];
+          if (combined.length > 0) {
+            setFotoUrl(combined[0]);
+          }
+          return combined;
+        });
+        toast.success(`${urlsAdicionadas.length} foto(s) adicionada(s) à galeria!`);
+      }
+    } catch (e: any) {
+      console.error("Erro no upload de fotos:", e);
+      toast.error("Erro ao enviar imagem.");
+    } finally {
+      setEnviandoFotos(false);
+      if (e.target) e.target.value = "";
     }
+  };
+
+  const handleRemoverFotoGaleria = (indexRemover: number) => {
+    setGaleriaFotos((prev) => {
+      const nova = prev.filter((_, idx) => idx !== indexRemover);
+      setFotoUrl(nova.length > 0 ? nova[0] : "");
+      return nova;
+    });
   };
 
   const handleCriarCategoria = (e: React.FormEvent) => {
@@ -305,6 +368,9 @@ export function ProductsView({
     setPrecoFormatado("");
     setCategoria(todasCategoriasDisponiveis[0] || "Bolos");
     setFotoUrl("");
+    setGaleriaFotos([]);
+    setServePessoas("");
+    setPesoDetalhe("");
     setDestaque(false);
     setAtivo(true);
     setVendePorPeso(false);
@@ -327,7 +393,13 @@ export function ProductsView({
     setDescricao(prod.descricao);
     setPrecoFormatado(prod.preco ? `R$ ${(prod.preco).toFixed(2).replace(".", ",")}` : "");
     setCategoria(prod.categoria);
-    setFotoUrl(prod.fotoUrl);
+    const fotos = Array.isArray(prod.galeria_fotos) && prod.galeria_fotos.length > 0
+      ? prod.galeria_fotos
+      : (prod.fotoUrl ? [prod.fotoUrl] : []);
+    setGaleriaFotos(fotos);
+    setFotoUrl(prod.fotoUrl || (fotos[0] || ""));
+    setServePessoas(prod.serve_pessoas !== null && prod.serve_pessoas !== undefined ? prod.serve_pessoas : "");
+    setPesoDetalhe(prod.peso_detalhe || "");
     setDestaque(!!prod.destaque);
     setAtivo(prod.ativo !== false);
     setVendePorPeso(Boolean(prod.vende_por_peso || prod.unidade_venda === "kg"));
@@ -359,12 +431,20 @@ export function ProductsView({
     }
 
     try {
+      const fotosParaSalvar = galeriaFotos.length > 0
+        ? galeriaFotos
+        : (fotoUrl ? [fotoUrl] : []);
+      const fotoPrincipal = fotosParaSalvar[0] || fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+
       const payload: Partial<ProdutoCardapio> = {
         nome,
         descricao,
         preco: precoNum,
         categoria,
-        fotoUrl: fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
+        fotoUrl: fotoPrincipal,
+        galeria_fotos: fotosParaSalvar,
+        serve_pessoas: servePessoas !== "" && !isNaN(Number(servePessoas)) ? Number(servePessoas) : undefined,
+        peso_detalhe: pesoDetalhe.trim() || undefined,
         destaque,
         tempoPreparoHoras: availabilityType === "encomenda" ? minLeadTimeDays * 24 : 0,
         ativo,
@@ -789,32 +869,75 @@ export function ProductsView({
           </DialogHeader>
 
           <form onSubmit={handleSalvar} className="space-y-4 py-2">
-            {/* Foto do Produto */}
-            <div className="space-y-1.5 text-center">
-              <Label className="text-xs font-semibold block text-left">Foto do Produto</Label>
-              <div className="relative h-32 w-full rounded-2xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center bg-muted/20 overflow-hidden cursor-pointer group">
-                {fotoUrl ? (
-                  <>
-                    <img src={fotoUrl} alt="Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
-                      Trocar Foto
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-1 text-muted-foreground p-3">
-                    <ImageIcon className="w-6 h-6" />
-                    <span className="text-xs font-semibold">Clique para carregar uma foto</span>
-                    <span className="text-[10px]">JPG, PNG ou WEBP</span>
-                  </div>
+            {/* Galeria de Fotos do Produto (Upload Múltiplo) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                  <ImageIcon className="w-4 h-4 text-purple-600" />
+                  Galeria de Fotos do Produto
+                </Label>
+                {galeriaFotos.length > 0 && (
+                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
+                    {galeriaFotos.length} {galeriaFotos.length === 1 ? "foto" : "fotos"}
+                  </Badge>
                 )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadFoto}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
               </div>
+
+              {/* Grid de Miniaturas da Galeria */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {galeriaFotos.map((url, idx) => (
+                  <div
+                    key={`${url}_${idx}`}
+                    className="relative aspect-square rounded-xl overflow-hidden border border-border/80 bg-muted/30 group shadow-2xs"
+                  >
+                    <img
+                      src={url}
+                      alt={`Foto ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {idx === 0 && (
+                      <span className="absolute bottom-1 left-1 bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                        Principal
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoverFotoGaleria(idx)}
+                      title="Remover foto"
+                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 opacity-90 hover:opacity-100 transition-all shadow-xs"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Botão para Adicionar Mais Fotos */}
+                <label className={`relative aspect-square rounded-xl border-2 border-dashed border-purple-400/50 hover:border-purple-600 dark:border-purple-800/60 dark:hover:border-purple-500 bg-purple-50/40 dark:bg-purple-950/20 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${enviandoFotos ? "opacity-60 cursor-not-allowed" : "hover:bg-purple-100/40"}`}>
+                  {enviandoFotos ? (
+                    <>
+                      <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+                      <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 text-center px-1">Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 text-center px-1">Adicionar Fotos</span>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={enviandoFotos}
+                    onChange={handleUploadFotos}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Selecione uma ou mais fotos (JPG, PNG ou WEBP). A primeira foto será a capa principal.
+              </p>
             </div>
 
             {/* Tipo de Venda (Unidade vs Peso/Quilo) */}
@@ -855,6 +978,41 @@ export function ProductsView({
                   ? "⚖️ No PDV de Balcão, o operador poderá digitar a pesagem em gramas (ex: 350g) e o sistema calculará o valor proporcional."
                   : "📦 Preço cobrado por unidade inteira do item."}
               </p>
+            </div>
+
+            {/* Novos Campos: Rendimento e Peso/Tamanho */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-muted/30 border border-border/80">
+              <div className="space-y-1">
+                <Label htmlFor="prod-rendimento" className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                  Rendimento (Serve quantas pessoas?)
+                </Label>
+                <Input
+                  id="prod-rendimento"
+                  type="number"
+                  min="1"
+                  placeholder="Ex: 15"
+                  value={servePessoas}
+                  onChange={(e) => setServePessoas(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="h-8 text-xs bg-background font-semibold"
+                />
+                <span className="text-[10px] text-muted-foreground">Opcional. Exibido no cardápio</span>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="prod-peso" className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Scale className="w-3.5 h-3.5 text-amber-600" />
+                  Peso / Tamanho
+                </Label>
+                <Input
+                  id="prod-peso"
+                  placeholder="Ex: 1,5kg, 500g, 20 fatias"
+                  value={pesoDetalhe}
+                  onChange={(e) => setPesoDetalhe(e.target.value)}
+                  className="h-8 text-xs bg-background font-semibold"
+                />
+                <span className="text-[10px] text-muted-foreground">Opcional. Exibido no cardápio</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
