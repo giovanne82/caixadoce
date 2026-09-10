@@ -1179,6 +1179,8 @@ export interface Encomenda {
   detalhesTopoBolo?: string;
   temVela?: boolean;
   detalhesVela?: string;
+  is_orcamento?: boolean;
+  taxaEntrega?: number;
   createdAt?: string;
 }
 
@@ -1559,6 +1561,47 @@ ${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : "
 💵 *Saldo Restante:* ${saldoRestante}${blocoPagamento}
 
 Agradecemos imensamente pela preferência! Caso precise de algum ajuste, estamos à disposição. 💕`;
+}
+
+export function gerarMensagemOrcamentoWhatsApp(
+  encomenda: Encomenda,
+  dadosLoja?: string | DadosLojaPix
+): string {
+  const nomeLoja = typeof dadosLoja === "string" ? dadosLoja : dadosLoja?.nomeLoja || "CaixaDoce";
+  const dataFormatada = encomenda.dataEntrega ? encomenda.dataEntrega.split("-").reverse().join("/") : "A combinar";
+  const hora = encomenda.horarioEntrega || "14:00";
+  const valorTotal = formatarMoeda(encomenda.valorTotal);
+  const modalidade = encomenda.tipoEntrega === "delivery"
+    ? `🚚 Entrega / Delivery (${encomenda.enderecoEntrega || "A combinar"})`
+    : "🏬 Retirada no Balcão";
+
+  let itensTexto = encomenda.itens;
+  if (encomenda.itensDetalhes && encomenda.itensDetalhes.length > 0) {
+    itensTexto = encomenda.itensDetalhes
+      .map((it) => {
+        const opc =
+          (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
+            ? ` (${it.opcoes_selecionadas.map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome)).join(", ")})`
+            : "") || (it.opcaoNome ? ` (${it.opcaoNome})` : "");
+        const unit = (it.precoUnitario || it.preco) ? ` - ${formatarMoeda((it.precoUnitario || it.preco) * (it.quantidade || 1))}` : "";
+        return `• ${it.quantidade || 1}x ${it.nome}${opc}${unit}`;
+      })
+      .join("\n");
+  }
+
+  return `📝 *Orçamento de Encomenda - ${nomeLoja}* 📝
+
+Olá, *${encomenda.clienteNome}*! Segue o detalhamento do seu orçamento solicitado conosco:
+
+🎂 *Itens Solicitados:*
+${itensTexto}
+
+📅 *Data Prevista:* ${dataFormatada} às ${hora}
+📍 *Modalidade:* ${modalidade}
+${encomenda.taxaEntrega && encomenda.taxaEntrega > 0 ? `🛵 *Taxa de Entrega:* ${formatarMoeda(encomenda.taxaEntrega)}\n` : ""}${encomenda.observacoes ? `📝 *Observações:* ${encomenda.observacoes}\n` : ""}
+💰 *Valor Total do Orçamento:* ${valorTotal}
+
+Ficamos à disposição para confirmar sua encomenda ou ajustar qualquer detalhe! 💕`;
 }
 
 export function obterNotinhasVinculadasPorLista(

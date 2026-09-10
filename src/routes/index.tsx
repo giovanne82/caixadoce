@@ -607,6 +607,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             observacoes: d.observacoes,
             enderecoEntrega: d.endereco_entrega,
             tipoEntrega: d.tipo_entrega || "retirada",
+            taxaEntrega: d.taxa_entrega !== undefined ? Number(d.taxa_entrega) : undefined,
+            is_orcamento: Boolean(d.is_orcamento),
             createdAt: d.created_at,
           };
         });
@@ -1161,6 +1163,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       status: item.status || "pendente",
       tipo_entrega: item.tipoEntrega || "retirada",
       endereco_entrega: item.enderecoEntrega || "",
+      taxa_entrega: item.taxaEntrega || 0,
+      is_orcamento: Boolean(item.is_orcamento),
       observacoes: item.observacoes || "",
       tem_topo_bolo: temTopo,
       detalhes_topo_bolo: detTopo,
@@ -1238,6 +1242,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       tipo_vela: dados.detalhesVela || (dados as any).tipoVela || "",
       updated_at: new Date().toISOString(),
     };
+
+    if (dados.taxaEntrega !== undefined) payloadUpdate.taxa_entrega = Number(dados.taxaEntrega) || 0;
+    if (dados.is_orcamento !== undefined) payloadUpdate.is_orcamento = Boolean(dados.is_orcamento);
 
     let { error } = await supabase
       .from("encomendas")

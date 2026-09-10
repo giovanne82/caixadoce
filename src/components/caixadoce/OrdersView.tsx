@@ -98,6 +98,7 @@ import {
   formatarMoeda,
   formatarWhatsappLink,
   gerarMensagemResumoWhatsApp,
+  gerarMensagemOrcamentoWhatsApp,
   identificarMetodoPagamento,
   generatePixPayload,
   type ContaPix,
@@ -126,6 +127,7 @@ import {
   type DespesaNotaFiscal,
   type PagamentoItem,
 } from "@/lib/caixadoce-data";
+import { gerarPdfOrcamento } from "@/lib/pdf-orcamento";
 import { toast } from "sonner";
 
 interface OrdersViewProps {
@@ -162,6 +164,15 @@ function obterEstiloPilula(status: StatusEncomenda) {
 }
 
 function renderizarBadgePagamento(ord: Encomenda) {
+  if (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento") {
+    return (
+      <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none text-[10px] font-extrabold shadow-xs flex items-center gap-1">
+        <span>📝</span>
+        <span>ORÇAMENTO</span>
+      </Badge>
+    );
+  }
+
   const totalPago = calcularTotalPagoEncomenda(ord);
   const statusPag = String(ord.statusPagamento || (ord as any).status_pagamento || "").toLowerCase();
   const isStatusPago =
@@ -222,6 +233,15 @@ function renderizarBadgePagamento(ord: Encomenda) {
 }
 
 function renderizarBadgePagamentoMobile(ord: Encomenda) {
+  if (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento") {
+    return (
+      <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none text-[9px] px-1.5 py-0 mt-0.5 font-extrabold flex items-center gap-0.5">
+        <span>📝</span>
+        <span>ORÇAMENTO</span>
+      </Badge>
+    );
+  }
+
   const totalPago = calcularTotalPagoEncomenda(ord);
   const statusPag = String(ord.statusPagamento || (ord as any).status_pagamento || "").toLowerCase();
   const isStatusPago =
@@ -492,6 +512,8 @@ export function OrdersView({
   const [dataEntrega, setDataEntrega] = useState(new Date().toISOString().split("T")[0]);
   const [horarioEntrega, setHorarioEntrega] = useState("14:00");
   const [valorTotalFormatado, setValorTotalFormatado] = useState("");
+  const [taxaEntregaFormatada, setTaxaEntregaFormatada] = useState("");
+  const [isOrcamento, setIsOrcamento] = useState(false);
   const [valorEntradaFormatado, setValorEntradaFormatado] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState<"retirada" | "delivery">("retirada");
   const [enderecoEntrega, setEnderecoEntrega] = useState("");
@@ -881,6 +903,8 @@ export function OrdersView({
     setHorarioEntrega("14:00");
     setItensTags([]);
     setValorTotalFormatado("");
+    setTaxaEntregaFormatada("");
+    setIsOrcamento(false);
     setValorEntradaFormatado("");
     setHistoricoPagamentos([]);
     setNovoPagamentoValorFormatado("");
@@ -920,6 +944,7 @@ export function OrdersView({
     setDataEntrega(ord.dataEntrega);
     setHorarioEntrega(ord.horarioEntrega || "14:00");
     setStatusEncomenda(ord.status || "pendente");
+    setIsOrcamento(Boolean(ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento"));
 
     if (ord.itensDetalhes && ord.itensDetalhes.length > 0) {
       setItensTags(ord.itensDetalhes);
@@ -930,6 +955,7 @@ export function OrdersView({
     }
 
     setValorTotalFormatado(ord.valorTotal ? `R$ ${(ord.valorTotal).toFixed(2).replace(".", ",")}` : "");
+    setTaxaEntregaFormatada(ord.taxaEntrega ? `R$ ${(ord.taxaEntrega).toFixed(2).replace(".", ",")}` : "");
     
     // Histórico de Pagamentos ou Fallback do Sinal
     const histExistente = ord.historicoPagamentos || ord.paymentsHistory;
@@ -975,6 +1001,7 @@ export function OrdersView({
   const handleSalvarEncomenda = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorNum = converterMoedaInputParaNumero(valorTotalFormatado);
+    const taxaNum = converterMoedaInputParaNumero(taxaEntregaFormatada);
     const totalPago = historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
 
     if (!clienteNome || itensTags.length === 0 || valorNum <= 0) {
@@ -988,7 +1015,7 @@ export function OrdersView({
           ? "pago_integral"
           : totalPago > 0
           ? "sinal_pago"
-          : "pendente";
+          : (isOrcamento ? "pendente" : "pendente");
 
       const itensSanitizados = itensTags.map((it) => ({
         ...it,
@@ -1007,6 +1034,8 @@ export function OrdersView({
         itensDetalhes: itensSanitizados,
         insumosNecessarios: insumosTags,
         valorTotal: valorNum,
+        taxaEntrega: taxaNum > 0 ? taxaNum : undefined,
+        is_orcamento: isOrcamento,
         valorEntrada: totalPago,
         historicoPagamentos,
         paymentsHistory: historicoPagamentos,
@@ -1023,10 +1052,10 @@ export function OrdersView({
 
       if (editingId) {
         await onEditarEncomenda(editingId, payload);
-        toast.success("Encomenda atualizada com sucesso!");
+        toast.success(isOrcamento ? "Orçamento atualizado com sucesso!" : "Encomenda atualizada com sucesso!");
       } else {
         await onCriarEncomenda(payload);
-        toast.success("Nova encomenda cadastrada com sucesso!");
+        toast.success(isOrcamento ? "Novo orçamento cadastrado com sucesso!" : "Nova encomenda cadastrada com sucesso!");
       }
 
       if (onCriarClienteRapido && !clienteId && clienteNome && clienteWhatsapp) {
@@ -1056,13 +1085,20 @@ export function OrdersView({
     const saldoRestanteNum = Math.max(0, ord.valorTotal - totalPago);
     const valorParaPix = saldoRestanteNum > 0 ? saldoRestanteNum : (ord.valorTotal > 0 ? ord.valorTotal : 0);
 
-    // 1. Gera mensagem com a formatação dinâmica conforme o método da encomenda
-    const mensagem = gerarMensagemResumoWhatsApp(ord, {
-      nomeLoja,
-      chavePix,
-      favorecidoPix,
-      cidadeLoja,
-    });
+    // 1. Gera mensagem com a formatação dinâmica conforme o método da encomenda ou orçamento
+    const mensagem = (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento")
+      ? gerarMensagemOrcamentoWhatsApp(ord, {
+          nomeLoja,
+          chavePix,
+          favorecidoPix,
+          cidadeLoja,
+        })
+      : gerarMensagemResumoWhatsApp(ord, {
+          nomeLoja,
+          chavePix,
+          favorecidoPix,
+          cidadeLoja,
+        });
 
     const tipoMetodo = identificarMetodoPagamento(ord);
 
@@ -3204,17 +3240,44 @@ export function OrdersView({
               </Card>
             )}
 
-            {/* VALOR TOTAL DA ENCOMENDA */}
-            <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-1">
-              <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total da Encomenda (R$) *</Label>
-              <Input
-                id="enc-valor"
-                placeholder="R$ 0,00"
-                value={valorTotalFormatado}
-                onChange={(e) => setValorTotalFormatado(aplicarMascaraMoedaInput(e.target.value))}
-                className="h-9 text-sm font-black text-foreground"
-                required
-              />
+            {/* VALOR TOTAL E TAXA DE ENTREGA DA ENCOMENDA */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/30 border border-border/60">
+              <div className="space-y-1">
+                <Label htmlFor="enc-valor" className="text-xs font-bold text-foreground">Valor Total da Encomenda (R$) *</Label>
+                <Input
+                  id="enc-valor"
+                  placeholder="R$ 0,00"
+                  value={valorTotalFormatado}
+                  onChange={(e) => setValorTotalFormatado(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-9 text-sm font-black text-foreground"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="enc-taxa-frete" className="text-xs font-bold text-foreground">Taxa de Entrega Customizada (R$)</Label>
+                <Input
+                  id="enc-taxa-frete"
+                  placeholder="R$ 0,00"
+                  value={taxaEntregaFormatada}
+                  onChange={(e) => setTaxaEntregaFormatada(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-9 text-sm font-semibold text-foreground"
+                />
+              </div>
+
+              <div className="sm:col-span-2 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isOrcamento}
+                    onChange={(e) => setIsOrcamento(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    📝 Tratar este pedido como Solicitação de Orçamento
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* CARD VISUAL: HISTÓRICO DE PAGAMENTOS */}
@@ -3847,6 +3910,12 @@ export function OrdersView({
                   >
                     <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar
                   </Button>
+                  {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") && (
+                    <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] shadow-xs flex items-center gap-1">
+                      <span>📝</span>
+                      <span>ORÇAMENTO</span>
+                    </Badge>
+                  )}
                   <Badge className={STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.color || "bg-amber-500"}>
                     {STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.label || "Pendente"}
                   </Badge>
@@ -4031,7 +4100,9 @@ export function OrdersView({
               {/* BLOCO 4: FINANCEIRO & HISTÓRICO DE PAGAMENTOS */}
               <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground">Valor Total do Pedido:</span>
+                  <span className="font-bold text-foreground">
+                    {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "Valor Total Orçado:" : "Valor Total do Pedido:"}
+                  </span>
                   <div className="flex items-center gap-2">
                     {renderizarBadgePagamento(encomendaDetalhes)}
                     <span className="font-mono font-extrabold text-base text-foreground">
@@ -4039,6 +4110,17 @@ export function OrdersView({
                     </span>
                   </div>
                 </div>
+
+                {encomendaDetalhes.taxaEntrega !== undefined && Number(encomendaDetalhes.taxaEntrega) > 0 && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-purple-500/10 text-muted-foreground">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Truck className="w-3.5 h-3.5 text-primary shrink-0" /> Taxa de Entrega Inclusa:
+                    </span>
+                    <span className="font-mono font-bold text-foreground">
+                      {formatarMoeda(encomendaDetalhes.taxaEntrega)}
+                    </span>
+                  </div>
+                )}
 
                 {/* HISTÓRICO DE PAGAMENTOS */}
                 <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
@@ -4077,7 +4159,7 @@ export function OrdersView({
           )}
 
           <DialogFooter className="pt-2 border-t flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button type="button" variant="outline" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
                 Fechar
               </Button>
@@ -4098,6 +4180,25 @@ export function OrdersView({
                   <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar Pedido
                 </Button>
               )}
+              {encomendaDetalhes && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    try {
+                      gerarPdfOrcamento(encomendaDetalhes, estabelecimentoNome || profile?.establishmentName || "CaixaDoce");
+                      toast.success("PDF do orçamento gerado com sucesso!");
+                    } catch (err) {
+                      console.error("Erro ao gerar PDF:", err);
+                      toast.error("Erro ao gerar PDF do orçamento.");
+                    }
+                  }}
+                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 shadow-2xs"
+                >
+                  <FileText className="w-3.5 h-3.5 mr-1 text-amber-600" /> Gerar PDF do Orçamento
+                </Button>
+              )}
             </div>
 
             {encomendaDetalhes && (
@@ -4110,7 +4211,7 @@ export function OrdersView({
                 }}
                 className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                <Send className="w-3.5 h-3.5 mr-1" /> WhatsApp Resumo
+                <Send className="w-3.5 h-3.5 mr-1" /> {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}
               </Button>
             )}
           </DialogFooter>

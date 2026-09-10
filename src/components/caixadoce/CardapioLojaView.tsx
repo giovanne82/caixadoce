@@ -532,6 +532,7 @@ export function CardapioLojaView() {
   const [resumoModalOpen, setResumoModalOpen] = useState(false);
   const [sucessoModalOpen, setSucessoModalOpen] = useState(false);
   const [salvandoPedido, setSalvandoPedido] = useState(false);
+  const [salvandoOrcamento, setSalvandoOrcamento] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [ultimoPedidoId, setUltimoPedidoId] = useState("");
   const [pedidoCriadoId, setPedidoCriadoId] = useState<string | null>(null);
@@ -2117,6 +2118,260 @@ export function CardapioLojaView() {
     }
   };
 
+  // 1.1 Gravação de Solicitação Apenas de Orçamento (Ignora pagamento Pix/Cartão)
+  const handleSolicitarOrcamento = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!clienteNome.trim() || !clienteWhatsapp.trim()) {
+      toast.error("Preencha seu nome e WhatsApp para solicitar o orçamento.");
+      return;
+    }
+
+    if (carrinho.length === 0) {
+      toast.error("Adicione produtos ao carrinho antes de solicitar um orçamento.");
+      return;
+    }
+
+    if (tipoEntrega === "delivery") {
+      const temRegras = freteConfig.regrasBairros.filter((b) => b.ativo).length > 0;
+      if (temRegras && !regiaoEntregaId) {
+        toast.error("Por favor, selecione sua Região / Zona de Entrega.");
+        return;
+      }
+      if (!endLogradouro.trim() || !endNumero.trim() || !endBairro.trim()) {
+        toast.error("Preencha a rua, número e bairro para a entrega.");
+        return;
+      }
+    }
+
+    setSalvandoOrcamento(true);
+    try {
+      const pedidoId = crypto.randomUUID();
+      const resumoItensTexto = carrinho
+        .map((item) => {
+          if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+            const descOpcoes = item.opcoesSelecionadas
+              .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+              .join(", ");
+            const subtotal = item.opcoesSelecionadas.reduce(
+              (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+              0
+            );
+            const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+            return `${totalQtd}x ${item.produto.nome} [${descOpcoes}] (${formatarMoeda(subtotal)})`;
+          }
+          const optText = item.opcaoSelecionada ? ` [${item.opcaoSelecionada.nome}]` : "";
+          const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+          return `${item.quantidade}x ${item.produto.nome}${optText} (${formatarMoeda(unitPrice * item.quantidade)})`;
+        })
+        .join(", ");
+
+      const itensDetalhesJson = carrinho.map((item) => {
+        if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
+          const subtotal = item.opcoesSelecionadas.reduce(
+            (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
+            0
+          );
+          const totalQtd = item.opcoesSelecionadas.reduce((s, o) => s + (o.quantidade || 1), 0);
+          const descOpcoes = item.opcoesSelecionadas
+            .map((o) => `${o.quantidade || 1}x ${o.nome}`)
+            .join(", ");
+          return {
+            id: item.produto.id,
+            nome: item.produto.nome,
+            quantidade: totalQtd,
+            precoUnitario: subtotal / (totalQtd || 1),
+            subtotal: subtotal,
+            opcao_selecionada: item.opcoesSelecionadas[0] || null,
+            opcoes_selecionadas: item.opcoesSelecionadas,
+            opcaoNome: descOpcoes,
+            opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
+            categoria: item.produto.categoria,
+          };
+        }
+        const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
+        return {
+          id: item.produto.id,
+          nome: item.produto.nome,
+          quantidade: item.quantidade,
+          precoUnitario: unitPrice,
+          subtotal: unitPrice * item.quantidade,
+          opcao_selecionada: item.opcaoSelecionada || null,
+          opcoes_selecionadas: item.opcaoSelecionada ? [item.opcaoSelecionada] : [],
+          opcaoNome: item.opcaoSelecionada?.nome || null,
+          opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
+          categoria: item.produto.categoria,
+        };
+      });
+
+      const valTotalCarrinho = Math.max(0, Number(totalComFrete) || 0);
+      const obsFinal = observacoes.trim() || "";
+
+      let clienteId: string | null = null;
+      const cleanPhone = limparTelefone(clienteWhatsapp);
+
+      let estDbId: string | null = null;
+      if (lojaInfo?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.id)) {
+        estDbId = lojaInfo.id;
+      } else {
+        try {
+          const { data: estRow } = await supabase
+            .from("estabelecimentos")
+            .select("id")
+            .or(`codigo.eq.${code},estabelecimento_codigo.eq.${code}`)
+            .maybeSingle();
+          if (estRow?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(estRow.id)) {
+            estDbId = estRow.id;
+          }
+        } catch {}
+      }
+
+      try {
+        let clienteExistenteRow: any = null;
+        if (cleanPhone) {
+          if (estDbId) {
+            const { data: byEstPhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_id", estDbId)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
+
+            if (byEstPhone && byEstPhone.length > 0) {
+              clienteExistenteRow = byEstPhone[0];
+            }
+          }
+
+          if (!clienteExistenteRow) {
+            const { data: byCodePhone } = await supabase
+              .from("clientes_loja")
+              .select("id, total_pedidos, total_gasto, telefone")
+              .eq("estabelecimento_codigo", code)
+              .or(`telefone.eq.${cleanPhone},telefone.eq.${clienteWhatsapp}`)
+              .limit(1);
+
+            if (byCodePhone && byCodePhone.length > 0) {
+              clienteExistenteRow = byCodePhone[0];
+            }
+          }
+        }
+
+        if (clienteExistenteRow?.id) {
+          clienteId = clienteExistenteRow.id;
+          await supabase
+            .from("clientes_loja")
+            .update({
+              nome: clienteNome,
+              telefone: cleanPhone,
+              estabelecimento_id: estDbId || undefined,
+              endereco: tipoEntrega === "delivery" ? enderecoEntrega : undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", clienteId);
+        } else {
+          const novoClienteId = crypto.randomUUID();
+          const { data: criado } = await supabase
+            .from("clientes_loja")
+            .upsert({
+              id: novoClienteId,
+              estabelecimento_id: estDbId,
+              estabelecimento_codigo: code,
+              nome: clienteNome,
+              telefone: cleanPhone,
+              endereco: tipoEntrega === "delivery" ? enderecoEntrega : "",
+              total_pedidos: 1,
+              total_gasto: valTotalCarrinho,
+              ultimo_pedido_em: new Date().toISOString(),
+            }, {
+              onConflict: "estabelecimento_codigo,telefone",
+            })
+            .select("id")
+            .maybeSingle();
+
+          clienteId = criado?.id || novoClienteId;
+        }
+      } catch (eCli) {
+        console.warn("Aviso ao processar tabela clientes_loja no orçamento:", eCli);
+      }
+
+      const payloadOrcamento: Record<string, any> = {
+        id: pedidoId,
+        estabelecimento_codigo: code,
+        user_id: lojaInfo?.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lojaInfo.user_id) ? lojaInfo.user_id : null,
+        cliente_id: clienteId,
+        cliente_nome: clienteNome,
+        cliente_whatsapp: clienteWhatsapp,
+        data_entrega: dataEntrega || new Date().toISOString().split("T")[0],
+        horario_entrega: horarioEntrega || "15:00",
+        tipo_entrega: tipoEntrega,
+        endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+        taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
+        status_pagamento: "orcamento",
+        metodo_pagamento: "Orçamento",
+        forma_pagamento: "Orçamento",
+        origem_pagamento: "orcamento",
+        status: "pendente",
+        is_orcamento: true,
+        itens: resumoItensTexto,
+        itens_detalhes: itensDetalhesJson,
+        valor_total: valTotalCarrinho,
+        total_amount: valTotalCarrinho,
+        observacoes: obsFinal,
+      };
+
+      let { error: insertError } = await supabase.from("encomendas").insert([payloadOrcamento]);
+
+      if (insertError) {
+        console.warn("Tentativa de insert orcamento em encomendas falhou com payload estendido, tentando fallback:", insertError.message);
+        const { is_orcamento: _iso, ...payloadMinimal } = payloadOrcamento;
+        const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
+        insertError = resMin.error;
+      }
+
+      if (insertError) {
+        console.error("Erro ao registrar orçamento no Supabase:", insertError);
+        toast.error(`Falha ao registrar orçamento: ${insertError.message || "Erro no servidor"}`);
+        return;
+      }
+
+      // Histórico local
+      try {
+        const nowIso = new Date().toISOString();
+        const novoResumoPedido = {
+          id: pedidoId,
+          data: nowIso,
+          created_at: nowIso,
+          data_entrega: dataEntrega || nowIso.split("T")[0],
+          horario_entrega: horarioEntrega || "15:00",
+          tipo_entrega: tipoEntrega,
+          valor_total: valTotalCarrinho,
+          status: "pendente",
+          itens: resumoItensTexto,
+          total_itens: totalItensCarrinho,
+          metodo_pagamento: "Orçamento",
+          loja_codigo: code,
+          loja_nome: lojaInfo?.nome || "Confeitaria",
+        };
+
+        const rawOrders = localStorage.getItem("caixadoce_recent_orders");
+        const pedidosAnteriores = rawOrders ? JSON.parse(rawOrders) : [];
+        const atualizados = [novoResumoPedido, ...pedidosAnteriores.filter((p: any) => p.id !== pedidoId)].slice(0, 3);
+        localStorage.setItem("caixadoce_recent_orders", JSON.stringify(atualizados));
+        setRecentOrders(atualizados);
+      } catch {}
+
+      setCarrinho([]);
+      setCartOpen(false);
+      toast.success("Orçamento enviado com sucesso! A confeitaria entrará em contato.", {
+        duration: 6000,
+      });
+    } catch (err: any) {
+      toast.error(`Erro ao solicitar orçamento: ${err?.message || "Ocorreu uma falha."}`);
+    } finally {
+      setSalvandoOrcamento(false);
+    }
+  };
+
   // Processamento de Pagamento via Cartão de Crédito (Payment Brick do Mercado Pago)
   const handleProcessarPagamentoCartao = async (param: any) => {
     if (!clienteNome.trim()) {
@@ -3565,23 +3820,44 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             )}
           </div>
 
-          {carrinho.length > 0 && metodoPagamento === "pix" && (
-            <SheetFooter className="pt-4 border-t border-border/60">
+          {carrinho.length > 0 && (
+            <SheetFooter className="pt-4 border-t border-border/60 flex flex-col gap-2 sm:flex-col">
+              {metodoPagamento === "pix" && (
+                <Button
+                  type="submit"
+                  form="form-checkout"
+                  disabled={salvandoPedido || salvandoOrcamento}
+                  className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
+                >
+                  {salvandoPedido ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Gerando Pix...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Confirmar e Pagar via Pix
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
-                type="submit"
-                form="form-checkout"
-                disabled={salvandoPedido}
-                className="w-full font-black text-xs h-10 shadow-md bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-1.5"
+                type="button"
+                variant="outline"
+                disabled={salvandoPedido || salvandoOrcamento}
+                onClick={handleSolicitarOrcamento}
+                className="w-full font-bold text-xs h-10 border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
               >
-                {salvandoPedido ? (
+                {salvandoOrcamento ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando Pix...
+                    Enviando Orçamento...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Confirmar e Pagar via Pix
+                    <span>📝</span>
+                    Solicitar Apenas Orçamento
                   </>
                 )}
               </Button>
