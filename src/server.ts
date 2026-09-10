@@ -562,30 +562,6 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   const cleanCupomCode = cupomUtilizado ? String(cupomUtilizado).toUpperCase().trim() : null;
 
-  let targetAfiliadoId: string | null = null;
-  if (cleanCupomCode && cleanCupomCode !== "CUPOM_DESCONTO") {
-    try {
-      const afilRes = await fetch(
-        `${supabaseUrl}/rest/v1/afiliados?cupom_exclusivo=ilike.${encodeURIComponent(cleanCupomCode)}&select=id`,
-        {
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
-      );
-      if (afilRes.ok) {
-        const afilList = await afilRes.json();
-        if (Array.isArray(afilList) && afilList.length > 0) {
-          targetAfiliadoId = afilList[0].id;
-          console.log(`[Ativar Plano Supabase] Cupom '${cleanCupomCode}' vinculado ao Afiliado ID: ${targetAfiliadoId}`);
-        }
-      }
-    } catch (errAfil) {
-      console.warn("[Ativar Plano Supabase] Erro ao buscar id do afiliado por cupom:", errAfil);
-    }
-  }
-
   const patchPayloads = [
     {
       status: "ativo",
@@ -597,7 +573,6 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       metodo_pagamento: paymentMethod,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
     {
       status: "ativo",
@@ -605,7 +580,6 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano_exp: dataExpiracao,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
     {
       status_assinatura: "ativo",
@@ -613,7 +587,6 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano_expira_em: dataExpiracao,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     },
   ];
 
@@ -657,7 +630,6 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
       plano_id: planId,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-      ...(targetAfiliadoId ? { afiliado_id: targetAfiliadoId } : {}),
     };
 
     for (const [col, val] of Object.entries(individualColumns)) {
@@ -1284,7 +1256,7 @@ export default {
 
           const afiliadosList = resAfil.ok ? await resAfil.json() : [];
 
-          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=codigo,nome,email,plano_status,status_assinatura,created_at,cupom_utilizado,afiliado_id`, {
+          const resEst = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?select=codigo,nome,email,plano_status,status_assinatura,created_at,cupom_utilizado`, {
             headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
           });
 
@@ -1292,9 +1264,7 @@ export default {
 
           const relatorio = (afiliadosList || []).map((afiliado: any) => {
             const lojasConvertidas = (estabelecimentosList || []).filter((est: any) => {
-              const matchesId = est.afiliado_id && String(est.afiliado_id) === String(afiliado.id);
-              const matchesCupom = est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afiliado.cupom_exclusivo).toUpperCase();
-              return matchesId || matchesCupom;
+              return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afiliado.cupom_exclusivo).toUpperCase();
             });
 
             const count = lojasConvertidas.length;
@@ -1332,8 +1302,6 @@ export default {
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           let cupom = "";
-          let afiliadoId = "";
-          let email = "";
 
           if (request.method === "POST") {
             try {
@@ -1341,8 +1309,6 @@ export default {
               if (bodyText) {
                 const body = JSON.parse(bodyText);
                 cupom = String(body.cupom || body.cupom_exclusivo || body.code || "").trim().toUpperCase();
-                afiliadoId = String(body.afiliado_id || body.id || "").trim();
-                email = String(body.email || "").trim().toLowerCase();
               }
             } catch {}
           } else {
@@ -1352,41 +1318,34 @@ export default {
               url.searchParams.get("code") ||
               ""
             ).trim().toUpperCase();
-
-            afiliadoId = String(url.searchParams.get("afiliado_id") || url.searchParams.get("id") || "").trim();
-            email = String(url.searchParams.get("email") || "").trim().toLowerCase();
           }
 
-          let targetCupom = cupom;
-          let targetAfiliadoId = afiliadoId;
-
-          // Se nem cupom nem afiliadoId foram informados diretamente, tenta buscar afiliado por email
-          if (!targetCupom && !targetAfiliadoId && email) {
-            const afilRes = await fetch(`${supabaseUrl}/rest/v1/afiliados?email=ilike.${encodeURIComponent(email)}`, {
-              headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
-            });
-            if (afilRes.ok) {
-              const afilData = await afilRes.json();
-              if (Array.isArray(afilData) && afilData.length > 0) {
-                targetCupom = String(afilData[0].cupom_exclusivo || "").trim().toUpperCase();
-                targetAfiliadoId = String(afilData[0].id || "");
+          // Se cupom não foi informado diretamente no parâmetro 'cupom', tenta buscar pelo parâmetro 'email'
+          if (!cupom) {
+            const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+            if (email) {
+              const afilRes = await fetch(`${supabaseUrl}/rest/v1/afiliados?email=ilike.${encodeURIComponent(email)}`, {
+                headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+              });
+              if (afilRes.ok) {
+                const afilData = await afilRes.json();
+                if (Array.isArray(afilData) && afilData.length > 0) {
+                  cupom = String(afilData[0].cupom_exclusivo || "").trim().toUpperCase();
+                }
               }
             }
           }
 
-          // Validação: Parâmetro 'cupom' é obrigatório
-          if (!targetCupom && !targetAfiliadoId) {
+          // Validação estrita: Parâmetro 'cupom' é obrigatório
+          if (!cupom) {
             return new Response(
               JSON.stringify({ error: "Parâmetro 'cupom' é obrigatório.", count: 0, lojasConvertidasCount: 0, lojas: [] }),
               { status: 400, headers: { "content-type": "application/json" } }
             );
           }
 
-          let queryFilters = [];
-          if (targetCupom) queryFilters.push(`cupom_utilizado.ilike.${encodeURIComponent(targetCupom)}`);
-          if (targetAfiliadoId) queryFilters.push(`afiliado_id.eq.${encodeURIComponent(targetAfiliadoId)}`);
-
-          const queryUrl = `${supabaseUrl}/rest/v1/estabelecimentos?or=(${queryFilters.join(",")})&select=id,codigo,nome,email,status,plano_status,status_assinatura,is_pro,created_at,cupom_utilizado,afiliado_id`;
+          // Consulta ESTRITAMENTE pela coluna cupom_utilizado no Supabase usando Admin Key (bypassing RLS)
+          const queryUrl = `${supabaseUrl}/rest/v1/estabelecimentos?cupom_utilizado=ilike.${encodeURIComponent(cupom)}&select=id,codigo,nome,email,status,plano_status,status_assinatura,is_pro,created_at,cupom_utilizado`;
 
           const estRes = await fetch(queryUrl, {
             headers: {
@@ -1397,8 +1356,10 @@ export default {
           });
 
           if (!estRes.ok) {
+            const errBody = await estRes.text();
+            console.error("[Backend Stats API Supabase Error]", estRes.status, errBody);
             return new Response(
-              JSON.stringify({ sucesso: false, count: 0, lojasConvertidasCount: 0, lojas: [] }),
+              JSON.stringify({ sucesso: false, count: 0, lojasConvertidasCount: 0, lojas: [], error: errBody }),
               { status: estRes.status || 500, headers: { "content-type": "application/json" } }
             );
           }
@@ -1411,10 +1372,9 @@ export default {
               est.status_assinatura === "ativo" ||
               est.plano_status === "ativo" ||
               est.is_pro === true;
-            const matchesCupom = targetCupom && est.cupom_utilizado && String(est.cupom_utilizado).trim().toUpperCase() === targetCupom;
-            const matchesId = targetAfiliadoId && est.afiliado_id && String(est.afiliado_id) === targetAfiliadoId;
+            const matchesCupom = est.cupom_utilizado && String(est.cupom_utilizado).trim().toUpperCase() === cupom;
 
-            return isAtivo && (matchesCupom || matchesId);
+            return isAtivo && matchesCupom;
           });
 
           const count = ativas.length;

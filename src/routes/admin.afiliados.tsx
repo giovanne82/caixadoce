@@ -126,16 +126,14 @@ function AdminAfiliadosComponent() {
 
       const { data: dbEstabelecimentos } = await supabase
         .from("estabelecimentos")
-        .select("codigo, nome, email, plano_status, status_assinatura, created_at, cupom_utilizado, afiliado_id");
+        .select("codigo, nome, email, plano_status, status_assinatura, created_at, cupom_utilizado");
 
       const listaAfiliados: Afiliado[] = (dbAfiliados as any[]) || [];
       const listaLojas = (dbEstabelecimentos as any[]) || [];
 
       const resultado: RelatorioAfiliado[] = listaAfiliados.map((afil) => {
         const convertidas = listaLojas.filter((est) => {
-          const idMatch = est.afiliado_id && String(est.afiliado_id) === String(afil.id);
-          const cupomMatch = est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afil.cupom_exclusivo).toUpperCase();
-          return idMatch || cupomMatch;
+          return est.cupom_utilizado && String(est.cupom_utilizado).toUpperCase() === String(afil.cupom_exclusivo).toUpperCase();
         });
 
         const count = convertidas.length;
