@@ -414,6 +414,7 @@ async function seedAfiliadosTableInSupabase() {
       );
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS cupom_utilizado TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS afiliado_id UUID;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS signature_data_url TEXT;
       CREATE INDEX IF NOT EXISTS idx_afiliados_cupom ON public.afiliados(cupom_exclusivo);
       CREATE INDEX IF NOT EXISTS idx_estabelecimentos_afiliado ON public.estabelecimentos(afiliado_id);
       CREATE INDEX IF NOT EXISTS idx_historico_comissoes_cupom ON public.historico_comissoes(cupom);

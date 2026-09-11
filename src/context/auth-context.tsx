@@ -400,6 +400,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                 sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
                 menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
                 modo_venda: data.modo_venda || baseProf.modo_venda || "ambos",
+                signature_data_url: data.signature_data_url || (data as any)?.assinatura_data_url || baseProf.signature_data_url,
+                assinatura_data_url: (data as any)?.assinatura_data_url || data.signature_data_url || baseProf.assinatura_data_url,
                 ownerUserId: data.user_id || u.id,
                 userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
               };
@@ -1120,6 +1122,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete fallbackUpdatePayload.pix_accounts;
           delete fallbackUpdatePayload.pix_keys;
           delete fallbackUpdatePayload.cnpj;
+          delete fallbackUpdatePayload.signature_data_url;
+          delete (fallbackUpdatePayload as any).assinatura_data_url;
           delete (fallbackUpdatePayload as any).codigo;
           delete (fallbackUpdatePayload as any).user_id;
 
