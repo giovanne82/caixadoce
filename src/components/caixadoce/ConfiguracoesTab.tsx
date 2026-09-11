@@ -90,6 +90,173 @@ interface ConfiguracoesTabProps {
   onIrParaPlano?: () => void;
 }
 
+function DigitalSignatureCanvas({
+  value,
+  onChange,
+}: {
+  value?: string | null;
+  onChange: (dataUrl: string | null) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(Boolean(value));
+
+  useEffect(() => {
+    if (canvasRef.current && value) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          setHasSignature(true);
+        };
+        img.src = value;
+      }
+    }
+  }, [value]);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#6d28d9";
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+    setHasSignature(true);
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    if (canvasRef.current) {
+      const dataUrl = canvasRef.current.toDataURL("image/png");
+      onChange(dataUrl);
+    }
+  };
+
+  const handleClear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setHasSignature(false);
+    onChange(null);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              const dataUrl = canvas.toDataURL("image/png");
+              setHasSignature(true);
+              onChange(dataUrl);
+            }
+          }
+        };
+        img.src = result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="border border-border rounded-xl bg-background p-2 relative overflow-hidden shadow-2xs">
+        <canvas
+          ref={canvasRef}
+          width={500}
+          height={150}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          className="w-full h-[150px] touch-none cursor-crosshair bg-white dark:bg-slate-900 rounded-lg border border-dashed border-purple-500/30"
+        />
+        {!hasSignature && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-xs text-muted-foreground/60 italic">
+            Desenhe sua assinatura com o mouse ou dedo no quadro acima
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleClear}
+            className="text-xs h-8 text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1" /> Limpar Assinatura
+          </Button>
+
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <span className="inline-flex items-center justify-center px-3 py-1.5 border border-purple-300 dark:border-purple-800 text-xs font-semibold rounded-lg text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 transition-colors shadow-2xs">
+              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload de Imagem
+            </span>
+          </label>
+        </div>
+
+        {hasSignature && (
+          <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Assinatura Cadastrada
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const {
     user,
@@ -117,6 +284,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [tipoChavePix, setTipoChavePix] = useState(profile?.tipoChavePix || "email");
   const [tipoDoc, setTipoDoc] = useState(profile?.tipoDocumento || "CNPJ");
   const [numDoc, setNumDoc] = useState(profile?.numeroDocumento || "");
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(
+    profile?.signature_data_url || (profile as any)?.assinatura_data_url || null
+  );
   const [salvandoEst, setSalvandoEst] = useState(false);
 
   const queryClient = useQueryClient();
@@ -869,6 +1039,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (profile.facebook || profile.social_facebook || profile.social_media?.facebook) setFacebookEst(profile.facebook || profile.social_facebook || profile.social_media?.facebook || "");
       if (profile.usar_mercadopago !== undefined) setUsarMercadopago(Boolean(profile.usar_mercadopago));
       if (profile.chave_pix_manual) setChavePixManual(profile.chave_pix_manual);
+      if (profile.signature_data_url || (profile as any)?.assinatura_data_url) {
+        setSignatureDataUrl(profile.signature_data_url || (profile as any)?.assinatura_data_url || null);
+      }
     }
 
     // 2. Busca os dados mais recentes diretamente da tabela 'estabelecimentos' do Supabase para garantir amnésia zero no F5
@@ -883,6 +1056,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (d.id) setEstId(d.id);
           if (d.usar_mercadopago !== undefined && d.usar_mercadopago !== null) setUsarMercadopago(Boolean(d.usar_mercadopago));
           if (d.chave_pix_manual !== undefined && d.chave_pix_manual !== null) setChavePixManual(d.chave_pix_manual);
+          if (d.signature_data_url || d.assinatura_data_url) setSignatureDataUrl(d.signature_data_url || d.assinatura_data_url);
           if (d.nome) setNomeEst(d.nome);
           if (d.slug) setSlugEst(d.slug);
           if (d.responsavel) setResponsavelEst(d.responsavel);
@@ -1072,6 +1246,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         social_facebook: facebookEst,
         usar_mercadopago: usarMercadopago,
         chave_pix_manual: chavePixManual,
+        signature_data_url: signatureDataUrl || undefined,
+        assinatura_data_url: signatureDataUrl || undefined,
       });
 
       // Garante sincronização imediata dos campos locais sem reversão
@@ -2247,6 +2423,25 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* ✍️ ASSINATURA DIGITAL DO CONFEITEIRO */}
+                <div className="pt-4 border-t space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
+                      <Edit2 className="w-4 h-4 text-purple-600" /> Assinatura Digital do Confeiteiro (Orçamentos &amp; Pedidos)
+                    </h4>
+                    <Badge variant="outline" className={`text-[10px] font-mono font-bold ${signatureDataUrl ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                      {signatureDataUrl ? "✓ Cadastrada" : "Pendente"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Desenhe sua assinatura digital no quadro abaixo ou faça upload da sua assinatura digitalizada. Ela será impressa no rodapé dos comprovantes e orçamentos em PDF.
+                  </p>
+                  <DigitalSignatureCanvas
+                    value={signatureDataUrl}
+                    onChange={(val) => setSignatureDataUrl(val)}
+                  />
                 </div>
 
                 <Button type="submit" disabled={salvandoEst} className="font-semibold shadow-sm mt-2">

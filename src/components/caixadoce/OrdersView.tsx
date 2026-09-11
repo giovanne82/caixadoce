@@ -128,7 +128,6 @@ import {
   type DespesaNotaFiscal,
   type PagamentoItem,
 } from "@/lib/caixadoce-data";
-import { gerarPdfOrcamento } from "@/lib/pdf-orcamento";
 import { toast } from "sonner";
 
 interface OrdersViewProps {
@@ -672,10 +671,21 @@ export function OrdersView({
   const [historicoPagamentos, setHistoricoPagamentos] = useState<PagamentoItem[]>([]);
   const [novoPagamentoValorFormatado, setNovoPagamentoValorFormatado] = useState("");
   const [novoPagamentoData, setNovoPagamentoData] = useState(() => new Date().toISOString().split("T")[0]);
+  const [novoPagamentoForma, setNovoPagamentoForma] = useState("Pix");
+  const [novoPagamentoStatus, setNovoPagamentoStatus] = useState<"pago" | "pendente">("pago");
+  const [novoPagamentoDataEfetiva, setNovoPagamentoDataEfetiva] = useState(() => new Date().toISOString().split("T")[0]);
   const [mostrarFormNovoPagamento, setMostrarFormNovoPagamento] = useState(false);
 
+  // Modal para Marcar como Pago com confirmação de Data Efetiva
+  const [modalMarcarPagoOpen, setModalMarcarPagoOpen] = useState(false);
+  const [itemMarcarPagoTarget, setItemMarcarPagoTarget] = useState<PagamentoItem | null>(null);
+  const [dataEfetivaMarcarPago, setDataEfetivaMarcarPago] = useState(() => new Date().toISOString().split("T")[0]);
+
   const totalPagoCalculado = useMemo(() => {
-    return historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+    return historicoPagamentos.reduce((sum, item) => {
+      const isPaid = item.status === undefined || item.status === "pago";
+      return isPaid ? sum + (Number(item.valor) || 0) : sum;
+    }, 0);
   }, [historicoPagamentos]);
 
   const valorTotalNum = useMemo(() => {
@@ -686,6 +696,12 @@ export function OrdersView({
     return Math.max(0, valorTotalNum - totalPagoCalculado);
   }, [valorTotalNum, totalPagoCalculado]);
 
+  const primeiraParcelaEntradaQuitada = useMemo(() => {
+    const primeira = historicoPagamentos.find((p) => p.isEntrada) || historicoPagamentos[0];
+    if (!primeira) return false;
+    return primeira.status === undefined || primeira.status === "pago";
+  }, [historicoPagamentos]);
+
   const handleAdicionarPagamentoHistorico = () => {
     const val = converterMoedaInputParaNumero(novoPagamentoValorFormatado);
     if (val <= 0) {
@@ -693,24 +709,277 @@ export function OrdersView({
       return;
     }
     if (!novoPagamentoData) {
-      toast.error("Informe a data do pagamento.");
+      toast.error("Informe a data prevista/acordada do pagamento.");
       return;
     }
 
+    const isEntrada = historicoPagamentos.length === 0;
+    const isPaid = novoPagamentoStatus === "pago";
     const novoItem: PagamentoItem = {
       id: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       data: novoPagamentoData,
       valor: val,
+      formaPagamento: novoPagamentoForma,
+      status: novoPagamentoStatus,
+      dataEfetiva: isPaid ? (novoPagamentoDataEfetiva || novoPagamentoData) : undefined,
+      isEntrada,
     };
 
     setHistoricoPagamentos((prev) => [...prev, novoItem]);
     setNovoPagamentoValorFormatado("");
-    toast.success(`Pagamento de ${formatarMoeda(val)} adicionado!`);
+    setNovoPagamentoStatus("pago");
+    toast.success(`Pagamento de ${formatarMoeda(val)} (${isPaid ? "Pago" : "Pendente"}) adicionado!`);
   };
 
   const handleRemoverPagamentoHistorico = (id: string) => {
     setHistoricoPagamentos((prev) => prev.filter((p) => p.id !== id));
     toast.info("Pagamento removido do histórico.");
+  };
+
+  const handleAbrirMarcarComoPago = (pag: PagamentoItem) => {
+    setItemMarcarPagoTarget(pag);
+    setDataEfetivaMarcarPago(new Date().toISOString().split("T")[0]);
+    setModalMarcarPagoOpen(true);
+  };
+
+  const handleConfirmarMarcarComoPago = () => {
+    if (!itemMarcarPagoTarget) return;
+    setHistoricoPagamentos((prev) =>
+      prev.map((p) =>
+        p.id === itemMarcarPagoTarget.id
+          ? {
+              ...p,
+              status: "pago",
+              dataEfetiva: dataEfetivaMarcarPago || new Date().toISOString().split("T")[0],
+            }
+          : p
+      )
+    );
+    setModalMarcarPagoOpen(false);
+    setItemMarcarPagoTarget(null);
+    toast.success("Pagamento marcado como Pago!");
+  };
+
+  const handleReverterPagamento = (pag: PagamentoItem) => {
+    if (confirm("Deseja reverter este pagamento para a condição 'Pendente'?")) {
+      setHistoricoPagamentos((prev) =>
+        prev.map((p) =>
+          p.id === pag.id
+            ? {
+                ...p,
+                status: "pendente",
+                dataEfetiva: undefined,
+              }
+            : p
+        )
+      );
+      toast.info("Pagamento revertido para Pendente.");
+    }
+  };
+
+  // Gerador do PDF / Comprovante do Orçamento de Encomenda
+  const handleGerarPdfOrcamento = (ord: Encomenda) => {
+    const printWindow = window.open("", "_blank", "width=850,height=950");
+    if (!printWindow) {
+      toast.error("Permita pop-ups no seu navegador para visualizar e imprimir o PDF do Orçamento.");
+      return;
+    }
+
+    const estNome = profile?.establishmentName || estabelecimentoNome || "Confeitaria";
+    const estEnd = profile?.establishmentAddress || (
+      [profile?.logradouro, profile?.numero, profile?.bairro, profile?.cidade && profile?.estado ? `${profile.cidade}/${profile.estado}` : "", profile?.cep ? `CEP: ${profile.cep}` : ""]
+        .filter(Boolean).join(", ")
+    ) || "Endereço não cadastrado";
+    const estTel = profile?.whatsapp || profile?.telefone || "Não informado";
+    const sigUrl = profile?.signature_data_url || (profile as any)?.assinatura_data_url || "";
+    const confeiteiroNome = profile?.responsavel || profile?.establishmentName || estNome;
+
+    const totalPago = calcularTotalPagoEncomenda(ord);
+    const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+
+    const hist = ord.historicoPagamentos || ord.paymentsHistory || [];
+
+    const paymentRowsHtml = hist.length > 0 ? hist.map((pag, idx) => {
+      const isPaid = pag.status === "pago" || (!pag.status && totalPago > 0);
+      const dataPrev = pag.data ? pag.data.split("-").reverse().join("/") : "-";
+      const dataEf = pag.dataEfetiva ? pag.dataEfetiva.split("-").reverse().join("/") : dataPrev;
+      const statusLabel = isPaid
+        ? `<span style="color: #059669; font-weight: bold; background: #d1fae5; padding: 2px 8px; border-radius: 4px;">✓ Pago em ${dataEf}</span>`
+        : `<span style="color: #d97706; font-weight: bold; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">⌛ Pendente</span>`;
+      const rotulo = pag.isEntrada || idx === 0 ? "Entrada / Sinal" : `${idx + 1}ª Parcela`;
+      const forma = pag.formaPagamento || "Pix";
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${rotulo}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${dataPrev}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">${forma}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; font-family: monospace;">${formatarMoeda(pag.valor)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${statusLabel}</td>
+        </tr>
+      `;
+    }).join("") : `
+      <tr>
+        <td colspan="5" style="padding: 14px; text-align: center; color: #64748b; font-style: italic;">Nenhum histórico de pagamento cadastrado. Pagamento integral na entrega.</td>
+      </tr>
+    `;
+
+    const itemsRowsHtml = ord.itensDetalhes && ord.itensDetalhes.length > 0
+      ? ord.itensDetalhes.map((it) => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${it.nome} ${it.opcaoNome ? `<span style="color:#64748b;">(${it.opcaoNome})</span>` : ""}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.quantidade}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;">${it.precoUnitario ? formatarMoeda(it.precoUnitario) : "-"}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace; font-weight: bold;">${it.subtotal ? formatarMoeda(it.subtotal) : "-"}</td>
+        </tr>
+      `).join("")
+      : `
+        <tr>
+          <td colspan="4" style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${ord.itens || "Itens diversos"}</td>
+        </tr>
+      `;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Orçamento de Encomenda - ${ord.clienteNome}</title>
+        <style>
+          @page { size: A4; margin: 12mm; }
+          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; margin: 0; padding: 24px; line-height: 1.5; font-size: 13px; background: #fff; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 3px solid #7c3aed; margin-bottom: 20px; }
+          .company-title { font-size: 22px; font-weight: 800; color: #6d28d9; margin: 0 0 4px 0; }
+          .company-info { color: #475569; font-size: 11px; margin: 2px 0; }
+          .doc-title { text-align: right; }
+          .doc-title h2 { font-size: 18px; font-weight: 800; color: #1e293b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .doc-meta { font-size: 11px; color: #64748b; font-family: monospace; }
+          .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #6d28d9; letter-spacing: 0.5px; margin: 20px 0 8px 0; padding-bottom: 4px; border-bottom: 1.5px solid #e2e8f0; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; background-color: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e2e8f0; }
+          .info-item { font-size: 12px; }
+          .info-label { font-weight: 700; color: #64748b; font-size: 10px; text-transform: uppercase; display: block; margin-bottom: 2px; }
+          .info-val { font-weight: 700; color: #0f172a; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+          th { background-color: #f1f5f9; text-align: left; padding: 10px; font-size: 11px; font-weight: 700; color: #475569; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
+          .totals-box { margin-left: auto; width: 300px; background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 24px; }
+          .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+          .totals-row.final { border-top: 2px dashed #cbd5e1; margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 800; }
+          .footer-container { margin-top: 40px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid; }
+          .signature-box { text-align: center; width: 260px; }
+          .signature-img { max-height: 75px; max-width: 220px; object-fit: contain; margin-bottom: 4px; }
+          .signature-line { border-top: 1.5px solid #64748b; margin-top: 6px; padding-top: 6px; font-size: 12px; font-weight: 800; color: #1e293b; }
+          .no-print { display: flex; gap: 8px; margin-bottom: 20px; background: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <button onclick="window.print()" style="background: #6d28d9; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px;">🖨️ Imprimir / Salvar em PDF</button>
+          <button onclick="window.close()" style="background: #e2e8f0; color: #334155; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px;">Fechar</button>
+        </div>
+
+        <div class="header">
+          <div>
+            <h1 class="company-title">${estNome}</h1>
+            <p class="company-info">📍 ${estEnd}</p>
+            <p class="company-info">📞 WhatsApp / Tel: ${estTel}</p>
+          </div>
+          <div class="doc-title">
+            <h2>Orçamento de Encomenda</h2>
+            <p class="doc-meta">Nº PEDIDO: #${ord.id.slice(-6).toUpperCase()}</p>
+            <p class="doc-meta">DATA DE EMISSÃO: ${new Date().toLocaleDateString("pt-BR")}</p>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Cliente</span>
+            <span class="info-val">${ord.clienteNome}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">WhatsApp</span>
+            <span class="info-val">${ord.clienteWhatsapp || "Não informado"}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Data & Horário de Entrega</span>
+            <span class="info-val">${ord.dataEntrega.split("-").reverse().join("/")} às ${ord.horarioEntrega || "14:00"}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Tipo de Entrega</span>
+            <span class="info-val" style="text-transform: capitalize;">${ord.tipoEntrega === "delivery" ? `Delivery (${ord.enderecoEntrega || "Endereço a combinar"})` : "Retirada na Loja"}</span>
+          </div>
+        </div>
+
+        <div class="section-title">Itens do Pedido</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Descrição do Produto / Item</th>
+              <th style="text-align: center;">Qtd</th>
+              <th style="text-align: right;">Valor Unit.</th>
+              <th style="text-align: right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRowsHtml}
+          </tbody>
+        </thead>
+        </table>
+
+        <div class="section-title">Condições de Pagamento &amp; Cronograma</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Parcela / Condição</th>
+              <th>Data Acordada</th>
+              <th>Forma de Pagamento</th>
+              <th>Valor (R$)</th>
+              <th>Status do Pagamento</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paymentRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="totals-box">
+          <div class="totals-row">
+            <span>Valor Total da Encomenda:</span>
+            <span style="font-family: monospace; font-weight: bold;">${formatarMoeda(ord.valorTotal)}</span>
+          </div>
+          <div class="totals-row">
+            <span>Total Pago (Quitado):</span>
+            <span style="font-family: monospace; font-weight: bold; color: #059669;">${formatarMoeda(totalPago)}</span>
+          </div>
+          <div class="totals-row final">
+            <span>Saldo Restante:</span>
+            <span style="font-family: monospace; color: ${saldoRestante > 0 ? '#dc2626' : '#059669'};">${formatarMoeda(saldoRestante)}</span>
+          </div>
+        </div>
+
+        ${ord.observacoes ? `
+          <div class="section-title">Observações do Pedido</div>
+          <p style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-style: italic; margin-bottom: 20px;">${ord.observacoes}</p>
+        ` : ""}
+
+        <div class="footer-container">
+          <div class="signature-box">
+            ${sigUrl ? `<img src="${sigUrl}" class="signature-img" alt="Assinatura Digital" />` : `<div style="height: 40px;"></div>`}
+            <div class="signature-line">
+              ${confeiteiroNome}<br/>
+              <span style="font-size: 10px; color: #64748b; font-weight: normal;">Confeitaria / Responsável</span>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // Formulário de Bloqueio de Data
@@ -3287,20 +3556,20 @@ export function OrdersView({
               </div>
             </div>
 
-            {/* CARD VISUAL: HISTÓRICO DE PAGAMENTOS */}
+            {/* CARD VISUAL: HISTÓRICO DE PAGAMENTOS E PARCELAS */}
             <div className="space-y-3 p-4 rounded-xl bg-card border border-border shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-emerald-600" />
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Histórico de Pagamentos
+                    Histórico de Pagamentos &amp; Parcelas
                   </h4>
                 </div>
 
                 {/* REGRA DE QUITAÇÃO: TAG PAGO */}
                 {saldoDevedorCalculado <= 0 && valorTotalNum > 0 ? (
                   <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-black text-xs px-2.5 py-0.5 shadow-xs flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" /> PAGO
+                    <Check className="w-3.5 h-3.5" /> TOTALMENTE PAGO
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
@@ -3309,42 +3578,99 @@ export function OrdersView({
                 )}
               </div>
 
+              {/* DESTAQUE DE ENTRADA / SINAL */}
+              {historicoPagamentos.length > 0 && (
+                <div className="flex items-center justify-between p-2 px-3 rounded-lg bg-muted/40 text-xs border border-border">
+                  <span className="font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className={`w-3.5 h-3.5 ${primeiraParcelaEntradaQuitada ? "text-emerald-600" : "text-amber-500"}`} />
+                    Entrada / Sinal (1ª Parcela):
+                  </span>
+                  <Badge className={primeiraParcelaEntradaQuitada ? "bg-emerald-600 text-white font-extrabold text-[10px]" : "bg-amber-500/15 text-amber-800 dark:text-amber-300 font-extrabold border border-amber-500/30 text-[10px]"}>
+                    {primeiraParcelaEntradaQuitada ? "✓ Quitada" : "⌛ Pendente"}
+                  </Badge>
+                </div>
+              )}
+
               {/* RENDERIZAÇÃO DA LISTA LINHA POR LINHA */}
               {historicoPagamentos.length > 0 ? (
                 <div className="divide-y divide-border/60 bg-muted/20 rounded-xl border border-border overflow-hidden">
-                  {historicoPagamentos.map((pag) => (
-                    <div
-                      key={pag.id}
-                      className="p-2.5 px-3 flex items-center justify-between text-xs hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-foreground font-semibold text-xs">
-                          {pag.data.split("-").reverse().join("/")}
-                        </span>
-                        {pag.observacao && (
-                          <span className="text-[11px] text-muted-foreground italic truncate max-w-[120px]">
-                            ({pag.observacao})
-                          </span>
-                        )}
-                      </div>
+                  {historicoPagamentos.map((pag, idx) => {
+                    const isPaid = pag.status === undefined || pag.status === "pago";
+                    const isEntrada = pag.isEntrada || idx === 0;
 
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
-                          {formatarMoeda(pag.valor)}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoverPagamentoHistorico(pag.id)}
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full"
-                          title="Remover pagamento"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                    return (
+                      <div
+                        key={pag.id}
+                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-foreground font-bold text-xs">
+                              📅 {pag.data ? pag.data.split("-").reverse().join("/") : "-"}
+                            </span>
+                            {isEntrada && (
+                              <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold px-1.5 py-0">
+                                Entrada / Sinal
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-[9px] uppercase font-mono text-muted-foreground px-1.5 py-0">
+                              {pag.formaPagamento || "Pix"}
+                            </Badge>
+                          </div>
+                          {pag.observacao && (
+                            <p className="text-[11px] text-muted-foreground italic truncate">
+                              ({pag.observacao})
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-2.5">
+                          <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                            {formatarMoeda(pag.valor)}
+                          </span>
+
+                          {/* TOGGLE / INTERACTIVE STATUS BUTTON */}
+                          {isPaid ? (
+                            <div className="flex items-center gap-1">
+                              <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 shadow-2xs">
+                                ✓ Pago {pag.dataEfetiva ? `em ${pag.dataEfetiva.split("-").reverse().join("/")}` : ""}
+                              </Badge>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleReverterPagamento(pag)}
+                                className="h-7 text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 px-2 rounded-lg"
+                                title="Reverter para Pendente"
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Desfazer
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleAbrirMarcarComoPago(pag)}
+                              className="h-7 text-[11px] font-extrabold bg-amber-500 hover:bg-amber-600 text-slate-950 px-2.5 rounded-lg shadow-2xs"
+                            >
+                              <Check className="w-3.5 h-3.5 mr-1" /> Marcar como Pago
+                            </Button>
+                          )}
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoverPagamentoHistorico(pag.id)}
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full shrink-0"
+                            title="Remover pagamento"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-3 text-center text-xs text-muted-foreground italic bg-muted/10 rounded-xl border border-dashed border-border">
@@ -3363,13 +3689,13 @@ export function OrdersView({
                       onClick={() => setMostrarFormNovoPagamento(true)}
                       className="w-full text-xs font-bold border-dashed border-emerald-500/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-600 h-9"
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1.5" /> + Adicionar pagamento
+                      <Plus className="w-3.5 h-3.5 mr-1.5" /> + Agendar ou Adicionar Pagamento
                     </Button>
                   ) : (
-                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-3">
+                    <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                          Novo Pagamento Recebido
+                          Novo Registro de Pagamento
                         </span>
                         <Button
                           type="button"
@@ -3382,10 +3708,10 @@ export function OrdersView({
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className="space-y-1">
                           <Label htmlFor="pay-val" className="text-[11px] font-semibold text-muted-foreground">
-                            Valor Recebido (R$)
+                            Valor (R$) *
                           </Label>
                           <Input
                             id="pay-val"
@@ -3396,9 +3722,10 @@ export function OrdersView({
                             autoFocus
                           />
                         </div>
+
                         <div className="space-y-1">
                           <Label htmlFor="pay-date" className="text-[11px] font-semibold text-muted-foreground">
-                            Data
+                            Data Acordada / Prevista *
                           </Label>
                           <Input
                             id="pay-date"
@@ -3408,7 +3735,56 @@ export function OrdersView({
                             className="h-8 text-xs font-mono font-bold bg-background"
                           />
                         </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-muted-foreground">
+                            Forma de Pagamento
+                          </Label>
+                          <Select value={novoPagamentoForma} onValueChange={setNovoPagamentoForma}>
+                            <SelectTrigger className="h-8 text-xs bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Pix">Pix</SelectItem>
+                              <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
+                              <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
+                              <SelectItem value="Transferência / TED">Transferência / TED</SelectItem>
+                              <SelectItem value="Outro">Outro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-muted-foreground">
+                            Status Inicial
+                          </Label>
+                          <Select value={novoPagamentoStatus} onValueChange={(val: any) => setNovoPagamentoStatus(val)}>
+                            <SelectTrigger className="h-8 text-xs bg-background font-bold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pago" className="text-emerald-600 font-bold">✓ Pago (Quitado)</SelectItem>
+                              <SelectItem value="pendente" className="text-amber-600 font-bold">⌛ Pendente (Agendado)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
+
+                      {novoPagamentoStatus === "pago" && (
+                        <div className="space-y-1 pt-1 border-t border-emerald-500/20">
+                          <Label htmlFor="pay-date-efetiva" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+                            Data Efetiva do Recebimento
+                          </Label>
+                          <Input
+                            id="pay-date-efetiva"
+                            type="date"
+                            value={novoPagamentoDataEfetiva}
+                            onChange={(e) => setNovoPagamentoDataEfetiva(e.target.value)}
+                            className="h-8 text-xs font-mono font-bold bg-background"
+                          />
+                        </div>
+                      )}
 
                       <div className="flex justify-end gap-2 pt-1">
                         <Button
@@ -4209,18 +4585,92 @@ export function OrdersView({
             </div>
 
             {encomendaDetalhes && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  setModalDetalhesOpen(false);
-                  handleEnviarResumoWhatsApp(encomendaDetalhes);
-                }}
-                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Send className="w-3.5 h-3.5 mr-1" /> {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGerarPdfOrcamento(encomendaDetalhes)}
+                  className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800"
+                >
+                  <FileText className="w-3.5 h-3.5 mr-1" /> Imprimir Orçamento (PDF)
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setModalDetalhesOpen(false);
+                    handleEnviarResumoWhatsApp(encomendaDetalhes);
+                  }}
+                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Send className="w-3.5 h-3.5 mr-1" /> {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}
+                </Button>
+              </div>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: MARCAR PAGAMENTO COMO PAGO (CONFIRMAR DATA EFETIVA) */}
+      <Dialog open={modalMarcarPagoOpen} onOpenChange={setModalMarcarPagoOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 className="w-5 h-5" /> Confirmar Pagamento Recebido
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Informe a Data Efetiva em que o valor de {itemMarcarPagoTarget ? formatarMoeda(itemMarcarPagoTarget.valor) : ""} foi pago/creditado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {itemMarcarPagoTarget && (
+              <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Data Acordada / Prevista:</span>
+                  <span className="font-mono font-bold">{itemMarcarPagoTarget.data ? itemMarcarPagoTarget.data.split("-").reverse().join("/") : "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Forma de Pagamento:</span>
+                  <span className="font-bold uppercase">{itemMarcarPagoTarget.formaPagamento || "Pix"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Valor da Parcela:</span>
+                  <span className="font-mono font-extrabold text-emerald-600">{formatarMoeda(itemMarcarPagoTarget.valor)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="date-efetiva-confirm" className="text-xs font-bold">
+                Data Efetiva do Pagamento *
+              </Label>
+              <Input
+                id="date-efetiva-confirm"
+                type="date"
+                value={dataEfetivaMarcarPago}
+                onChange={(e) => setDataEfetivaMarcarPago(e.target.value)}
+                className="font-mono font-bold text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Por padrão, sugerimos a data de hoje. Você pode alterar para a data do extrato bancário.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setModalMarcarPagoOpen(false)} className="text-xs">
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmarMarcarComoPago}
+              className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Check className="w-4 h-4 mr-1" /> Confirmar Pagamento
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

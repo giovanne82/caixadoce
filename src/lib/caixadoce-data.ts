@@ -64,6 +64,8 @@ export interface Estabelecimento {
     whatsapp?: string;
   };
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
+  signature_data_url?: string;
+  assinatura_data_url?: string;
 }
 
 import {
@@ -1130,17 +1132,27 @@ export interface InsumoNecessarioPedido {
 
 export interface PagamentoItem {
   id: string;
-  data: string; // YYYY-MM-DD
+  data: string; // Data Acordada / Prevista YYYY-MM-DD
   valor: number;
   observacao?: string;
+  dataEfetiva?: string; // Data Efetiva do Pagamento YYYY-MM-DD
+  formaPagamento?: string; // Pix, Dinheiro, Cartão de Crédito, Cartão de Débito, etc.
+  status?: "pendente" | "pago"; // default "pago" for backward compatibility if undefined
+  isEntrada?: boolean;
 }
 
 export function calcularTotalPagoEncomenda(encomenda: Partial<Encomenda>): number {
   if (encomenda.historicoPagamentos && encomenda.historicoPagamentos.length > 0) {
-    return encomenda.historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+    return encomenda.historicoPagamentos.reduce((sum, item) => {
+      const isPaid = item.status === undefined || item.status === "pago";
+      return isPaid ? sum + (Number(item.valor) || 0) : sum;
+    }, 0);
   }
   if (encomenda.paymentsHistory && (encomenda.paymentsHistory as any[]).length > 0) {
-    return (encomenda.paymentsHistory as any[]).reduce((sum, item) => sum + (Number(item.valor || item.amount) || 0), 0);
+    return (encomenda.paymentsHistory as any[]).reduce((sum, item) => {
+      const isPaid = item.status === undefined || item.status === "pago";
+      return isPaid ? sum + (Number(item.valor || item.amount) || 0) : sum;
+    }, 0);
   }
   return Number(encomenda.valorEntrada) || 0;
 }

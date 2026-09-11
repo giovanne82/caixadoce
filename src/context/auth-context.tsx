@@ -75,6 +75,8 @@ export type UpdateEstablishmentDetailsInput = {
   usar_mercadopago?: boolean;
   chave_pix_manual?: string;
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
+  signature_data_url?: string;
+  assinatura_data_url?: string;
 };
 
 export type StaffProfile = {
@@ -124,6 +126,8 @@ export type StaffProfile = {
   usar_mercadopago?: boolean;
   chave_pix_manual?: string;
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
+  signature_data_url?: string;
+  assinatura_data_url?: string;
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -983,6 +987,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
       if (details.modo_venda !== undefined) {
         updatePayload.modo_venda = details.modo_venda;
+      }
+
+      if (details.signature_data_url !== undefined || details.assinatura_data_url !== undefined) {
+        const sig = details.signature_data_url || details.assinatura_data_url;
+        updatePayload.signature_data_url = sig || null;
       }
 
       if (
