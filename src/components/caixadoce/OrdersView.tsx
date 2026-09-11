@@ -982,6 +982,8 @@ export function OrdersView({
     printWindow.document.close();
   };
 
+  const gerarPdfOrcamento = (ord: Encomenda, _nomeLoja?: string) => handleGerarPdfOrcamento(ord);
+
   // Formulário de Bloqueio de Data
   const [dataBloqueio, setDataBloqueio] = useState(new Date().toISOString().split("T")[0]);
   const [motivoBloqueio, setMotivoBloqueio] = useState("Agenda Lotada");
@@ -4570,7 +4572,7 @@ export function OrdersView({
                   size="sm"
                   onClick={() => {
                     try {
-                      gerarPdfOrcamento(encomendaDetalhes, estabelecimentoNome || profile?.establishmentName || "CaixaDoce");
+                      handleGerarPdfOrcamento(encomendaDetalhes);
                       toast.success("PDF do orçamento gerado com sucesso!");
                     } catch (err) {
                       console.error("Erro ao gerar PDF:", err);
