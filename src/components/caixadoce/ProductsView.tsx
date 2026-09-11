@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
@@ -117,8 +117,79 @@ export function ProductsView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
-  // Informações do Estabelecimento & Delivery
+  // Informações do Estabelecimento & Delivery & Modo de Venda
   const { profile, updateEstablishmentDetails } = useAuth();
+  
+  // Configuração do Modo de Recebimento de Pedidos ('ambos' | 'apenas_pedido' | 'apenas_orcamento')
+  const [modoVenda, setModoVenda] = useState<"apenas_pedido" | "apenas_orcamento" | "ambos">(
+    (profile?.modo_venda as any) || "ambos"
+  );
+  const [salvandoModoVenda, setSalvandoModoVenda] = useState(false);
+
+  useEffect(() => {
+    if (profile?.modo_venda) {
+      setModoVenda(profile.modo_venda as any);
+    }
+  }, [profile?.modo_venda]);
+
+  const handleSalvarModoVenda = async (novoModo: "apenas_pedido" | "apenas_orcamento" | "ambos") => {
+    const modoAnterior = modoVenda;
+    setModoVenda(novoModo);
+    setSalvandoModoVenda(true);
+
+    try {
+      let targetId = profile?.establishmentId || null;
+      if (!targetId && estabelecimentoCodigo) {
+        const { data: estRow } = await supabase
+          .from("estabelecimentos")
+          .select("id")
+          .ilike("codigo", estabelecimentoCodigo.toUpperCase().trim())
+          .maybeSingle();
+
+        if (estRow?.id) {
+          targetId = estRow.id;
+        }
+      }
+
+      let query = supabase.from("estabelecimentos").update({
+        modo_venda: novoModo,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (targetId) {
+        query = query.eq("id", targetId);
+      } else if (estabelecimentoCodigo) {
+        query = query.ilike("codigo", estabelecimentoCodigo.toUpperCase().trim());
+      } else {
+        throw new Error("Código do estabelecimento não encontrado.");
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+
+      await updateEstablishmentDetails({
+        modo_venda: novoModo,
+      });
+
+      toast.success("Modo de recebimento atualizado!", {
+        description:
+          novoModo === "ambos"
+            ? "Clientes podem escolher entre fazer compras ou solicitar orçamentos."
+            : novoModo === "apenas_pedido"
+            ? "O cardápio funcionará apenas com vendas diretas e checkout."
+            : "O cardápio funcionará apenas para solicitações de orçamento.",
+      });
+    } catch (err: any) {
+      console.error("[ProductsView] Erro ao salvar modo_venda:", err);
+      setModoVenda(modoAnterior);
+      toast.error("Erro ao atualizar modo de recebimento", {
+        description: err?.message || "Não foi possível salvar no banco de dados.",
+      });
+    } finally {
+      setSalvandoModoVenda(false);
+    }
+  };
+
   // Configuração da opção de Entrega (Delivery)
   const [deliveryAtivo, setDeliveryAtivo] = useState<boolean>(() => {
     if (typeof window !== "undefined" && estabelecimentoCodigo) {
@@ -555,29 +626,71 @@ export function ProductsView({
         </div>
       </div>
 
-      {/* Opção de Delivery (Entrega a Domicílio) no Cardápio Digital */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-xs">
-        <div className="space-y-0.5">
-          <Label htmlFor="switch-delivery-cardapio" className="text-xs font-bold text-foreground flex items-center gap-2 cursor-pointer">
-            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            Habilitar opção de Entrega (Delivery) no Cardápio Digital
-          </Label>
-          <p className="text-[11px] text-muted-foreground">
-            {deliveryAtivo
-              ? "Seus clientes poderão escolher entre Entrega / Delivery e Retirada no Balcão ao fazer pedidos."
-              : "Delivery desativado. O Cardápio Digital aceitará apenas a modalidade de Retirada no Balcão."}
-          </p>
+      {/* Controles Rápidos do Cardápio: Modo de Recebimento de Pedidos e Delivery */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Modo de Recebimento de Pedidos */}
+        <div className="flex flex-col justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-xs">
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="select-modo-recebimento" className="text-xs font-bold text-foreground flex items-center gap-2">
+                <Store className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                Modo de Recebimento de Pedidos
+              </Label>
+              {salvandoModoVenda && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Defina como seus clientes poderão interagir com o seu cardápio público.
+            </p>
+          </div>
+
+          <div className="pt-1">
+            <Select
+              value={modoVenda}
+              onValueChange={(val: "ambos" | "apenas_pedido" | "apenas_orcamento") => handleSalvarModoVenda(val)}
+              disabled={salvandoModoVenda}
+            >
+              <SelectTrigger id="select-modo-recebimento" className="h-9 text-xs font-bold bg-background border-border">
+                <SelectValue placeholder="Selecione o modo de recebimento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ambos" className="text-xs font-medium">
+                  ✨ Vendas e Orçamentos (Cliente escolhe)
+                </SelectItem>
+                <SelectItem value="apenas_pedido" className="text-xs font-medium">
+                  🛒 Apenas Vendas Diretas
+                </SelectItem>
+                <SelectItem value="apenas_orcamento" className="text-xs font-medium">
+                  📝 Apenas Solicitação de Orçamentos
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <Badge variant={deliveryAtivo ? "default" : "outline"} className="text-[10px] font-bold">
-            {deliveryAtivo ? "Delivery Ativo" : "Apenas Retirada"}
-          </Badge>
-          <Switch
-            id="switch-delivery-cardapio"
-            checked={deliveryAtivo}
-            onCheckedChange={handleToggleDelivery}
-          />
+        {/* Opção de Delivery (Entrega a Domicílio) no Cardápio Digital */}
+        <div className="flex flex-col justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-xs">
+          <div className="space-y-0.5">
+            <Label htmlFor="switch-delivery-cardapio" className="text-xs font-bold text-foreground flex items-center gap-2 cursor-pointer">
+              <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              Habilitar opção de Entrega (Delivery) no Cardápio Digital
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              {deliveryAtivo
+                ? "Seus clientes poderão escolher entre Entrega / Delivery e Retirada no Balcão ao fazer pedidos."
+                : "Delivery desativado. O Cardápio Digital aceitará apenas a modalidade de Retirada no Balcão."}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-2.5 pt-1">
+            <Badge variant={deliveryAtivo ? "default" : "outline"} className="text-[10px] font-bold">
+              {deliveryAtivo ? "Delivery Ativo" : "Apenas Retirada"}
+            </Badge>
+            <Switch
+              id="switch-delivery-cardapio"
+              checked={deliveryAtivo}
+              onCheckedChange={handleToggleDelivery}
+            />
+          </div>
         </div>
       </div>
 

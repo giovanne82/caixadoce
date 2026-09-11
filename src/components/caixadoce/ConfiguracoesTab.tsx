@@ -154,11 +154,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
   const [salvandoPixPref, setSalvandoPixPref] = useState(false);
 
-  // Modo de Operação do Cardápio ('ambos' | 'apenas_pedido' | 'apenas_orcamento')
-  const [modoVenda, setModoVenda] = useState<"apenas_pedido" | "apenas_orcamento" | "ambos">(
-    (profile?.modo_venda as any) || "ambos"
-  );
-  const [salvandoModoVenda, setSalvandoModoVenda] = useState(false);
 
   // Estado do Mercado Pago Connect (OAuth) com hidratação imediata do cache local
   const [mpConectado, setMpConectado] = useState<boolean>(() => {
@@ -203,9 +198,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       }
       if (data?.chave_pix_manual !== undefined && data?.chave_pix_manual !== null) {
         setChavePixManual(data.chave_pix_manual);
-      }
-      if (data?.modo_venda) {
-        setModoVenda(data.modo_venda as any);
       }
 
       const tokenEncontrado = Boolean((data as any)?.mp_access_token);
@@ -319,72 +311,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   };
 
-  // Função para atualização imediata no banco ao alterar o Modo de Operação do Cardápio
-  const handleSalvarModoVenda = async (novoModo: "apenas_pedido" | "apenas_orcamento" | "ambos") => {
-    const modoAnterior = modoVenda;
-    setModoVenda(novoModo);
-    setSalvandoModoVenda(true);
-
-    try {
-      let targetId = estId;
-
-      if (!targetId && activeCode) {
-        const { data: estRow } = await supabase
-          .from("estabelecimentos")
-          .select("id")
-          .ilike("codigo", activeCode.toUpperCase().trim())
-          .maybeSingle();
-
-        if (estRow?.id) {
-          targetId = estRow.id;
-          setEstId(estRow.id);
-        }
-      }
-
-      let query = supabase.from("estabelecimentos").update({
-        modo_venda: novoModo,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (targetId) {
-        query = query.eq("id", targetId);
-      } else if (activeCode) {
-        query = query.ilike("codigo", activeCode.toUpperCase().trim());
-      } else {
-        throw new Error("ID ou código do estabelecimento não encontrado.");
-      }
-
-      const { error } = await query;
-
-      if (error) {
-        console.error("Falha no UPDATE de modo_venda:", error);
-        throw error;
-      }
-
-      await updateEstablishmentDetails({
-        modo_venda: novoModo,
-      });
-
-      queryClient.invalidateQueries();
-
-      toast.success("Modo de Operação atualizado!", {
-        description:
-          novoModo === "ambos"
-            ? "Clientes podem escolher entre fazer pedidos ou solicitar orçamentos."
-            : novoModo === "apenas_pedido"
-            ? "O cardápio funcionará apenas com pedidos diretos e checkout de pagamento."
-            : "O cardápio funcionará apenas para solicitações de orçamento sem pagamento imediato.",
-      });
-    } catch (err: any) {
-      console.error("Erro ao salvar modo_venda:", err);
-      setModoVenda(modoAnterior);
-      toast.error("Erro ao salvar modo de operação", {
-        description: err.message || "Não foi possível atualizar no banco de dados.",
-      });
-    } finally {
-      setSalvandoModoVenda(false);
-    }
-  };
 
   useEffect(() => {
     checarMpStatus();
@@ -1146,7 +1072,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         social_facebook: facebookEst,
         usar_mercadopago: usarMercadopago,
         chave_pix_manual: chavePixManual,
-        modo_venda: modoVenda,
       });
 
       // Garante sincronização imediata dos campos locais sem reversão
@@ -1565,140 +1490,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </CardContent>
           </Card>
 
-          {/* CARD: MODO DE OPERAÇÃO DO CARDÁPIO */}
-          <Card className="border-border shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                    <Store className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    <span>Modo de Operação do Cardápio</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-1">
-                    Escolha como seus clientes farão compras: com checkout direto de pagamento, apenas solicitações de orçamento ou dando a liberdade de escolha ao cliente.
-                  </CardDescription>
-                </div>
-                <Badge className={`w-fit font-bold text-[10px] px-2.5 py-1 ${
-                  modoVenda === "ambos"
-                    ? "bg-purple-600 text-white"
-                    : modoVenda === "apenas_pedido"
-                    ? "bg-emerald-600 text-white"
-                    : "bg-amber-600 text-white"
-                }`}>
-                  {modoVenda === "ambos"
-                    ? "Pedidos & Orçamentos"
-                    : modoVenda === "apenas_pedido"
-                    ? "Apenas Pedidos"
-                    : "Apenas Orçamentos"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-2">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Opção 1: Ambos */}
-                <button
-                  type="button"
-                  disabled={salvandoModoVenda}
-                  onClick={() => handleSalvarModoVenda("ambos")}
-                  className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 ${
-                    modoVenda === "ambos"
-                      ? "border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30 shadow-xs"
-                      : "border-border hover:border-purple-300 bg-card hover:bg-muted/30"
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">✨</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        modoVenda === "ambos"
-                          ? "border-purple-600 bg-purple-600 text-white"
-                          : "border-muted-foreground/40"
-                      }`}>
-                        {modoVenda === "ambos" && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                      </div>
-                    </div>
-                    <h4 className="text-xs font-black text-foreground">
-                      Permitir Pedidos e Orçamentos (O cliente escolhe)
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      Exibe um modal de boas-vindas e botão de troca no topo para o cliente decidir se deseja fechar o pedido ou solicitar orçamento.
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="w-fit text-[9px] font-bold text-purple-700 dark:text-purple-300 border-purple-300 bg-purple-500/10">
-                    Recomendado / Flexível
-                  </Badge>
-                </button>
-
-                {/* Opção 2: Apenas Pedido */}
-                <button
-                  type="button"
-                  disabled={salvandoModoVenda}
-                  onClick={() => handleSalvarModoVenda("apenas_pedido")}
-                  className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 ${
-                    modoVenda === "apenas_pedido"
-                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30 shadow-xs"
-                      : "border-border hover:border-emerald-300 bg-card hover:bg-muted/30"
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">🛒</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        modoVenda === "apenas_pedido"
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-muted-foreground/40"
-                      }`}>
-                        {modoVenda === "apenas_pedido" && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                      </div>
-                    </div>
-                    <h4 className="text-xs font-black text-foreground">
-                      Trabalhar Apenas com Pedidos Diretos
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      Fluxo direto para compras com fechamento obrigatório (Pix ou Cartão). Não exibe modal inicial nem botões de orçamento.
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="w-fit text-[9px] font-bold text-emerald-700 dark:text-emerald-300 border-emerald-300 bg-emerald-500/10">
-                    Venda Direta
-                  </Badge>
-                </button>
-
-                {/* Opção 3: Apenas Orçamento */}
-                <button
-                  type="button"
-                  disabled={salvandoModoVenda}
-                  onClick={() => handleSalvarModoVenda("apenas_orcamento")}
-                  className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 ${
-                    modoVenda === "apenas_orcamento"
-                      ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30 shadow-xs"
-                      : "border-border hover:border-amber-300 bg-card hover:bg-muted/30"
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">📝</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        modoVenda === "apenas_orcamento"
-                          ? "border-amber-600 bg-amber-600 text-white"
-                          : "border-muted-foreground/40"
-                      }`}>
-                        {modoVenda === "apenas_orcamento" && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                      </div>
-                    </div>
-                    <h4 className="text-xs font-black text-foreground">
-                      Trabalhar Apenas com Orçamentos
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      Ideal para produtos sob encomenda personalizada. O cliente envia a lista sem opções de pagamento imediato.
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="w-fit text-[9px] font-bold text-amber-700 dark:text-amber-300 border-amber-300 bg-amber-500/10">
-                    Sob Medida
-                  </Badge>
-                </button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* CARD: DADOS DO ESTABELECIMENTO & PIX */}
           <Card className="border-border shadow-sm">
