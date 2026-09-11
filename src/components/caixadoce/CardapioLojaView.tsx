@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
