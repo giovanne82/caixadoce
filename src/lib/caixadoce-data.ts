@@ -1136,22 +1136,28 @@ export interface PagamentoItem {
   valor: number;
   observacao?: string;
   dataEfetiva?: string; // Data Efetiva do Pagamento YYYY-MM-DD
+  data_pagamento?: string | null;
   formaPagamento?: string; // Pix, Dinheiro, Cartão de Crédito, Cartão de Débito, etc.
-  status?: "pendente" | "pago"; // default "pago" for backward compatibility if undefined
+  status?: "pendente" | "pago";
+  pago: boolean; // Booleano explícito: true se pago/quitado, false se pendente
+  is_paid?: boolean;
   isEntrada?: boolean;
 }
 
+export function isPagamentoItemPago(item: any): boolean {
+  if (!item) return false;
+  if (typeof item.pago === "boolean") return item.pago;
+  if (typeof item.is_paid === "boolean") return item.is_paid;
+  if (item.status) return item.status === "pago";
+  return false;
+}
+
 export function calcularTotalPagoEncomenda(encomenda: Partial<Encomenda>): number {
-  if (encomenda.historicoPagamentos && encomenda.historicoPagamentos.length > 0) {
-    return encomenda.historicoPagamentos.reduce((sum, item) => {
-      const isPaid = item.status === undefined || item.status === "pago";
-      return isPaid ? sum + (Number(item.valor) || 0) : sum;
-    }, 0);
-  }
-  if (encomenda.paymentsHistory && (encomenda.paymentsHistory as any[]).length > 0) {
-    return (encomenda.paymentsHistory as any[]).reduce((sum, item) => {
-      const isPaid = item.status === undefined || item.status === "pago";
-      return isPaid ? sum + (Number(item.valor || item.amount) || 0) : sum;
+  const hist = encomenda.historicoPagamentos || encomenda.paymentsHistory;
+  if (Array.isArray(hist) && hist.length > 0) {
+    return hist.reduce((sum, item) => {
+      const isPaid = isPagamentoItemPago(item);
+      return isPaid ? sum + (Number(item.valor || (item as any).amount) || 0) : sum;
     }, 0);
   }
   return Number(encomenda.valorEntrada) || 0;

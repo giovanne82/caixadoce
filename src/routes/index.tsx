@@ -570,18 +570,35 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         const mapeadas: Encomenda[] = data.map((d: any) => {
           const histRaw = d.historico_pagamentos || d.payments_history;
           const historicoMapeado = Array.isArray(histRaw) && histRaw.length > 0
-            ? histRaw.map((p: any) => ({
-                id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
-                data: p.data || p.date || d.created_at?.split("T")[0] || d.data_entrega,
-                valor: Number(p.valor || p.amount || 0),
-                observacao: p.observacao || p.note || "",
-              }))
+            ? histRaw.map((p: any) => {
+                const isPaid = p.pago === true || p.is_paid === true || p.status === "pago";
+                return {
+                  id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+                  data: p.data || p.date || d.created_at?.split("T")[0] || d.data_entrega,
+                  valor: Number(p.valor || p.amount || 0),
+                  observacao: p.observacao || p.note || "",
+                  dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || undefined) : undefined,
+                  data_pagamento: isPaid ? (p.data_pagamento || p.dataEfetiva || p.data_efetiva || null) : null,
+                  formaPagamento: p.formaPagamento || p.forma_pagamento || p.method || "Pix",
+                  status: isPaid ? "pago" : "pendente",
+                  pago: isPaid,
+                  is_paid: isPaid,
+                  isEntrada: p.isEntrada !== undefined ? Boolean(p.isEntrada) : false,
+                };
+              })
             : d.valor_entrada && Number(d.valor_entrada) > 0
             ? [{
                 id: "pay_initial",
                 data: d.created_at?.split("T")[0] || d.data_entrega,
                 valor: Number(d.valor_entrada),
                 observacao: "Sinal / Entrada Inicial",
+                dataEfetiva: d.created_at?.split("T")[0],
+                data_pagamento: d.created_at?.split("T")[0],
+                formaPagamento: "Pix",
+                status: "pago",
+                pago: true,
+                is_paid: true,
+                isEntrada: true,
               }]
             : [];
 
@@ -1136,7 +1153,25 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       valTotal = item.itensDetalhes.reduce((acc, it: any) => acc + (Number(it.subtotal || it.precoUnitario) || 0), 0);
     }
     valTotal = Math.max(0, valTotal);
-    const valEntrada = Math.max(0, Number(item.valorEntrada) || Number((item as any).downPayment) || Number((item as any).valor_entrada) || 0);
+    const histRawCriar = item.historicoPagamentos || item.paymentsHistory || [];
+    const histSanitizadoCriar = histRawCriar.map((p: any) => {
+      const isPaid = p.pago === true || p.is_paid === true || p.status === "pago";
+      return {
+        id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+        data: p.data || p.date,
+        valor: Number(p.valor || p.amount || 0),
+        observacao: p.observacao || "",
+        formaPagamento: p.formaPagamento || p.forma_pagamento || "Pix",
+        status: isPaid ? "pago" : "pendente",
+        pago: isPaid,
+        is_paid: isPaid,
+        dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || p.data) : null,
+        data_pagamento: isPaid ? (p.data_pagamento || p.dataEfetiva || p.data_efetiva || p.data) : null,
+        isEntrada: Boolean(p.isEntrada),
+      };
+    });
+    const totalPagoQuitadoCriar = histSanitizadoCriar.filter((p: any) => p.pago).reduce((sum: number, p: any) => sum + p.valor, 0);
+    const valEntrada = totalPagoQuitadoCriar > 0 ? totalPagoQuitadoCriar : Math.max(0, Number(item.valorEntrada) || 0);
 
     const detVela = item.detalhesVela || (item as any).tipoVela || "";
     const detTopo = item.detalhesTopoBolo || "";
@@ -1159,7 +1194,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       valor_total: valTotal,
       total_amount: valTotal,
       valor_entrada: valEntrada,
-      historico_pagamentos: item.historicoPagamentos || item.paymentsHistory || [],
+      historico_pagamentos: histSanitizadoCriar,
       status_pagamento: item.statusPagamento || "pendente",
       status: item.status || "pendente",
       tipo_entrega: item.tipoEntrega || "retirada",
@@ -1207,7 +1242,13 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     }
 
     // 2. Atualizar estado local SOMENTE se a gravação no Supabase retornou sucesso
-    const atualizadas = [item, ...encomendas];
+    const itemFormatadoComHistorico = {
+      ...item,
+      historicoPagamentos: histSanitizadoCriar,
+      paymentsHistory: histSanitizadoCriar,
+      valorEntrada: valEntrada,
+    };
+    const atualizadas = [itemFormatadoComHistorico, ...encomendas];
     setEncomendas(atualizadas);
     try {
       localStorage.setItem(`caixadoce_orders_${activeCode}`, JSON.stringify(atualizadas));
@@ -1216,7 +1257,25 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
   const editarEncomenda = async (id: string, dados: Partial<Encomenda>) => {
     const valTotal = Number(dados.valorTotal) || 0;
-    const valEntrada = Number(dados.valorEntrada) || 0;
+    const histRawEditar = dados.historicoPagamentos || dados.paymentsHistory || [];
+    const histSanitizadoEditar = histRawEditar.map((p: any) => {
+      const isPaid = p.pago === true || p.is_paid === true || p.status === "pago";
+      return {
+        id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+        data: p.data || p.date,
+        valor: Number(p.valor || p.amount || 0),
+        observacao: p.observacao || "",
+        formaPagamento: p.formaPagamento || p.forma_pagamento || "Pix",
+        status: isPaid ? "pago" : "pendente",
+        pago: isPaid,
+        is_paid: isPaid,
+        dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || p.data) : null,
+        data_pagamento: isPaid ? (p.data_pagamento || p.dataEfetiva || p.data_efetiva || p.data) : null,
+        isEntrada: Boolean(p.isEntrada),
+      };
+    });
+    const totalPagoQuitadoEditar = histSanitizadoEditar.filter((p: any) => p.pago).reduce((sum: number, p: any) => sum + p.valor, 0);
+    const valEntrada = totalPagoQuitadoEditar > 0 ? totalPagoQuitadoEditar : Math.max(0, Number(dados.valorEntrada) || 0);
 
     // 1. Atualizar no Supabase PRIMEIRO com payload padronizado
     const payloadUpdate: Record<string, any> = {
@@ -1231,7 +1290,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       valor_total: valTotal,
       total_amount: valTotal,
       valor_entrada: valEntrada,
-      historico_pagamentos: dados.historicoPagamentos || dados.paymentsHistory || [],
+      historico_pagamentos: histSanitizadoEditar,
       status_pagamento: dados.statusPagamento || "pendente",
       status: dados.status || "pendente",
       tipo_entrega: dados.tipoEntrega || "retirada",

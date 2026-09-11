@@ -683,7 +683,7 @@ export function OrdersView({
 
   const totalPagoCalculado = useMemo(() => {
     return historicoPagamentos.reduce((sum, item) => {
-      const isPaid = item.status === undefined || item.status === "pago";
+      const isPaid = item.pago === true || item.is_paid === true || item.status === "pago";
       return isPaid ? sum + (Number(item.valor) || 0) : sum;
     }, 0);
   }, [historicoPagamentos]);
@@ -699,7 +699,7 @@ export function OrdersView({
   const primeiraParcelaEntradaQuitada = useMemo(() => {
     const primeira = historicoPagamentos.find((p) => p.isEntrada) || historicoPagamentos[0];
     if (!primeira) return false;
-    return primeira.status === undefined || primeira.status === "pago";
+    return primeira.pago === true || primeira.is_paid === true || primeira.status === "pago";
   }, [historicoPagamentos]);
 
   const handleAdicionarPagamentoHistorico = () => {
@@ -720,8 +720,11 @@ export function OrdersView({
       data: novoPagamentoData,
       valor: val,
       formaPagamento: novoPagamentoForma,
-      status: novoPagamentoStatus,
+      status: isPaid ? "pago" : "pendente",
+      pago: isPaid,
+      is_paid: isPaid,
       dataEfetiva: isPaid ? (novoPagamentoDataEfetiva || novoPagamentoData) : undefined,
+      data_pagamento: isPaid ? (novoPagamentoDataEfetiva || novoPagamentoData) : null,
       isEntrada,
     };
 
@@ -744,13 +747,17 @@ export function OrdersView({
 
   const handleConfirmarMarcarComoPago = () => {
     if (!itemMarcarPagoTarget) return;
+    const dataEf = dataEfetivaMarcarPago || new Date().toISOString().split("T")[0];
     setHistoricoPagamentos((prev) =>
       prev.map((p) =>
         p.id === itemMarcarPagoTarget.id
           ? {
               ...p,
               status: "pago",
-              dataEfetiva: dataEfetivaMarcarPago || new Date().toISOString().split("T")[0],
+              pago: true,
+              is_paid: true,
+              dataEfetiva: dataEf,
+              data_pagamento: dataEf,
             }
           : p
       )
@@ -768,7 +775,10 @@ export function OrdersView({
             ? {
                 ...p,
                 status: "pendente",
+                pago: false,
+                is_paid: false,
                 dataEfetiva: undefined,
+                data_pagamento: null,
               }
             : p
         )
@@ -800,12 +810,13 @@ export function OrdersView({
     const hist = ord.historicoPagamentos || ord.paymentsHistory || [];
 
     const paymentRowsHtml = hist.length > 0 ? hist.map((pag, idx) => {
-      const isPaid = pag.status === "pago" || (!pag.status && totalPago > 0);
+      const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
       const dataPrev = pag.data ? pag.data.split("-").reverse().join("/") : "-";
-      const dataEf = pag.dataEfetiva ? pag.dataEfetiva.split("-").reverse().join("/") : dataPrev;
+      const dataEf = pag.dataEfetiva || pag.data_pagamento;
+      const dataEfFmt = dataEf ? dataEf.split("-").reverse().join("/") : dataPrev;
       const statusLabel = isPaid
-        ? `<span style="color: #059669; font-weight: bold; background: #d1fae5; padding: 2px 8px; border-radius: 4px;">✓ Pago em ${dataEf}</span>`
-        : `<span style="color: #d97706; font-weight: bold; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">⌛ Pendente</span>`;
+        ? `<span style="color: #059669; font-weight: bold; background: #d1fae5; padding: 2px 8px; border-radius: 4px;">✓ Pago em ${dataEfFmt}</span>`
+        : `<span style="color: #d97706; font-weight: bold; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">⌛ Pendente (Vencimento em ${dataPrev})</span>`;
       const rotulo = pag.isEntrada || idx === 0 ? "Entrada / Sinal" : `${idx + 1}ª Parcela`;
       const forma = pag.formaPagamento || "Pix";
 
@@ -1239,12 +1250,22 @@ export function OrdersView({
     const histExistente = ord.historicoPagamentos || ord.paymentsHistory;
     if (Array.isArray(histExistente) && histExistente.length > 0) {
       setHistoricoPagamentos(
-        histExistente.map((p: any) => ({
-          id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
-          data: p.data || p.date || ord.createdAt?.split("T")[0] || ord.dataEntrega,
-          valor: Number(p.valor || p.amount || 0),
-          observacao: p.observacao || p.note || "",
-        }))
+        histExistente.map((p: any) => {
+          const isPaid = p.pago === true || p.is_paid === true || p.status === "pago";
+          return {
+            id: p.id || `pay_${Math.random().toString(36).substr(2, 6)}`,
+            data: p.data || p.date || ord.createdAt?.split("T")[0] || ord.dataEntrega,
+            valor: Number(p.valor || p.amount || 0),
+            observacao: p.observacao || p.note || "",
+            formaPagamento: p.formaPagamento || p.forma_pagamento || "Pix",
+            status: isPaid ? "pago" : "pendente",
+            pago: isPaid,
+            is_paid: isPaid,
+            dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || undefined) : undefined,
+            data_pagamento: isPaid ? (p.data_pagamento || p.dataEfetiva || null) : null,
+            isEntrada: Boolean(p.isEntrada),
+          };
+        })
       );
     } else if (ord.valorEntrada && ord.valorEntrada > 0) {
       setHistoricoPagamentos([
@@ -1253,6 +1274,12 @@ export function OrdersView({
           data: ord.createdAt?.split("T")[0] || ord.dataEntrega || new Date().toISOString().split("T")[0],
           valor: Number(ord.valorEntrada),
           observacao: "Sinal / Entrada Inicial",
+          formaPagamento: "Pix",
+          status: "pago",
+          pago: true,
+          is_paid: true,
+          dataEfetiva: ord.createdAt?.split("T")[0] || ord.dataEntrega,
+          isEntrada: true,
         },
       ]);
     } else {
@@ -1280,7 +1307,9 @@ export function OrdersView({
     e.preventDefault();
     const valorNum = converterMoedaInputParaNumero(valorTotalFormatado);
     const taxaNum = converterMoedaInputParaNumero(taxaEntregaFormatada);
-    const totalPago = historicoPagamentos.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+    const totalPagoQuitado = historicoPagamentos
+      .filter((item) => item.pago === true || item.is_paid === true || item.status === "pago")
+      .reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
 
     if (!clienteNome || itensTags.length === 0 || valorNum <= 0) {
       toast.error("Preencha o cliente, adicione ao menos 1 item e informe o valor total.");
@@ -1289,9 +1318,9 @@ export function OrdersView({
 
     try {
       const statusPag: StatusPagamentoEncomenda =
-        totalPago >= valorNum && valorNum > 0
+        totalPagoQuitado >= valorNum && valorNum > 0
           ? "pago_integral"
-          : totalPago > 0
+          : totalPagoQuitado > 0
           ? "sinal_pago"
           : (isOrcamento ? "pendente" : "pendente");
 
@@ -1314,7 +1343,7 @@ export function OrdersView({
         valorTotal: valorNum,
         taxaEntrega: taxaNum > 0 ? taxaNum : undefined,
         is_orcamento: isOrcamento,
-        valorEntrada: totalPago,
+        valorEntrada: totalPagoQuitado,
         historicoPagamentos,
         paymentsHistory: historicoPagamentos,
         statusPagamento: statusPag,
@@ -4509,24 +4538,61 @@ export function OrdersView({
 
                 {/* HISTÓRICO DE PAGAMENTOS */}
                 <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
-                  <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block">
-                    Pagamentos Registrados:
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block">
+                      Pagamentos Registrados:
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                      Total Quitado: {formatarMoeda(calcularTotalPagoEncomenda(encomendaDetalhes))}
+                    </span>
+                  </div>
                   {encomendaDetalhes.historicoPagamentos && encomendaDetalhes.historicoPagamentos.length > 0 ? (
                     <div className="space-y-1">
-                      {encomendaDetalhes.historicoPagamentos.map((pag) => (
-                        <div key={pag.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
-                          <div>
-                            <span className="font-mono text-[11px] text-muted-foreground block">
-                              📅 {pag.data.split("-").reverse().join("/")}
-                            </span>
-                            {pag.observacao && <span className="text-[10px] text-muted-foreground">{pag.observacao}</span>}
+                      {encomendaDetalhes.historicoPagamentos.map((pag, idx) => {
+                        const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
+                        const isEntrada = pag.isEntrada || idx === 0;
+                        const dataPrev = pag.data ? pag.data.split("-").reverse().join("/") : "-";
+                        const dataEf = pag.dataEfetiva || pag.data_pagamento;
+                        const dataEfFmt = dataEf ? dataEf.split("-").reverse().join("/") : dataPrev;
+
+                        return (
+                          <div key={pag.id || idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[11px] font-semibold text-foreground">
+                                  📅 {dataPrev}
+                                </span>
+                                {isEntrada && (
+                                  <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold px-1.5 py-0">
+                                    Entrada / Sinal
+                                  </Badge>
+                                )}
+                                {pag.formaPagamento && (
+                                  <Badge variant="outline" className="text-[9px] uppercase font-mono text-muted-foreground px-1.5 py-0">
+                                    {pag.formaPagamento}
+                                  </Badge>
+                                )}
+                              </div>
+                              {pag.observacao && <span className="text-[10px] text-muted-foreground block">({pag.observacao})</span>}
+                            </div>
+
+                            <div className="text-right flex items-center gap-2">
+                              <span className={`font-mono font-bold text-xs ${isPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                                {formatarMoeda(pag.valor)}
+                              </span>
+                              {isPaid ? (
+                                <Badge className="bg-emerald-600 text-white font-extrabold text-[9px] px-1.5 py-0">
+                                  ✓ Pago {dataEfFmt ? `em ${dataEfFmt}` : ""}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold text-[9px] px-1.5 py-0">
+                                  ⌛ Pendente (Previsto para {dataPrev})
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatarMoeda(pag.valor)}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">Nenhum pagamento registrado até o momento.</p>

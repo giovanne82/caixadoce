@@ -560,6 +560,8 @@ export function FinanceiroTab({
       if (historico.length > 0) {
         for (const p of historico) {
           if (!p) continue;
+          const isPaid = p.pago === true || p.is_paid === true || p.status === "pago";
+          if (!isPaid) continue;
           const valNum = Number(p.valor || p.amount || p.val || 0);
           if (!isNaN(valNum) && valNum > 0) {
             soma += valNum;
