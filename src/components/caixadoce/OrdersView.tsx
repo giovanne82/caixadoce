@@ -163,6 +163,26 @@ function obterEstiloPilula(status: StatusEncomenda) {
   }
 }
 
+function renderizarBadgeOrigem(origem?: string) {
+  if (!origem || String(origem).trim().toLowerCase() !== "ifood") return null;
+  return (
+    <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
+      <Store className="w-3 h-3 text-white fill-white shrink-0" />
+      <span>iFood</span>
+    </Badge>
+  );
+}
+
+function renderizarBadgeOrigemMobile(origem?: string) {
+  if (!origem || String(origem).trim().toLowerCase() !== "ifood") return null;
+  return (
+    <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] font-black uppercase flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
+      <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
+      <span>iFood</span>
+    </Badge>
+  );
+}
+
 function renderizarBadgePagamento(ord: Encomenda) {
   if (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento") {
     return (
@@ -2163,7 +2183,10 @@ export function OrdersView({
                         </TableCell>
 
                         <TableCell>
-                          <div className="font-semibold text-xs text-foreground">{ord.clienteNome}</div>
+                          <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
+                            <span>{ord.clienteNome}</span>
+                            {renderizarBadgeOrigem(ord.origem)}
+                          </div>
                           {ord.clienteWhatsapp && (
                             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-mono">
                               <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
@@ -2223,7 +2246,10 @@ export function OrdersView({
                         </TableCell>
 
                         <TableCell className="text-xs space-y-1">
-                          {renderizarBadgePagamento(ord)}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {renderizarBadgeOrigem(ord.origem)}
+                            {renderizarBadgePagamento(ord)}
+                          </div>
                           <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-medium pt-0.5">
                             <CreditCard className="w-3 h-3 text-muted-foreground/70 shrink-0" />
                             <span>{obterMetodoPagamentoFormatado(ord)}</span>
@@ -2361,6 +2387,7 @@ export function OrdersView({
                       <div className="space-y-1">
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-extrabold">{ord.clienteNome}</span>
+                          {renderizarBadgeOrigemMobile(ord.origem)}
                           {ord.status === "entregue" && (
                             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
                               ✓ Entregue
@@ -3010,6 +3037,7 @@ export function OrdersView({
                             <Clock className="w-3.5 h-3.5" /> {ord.horarioEntrega || "14:00"}
                           </span>
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            {renderizarBadgeOrigemMobile(ord.origem)}
                             {renderizarBadgePagamentoMobile(ord)}
                             <Badge variant="outline" className={`text-[10px] font-bold ${statusCfg?.color || ""}`}>
                               {statusCfg?.label || ord.status}

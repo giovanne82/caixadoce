@@ -1192,6 +1192,9 @@ export interface Encomenda {
   metodoPagamento?: string;
   metodo_pagamento?: string;
   origem_pagamento?: string;
+  origem?: string;
+  codigo_pedido_ifood?: string;
+  dados_brutos?: any;
   status: StatusEncomenda;
   observacoes?: string;
   enderecoEntrega?: string;
