@@ -361,7 +361,10 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         .maybeSingle();
 
       if (data) {
-        const isConectado = (data as any)?.ifood_status === "conectado" || Boolean((data as any)?.ifood_access_token);
+        const isConectado =
+          Boolean((data as any)?.ifood_merchant_id) ||
+          (data as any)?.ifood_status === "conectado" ||
+          Boolean((data as any)?.ifood_access_token);
         setIfoodConectado(isConectado);
         setIfoodMerchantId((data as any)?.ifood_merchant_id || null);
       }
@@ -379,12 +382,13 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    const ifoodConnected = params.get("ifood_connected");
     const ifoodRes = params.get("ifood");
-    if (ifoodRes === "success") {
+    if (ifoodConnected === "true" || ifoodRes === "success") {
       toast.success("Sua loja foi conectada ao iFood com sucesso!");
       window.history.replaceState({}, "", window.location.pathname);
       checarIfoodStatus();
-    } else if (ifoodRes === "error") {
+    } else if (ifoodRes === "error" || ifoodConnected === "false") {
       const msg = params.get("message") || "Falha na autorização do iFood";
       toast.error(`Não foi possível conectar com o iFood: ${msg}`);
       window.history.replaceState({}, "", window.location.pathname);
@@ -397,7 +401,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       return;
     }
     toast.info("Redirecionando para a autorização do iFood...");
-    window.location.href = `/api/ifood/authorize?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
+    window.location.href = `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
   };
 
   const handleDesconectarIFood = async () => {

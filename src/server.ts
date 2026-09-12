@@ -1136,9 +1136,9 @@ export default {
       }
 
       // =========================================================================
-      // ENDPOINT DE AUTORIZAÇÃO IFOOD OAUTH 2.0 (/api/ifood/authorize)
+      // ENDPOINT DE AUTORIZAÇÃO IFOOD OAUTH 2.0 (/api/ifood/auth e /api/ifood/authorize)
       // =========================================================================
-      if (url.pathname === "/api/ifood/authorize") {
+      if (url.pathname === "/api/ifood/auth" || url.pathname === "/api/ifood/authorize") {
         const estCode =
           url.searchParams.get("estabelecimento_codigo") ||
           url.searchParams.get("state") ||
@@ -1175,8 +1175,14 @@ export default {
       // =========================================================================
       if (url.pathname === "/api/ifood/callback") {
         try {
-          const authCode = url.searchParams.get("authorizationCode") || url.searchParams.get("code");
-          const stateCode = url.searchParams.get("state") || "";
+          const authCode =
+            url.searchParams.get("authorizationCode") ||
+            url.searchParams.get("authorization_code") ||
+            url.searchParams.get("code");
+          const stateCode =
+            url.searchParams.get("state") ||
+            url.searchParams.get("estabelecimento_codigo") ||
+            "";
           const ifoodError = url.searchParams.get("error");
 
           if (ifoodError || !authCode) {
@@ -1259,11 +1265,33 @@ export default {
 
           const accessToken = tokenData?.accessToken || tokenData?.access_token || "";
           const refreshToken = tokenData?.refreshToken || tokenData?.refresh_token || "";
-          const merchantId =
+          let merchantId =
             tokenData?.merchantId ||
             tokenData?.merchant_id ||
             (Array.isArray(tokenData?.merchants) && tokenData?.merchants[0]?.id) ||
             "";
+
+          // Se o merchantId não veio diretamente no payload do token, busca na API de merchants do iFood
+          if (!merchantId && accessToken) {
+            try {
+              const merchantsRes = await fetch("https://merchant-api.ifood.com.br/merchant/v1.0/merchants", {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/json",
+                },
+              });
+              if (merchantsRes.ok) {
+                const merchantsData: any = await merchantsRes.json();
+                if (Array.isArray(merchantsData) && merchantsData.length > 0) {
+                  merchantId = merchantsData[0]?.id || merchantsData[0]?.merchantId || "";
+                } else if (merchantsData?.id) {
+                  merchantId = merchantsData.id;
+                }
+              }
+            } catch (mErr) {
+              console.warn("[iFood Fetch Merchants Log]", mErr);
+            }
+          }
 
           console.log(`[iFood OAuth Token Success] Loja: ${stateCode} | merchantId: ${merchantId}`);
 
@@ -1271,19 +1299,19 @@ export default {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const agora = new Date().toISOString();
 
+          const updatePayload = {
+            ifood_access_token: accessToken,
+            ifood_refresh_token: refreshToken,
+            ifood_merchant_id: merchantId,
+            ifood_status: "conectado",
+            updated_at: agora,
+          };
+
           const filterQuery = stateCode
             ? `codigo=ilike.${encodeURIComponent(stateCode.trim())}`
             : "";
 
           if (filterQuery) {
-            const updatePayload = {
-              ifood_access_token: accessToken,
-              ifood_refresh_token: refreshToken,
-              ifood_merchant_id: merchantId,
-              ifood_status: "conectado",
-              updated_at: agora,
-            };
-
             const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?${filterQuery}`, {
               method: "PATCH",
               headers: {
@@ -1303,7 +1331,7 @@ export default {
             }
           }
 
-          return Response.redirect(`${url.origin}/painel/configuracoes?ifood=success`, 302);
+          return Response.redirect(`${url.origin}/painel/configuracoes?ifood_connected=true`, 302);
         } catch (err: any) {
           console.error("[iFood OAuth Callback Exception]", err);
           return Response.redirect(
