@@ -211,7 +211,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     }
   }, []);
 
-  // Scanner é a tela inicial padrão; ajusta para 'config' se rota/parâmetro for de configurações/OAuth
+  // Encomendas é a tela inicial padrão; ajusta para 'config' se rota/parâmetro for de configurações/OAuth
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (defaultTab) return defaultTab;
     if (typeof window !== "undefined") {
@@ -223,7 +223,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         return "config";
       }
     }
-    return "scanner";
+    return "encomendas";
   });
 
   useEffect(() => {
@@ -2096,14 +2096,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
-              {podeAcessarAba("scanner") && (
-                <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Camera className="w-4 h-4" /> Escanear
-                </TabsTrigger>
-              )}
-              {(podeAcessarAba("insumos") || podeAcessarAba("despesas")) && (
-                <TabsTrigger value="insumos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Scale className="w-4 h-4" /> Insumos
+              {podeAcessarAba("encomendas") && (
+                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Package className="w-4 h-4" /> Encomendas
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -2111,9 +2106,14 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                   <Cake className="w-4 h-4" /> Cardápio
                 </TabsTrigger>
               )}
-              {podeAcessarAba("encomendas") && (
-                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Package className="w-4 h-4" /> Encomendas
+              {(podeAcessarAba("insumos") || podeAcessarAba("despesas")) && (
+                <TabsTrigger value="insumos" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Scale className="w-4 h-4" /> Insumos
+                </TabsTrigger>
+              )}
+              {podeAcessarAba("scanner") && (
+                <TabsTrigger value="scanner" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                  <Camera className="w-4 h-4" /> Escanear
                 </TabsTrigger>
               )}
               {podeAcessarAba("financeiro") && (
@@ -2262,17 +2262,31 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       {/* Barra de Navegação Inferior Fixa para Dispositivos Móveis (Bottom Bar Alta Visibilidade & Ergonomia) */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#160B29]/95 backdrop-blur-lg border-t-2 border-[#7C3AED]/40 text-white md:hidden px-1 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.4)]">
         <div className="grid grid-cols-6 w-full items-center text-center gap-1">
-          {podeAcessarAba("scanner") && (
+          {podeAcessarAba("encomendas") && (
             <button
-              onClick={() => setActiveTab("scanner")}
+              onClick={() => setActiveTab("encomendas")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-                activeTab === "scanner"
-                  ? "bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105"
+                activeTab === "encomendas"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
                   : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Camera className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "scanner" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Escanear</span>
+              <Package className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "encomendas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Encomendas</span>
+            </button>
+          )}
+
+          {podeAcessarAba("produtos") && (
+            <button
+              onClick={() => setActiveTab("produtos")}
+              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                activeTab === "produtos"
+                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
+              }`}
+            >
+              <Cake className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "produtos" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Cardápio</span>
             </button>
           )}
 
@@ -2290,33 +2304,17 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             </button>
           )}
 
-          {/* CARDÁPIO COLOCADO ANTES DE ENCOMENDAS */}
-          {podeAcessarAba("produtos") && (
+          {podeAcessarAba("scanner") && (
             <button
-              onClick={() => setActiveTab("produtos")}
+              onClick={() => setActiveTab("scanner")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-                activeTab === "produtos"
-                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
+                activeTab === "scanner"
+                  ? "bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105"
                   : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
               }`}
             >
-              <Cake className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "produtos" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Cardápio</span>
-            </button>
-          )}
-
-          {/* ENCOMENDAS COLOCADO APÓS CARDÁPIO */}
-          {podeAcessarAba("encomendas") && (
-            <button
-              onClick={() => setActiveTab("encomendas")}
-              className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-                activeTab === "encomendas"
-                  ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
-                  : "text-stone-300 hover:text-white hover:bg-white/10 font-semibold"
-              }`}
-            >
-              <Package className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "encomendas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Encomendas</span>
+              <Camera className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "scanner" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Escanear</span>
             </button>
           )}
 
