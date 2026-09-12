@@ -67,6 +67,8 @@ import {
   type ItemListaCompra,
   type ListaCompras,
   normalizarNomeInsumo,
+  isPedidoIFood,
+  extrairDadosIFood,
 } from "@/lib/caixadoce-data";
 import { LISTAS_COMPRAS_PADRAO } from "@/lib/constants";
 
@@ -602,18 +604,47 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
               }]
             : [];
 
+          let valorTotalFinal = Number(d.valor_total || 0);
+          let itensFinal = d.itens || (d.codigo_pedido_ifood ? `Pedido iFood #${d.codigo_pedido_ifood}` : "Pedido iFood");
+          let itensDetalhesFinal = Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [];
+          let clienteNomeFinal = d.cliente_nome || d.client_name || "Cliente";
+          let clienteWhatsappFinal = d.cliente_whatsapp || d.client_whatsapp || "";
+          let tipoEntregaFinal = d.tipo_entrega || "delivery";
+
+          if (isPedidoIFood(d)) {
+            const ifoodData = extrairDadosIFood(d);
+            if (valorTotalFinal === 0 && ifoodData.valorTotal > 0) {
+              valorTotalFinal = ifoodData.valorTotal;
+            }
+            if ((!d.itens || d.itens === "[]" || d.itens === "{}" || d.itens === "Pedido iFood" || d.itens.startsWith("Pedido iFood #")) && ifoodData.itens) {
+              itensFinal = ifoodData.itens;
+            }
+            if (itensDetalhesFinal.length === 0 && ifoodData.itensDetalhes.length > 0) {
+              itensDetalhesFinal = ifoodData.itensDetalhes;
+            }
+            if ((!d.cliente_nome || d.cliente_nome === "Cliente iFood" || d.cliente_nome === "Cliente") && ifoodData.clienteNome) {
+              clienteNomeFinal = ifoodData.clienteNome;
+            }
+            if (!clienteWhatsappFinal && ifoodData.clienteWhatsapp) {
+              clienteWhatsappFinal = ifoodData.clienteWhatsapp;
+            }
+            if (ifoodData.tipoEntrega) {
+              tipoEntregaFinal = ifoodData.tipoEntrega;
+            }
+          }
+
           return {
             id: String(d.id),
             estabelecimentoCodigo: d.estabelecimento_codigo,
             clienteId: d.cliente_id,
-            clienteNome: d.cliente_nome || d.client_name || "Cliente iFood",
-            clienteWhatsapp: d.cliente_whatsapp || d.client_whatsapp || "",
+            clienteNome: clienteNomeFinal,
+            clienteWhatsapp: clienteWhatsappFinal,
             dataEntrega: d.data_entrega || String(d.created_at || "").split("T")[0] || "",
             horarioEntrega: d.horario_entrega || (d.origem === "iFood" ? "" : "14:00"),
-            itens: d.itens || (d.codigo_pedido_ifood ? `Pedido iFood #${d.codigo_pedido_ifood}` : "Pedido iFood"),
-            itensDetalhes: Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [],
+            itens: itensFinal,
+            itensDetalhes: itensDetalhesFinal,
             insumosNecessarios: Array.isArray(d.insumos_necessarios) ? d.insumos_necessarios : [],
-            valorTotal: Number(d.valor_total || 0),
+            valorTotal: valorTotalFinal,
             valorEntrada: d.valor_entrada ? Number(d.valor_entrada) : 0,
             historicoPagamentos: historicoMapeado,
             paymentsHistory: historicoMapeado,
@@ -627,7 +658,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             status: d.status || "pendente",
             observacoes: d.observacoes || "",
             enderecoEntrega: d.endereco_entrega || "",
-            tipoEntrega: d.tipo_entrega || "delivery",
+            tipoEntrega: tipoEntregaFinal,
             taxaEntrega: d.taxa_entrega !== undefined && d.taxa_entrega !== null ? Number(d.taxa_entrega) : undefined,
             is_orcamento: Boolean(d.is_orcamento),
             createdAt: d.created_at,

@@ -127,6 +127,8 @@ import {
   type ProdutoCardapio,
   type DespesaNotaFiscal,
   type PagamentoItem,
+  isPedidoIFood,
+  extrairDadosIFood,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -184,6 +186,15 @@ function renderizarBadgeOrigemMobile(origem?: string) {
 }
 
 function renderizarBadgePagamento(ord: Encomenda) {
+  if (isPedidoIFood(ord)) {
+    return (
+      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shadow-xs">
+        <Store className="w-3 h-3 text-white fill-white shrink-0" />
+        <span>iFood</span>
+      </Badge>
+    );
+  }
+
   if (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento") {
     return (
       <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none text-[10px] font-extrabold shadow-xs flex items-center gap-1">
@@ -253,6 +264,15 @@ function renderizarBadgePagamento(ord: Encomenda) {
 }
 
 function renderizarBadgePagamentoMobile(ord: Encomenda) {
+  if (isPedidoIFood(ord)) {
+    return (
+      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] px-1.5 py-0 mt-0.5 font-black uppercase flex items-center gap-0.5 shadow-xs">
+        <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
+        <span>iFood</span>
+      </Badge>
+    );
+  }
+
   if (ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento") {
     return (
       <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none text-[9px] px-1.5 py-0 mt-0.5 font-extrabold flex items-center gap-0.5">
@@ -410,7 +430,7 @@ function formatarDataHoraCriacao(dateStr?: string): string {
 }
 
 export function OrdersView({
-  encomendas,
+  encomendas: rawEncomendas = [],
   datasBloqueadas,
   despesas = [],
   clientes = [],
@@ -428,6 +448,32 @@ export function OrdersView({
 }: OrdersViewProps) {
   const { profile } = useAuth();
   const activeCode = profile?.establishmentCode || "";
+
+  // Hidratação automática de pedidos com origem iFood (extraindo valor total e itens do payload bruto)
+  const encomendas = useMemo(() => {
+    return (rawEncomendas || []).map((enc) => {
+      if (!isPedidoIFood(enc)) return enc;
+      const extraidos = extrairDadosIFood(enc);
+      const valAtual = Number(enc.valorTotal || 0);
+      const valorTotal = (valAtual === 0 && extraidos.valorTotal > 0) ? extraidos.valorTotal : valAtual;
+      const itens = (!enc.itens || enc.itens === "[]" || enc.itens === "{}" || enc.itens === "Pedido iFood" || enc.itens.startsWith("Pedido iFood #")) && extraidos.itens ? extraidos.itens : enc.itens;
+      const itensDetalhes = (!enc.itensDetalhes || enc.itensDetalhes.length === 0) && extraidos.itensDetalhes.length > 0 ? extraidos.itensDetalhes : enc.itensDetalhes;
+      const clienteNome = (!enc.clienteNome || enc.clienteNome === "Cliente iFood" || enc.clienteNome === "Cliente") && extraidos.clienteNome ? extraidos.clienteNome : (enc.clienteNome || "Cliente iFood");
+      const clienteWhatsapp = !enc.clienteWhatsapp && extraidos.clienteWhatsapp ? extraidos.clienteWhatsapp : enc.clienteWhatsapp;
+      const tipoEntrega = enc.tipoEntrega || extraidos.tipoEntrega || "delivery";
+
+      return {
+        ...enc,
+        origem: enc.origem || "iFood",
+        valorTotal,
+        itens,
+        itensDetalhes,
+        clienteNome,
+        clienteWhatsapp,
+        tipoEntrega,
+      };
+    });
+  }, [rawEncomendas]);
 
   // Aba Sub-View: 'pedidos' | 'clientes'
   const [abaSubView, setAbaSubView] = useState<"pedidos" | "clientes">("pedidos");

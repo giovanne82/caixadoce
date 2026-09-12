@@ -1761,7 +1761,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     <span>Integração iFood (Integração Centralizada)</span>
                   </CardTitle>
                   <CardDescription className="text-xs mt-1">
-                    Conecte sua loja do iFood para gerenciar pedidos, sincronizar o catálogo e integrar seu estabelecimento ao CaixaDoce.
+                    Receba seus pedidos do iFood diretamente no painel do CaixaDoce em tempo real. (Sincronização de cardápio e status em breve).
                   </CardDescription>
                 </div>
                 {ifoodConectado && (

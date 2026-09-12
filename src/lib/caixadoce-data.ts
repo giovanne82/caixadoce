@@ -1195,6 +1195,12 @@ export interface Encomenda {
   origem?: string;
   codigo_pedido_ifood?: string;
   dados_brutos?: any;
+  raw_payload?: any;
+  payload?: any;
+  webhook_payload?: any;
+  dados_webhook?: any;
+  metadata?: any;
+  is_ifood?: boolean;
   status: StatusEncomenda;
   observacoes?: string;
   enderecoEntrega?: string;
@@ -1517,6 +1523,255 @@ export function identificarMetodoPagamento(
   }
 
   return "pix";
+}
+
+/**
+ * Verifica se uma encomenda ou objeto de pedido tem origem no iFood
+ */
+export function isPedidoIFood(encomenda?: any): boolean {
+  if (!encomenda) return false;
+
+  const origem = String(
+    encomenda.origem ||
+    encomenda.origem_pagamento ||
+    encomenda.origemPagamento ||
+    encomenda.canal ||
+    encomenda.source ||
+    encomenda.origem_venda ||
+    ""
+  ).toLowerCase().trim();
+
+  const metodo = String(
+    encomenda.metodo_pagamento ||
+    encomenda.metodoPagamento ||
+    encomenda.forma_pagamento ||
+    encomenda.formaPagamento ||
+    ""
+  ).toLowerCase().trim();
+
+  const obs = String(encomenda.observacoes || encomenda.notes || "").toLowerCase().trim();
+
+  if (
+    origem.includes("ifood") ||
+    metodo.includes("ifood") ||
+    obs.includes("ifood") ||
+    Boolean(encomenda.codigo_pedido_ifood) ||
+    Boolean(encomenda.is_ifood)
+  ) {
+    return true;
+  }
+
+  const raw =
+    encomenda.dados_brutos ||
+    encomenda.raw_payload ||
+    encomenda.payload ||
+    encomenda.webhook_payload ||
+    encomenda.dados_webhook ||
+    encomenda.metadata;
+
+  if (raw) {
+    if (typeof raw === "object") {
+      if (
+        raw.salesChannel === "IFOOD" ||
+        raw.code === "IFOOD" ||
+        raw.code === "PLC" ||
+        raw.merchant?.name?.toLowerCase().includes("ifood") ||
+        raw.order?.salesChannel === "IFOOD" ||
+        (raw.orderType === "DELIVERY" && (raw.id || raw.items || raw.orderAmount))
+      ) {
+        return true;
+      }
+    } else if (typeof raw === "string" && raw.toLowerCase().includes("ifood")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Extrai dados consolidados (valor total da venda, nomes dos itens, opções e cliente) de pedidos iFood
+ * a partir da coluna de payload bruto (JSON) ou campos correlatos.
+ */
+export function extrairDadosIFood(encomenda?: any): {
+  valorTotal: number;
+  itens: string;
+  itensDetalhes: ItemPedidoEncomenda[];
+  clienteNome?: string;
+  clienteWhatsapp?: string;
+  tipoEntrega?: "retirada" | "delivery";
+} {
+  if (!encomenda) {
+    return { valorTotal: 0, itens: "", itensDetalhes: [] };
+  }
+
+  // Obter o objeto JSON bruto de qualquer coluna possível
+  let raw: any =
+    encomenda.dados_brutos ||
+    encomenda.raw_payload ||
+    encomenda.payload ||
+    encomenda.webhook_payload ||
+    encomenda.dados_webhook ||
+    encomenda.corpo_webhook ||
+    encomenda.raw_json ||
+    encomenda.raw_data ||
+    encomenda.json_data ||
+    encomenda.dados ||
+    encomenda.metadata ||
+    encomenda.order_raw ||
+    encomenda.ifood_payload;
+
+  // Se não estiver nas colunas de payload, tenta parsear itens ou observações caso venham como string JSON
+  if (!raw && typeof encomenda.itens === "string" && (encomenda.itens.trim().startsWith("{") || encomenda.itens.trim().startsWith("["))) {
+    try {
+      raw = JSON.parse(encomenda.itens);
+    } catch {}
+  }
+  if (!raw && typeof encomenda.observacoes === "string" && (encomenda.observacoes.trim().startsWith("{") || encomenda.observacoes.trim().startsWith("["))) {
+    try {
+      raw = JSON.parse(encomenda.observacoes);
+    } catch {}
+  }
+
+  // Se raw for string, faz parse seguro
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {}
+  }
+
+  // Descompacta containers comuns do iFood ({ data: ... }, { order: ... }, { details: ... }, etc.)
+  const p = raw?.order || raw?.data || raw?.details || raw || {};
+
+  // 1. EXTRAÇÃO DO VALOR TOTAL DA VENDA
+  let valorTotalExtraido = 0;
+
+  if (typeof p.total?.orderAmount === "number" && p.total.orderAmount > 0) {
+    valorTotalExtraido = p.total.orderAmount;
+  } else if (typeof p.orderAmount === "number" && p.orderAmount > 0) {
+    valorTotalExtraido = p.orderAmount;
+  } else if (typeof p.payments?.total?.value === "number" && p.payments.total.value > 0) {
+    valorTotalExtraido = p.payments.total.value;
+  } else if (typeof p.payments?.total === "number" && p.payments.total > 0) {
+    valorTotalExtraido = p.payments.total;
+  } else if (typeof p.payments?.totalAmount === "number" && p.payments.totalAmount > 0) {
+    valorTotalExtraido = p.payments.totalAmount;
+  } else if (typeof p.total?.value === "number" && p.total.value > 0) {
+    valorTotalExtraido = p.total.value;
+  } else if (typeof p.total === "number" && p.total > 0) {
+    valorTotalExtraido = p.total;
+  } else if (typeof p.order?.total?.orderAmount === "number" && p.order.total.orderAmount > 0) {
+    valorTotalExtraido = p.order.total.orderAmount;
+  } else if (typeof p.valor_total === "number" && p.valor_total > 0) {
+    valorTotalExtraido = p.valor_total;
+  } else if (typeof p.total_price === "number" && p.total_price > 0) {
+    valorTotalExtraido = p.total_price;
+  } else if (typeof p.amount === "number" && p.amount > 0) {
+    valorTotalExtraido = p.amount;
+  } else if (Array.isArray(p.payments?.methods) && p.payments.methods.length > 0) {
+    const somaMetodos = p.payments.methods.reduce((acc: number, m: any) => acc + Number(m.value || m.amount || 0), 0);
+    if (somaMetodos > 0) valorTotalExtraido = somaMetodos;
+  }
+
+  // 2. EXTRAÇÃO DOS NOMES E DETALHES DOS ITENS
+  const rawItems: any[] =
+    (Array.isArray(p.items) && p.items) ||
+    (Array.isArray(p.order?.items) && p.order.items) ||
+    (Array.isArray(p.data?.items) && p.data.items) ||
+    (Array.isArray(p.products) && p.products) ||
+    (Array.isArray(p.itens) && p.itens) ||
+    [];
+
+  const itensDetalhes: ItemPedidoEncomenda[] = [];
+  const nomesResumo: string[] = [];
+
+  if (Array.isArray(rawItems) && rawItems.length > 0) {
+    rawItems.forEach((it: any, idx: number) => {
+      const nome = String(it.name || it.nome || it.productName || it.title || it.description || `Item #${idx + 1}`).trim();
+      const quantidade = Number(it.quantity || it.qtd || it.quantidade || 1);
+      const precoUnit = Number(it.unitPrice || it.unit_price || it.price || it.preco || it.valorUnitario || 0);
+
+      // Opções / Complementos / Sabores do item iFood
+      const rawOptions = it.options || it.subItems || it.sub_items || it.opcoes || it.toppings || [];
+      const opcoes_selecionadas = Array.isArray(rawOptions)
+        ? rawOptions
+            .map((opt: any) => ({
+              nome: String(opt.name || opt.nome || opt.description || "").trim(),
+              quantidade: Number(opt.quantity || opt.qtd || 1),
+              preco: Number(opt.unitPrice || opt.price || 0),
+            }))
+            .filter((o: any) => Boolean(o.nome))
+        : [];
+
+      itensDetalhes.push({
+        id: String(it.id || it.externalCode || `ifood_item_${idx}`),
+        nome,
+        quantidade,
+        precoUnitario: precoUnit,
+        opcoes_selecionadas: opcoes_selecionadas.length > 0 ? opcoes_selecionadas : undefined,
+      });
+
+      const optionsDesc = opcoes_selecionadas.length > 0
+        ? ` (${opcoes_selecionadas.map((o) => (o.quantidade > 1 ? `${o.quantidade}x ${o.nome}` : o.nome)).join(", ")})`
+        : "";
+
+      nomesResumo.push(`${quantidade > 1 ? `${quantidade}x ` : ""}${nome}${optionsDesc}`);
+    });
+  }
+
+  // Se valor total não foi informado explicitamente, calcula pela soma dos itens + taxa de entrega
+  if (valorTotalExtraido === 0 && rawItems.length > 0) {
+    const somaItens = rawItems.reduce((acc: number, it: any) => {
+      const preco = Number(it.totalPrice || it.total_price || (Number(it.unitPrice || it.price || 0) * Number(it.quantity || 1)) || 0);
+      return acc + preco;
+    }, 0);
+    const taxaEntrega = Number(p.total?.deliveryFee || p.deliveryFee || p.taxa_entrega || 0);
+    valorTotalExtraido = somaItens + taxaEntrega;
+  }
+
+  // Fallback seguro caso os campos nativos já existam
+  const valorTotalFinal = valorTotalExtraido > 0 ? valorTotalExtraido : Number(encomenda.valorTotal || encomenda.valor_total || 0);
+  const itensTextoFinal = nomesResumo.length > 0
+    ? nomesResumo.join(", ")
+    : (encomenda.itens && encomenda.itens !== "[]" && encomenda.itens !== "{}" && !encomenda.itens.startsWith("Pedido iFood") ? encomenda.itens : (encomenda.codigo_pedido_ifood ? `Pedido iFood #${encomenda.codigo_pedido_ifood}` : "Pedido iFood"));
+
+  const itensDetalhesFinal = itensDetalhes.length > 0
+    ? itensDetalhes
+    : (Array.isArray(encomenda.itensDetalhes) && encomenda.itensDetalhes.length > 0
+        ? encomenda.itensDetalhes
+        : (Array.isArray(encomenda.itens_detalhes) ? encomenda.itens_detalhes : []));
+
+  // Cliente (se houver no payload)
+  const clienteNome =
+    p.customer?.name ||
+    p.order?.customer?.name ||
+    p.customer_name ||
+    p.cliente_nome ||
+    encomenda.clienteNome ||
+    encomenda.cliente_nome ||
+    encomenda.client_name;
+
+  const clienteWhatsapp =
+    p.customer?.phone?.number ||
+    p.customer?.phone ||
+    p.customer_phone ||
+    p.cliente_whatsapp ||
+    encomenda.clienteWhatsapp ||
+    encomenda.cliente_whatsapp;
+
+  const tipoEntrega: "retirada" | "delivery" =
+    p.orderType === "TAKEOUT" || p.orderType === "TOGO" || p.delivery_type === "retirada"
+      ? "retirada"
+      : "delivery";
+
+  return {
+    valorTotal: valorTotalFinal,
+    itens: itensTextoFinal,
+    itensDetalhes: itensDetalhesFinal,
+    clienteNome,
+    clienteWhatsapp,
+    tipoEntrega,
+  };
 }
 
 /**
