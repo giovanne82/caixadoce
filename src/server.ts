@@ -1137,6 +1137,45 @@ export default {
       }
 
       // =========================================================================
+      // ENDPOINT DE WEBHOOK IFOOD (/api/ifood/webhook)
+      // =========================================================================
+      if (url.pathname === "/api/ifood/webhook") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "text/plain",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        if (request.method === "GET") {
+          return new Response("Webhook iFood CaixaDoce Ativo", { status: 200, headers: corsHeaders });
+        }
+
+        if (request.method === "POST") {
+          try {
+            let body: any = null;
+            try {
+              body = await request.json();
+            } catch {
+              const txt = await request.text();
+              try { body = JSON.parse(txt); } catch { body = []; }
+            }
+            console.log("📦 [Server.ts] Evento iFood Recebido:", typeof body === "object" ? JSON.stringify(body) : body);
+            await processIFoodEventsInServer(body, env);
+          } catch (wErr) {
+            console.error("[Server iFood Webhook Error]", wErr);
+          }
+          return new Response("OK", { status: 200, headers: corsHeaders });
+        }
+
+        return new Response("OK", { status: 200, headers: corsHeaders });
+      }
+
+      // =========================================================================
       // ENDPOINT DE INICIALIZAÇÃO IFOOD DEVICE GRANT (/api/ifood/auth, /api/ifood/userCode)
       // =========================================================================
       if (url.pathname === "/api/ifood/auth" || url.pathname === "/api/ifood/userCode" || url.pathname === "/api/ifood/authorize") {
