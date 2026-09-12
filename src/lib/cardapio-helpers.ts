@@ -231,6 +231,7 @@ export function validarDataEntrega(
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
+  if (!dataIso || typeof dataIso !== "string") return { valida: false, motivo: "Data não informada." };
   const parts = dataIso.split("-").map(Number);
   if (parts.length !== 3) return { valida: false, motivo: "Data em formato inválido." };
   const [ano, mes, dia] = parts;

@@ -2006,7 +2006,8 @@ export function OrdersView({
                   <div className="space-y-1 my-1 flex-1">
                     {exibidas.map((ord) => {
                       const estiloPilula = obterEstiloPilula(ord.status);
-                      const resumoItem = ord.itens.length > 18 ? `${ord.itens.substring(0, 18)}...` : ord.itens;
+                      const textoItens = ord.itens || "Pedido";
+                      const resumoItem = textoItens.length > 18 ? `${textoItens.substring(0, 18)}...` : textoItens;
 
                       return (
                         <div
@@ -2014,10 +2015,10 @@ export function OrdersView({
                           className={`text-[10px] sm:text-[11px] font-semibold px-1.5 py-0.5 rounded-md border truncate shadow-2xs flex items-center gap-1 transition-transform group-hover:translate-x-0.5 ${estiloPilula}`}
                         >
                           <span className="font-mono font-bold shrink-0 opacity-80">
-                            {ord.horarioEntrega || "14:00"}
+                            {ord.horarioEntrega || (ord.origem === "iFood" ? "iFood" : "14:00")}
                           </span>
                           <span className="truncate">
-                            <strong>{ord.clienteNome}</strong> ({resumoItem})
+                            <strong>{ord.clienteNome || "Cliente"}</strong> ({resumoItem})
                           </span>
                         </div>
                       );
@@ -2170,10 +2171,10 @@ export function OrdersView({
                           )}
                           <div className="font-extrabold text-foreground flex items-center gap-1.5">
                             <CalendarDays className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                            <span>{ord.dataEntrega.split("-").reverse().join("/")}</span>
+                            <span>{ord.dataEntrega ? ord.dataEntrega.split("-").reverse().join("/") : (ord.origem === "iFood" ? "Data a confirmar" : "A confirmar")}</span>
                           </div>
                           <div className="text-muted-foreground flex items-center gap-1 text-[11px] font-mono mt-0.5">
-                            <Clock className="w-3 h-3 text-primary shrink-0" /> {ord.horarioEntrega || "14:00"}
+                            <Clock className="w-3 h-3 text-primary shrink-0" /> {ord.horarioEntrega || (ord.origem === "iFood" ? "Hora a confirmar" : "14:00")}
                           </div>
                           {ord.createdAt && (
                             <div className="text-[10px] text-muted-foreground/80 flex items-center gap-1 mt-1 font-sans">
@@ -2396,7 +2397,7 @@ export function OrdersView({
                         </div>
                         <div className="text-[11.5px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
                           <CalendarDays className="w-3.5 h-3.5 shrink-0 text-purple-600" />
-                          <span>Entrega: {ord.dataEntrega.split("-").reverse().join("/")} às {ord.horarioEntrega || "14:00"}</span>
+                          <span>Entrega: {ord.dataEntrega ? ord.dataEntrega.split("-").reverse().join("/") : (ord.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {ord.horarioEntrega || (ord.origem === "iFood" ? "Hora a confirmar" : "14:00")}</span>
                         </div>
                         {ord.createdAt && (
                           <div className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -2633,7 +2634,7 @@ export function OrdersView({
                       <CardHeader className="p-3.5 pb-2 border-b border-border/50 flex flex-row items-center justify-between">
                         <div>
                           <CardTitle className="text-sm font-bold text-foreground">
-                            {enc.clienteNome} • {enc.dataEntrega.split("-").reverse().join("/")}
+                            {enc.clienteNome || "Cliente"} • {enc.dataEntrega ? enc.dataEntrega.split("-").reverse().join("/") : "A confirmar"}
                           </CardTitle>
                           <CardDescription className="text-xs">{enc.itens}</CardDescription>
                         </div>
@@ -2745,7 +2746,7 @@ export function OrdersView({
                                         <div>
                                           <p className="font-bold text-foreground">{n.fornecedorNome}</p>
                                           <p className="text-[10px] text-muted-foreground">
-                                            Data: {n.dataCompra.split("-").reverse().join("/")} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                                            Data: {n.dataCompra ? n.dataCompra.split("-").reverse().join("/") : "-"} {n.numeroNota ? `• ${n.numeroNota}` : ""}
                                           </p>
                                         </div>
                                       </div>
@@ -2814,7 +2815,7 @@ export function OrdersView({
                           {clienteNome}
                         </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
-                          {dataEntrega.split("-").reverse().join("/")}
+                          {dataEntrega ? dataEntrega.split("-").reverse().join("/") : "A confirmar"}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -2847,7 +2848,7 @@ export function OrdersView({
                 <Building2 className="w-5 h-5 text-primary" /> {notaDetalheSelecionada.fornecedorNome}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}
+                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra ? notaDetalheSelecionada.dataCompra.split("-").reverse().join("/") : "-"}
               </DialogDescription>
             </DialogHeader>
 
@@ -2874,7 +2875,7 @@ export function OrdersView({
                     <Clock className="w-3 h-3" /> Data &amp; Hora:
                   </span>
                   <p className="font-mono text-foreground mt-0.5">
-                    {notaDetalheSelecionada.dataCompra.split("-").reverse().join("/")}{" "}
+                    {notaDetalheSelecionada.dataCompra ? notaDetalheSelecionada.dataCompra.split("-").reverse().join("/") : "-"}{" "}
                     {notaDetalheSelecionada.horaCompra ? `às ${notaDetalheSelecionada.horaCompra}` : ""}
                   </p>
                 </div>
@@ -4391,7 +4392,7 @@ export function OrdersView({
                       <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data de Entrega / Retirada</span>
                       <span className="font-bold text-foreground text-xs flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
                         <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />
-                        {encomendaDetalhes.dataEntrega.split("-").reverse().join("/")} às {encomendaDetalhes.horarioEntrega || "14:00"}
+                        {encomendaDetalhes.dataEntrega ? encomendaDetalhes.dataEntrega.split("-").reverse().join("/") : (encomendaDetalhes.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {encomendaDetalhes.horarioEntrega || (encomendaDetalhes.origem === "iFood" ? "Hora a confirmar" : "14:00")}
                       </span>
                       <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
                         {encomendaDetalhes.tipoEntrega === "delivery"

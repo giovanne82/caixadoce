@@ -1531,17 +1531,17 @@ export function gerarMensagemResumoWhatsApp(
   const favorecido = typeof dadosLoja === "object" ? dadosLoja?.favorecidoPix : undefined;
   const cidade = typeof dadosLoja === "object" ? dadosLoja?.cidadeLoja : undefined;
 
-  const dataFormatada = encomenda.dataEntrega.split("-").reverse().join("/");
-  const hora = encomenda.horarioEntrega || "14:00";
+  const dataFormatada = encomenda.dataEntrega ? encomenda.dataEntrega.split("-").reverse().join("/") : "A confirmar";
+  const hora = encomenda.horarioEntrega || (encomenda.origem === "iFood" ? "Hora a confirmar" : "14:00");
   const totalPago = calcularTotalPagoEncomenda(encomenda);
-  const saldoRestanteNum = Math.max(0, encomenda.valorTotal - totalPago);
+  const saldoRestanteNum = Math.max(0, (encomenda.valorTotal || 0) - totalPago);
 
-  const valorTotal = formatarMoeda(encomenda.valorTotal);
+  const valorTotal = formatarMoeda(encomenda.valorTotal || 0);
   const sinalPago = formatarMoeda(totalPago);
   const saldoRestante = formatarMoeda(saldoRestanteNum);
   const modalidade = encomenda.tipoEntrega === "delivery" ? `🚚 Entrega / Delivery (${encomenda.enderecoEntrega || "A combinar"})` : "🏬 Retirada no Balcão";
 
-  let itensTexto = encomenda.itens;
+  let itensTexto = encomenda.itens || "Pedido registrado";
   if (encomenda.itensDetalhes && encomenda.itensDetalhes.length > 0) {
     itensTexto = encomenda.itensDetalhes.map((it) => `• ${it.quantidade}x ${it.nome}`).join("\n");
   }
