@@ -484,6 +484,32 @@ async function seedIfoodColumnsInSupabase() {
 }
 seedIfoodColumnsInSupabase();
 
+// Injeção de Colunas do iFood na Tabela encomendas do Supabase
+async function seedIfoodEncomendasColumnsInSupabase() {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+  try {
+    const alterSql = `
+      ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'Manual';
+      ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS codigo_pedido_ifood TEXT;
+      ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS dados_brutos JSONB;
+      CREATE INDEX IF NOT EXISTS idx_encomendas_codigo_ifood ON public.encomendas(codigo_pedido_ifood);
+      CREATE INDEX IF NOT EXISTS idx_encomendas_origem ON public.encomendas(origem);
+    `;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: alterSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed iFood Encomendas Columns Log]", err);
+  }
+}
+seedIfoodEncomendasColumnsInSupabase();
+
 const processedPaymentsSet = new Set<string>();
 
 // Helper de Segurança Anti-Fraude: Verifica se o estabelecimento já utilizou qualquer cupom no passado ou já foi assinante
@@ -961,6 +987,127 @@ async function calcularNovaDataExpiracaoBackend(
   return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
 }
 
+// Helper assíncrono para processar eventos do iFood no server.ts (ex: evento 'PLC' -> Tabela encomendas)
+async function processIFoodEventsInServer(body: any, env?: any) {
+  try {
+    const events = Array.isArray(body) ? body : body ? [body] : [];
+    if (events.length === 0) return;
+
+    const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    };
+
+    for (const event of events) {
+      const code = String(event.code || "").toUpperCase();
+
+      if (code === "PLC") {
+        const orderId = event.correlationId || event.orderId || event.id || "";
+        const merchantId = event.merchantId || event.merchant?.id || "";
+
+        console.log(`[Server iFood PLC] Processando pedido iFood ID: ${orderId} | Merchant ID: ${merchantId}`);
+
+        let estCode = "";
+        if (merchantId) {
+          try {
+            const resEst = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?ifood_merchant_id=ilike.${encodeURIComponent(String(merchantId).trim())}&select=codigo`,
+              { headers }
+            );
+            if (resEst.ok) {
+              const listEst = await resEst.json();
+              if (Array.isArray(listEst) && listEst.length > 0 && listEst[0]?.codigo) {
+                estCode = listEst[0].codigo;
+              }
+            }
+          } catch {}
+        }
+
+        if (!estCode) {
+          try {
+            const resFb = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?ifood_status=eq.conectado&select=codigo&limit=1`,
+              { headers }
+            );
+            if (resFb.ok) {
+              const listFb = await resFb.json();
+              if (Array.isArray(listFb) && listFb.length > 0 && listFb[0]?.codigo) {
+                estCode = listFb[0].codigo;
+              }
+            }
+          } catch {}
+        }
+
+        if (!orderId) continue;
+
+        // Evita inserção duplicada
+        try {
+          const resDup = await fetch(
+            `${supabaseUrl}/rest/v1/encomendas?codigo_pedido_ifood=eq.${encodeURIComponent(orderId)}&select=id`,
+            { headers }
+          );
+          if (resDup.ok) {
+            const listDup = await resDup.json();
+            if (Array.isArray(listDup) && listDup.length > 0) {
+              console.log(`[Server iFood PLC] Pedido ${orderId} já existe na tabela encomendas. Ignorando.`);
+              continue;
+            }
+          }
+        } catch {}
+
+        const targetCode = estCode || "CD-1001";
+        const agora = new Date().toISOString();
+        const dataHoje = agora.split("T")[0];
+        const horaHoje = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+        const payloadEncomenda = {
+          estabelecimento_codigo: targetCode,
+          codigo: targetCode,
+          store_id: targetCode,
+          origem: "iFood",
+          codigo_pedido_ifood: orderId,
+          cliente_nome: "Cliente iFood",
+          customer_name: "Cliente iFood",
+          client_name: "Cliente iFood",
+          status: "A Confirmar",
+          status_pagamento: "pago",
+          payment_status: "pago",
+          tipo_entrega: "delivery",
+          delivery_type: "delivery",
+          observacoes: `Pedido iFood #${orderId}`,
+          notes: `Pedido iFood #${orderId}`,
+          dados_brutos: event,
+          data_entrega: dataHoje,
+          delivery_date: dataHoje,
+          horario_entrega: horaHoje,
+          delivery_time: horaHoje,
+          valor_total: 0.00,
+          total_price: 0.00,
+          created_at: agora,
+        };
+
+        const insertRes = await fetch(`${supabaseUrl}/rest/v1/encomendas`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payloadEncomenda),
+        });
+
+        if (insertRes.ok) {
+          console.log(`[Server iFood PLC Success] Pedido ${orderId} inserido com sucesso para ${targetCode}`);
+        } else {
+          const errTxt = await insertRes.text();
+          console.error(`[Server iFood PLC Error] Falha ao inserir pedido: ${errTxt}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Server iFood Events Exception]", err);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -1219,6 +1366,11 @@ export default {
             } catch {}
 
             console.log("📦 Evento iFood Recebido:", typeof body === "object" ? JSON.stringify(body, null, 2) : body);
+
+            // Dispara o processamento assíncrono em segundo plano (sem travar o retorno HTTP 200)
+            processIFoodEventsInServer(body, env).catch((err) =>
+              console.error("[Server iFood Webhook Background Error]", err)
+            );
           } catch (err) {
             console.error("[iFood Webhook Error]", err);
           }
