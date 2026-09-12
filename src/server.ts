@@ -1184,38 +1184,29 @@ export default {
 
           console.log(`[iFood OAuth userCode] Solicitando userCode para '${estCode}' com clientId '${ifoodClientId}'...`);
 
-          const bodyParams = new URLSearchParams({
-            clientId: ifoodClientId,
-          });
+          // POST estritamente para /authentication/v1.0/oauth/userCode com x-www-form-urlencoded
+          const bodyParams = new URLSearchParams();
+          bodyParams.append("clientId", ifoodClientId.trim());
 
-          let ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
+          const ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
             method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Accept: "application/json",
+            },
             body: bodyParams.toString(),
           });
 
-          let ifoodData: any = null;
-
-          if (ifoodRes.ok) {
-            ifoodData = await ifoodRes.json();
-          } else {
-            ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ clientId: ifoodClientId }),
-            });
-
-            if (ifoodRes.ok) {
-              ifoodData = await ifoodRes.json();
-            } else {
-              const errTxt = await ifoodRes.text();
-              console.error(`[iFood OAuth userCode Error] HTTP ${ifoodRes.status}: ${errTxt}`);
-              return new Response(
-                JSON.stringify({ success: false, error: `Erro do iFood: ${errTxt}` }),
-                { status: ifoodRes.status || 400, headers: corsHeaders }
-              );
-            }
+          if (!ifoodRes.ok) {
+            const errTxt = await ifoodRes.text();
+            console.error(`[iFood OAuth userCode Error] HTTP ${ifoodRes.status}: ${errTxt}`);
+            return new Response(
+              JSON.stringify({ success: false, error: `Erro do iFood (${ifoodRes.status}): ${errTxt}` }),
+              { status: ifoodRes.status || 400, headers: corsHeaders }
+            );
           }
+
+          const ifoodData: any = await ifoodRes.json();
 
           const userCode = ifoodData.userCode;
           const authorizationCodeVerifier = ifoodData.authorizationCodeVerifier;
@@ -1361,60 +1352,40 @@ export default {
           }
 
           // POST para /authentication/v1.0/oauth/token no iFood
-          const bodyParams = new URLSearchParams({
-            grantType: "authorization_code",
-            clientId: ifoodClientId,
-            clientSecret: ifoodClientSecret,
-            authorizationCode: authCode.trim(),
-            authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
-          });
+          const bodyParams = new URLSearchParams();
+          bodyParams.append("grantType", "authorization_code");
+          bodyParams.append("clientId", ifoodClientId.trim());
+          bodyParams.append("clientSecret", ifoodClientSecret.trim());
+          bodyParams.append("authorizationCode", authCode.trim());
+          bodyParams.append("authorizationCodeVerifier", codeVerifier ? codeVerifier.trim() : "");
 
           console.log(`[iFood OAuth Token Exchange] Requisitando token para '${stateCode}' com authCode '${authCode.trim()}'...`);
 
-          let tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+          const tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
             method: "POST",
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
+              Accept: "application/json",
             },
             body: bodyParams.toString(),
           });
 
-          let tokenData: any = null;
-
-          if (tokenRes.ok) {
-            tokenData = await tokenRes.json();
-          } else {
-            tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                grantType: "authorization_code",
-                clientId: ifoodClientId,
-                clientSecret: ifoodClientSecret,
-                authorizationCode: authCode.trim(),
-                authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
-              }),
-            });
-
-            if (tokenRes.ok) {
-              tokenData = await tokenRes.json();
-            } else {
-              const errBody = await tokenRes.text();
-              console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
-              if (isJsonReq) {
-                return new Response(
-                  JSON.stringify({ success: false, error: `Falha na autorização do iFood: ${errBody}` }),
-                  { status: tokenRes.status || 400, headers: corsHeaders }
-                );
-              }
-              return Response.redirect(
-                `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`,
-                302
+          if (!tokenRes.ok) {
+            const errBody = await tokenRes.text();
+            console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
+            if (isJsonReq) {
+              return new Response(
+                JSON.stringify({ success: false, error: `Falha na autorização do iFood (${tokenRes.status}): ${errBody}` }),
+                { status: tokenRes.status || 400, headers: corsHeaders }
               );
             }
+            return Response.redirect(
+              `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`,
+              302
+            );
           }
+
+          const tokenData: any = await tokenRes.json();
 
           const accessToken = tokenData?.accessToken || tokenData?.access_token || "";
           const refreshToken = tokenData?.refreshToken || tokenData?.refresh_token || "";

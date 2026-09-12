@@ -51,40 +51,29 @@ export default async function handler(req: any, res: any) {
 
     console.log(`[iFood OAuth userCode] Solicitando userCode para loja '${estCode}' com clientId '${ifoodClientId}'...`);
 
-    // POST para /authentication/v1.0/oauth/userCode
-    const bodyParams = new URLSearchParams({
-      clientId: ifoodClientId,
-    });
+    // POST estritamente para /authentication/v1.0/oauth/userCode com x-www-form-urlencoded
+    const bodyParams = new URLSearchParams();
+    bodyParams.append("clientId", ifoodClientId.trim());
 
-    let ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
+    const ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
       body: bodyParams.toString(),
     });
 
-    let ifoodData: any = null;
-
-    if (ifoodRes.ok) {
-      ifoodData = await ifoodRes.json();
-    } else {
-      // Fallback JSON
-      ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: ifoodClientId }),
+    if (!ifoodRes.ok) {
+      const errTxt = await ifoodRes.text();
+      console.error(`[iFood OAuth userCode Error] HTTP ${ifoodRes.status}: ${errTxt}`);
+      return res.status(ifoodRes.status || 400).json({
+        success: false,
+        error: `Erro ao obter código de autorização do iFood (${ifoodRes.status}): ${errTxt}`,
       });
-
-      if (ifoodRes.ok) {
-        ifoodData = await ifoodRes.json();
-      } else {
-        const errTxt = await ifoodRes.text();
-        console.error(`[iFood OAuth userCode Error] HTTP ${ifoodRes.status}: ${errTxt}`);
-        return res.status(ifoodRes.status || 400).json({
-          success: false,
-          error: `Erro ao obter código de autorização do iFood: ${errTxt}`,
-        });
-      }
     }
+
+    const ifoodData: any = await ifoodRes.json();
 
     const userCode = ifoodData.userCode;
     const authorizationCodeVerifier = ifoodData.authorizationCodeVerifier;

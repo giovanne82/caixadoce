@@ -84,7 +84,10 @@ export async function renovarAccessTokenIFood(estabelecimentoId: string, refresh
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
     body: bodyParams.toString(),
   });
 

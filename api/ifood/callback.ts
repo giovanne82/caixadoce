@@ -97,55 +97,37 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  try {
-    const bodyParams = new URLSearchParams({
-      grantType: "authorization_code",
-      clientId: ifoodClientId,
-      clientSecret: ifoodClientSecret,
-      authorizationCode: authCode.trim(),
-      authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
-    });
+    const bodyParams = new URLSearchParams();
+    bodyParams.append("grantType", "authorization_code");
+    bodyParams.append("clientId", ifoodClientId.trim());
+    bodyParams.append("clientSecret", ifoodClientSecret.trim());
+    bodyParams.append("authorizationCode", authCode.trim());
+    bodyParams.append("authorizationCodeVerifier", codeVerifier ? codeVerifier.trim() : "");
 
     console.log(`[iFood OAuth Token Exchange] Trocando authorizationCode '${authCode.trim()}' para loja '${stateCode}'...`);
 
-    let tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+    const tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
       body: bodyParams.toString(),
     });
 
-    let tokenData: any = null;
-
-    if (tokenRes.ok) {
-      tokenData = await tokenRes.json();
-    } else {
-      // Fallback para envio em JSON
-      tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          grantType: "authorization_code",
-          clientId: ifoodClientId,
-          clientSecret: ifoodClientSecret,
-          authorizationCode: authCode.trim(),
-          authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
-        }),
-      });
-
-      if (tokenRes.ok) {
-        tokenData = await tokenRes.json();
-      } else {
-        const errBody = await tokenRes.text();
-        console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
-        if (isJsonRequest) {
-          return res.status(tokenRes.status || 400).json({
-            success: false,
-            error: `Falha na autorização do iFood: ${errBody || "Código inválido ou expirado"}`,
-          });
-        }
-        return res.redirect(302, `${host}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`);
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text();
+      console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
+      if (isJsonRequest) {
+        return res.status(tokenRes.status || 400).json({
+          success: false,
+          error: `Falha na autorização do iFood (${tokenRes.status}): ${errBody || "Código inválido ou expirado"}`,
+        });
       }
+      return res.redirect(302, `${host}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`);
     }
+
+    const tokenData: any = await tokenRes.json();
 
     const accessToken = tokenData?.accessToken || tokenData?.access_token || "";
     const refreshToken = tokenData?.refreshToken || tokenData?.refresh_token || "";
