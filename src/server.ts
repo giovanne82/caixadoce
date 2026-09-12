@@ -457,6 +457,33 @@ async function seedAfiliadosTableInSupabase() {
   }
 }
 seedAfiliadosTableInSupabase();
+
+// Injeção de Colunas do iFood OAuth 2.0 na Tabela estabelecimentos do Supabase
+async function seedIfoodColumnsInSupabase() {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+  try {
+    const alterSql = `
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_access_token TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_refresh_token TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_merchant_id TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_status TEXT DEFAULT 'desconectado';
+      CREATE INDEX IF NOT EXISTS idx_estabelecimentos_ifood_merchant ON public.estabelecimentos(ifood_merchant_id);
+    `;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: alterSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed iFood Columns Log]", err);
+  }
+}
+seedIfoodColumnsInSupabase();
+
 const processedPaymentsSet = new Set<string>();
 
 // Helper de Segurança Anti-Fraude: Verifica se o estabelecimento já utilizou qualquer cupom no passado ou já foi assinante
@@ -979,6 +1006,184 @@ export default {
           JSON.stringify({ success: false, error: "Link de cobrança não encontrado ou expirado." }),
           { status: 404, headers: { "content-type": "application/json" } }
         );
+      }
+
+      // =========================================================================
+      // ENDPOINT DE AUTORIZAÇÃO IFOOD OAUTH 2.0 (/api/ifood/authorize)
+      // =========================================================================
+      if (url.pathname === "/api/ifood/authorize") {
+        const estCode =
+          url.searchParams.get("estabelecimento_codigo") ||
+          url.searchParams.get("state") ||
+          url.searchParams.get("code") ||
+          url.searchParams.get("id") ||
+          "";
+
+        const envObj = (env as Record<string, string>) || {};
+        const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+        const ifoodClientId =
+          envObj.IFOOD_CLIENT_ID ||
+          procObj.IFOOD_CLIENT_ID ||
+          envObj.VITE_IFOOD_CLIENT_ID ||
+          procObj.VITE_IFOOD_CLIENT_ID ||
+          "";
+
+        if (!ifoodClientId) {
+          console.error("[iFood OAuth] Credencial IFOOD_CLIENT_ID não encontrada nas variáveis de ambiente!");
+        }
+
+        const redirectUri = `${url.origin}/api/ifood/callback`;
+
+        const authorizationUrl = `https://merchant-api.ifood.com.br/authentication/v1.0/oauth/authorize?clientId=${encodeURIComponent(
+          ifoodClientId
+        )}&state=${encodeURIComponent(estCode)}&redirectUri=${encodeURIComponent(redirectUri)}`;
+
+        console.log(`[iFood OAuth Authorize] Redirecionando para iFood URL: ${authorizationUrl}`);
+        return Response.redirect(authorizationUrl, 302);
+      }
+
+      // =========================================================================
+      // ENDPOINT DE CALLBACK IFOOD OAUTH 2.0 (/api/ifood/callback)
+      // =========================================================================
+      if (url.pathname === "/api/ifood/callback") {
+        try {
+          const authCode = url.searchParams.get("authorizationCode") || url.searchParams.get("code");
+          const stateCode = url.searchParams.get("state") || "";
+          const ifoodError = url.searchParams.get("error");
+
+          if (ifoodError || !authCode) {
+            console.warn(`[iFood OAuth Callback Error] iFood retornou erro ou código ausente: ${ifoodError || 'Sem código'}`);
+            return Response.redirect(
+              `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent(ifoodError || "authorization_code_missing")}`,
+              302
+            );
+          }
+
+          const envObj = (env as Record<string, string>) || {};
+          const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+          const ifoodClientId =
+            envObj.IFOOD_CLIENT_ID ||
+            procObj.IFOOD_CLIENT_ID ||
+            envObj.VITE_IFOOD_CLIENT_ID ||
+            procObj.VITE_IFOOD_CLIENT_ID ||
+            "";
+
+          const ifoodClientSecret =
+            envObj.IFOOD_CLIENT_SECRET ||
+            procObj.IFOOD_CLIENT_SECRET ||
+            envObj.VITE_IFOOD_CLIENT_SECRET ||
+            procObj.VITE_IFOOD_CLIENT_SECRET ||
+            "";
+
+          const redirectUri = `${url.origin}/api/ifood/callback`;
+
+          // POST para /authentication/v1.0/oauth/token no iFood
+          const bodyParams = new URLSearchParams({
+            grantType: "authorization_code",
+            clientId: ifoodClientId,
+            clientSecret: ifoodClientSecret,
+            authorizationCode: authCode,
+            redirectUri: redirectUri,
+          });
+
+          console.log(`[iFood OAuth Token Exchange] Requisitando token para loja '${stateCode}'...`);
+
+          let tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: bodyParams.toString(),
+          });
+
+          let tokenData: any = null;
+
+          if (tokenRes.ok) {
+            tokenData = await tokenRes.json();
+          } else {
+            // Fallback para envio em JSON se form-urlencoded for recusado
+            tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                grantType: "authorization_code",
+                clientId: ifoodClientId,
+                clientSecret: ifoodClientSecret,
+                authorizationCode: authCode,
+                redirectUri: redirectUri,
+              }),
+            });
+
+            if (tokenRes.ok) {
+              tokenData = await tokenRes.json();
+            } else {
+              const errBody = await tokenRes.text();
+              console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
+              return Response.redirect(
+                `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`,
+                302
+              );
+            }
+          }
+
+          const accessToken = tokenData?.accessToken || tokenData?.access_token || "";
+          const refreshToken = tokenData?.refreshToken || tokenData?.refresh_token || "";
+          const merchantId =
+            tokenData?.merchantId ||
+            tokenData?.merchant_id ||
+            (Array.isArray(tokenData?.merchants) && tokenData?.merchants[0]?.id) ||
+            "";
+
+          console.log(`[iFood OAuth Token Success] Loja: ${stateCode} | merchantId: ${merchantId}`);
+
+          // Salva na tabela 'estabelecimentos' do Supabase
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          const agora = new Date().toISOString();
+
+          const filterQuery = stateCode
+            ? `codigo=ilike.${encodeURIComponent(stateCode.trim())}`
+            : "";
+
+          if (filterQuery) {
+            const updatePayload = {
+              ifood_access_token: accessToken,
+              ifood_refresh_token: refreshToken,
+              ifood_merchant_id: merchantId,
+              ifood_status: "conectado",
+              updated_at: agora,
+            };
+
+            const patchRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?${filterQuery}`, {
+              method: "PATCH",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=representation",
+              },
+              body: JSON.stringify(updatePayload),
+            });
+
+            if (patchRes.ok) {
+              console.log(`[iFood OAuth Save Success] Dados do iFood salvos com sucesso no Supabase para ${stateCode}`);
+            } else {
+              const patchErr = await patchRes.text();
+              console.error("[iFood OAuth Save Error] Falha no PATCH no Supabase:", patchErr);
+            }
+          }
+
+          return Response.redirect(`${url.origin}/painel/configuracoes?ifood=success`, 302);
+        } catch (err: any) {
+          console.error("[iFood OAuth Callback Exception]", err);
+          return Response.redirect(
+            `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent(err?.message || "server_error")}`,
+            302
+          );
+        }
       }
 
       // =========================================================================

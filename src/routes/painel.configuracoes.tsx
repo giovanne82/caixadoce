@@ -5,6 +5,8 @@ export const Route = createFileRoute("/painel/configuracoes")({
   validateSearch: (search: Record<string, unknown>) => ({
     code: search.code as string | undefined,
     state: search.state as string | undefined,
+    ifood: search.ifood as string | undefined,
+    message: search.message as string | undefined,
     error: search.error as string | undefined,
     error_code: search.error_code as string | undefined,
     error_description: search.error_description as string | undefined,

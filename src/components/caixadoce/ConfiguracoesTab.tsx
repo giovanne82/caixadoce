@@ -343,6 +343,91 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [processandoOAuthMp, setProcessandoOAuthMp] = useState(false);
   const [desconectandoMp, setDesconectandoMp] = useState(false);
 
+  // Estado do iFood OAuth 2.0 (Integração Centralizada)
+  const [ifoodConectado, setIfoodConectado] = useState<boolean>(false);
+  const [ifoodMerchantId, setIfoodMerchantId] = useState<string | null>(null);
+  const [carregandoIfood, setCarregandoIfood] = useState(true);
+  const [desconectandoIfood, setDesconectandoIfood] = useState(false);
+
+  const checarIfoodStatus = useCallback(async () => {
+    if (!activeCode) return;
+    const targetCode = activeCode.toUpperCase().trim();
+    setCarregandoIfood(true);
+    try {
+      const { data } = await supabase
+        .from("estabelecimentos")
+        .select("ifood_access_token, ifood_merchant_id, ifood_status")
+        .ilike("codigo", targetCode)
+        .maybeSingle();
+
+      if (data) {
+        const isConectado = (data as any)?.ifood_status === "conectado" || Boolean((data as any)?.ifood_access_token);
+        setIfoodConectado(isConectado);
+        setIfoodMerchantId((data as any)?.ifood_merchant_id || null);
+      }
+    } catch (err) {
+      console.warn("[iFood Sync Exception]", err);
+    } finally {
+      setCarregandoIfood(false);
+    }
+  }, [activeCode]);
+
+  useEffect(() => {
+    checarIfoodStatus();
+  }, [checarIfoodStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const ifoodRes = params.get("ifood");
+    if (ifoodRes === "success") {
+      toast.success("Sua loja foi conectada ao iFood com sucesso!");
+      window.history.replaceState({}, "", window.location.pathname);
+      checarIfoodStatus();
+    } else if (ifoodRes === "error") {
+      const msg = params.get("message") || "Falha na autorização do iFood";
+      toast.error(`Não foi possível conectar com o iFood: ${msg}`);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [checarIfoodStatus]);
+
+  const handleConectarIFood = () => {
+    if (!activeCode) {
+      toast.error("Código do estabelecimento não encontrado.");
+      return;
+    }
+    toast.info("Redirecionando para a autorização do iFood...");
+    window.location.href = `/api/ifood/authorize?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
+  };
+
+  const handleDesconectarIFood = async () => {
+    if (!activeCode) return;
+    setDesconectandoIfood(true);
+    try {
+      const targetCode = activeCode.toUpperCase().trim();
+      const { error } = await supabase
+        .from("estabelecimentos")
+        .update({
+          ifood_access_token: null,
+          ifood_refresh_token: null,
+          ifood_merchant_id: null,
+          ifood_status: "desconectado",
+          updated_at: new Date().toISOString(),
+        })
+        .ilike("codigo", targetCode);
+
+      if (error) throw error;
+
+      setIfoodConectado(false);
+      setIfoodMerchantId(null);
+      toast.success("Loja desconectada do iFood.");
+    } catch (err: any) {
+      toast.error(`Erro ao desconectar: ${err.message || "Falha no servidor"}`);
+    } finally {
+      setDesconectandoIfood(false);
+    }
+  };
+
   // 1. Sincronização estrita com o Banco no Mount / Troca de Aba
   const checarMpStatus = useCallback(async () => {
     if (!activeCode) return;
@@ -1663,6 +1748,88 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* CARD: INTEGRAÇÃO IFOOD (OAUTH 2.0 CENTRALIZADO) */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                    <Store className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    <span>Integração iFood (Integração Centralizada)</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    Conecte sua loja do iFood para gerenciar pedidos, sincronizar o catálogo e integrar seu estabelecimento ao CaixaDoce.
+                  </CardDescription>
+                </div>
+                {ifoodConectado && (
+                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Loja Conectada
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-2">
+              {carregandoIfood ? (
+                <div className="p-4 rounded-2xl bg-muted/30 border border-border flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-red-600 shrink-0" />
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    Verificando status da conexão com o iFood...
+                  </span>
+                </div>
+              ) : ifoodConectado ? (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                          Sua loja está conectada ao iFood!
+                        </span>
+                      </div>
+                      {ifoodMerchantId && (
+                        <p className="text-[11px] font-mono text-muted-foreground">
+                          ID da Loja no iFood (Merchant ID): <strong>{ifoodMerchantId}</strong>
+                        </p>
+                      )}
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleDesconectarIFood}
+                      disabled={desconectandoIfood}
+                      className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-500/15 hover:text-rose-700 h-9 rounded-xl gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {desconectandoIfood ? "Desconectando..." : "Desconectar iFood"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-4">
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-extrabold text-red-900 dark:text-red-200 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-red-600 shrink-0" />
+                      Conecte seu iFood ao CaixaDoce
+                    </h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Ao clicar no botão abaixo, você será redirecionado com segurança para o portal do iFood para autorizar o acesso da sua loja ao nosso sistema.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleConectarIFood}
+                    className="w-full sm:w-auto font-black text-xs h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md gap-2"
+                  >
+                    <Store className="w-4 h-4" />
+                    Conectar ao iFood
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
