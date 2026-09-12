@@ -85,6 +85,7 @@ import {
   CheckCircle2,
   RotateCcw,
   Copy,
+  Loader2,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -129,6 +130,7 @@ import {
   type PagamentoItem,
   isPedidoIFood,
   extrairDadosIFood,
+  enviarAcaoIFood,
 } from "@/lib/caixadoce-data";
 import { toast } from "sonner";
 
@@ -493,6 +495,113 @@ export function OrdersView({
   const [modalEncomendaOpen, setModalEncomendaOpen] = useState(false);
   const [modalBloqueioOpen, setModalBloqueioOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Estado de processamento de ações iFood (Confirmar / Despachar / Cancelar)
+  const [processandoAcaoIfood, setProcessandoAcaoIfood] = useState<Record<string, "confirm" | "dispatch" | "cancel" | null>>({});
+
+  const handleAcaoIFood = async (
+    ord: Encomenda,
+    acao: "confirm" | "dispatch" | "cancel",
+    e?: React.MouseEvent
+  ) => {
+    if (e) e.stopPropagation();
+
+    const orderIfoodId = ord.codigo_pedido_ifood || ord.id;
+    if (!orderIfoodId) {
+      toast.error("Identificador do pedido iFood não encontrado.");
+      return;
+    }
+
+    if (acao === "cancel") {
+      const confirmou = window.confirm(`Deseja realmente solicitar o cancelamento do pedido iFood #${orderIfoodId}?`);
+      if (!confirmou) return;
+    }
+
+    setProcessandoAcaoIfood((prev) => ({ ...prev, [ord.id]: acao }));
+    try {
+      const res = await enviarAcaoIFood(orderIfoodId, acao, ord.estabelecimentoCodigo || activeCode);
+      if (res.success) {
+        toast.success(res.message || "Ação executada com sucesso no iFood!");
+        const novoStatus: StatusEncomenda = acao === "confirm" ? "em_producao" : acao === "dispatch" ? "pronta" : "cancelada";
+        await onEditarEncomenda(ord.id, { status: novoStatus });
+        if (encomendaDetalhes && encomendaDetalhes.id === ord.id) {
+          setEncomendaDetalhes({ ...encomendaDetalhes, status: novoStatus });
+        }
+      } else {
+        toast.error(res.error || "Não foi possível executar a ação no iFood.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao comunicar com o iFood.");
+    } finally {
+      setProcessandoAcaoIfood((prev) => ({ ...prev, [ord.id]: null }));
+    }
+  };
+
+  const renderBotoesAcaoIFood = (ord: Encomenda) => {
+    const acaoAtual = processandoAcaoIfood[ord.id];
+    const isCancelado = ord.status === "cancelada" || ord.status === "cancelado";
+    const isEntregue = ord.status === "entregue" || ord.status === "concluido" || ord.status === "concluida";
+    const isProduzindo = ord.status === "em_producao";
+    const isPronto = ord.status === "pronta";
+
+    return (
+      <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+        {/* 1. CONFIRMAR */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={Boolean(acaoAtual) || isProduzindo || isPronto || isEntregue || isCancelado}
+          onClick={(e) => handleAcaoIFood(ord, "confirm", e)}
+          title="Confirmar pedido no iFood"
+          className="h-7 px-2 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 font-bold disabled:opacity-50"
+        >
+          {acaoAtual === "confirm" ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-blue-600" />
+          )}
+          Confirmar
+        </Button>
+
+        {/* 2. DESPACHAR */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={Boolean(acaoAtual) || isPronto || isEntregue || isCancelado}
+          onClick={(e) => handleAcaoIFood(ord, "dispatch", e)}
+          title="Despachar pedido para entrega no iFood"
+          className="h-7 px-2 text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 font-bold disabled:opacity-50"
+        >
+          {acaoAtual === "dispatch" ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+          ) : (
+            <Truck className="w-3.5 h-3.5 mr-1 text-amber-600" />
+          )}
+          Despachar
+        </Button>
+
+        {/* 3. CANCELAR */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={Boolean(acaoAtual) || isCancelado || isEntregue}
+          onClick={(e) => handleAcaoIFood(ord, "cancel", e)}
+          title="Solicitar cancelamento do pedido no iFood"
+          className="h-7 px-2 text-xs bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/20 font-bold disabled:opacity-50"
+        >
+          {acaoAtual === "cancel" ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+          ) : (
+            <X className="w-3.5 h-3.5 mr-1 text-rose-600" />
+          )}
+          Cancelar
+        </Button>
+      </div>
+    );
+  };
 
   // Notinhas Vinculadas especificamente por Lista/Encomenda { [shoppingListId]: string[] }
   const [linkedMap, setLinkedMap] = useState<Record<string, string[]>>({});
@@ -2305,7 +2414,9 @@ export function OrdersView({
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            {ord.status === "entregue" ? (
+                            {isPedidoIFood(ord) ? (
+                              renderBotoesAcaoIFood(ord)
+                            ) : ord.status === "entregue" ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -2523,7 +2634,9 @@ export function OrdersView({
                       <span className="text-[10.5px] text-primary font-bold hover:underline">Ver todos os detalhes &gt;</span>
 
                       <div className="flex items-center gap-1">
-                        {ord.status === "entregue" ? (
+                        {isPedidoIFood(ord) ? (
+                          renderBotoesAcaoIFood(ord)
+                        ) : ord.status === "entregue" ? (
                           <Button
                             variant="outline"
                             size="sm"
@@ -3212,7 +3325,9 @@ export function OrdersView({
                         </div>
 
                         <div className="flex justify-end items-center gap-1 pt-1">
-                          {ord.status === "entregue" ? (
+                          {isPedidoIFood(ord) ? (
+                            renderBotoesAcaoIFood(ord)
+                          ) : ord.status === "entregue" ? (
                             <Button
                               variant="outline"
                               size="sm"
@@ -4354,7 +4469,9 @@ export function OrdersView({
               </span>
               {encomendaDetalhes && (
                 <div className="flex items-center gap-1.5">
-                  {encomendaDetalhes.status === "entregue" ? (
+                  {isPedidoIFood(encomendaDetalhes) ? (
+                    renderBotoesAcaoIFood(encomendaDetalhes)
+                  ) : encomendaDetalhes.status === "entregue" ? (
                     <Button
                       type="button"
                       variant="outline"

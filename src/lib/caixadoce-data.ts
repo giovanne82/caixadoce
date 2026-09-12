@@ -2074,3 +2074,34 @@ export interface RelatorioAfiliado {
   lojas: LojaConvertida[];
   historicoComissoes?: HistoricoComissao[];
 }
+
+/**
+ * Envia uma ação oficial do iFood (confirmar, despachar, cancelar) através do backend
+ */
+export async function enviarAcaoIFood(
+  orderId: string,
+  acao: "confirm" | "dispatch" | "cancel",
+  estabelecimentoCodigo?: string,
+  motivoCancelamento?: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch(`/api/ifood/orders/${encodeURIComponent(orderId)}/${acao}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        estabelecimento_codigo: estabelecimentoCodigo,
+        reason: motivoCancelamento || "Cancelado pelo estabelecimento",
+        cancellationCode: "501",
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || data.message || `Erro HTTP ${res.status}`);
+    }
+    return { success: true, message: data.message };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Falha ao comunicar com o iFood" };
+  }
+}
+

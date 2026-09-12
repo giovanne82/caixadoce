@@ -1342,6 +1342,65 @@ export default {
       }
 
       // =========================================================================
+      // ENDPOINTS DE AÇÃO IFOOD OAUTH (/api/ifood/orders/[orderId]/confirm, dispatch, cancel)
+      // =========================================================================
+      const ifoodActionMatch = url.pathname.match(/^\/api\/ifood\/orders(?:\/([^/]+))?\/(confirm|dispatch|cancel)$/i);
+      if (ifoodActionMatch && (request.method === "POST" || request.method === "OPTIONS")) {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        try {
+          const pathOrderId = ifoodActionMatch[1];
+          const actionType = ifoodActionMatch[2].toLowerCase() as "confirm" | "dispatch" | "cancel";
+
+          let bodyJson: any = {};
+          try {
+            bodyJson = await request.json();
+          } catch {}
+
+          const orderId =
+            pathOrderId ||
+            url.searchParams.get("orderId") ||
+            url.searchParams.get("id") ||
+            bodyJson.orderId ||
+            bodyJson.id ||
+            "";
+
+          const estabelecimentoCodigo =
+            url.searchParams.get("estabelecimento_codigo") ||
+            bodyJson.estabelecimento_codigo ||
+            request.headers.get("x-estabelecimento-codigo") ||
+            "";
+
+          const { executarAcaoPedidoIFood } = await import("./lib/ifood-service");
+          const result = await executarAcaoPedidoIFood(orderId, actionType, {
+            reason: bodyJson.reason || url.searchParams.get("reason"),
+            cancellationCode: bodyJson.cancellationCode || url.searchParams.get("cancellationCode"),
+            estabelecimento_codigo: estabelecimentoCodigo,
+          });
+
+          return new Response(JSON.stringify(result), {
+            status: result.status || (result.success ? 200 : 400),
+            headers: corsHeaders,
+          });
+        } catch (actErr: any) {
+          console.error("[iFood Action Exception Server.ts]", actErr);
+          return new Response(
+            JSON.stringify({ success: false, error: actErr.message || "Internal server error" }),
+            { status: 500, headers: corsHeaders }
+          );
+        }
+      }
+
+      // =========================================================================
       // ENDPOINT DE WEBHOOK IFOOD (/api/ifood/webhook)
       // =========================================================================
       if (url.pathname === "/api/ifood/webhook") {
