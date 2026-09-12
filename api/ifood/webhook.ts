@@ -75,36 +75,16 @@ async function processIFoodEvents(body: any) {
           continue;
         }
 
-        // Prepara objeto de inserção na tabela encomendas do CaixaDoce
+        // Objeto de inserção na tabela encomendas (EXCLUSIVAMENTE as 6 colunas permitidas)
         const targetCode = estCode || "CD-1001";
-        const agora = new Date().toISOString();
-        const dataHoje = agora.split("T")[0];
-        const horaHoje = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
         const payloadEncomenda = {
-          estabelecimento_codigo: targetCode,
-          codigo: targetCode,
-          store_id: targetCode,
           origem: "iFood",
           codigo_pedido_ifood: orderId,
-          cliente_nome: "Cliente iFood",
-          customer_name: "Cliente iFood",
-          client_name: "Cliente iFood",
-          status: "A Confirmar",
-          status_pagamento: "pago",
-          payment_status: "pago",
-          tipo_entrega: "delivery",
-          delivery_type: "delivery",
-          observacoes: `Pedido iFood #${orderId}`,
-          notes: `Pedido iFood #${orderId}`,
           dados_brutos: event,
-          data_entrega: dataHoje,
-          delivery_date: dataHoje,
-          horario_entrega: horaHoje,
-          delivery_time: horaHoje,
-          valor_total: 0.00,
-          total_price: 0.00,
-          created_at: agora,
+          status: "pendente",
+          client_name: "Cliente iFood",
+          estabelecimento_codigo: targetCode,
         };
 
         const { error: insertErr } = await supabase
