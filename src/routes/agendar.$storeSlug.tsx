@@ -906,7 +906,7 @@ function PublicStoreView() {
                 <a
                   href={formatarWhatsappLink(
                     storeInfo.whatsapp,
-                    `Olá! Acabei de fazer o pedido #${pedidoCriadoId} no valor de ${formatarMoeda(totalCarrinho)} para o dia ${dataEntrega.split("-").reverse().join("/")} às ${horarioEntrega}. Nome: ${clienteNome}`
+                    `Olá! Acabei de fazer o pedido #${pedidoCriadoId} no valor de ${formatarMoeda(totalCarrinho)} para o dia ${dataEntrega ? String(dataEntrega || "").split("-").reverse().join("/") : "A confirmar"} às ${horarioEntrega}. Nome: ${clienteNome}`
                   )}
                   target="_blank"
                   rel="noopener noreferrer"

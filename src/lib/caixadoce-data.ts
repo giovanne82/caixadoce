@@ -1531,7 +1531,7 @@ export function gerarMensagemResumoWhatsApp(
   const favorecido = typeof dadosLoja === "object" ? dadosLoja?.favorecidoPix : undefined;
   const cidade = typeof dadosLoja === "object" ? dadosLoja?.cidadeLoja : undefined;
 
-  const dataFormatada = encomenda.dataEntrega ? encomenda.dataEntrega.split("-").reverse().join("/") : "A confirmar";
+  const dataFormatada = encomenda.dataEntrega ? String(encomenda.dataEntrega || "").split("-").reverse().join("/") : "A confirmar";
   const hora = encomenda.horarioEntrega || (encomenda.origem === "iFood" ? "Hora a confirmar" : "14:00");
   const totalPago = calcularTotalPagoEncomenda(encomenda);
   const saldoRestanteNum = Math.max(0, (encomenda.valorTotal || 0) - totalPago);
@@ -1592,7 +1592,7 @@ export function gerarMensagemOrcamentoWhatsApp(
   dadosLoja?: string | DadosLojaPix
 ): string {
   const nomeLoja = typeof dadosLoja === "string" ? dadosLoja : dadosLoja?.nomeLoja || "CaixaDoce";
-  const dataFormatada = encomenda.dataEntrega ? encomenda.dataEntrega.split("-").reverse().join("/") : "A combinar";
+  const dataFormatada = encomenda.dataEntrega ? String(encomenda.dataEntrega || "").split("-").reverse().join("/") : "A combinar";
   const hora = encomenda.horarioEntrega || "14:00";
   const valorTotal = formatarMoeda(encomenda.valorTotal);
   const modalidade = encomenda.tipoEntrega === "delivery"

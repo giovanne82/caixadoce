@@ -2746,7 +2746,7 @@ export function OrdersView({
                                         <div>
                                           <p className="font-bold text-foreground">{n.fornecedorNome}</p>
                                           <p className="text-[10px] text-muted-foreground">
-                                            Data: {n.dataCompra ? n.dataCompra.split("-").reverse().join("/") : "-"} {n.numeroNota ? `• ${n.numeroNota}` : ""}
+                                            Data: {n.dataCompra ? String(n.dataCompra || "").split("-").reverse().join("/") : "-"} {n.numeroNota ? `• ${n.numeroNota}` : ""}
                                           </p>
                                         </div>
                                       </div>
@@ -2815,7 +2815,7 @@ export function OrdersView({
                           {clienteNome}
                         </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
-                          {dataEntrega ? dataEntrega.split("-").reverse().join("/") : "A confirmar"}
+                          {dataEntrega ? String(dataEntrega || "").split("-").reverse().join("/") : "A confirmar"}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -2848,7 +2848,7 @@ export function OrdersView({
                 <Building2 className="w-5 h-5 text-primary" /> {notaDetalheSelecionada.fornecedorNome}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra ? notaDetalheSelecionada.dataCompra.split("-").reverse().join("/") : "-"}
+                Comprovante fiscal registrado em {notaDetalheSelecionada.dataCompra ? String(notaDetalheSelecionada.dataCompra || "").split("-").reverse().join("/") : "-"}
               </DialogDescription>
             </DialogHeader>
 
@@ -2875,7 +2875,7 @@ export function OrdersView({
                     <Clock className="w-3 h-3" /> Data &amp; Hora:
                   </span>
                   <p className="font-mono text-foreground mt-0.5">
-                    {notaDetalheSelecionada.dataCompra ? notaDetalheSelecionada.dataCompra.split("-").reverse().join("/") : "-"}{" "}
+                    {notaDetalheSelecionada.dataCompra ? String(notaDetalheSelecionada.dataCompra || "").split("-").reverse().join("/") : "-"}{" "}
                     {notaDetalheSelecionada.horaCompra ? `às ${notaDetalheSelecionada.horaCompra}` : ""}
                   </p>
                 </div>
@@ -3666,7 +3666,7 @@ export function OrdersView({
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-foreground font-bold text-xs">
-                              📅 {pag.data ? pag.data.split("-").reverse().join("/") : "-"}
+                              📅 {pag.data ? String(pag.data || "").split("-").reverse().join("/") : "-"}
                             </span>
                             {isEntrada && (
                               <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold px-1.5 py-0">
@@ -3693,7 +3693,7 @@ export function OrdersView({
                           {isPaid ? (
                             <div className="flex items-center gap-1">
                               <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 shadow-2xs">
-                                ✓ Pago {pag.dataEfetiva ? `em ${pag.dataEfetiva.split("-").reverse().join("/")}` : ""}
+                                ✓ Pago {pag.dataEfetiva ? `em ${String(pag.dataEfetiva || "").split("-").reverse().join("/")}` : ""}
                               </Badge>
                               <Button
                                 type="button"
@@ -4204,7 +4204,7 @@ export function OrdersView({
                   {datasBloqueadas.map((b) => (
                     <div key={b.id} className="flex items-center justify-between p-1.5 rounded-lg bg-muted/40 text-xs">
                       <span className="font-mono font-bold text-foreground">
-                        {b.data.split("-").reverse().join("/")} ({b.motivo})
+                        {b.data ? String(b.data || "").split("-").reverse().join("/") : ""} ({b.motivo})
                       </span>
                       <Button
                         type="button"
@@ -4392,7 +4392,7 @@ export function OrdersView({
                       <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data de Entrega / Retirada</span>
                       <span className="font-bold text-foreground text-xs flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
                         <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />
-                        {encomendaDetalhes.dataEntrega ? encomendaDetalhes.dataEntrega.split("-").reverse().join("/") : (encomendaDetalhes.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {encomendaDetalhes.horarioEntrega || (encomendaDetalhes.origem === "iFood" ? "Hora a confirmar" : "14:00")}
+                        {encomendaDetalhes.dataEntrega ? String(encomendaDetalhes.dataEntrega || "").split("-").reverse().join("/") : (encomendaDetalhes.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {encomendaDetalhes.horarioEntrega || (encomendaDetalhes.origem === "iFood" ? "Hora a confirmar" : "14:00")}
                       </span>
                       <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
                         {encomendaDetalhes.tipoEntrega === "delivery"
@@ -4580,9 +4580,9 @@ export function OrdersView({
                       {encomendaDetalhes.historicoPagamentos.map((pag, idx) => {
                         const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
                         const isEntrada = pag.isEntrada || idx === 0;
-                        const dataPrev = pag.data ? pag.data.split("-").reverse().join("/") : "-";
+                        const dataPrev = pag.data ? String(pag.data || "").split("-").reverse().join("/") : "-";
                         const dataEf = pag.dataEfetiva || pag.data_pagamento;
-                        const dataEfFmt = dataEf ? dataEf.split("-").reverse().join("/") : dataPrev;
+                        const dataEfFmt = dataEf ? String(dataEf || "").split("-").reverse().join("/") : dataPrev;
 
                         return (
                           <div key={pag.id || idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
@@ -4726,7 +4726,7 @@ export function OrdersView({
               <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Data Acordada / Prevista:</span>
-                  <span className="font-mono font-bold">{itemMarcarPagoTarget.data ? itemMarcarPagoTarget.data.split("-").reverse().join("/") : "-"}</span>
+                  <span className="font-mono font-bold">{itemMarcarPagoTarget.data ? String(itemMarcarPagoTarget.data || "").split("-").reverse().join("/") : "-"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Forma de Pagamento:</span>
