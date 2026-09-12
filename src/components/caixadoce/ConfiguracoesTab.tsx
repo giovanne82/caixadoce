@@ -1906,7 +1906,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       ) : (
                         <Store className="w-4 h-4" />
                       )}
-                      {gerandoUserCode ? "Gerando Código..." : (userCodeGerado ? "Gerar Novo Código" : "Conectar ao iFood")}
+                      {gerandoUserCode ? "Gerando Código..." : "Conectar iFood"}
                     </Button>
 
                     {userCodeGerado && urlVerificacao && (
@@ -1949,12 +1949,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
                       <div className="space-y-2">
                         <Label htmlFor="ifood-auth-code-input" className="text-xs font-bold text-foreground block">
-                          Cole o Código de Autorização gerado pelo iFood:
+                          Cole aqui o Código de Autorização do iFood:
                         </Label>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                           <Input
                             id="ifood-auth-code-input"
-                            placeholder="Ex: Cole aqui o código de autorização exibido no iFood..."
+                            placeholder="Cole aqui o Código de Autorização do iFood"
                             value={authCodeInput}
                             onChange={(e) => setAuthCodeInput(e.target.value)}
                             className="text-xs h-10 font-mono"
@@ -1970,11 +1970,11 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                             ) : (
                               <CheckCircle2 className="w-4 h-4" />
                             )}
-                            {confirmandoAuthCode ? "Confirmando..." : "Confirmar Código"}
+                            {confirmandoAuthCode ? "Validando..." : "Validar Código"}
                           </Button>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          Após autorizar no portal do iFood na outra aba, copie o código final gerado pelo iFood e confirme acima para conectar sua loja.
+                          Após autorizar no portal do iFood na outra aba, copie o código final exibido na tela e clique em Validar Código.
                         </p>
                       </div>
                     </div>
@@ -1983,12 +1983,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   {!userCodeGerado && (
                     <div className="p-3.5 rounded-xl bg-background/60 border border-border/60 space-y-2 mt-2">
                       <Label htmlFor="ifood-auth-code-direct" className="text-xs font-bold text-foreground block">
-                        Cole o Código de Autorização gerado pelo iFood:
+                        Cole aqui o Código de Autorização do iFood:
                       </Label>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <Input
                           id="ifood-auth-code-direct"
-                          placeholder="Cole o Código de Autorização gerado pelo iFood"
+                          placeholder="Cole aqui o Código de Autorização do iFood"
                           value={authCodeInput}
                           onChange={(e) => setAuthCodeInput(e.target.value)}
                           className="text-xs h-9.5 font-mono"
@@ -2004,7 +2004,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                           ) : (
                             <CheckCircle2 className="w-4 h-4" />
                           )}
-                          {confirmandoAuthCode ? "Confirmando..." : "Confirmar Código"}
+                          {confirmandoAuthCode ? "Validando..." : "Validar Código"}
                         </Button>
                       </div>
                     </div>
