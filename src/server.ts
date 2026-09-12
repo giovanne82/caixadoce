@@ -466,6 +466,7 @@ async function seedIfoodColumnsInSupabase() {
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_access_token TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_refresh_token TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_merchant_id TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_code_verifier TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS ifood_status TEXT DEFAULT 'desconectado';
       CREATE INDEX IF NOT EXISTS idx_estabelecimentos_ifood_merchant ON public.estabelecimentos(ifood_merchant_id);
     `;
@@ -1136,57 +1137,188 @@ export default {
       }
 
       // =========================================================================
-      // ENDPOINT DE AUTORIZAÇÃO IFOOD OAUTH 2.0 (/api/ifood/auth e /api/ifood/authorize)
+      // ENDPOINT DE INICIALIZAÇÃO IFOOD DEVICE GRANT (/api/ifood/auth, /api/ifood/userCode)
       // =========================================================================
-      if (url.pathname === "/api/ifood/auth" || url.pathname === "/api/ifood/authorize") {
-        const estCode =
-          url.searchParams.get("estabelecimento_codigo") ||
-          url.searchParams.get("state") ||
-          url.searchParams.get("code") ||
-          url.searchParams.get("id") ||
-          "";
+      if (url.pathname === "/api/ifood/auth" || url.pathname === "/api/ifood/userCode" || url.pathname === "/api/ifood/authorize") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+        };
 
-        const envObj = (env as Record<string, string>) || {};
-        const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
-
-        const ifoodClientId =
-          envObj.IFOOD_CLIENT_ID ||
-          procObj.IFOOD_CLIENT_ID ||
-          envObj.VITE_IFOOD_CLIENT_ID ||
-          procObj.VITE_IFOOD_CLIENT_ID ||
-          "";
-
-        if (!ifoodClientId) {
-          console.error("[iFood OAuth] Credencial IFOOD_CLIENT_ID não encontrada nas variáveis de ambiente!");
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
         }
 
-        const redirectUri = `${url.origin}/api/ifood/callback`;
+        try {
+          let bodyJson: any = {};
+          try {
+            if (request.method === "POST") bodyJson = await request.json();
+          } catch {}
 
-        const authorizationUrl = `https://merchant-api.ifood.com.br/authentication/v1.0/oauth/authorize?clientId=${encodeURIComponent(
-          ifoodClientId
-        )}&state=${encodeURIComponent(estCode)}&redirectUri=${encodeURIComponent(redirectUri)}`;
+          const estCode =
+            url.searchParams.get("estabelecimento_codigo") ||
+            url.searchParams.get("state") ||
+            bodyJson.estabelecimento_codigo ||
+            bodyJson.state ||
+            "";
 
-        console.log(`[iFood OAuth Authorize] Redirecionando para iFood URL: ${authorizationUrl}`);
-        return Response.redirect(authorizationUrl, 302);
+          const envObj = (env as Record<string, string>) || {};
+          const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+          const ifoodClientId =
+            envObj.IFOOD_CLIENT_ID ||
+            procObj.IFOOD_CLIENT_ID ||
+            envObj.VITE_IFOOD_CLIENT_ID ||
+            procObj.VITE_IFOOD_CLIENT_ID ||
+            "";
+
+          if (!ifoodClientId) {
+            console.error("[iFood OAuth] Credencial IFOOD_CLIENT_ID não encontrada!");
+            return new Response(
+              JSON.stringify({ success: false, error: "Credencial IFOOD_CLIENT_ID não configurada." }),
+              { status: 500, headers: corsHeaders }
+            );
+          }
+
+          console.log(`[iFood OAuth userCode] Solicitando userCode para '${estCode}' com clientId '${ifoodClientId}'...`);
+
+          const bodyParams = new URLSearchParams({
+            clientId: ifoodClientId,
+          });
+
+          let ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: bodyParams.toString(),
+          });
+
+          let ifoodData: any = null;
+
+          if (ifoodRes.ok) {
+            ifoodData = await ifoodRes.json();
+          } else {
+            ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ clientId: ifoodClientId }),
+            });
+
+            if (ifoodRes.ok) {
+              ifoodData = await ifoodRes.json();
+            } else {
+              const errTxt = await ifoodRes.text();
+              console.error(`[iFood OAuth userCode Error] HTTP ${ifoodRes.status}: ${errTxt}`);
+              return new Response(
+                JSON.stringify({ success: false, error: `Erro do iFood: ${errTxt}` }),
+                { status: ifoodRes.status || 400, headers: corsHeaders }
+              );
+            }
+          }
+
+          const userCode = ifoodData.userCode;
+          const authorizationCodeVerifier = ifoodData.authorizationCodeVerifier;
+          const verificationUrlComplete =
+            ifoodData.verificationUrlComplete ||
+            ifoodData.verificationUrl ||
+            `https://portal.ifood.com.br/autorizacao?code=${userCode}`;
+          const verificationUrl = ifoodData.verificationUrl || "https://portal.ifood.com.br/autorizacao";
+          const expiresIn = ifoodData.expiresIn || 600;
+
+          // Salva o authorizationCodeVerifier na tabela estabelecimentos
+          if (estCode) {
+            const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+            await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(estCode.trim())}`, {
+              method: "PATCH",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                ifood_code_verifier: authorizationCodeVerifier,
+                updated_at: new Date().toISOString(),
+              }),
+            }).catch(() => {});
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              userCode,
+              authorizationCodeVerifier,
+              verificationUrlComplete,
+              verificationUrl,
+              expiresIn,
+            }),
+            { status: 200, headers: corsHeaders }
+          );
+        } catch (err: any) {
+          console.error("[iFood OAuth userCode Exception]", err);
+          return new Response(
+            JSON.stringify({ success: false, error: err?.message || "Internal server error" }),
+            { status: 500, headers: corsHeaders }
+          );
+        }
       }
 
       // =========================================================================
-      // ENDPOINT DE CALLBACK IFOOD OAUTH 2.0 (/api/ifood/callback)
+      // ENDPOINT DE CALLBACK / TROCA DE TOKEN IFOOD (/api/ifood/callback e /api/ifood/token)
       // =========================================================================
-      if (url.pathname === "/api/ifood/callback") {
+      if (url.pathname === "/api/ifood/callback" || url.pathname === "/api/ifood/token") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
         try {
+          let bodyJson: any = {};
+          try {
+            if (request.method === "POST") bodyJson = await request.json();
+          } catch {}
+
           const authCode =
+            bodyJson.authorizationCode ||
+            bodyJson.code ||
             url.searchParams.get("authorizationCode") ||
             url.searchParams.get("authorization_code") ||
             url.searchParams.get("code");
+
+          let codeVerifier =
+            bodyJson.authorizationCodeVerifier ||
+            bodyJson.codeVerifier ||
+            url.searchParams.get("authorizationCodeVerifier") ||
+            url.searchParams.get("codeVerifier") ||
+            "";
+
           const stateCode =
+            bodyJson.estabelecimento_codigo ||
+            bodyJson.state ||
             url.searchParams.get("state") ||
             url.searchParams.get("estabelecimento_codigo") ||
             "";
+
           const ifoodError = url.searchParams.get("error");
+          const isJsonReq =
+            request.headers.get("accept")?.includes("application/json") ||
+            request.headers.get("content-type")?.includes("application/json") ||
+            request.method === "POST";
 
           if (ifoodError || !authCode) {
             console.warn(`[iFood OAuth Callback Error] iFood retornou erro ou código ausente: ${ifoodError || 'Sem código'}`);
+            if (isJsonReq) {
+              return new Response(
+                JSON.stringify({ success: false, error: ifoodError || "Código de autorização não informado." }),
+                { status: 400, headers: corsHeaders }
+              );
+            }
             return Response.redirect(
               `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent(ifoodError || "authorization_code_missing")}`,
               302
@@ -1210,18 +1342,34 @@ export default {
             procObj.VITE_IFOOD_CLIENT_SECRET ||
             "";
 
-          const redirectUri = `${url.origin}/api/ifood/callback`;
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+
+          // Se não veio codeVerifier, busca o salvo no Supabase
+          if (!codeVerifier && stateCode) {
+            try {
+              const fetchEst = await fetch(
+                `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(stateCode.trim())}&select=ifood_code_verifier`,
+                { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+              );
+              if (fetchEst.ok) {
+                const estList = await fetchEst.json();
+                if (Array.isArray(estList) && estList.length > 0 && estList[0].ifood_code_verifier) {
+                  codeVerifier = estList[0].ifood_code_verifier;
+                }
+              }
+            } catch {}
+          }
 
           // POST para /authentication/v1.0/oauth/token no iFood
           const bodyParams = new URLSearchParams({
             grantType: "authorization_code",
             clientId: ifoodClientId,
             clientSecret: ifoodClientSecret,
-            authorizationCode: authCode,
-            redirectUri: redirectUri,
+            authorizationCode: authCode.trim(),
+            authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
           });
 
-          console.log(`[iFood OAuth Token Exchange] Requisitando token para loja '${stateCode}'...`);
+          console.log(`[iFood OAuth Token Exchange] Requisitando token para '${stateCode}' com authCode '${authCode.trim()}'...`);
 
           let tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
             method: "POST",
@@ -1236,7 +1384,6 @@ export default {
           if (tokenRes.ok) {
             tokenData = await tokenRes.json();
           } else {
-            // Fallback para envio em JSON se form-urlencoded for recusado
             tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
               method: "POST",
               headers: {
@@ -1246,8 +1393,8 @@ export default {
                 grantType: "authorization_code",
                 clientId: ifoodClientId,
                 clientSecret: ifoodClientSecret,
-                authorizationCode: authCode,
-                redirectUri: redirectUri,
+                authorizationCode: authCode.trim(),
+                authorizationCodeVerifier: codeVerifier ? codeVerifier.trim() : "",
               }),
             });
 
@@ -1256,6 +1403,12 @@ export default {
             } else {
               const errBody = await tokenRes.text();
               console.error(`[iFood OAuth Token Exchange Failed] HTTP ${tokenRes.status}: ${errBody}`);
+              if (isJsonReq) {
+                return new Response(
+                  JSON.stringify({ success: false, error: `Falha na autorização do iFood: ${errBody}` }),
+                  { status: tokenRes.status || 400, headers: corsHeaders }
+                );
+              }
               return Response.redirect(
                 `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent("token_exchange_failed")}`,
                 302
@@ -1296,9 +1449,7 @@ export default {
           console.log(`[iFood OAuth Token Success] Loja: ${stateCode} | merchantId: ${merchantId}`);
 
           // Salva na tabela 'estabelecimentos' do Supabase
-          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
           const agora = new Date().toISOString();
-
           const updatePayload = {
             ifood_access_token: accessToken,
             ifood_refresh_token: refreshToken,
@@ -1329,6 +1480,17 @@ export default {
               const patchErr = await patchRes.text();
               console.error("[iFood OAuth Save Error] Falha no PATCH no Supabase:", patchErr);
             }
+          }
+
+          if (isJsonReq) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Sua loja foi conectada ao iFood com sucesso!",
+                merchantId,
+              }),
+              { status: 200, headers: corsHeaders }
+            );
           }
 
           return Response.redirect(`${url.origin}/painel/configuracoes?ifood_connected=true`, 302);
