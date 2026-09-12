@@ -991,7 +991,11 @@ async function calcularNovaDataExpiracaoBackend(
 // Helper assíncrono para processar eventos do iFood no server.ts (ex: evento 'PLC' -> Tabela encomendas)
 async function processIFoodEventsInServer(body: any, env?: any) {
   try {
-    const events = Array.isArray(body) ? body : body ? [body] : [];
+    let parsedBody = body;
+    if (typeof parsedBody === "string") {
+      try { parsedBody = JSON.parse(parsedBody); } catch { parsedBody = []; }
+    }
+    const events = Array.isArray(parsedBody) ? parsedBody : parsedBody ? [parsedBody] : [];
     if (events.length === 0) return;
 
     const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
@@ -1003,72 +1007,150 @@ async function processIFoodEventsInServer(body: any, env?: any) {
     };
 
     for (const event of events) {
-      const code = String(event.code || "").toUpperCase();
+      if (!event || typeof event !== "object") continue;
+      const code = String(event.code || event.type || "").toUpperCase();
 
-      if (code === "PLC") {
-        const orderId = event.correlationId || event.orderId || event.id || "";
-        const merchantId = event.merchantId || event.merchant?.id || "";
+      if (code === "PLC" || code === "PLACED" || code === "ORDER_PLACED") {
+        const orderId = String(event.correlationId || event.orderId || event.id || "").trim();
+        const merchantId = String(event.merchantId || event.merchant?.id || "").trim();
 
-        console.log(`[Server iFood PLC] Processando pedido iFood ID: ${orderId} | Merchant ID: ${merchantId}`);
-
-        let estCode = "";
-        if (merchantId) {
-          try {
-            const resEst = await fetch(
-              `${supabaseUrl}/rest/v1/estabelecimentos?ifood_merchant_id=ilike.${encodeURIComponent(String(merchantId).trim())}&select=codigo`,
-              { headers }
-            );
-            if (resEst.ok) {
-              const listEst = await resEst.json();
-              if (Array.isArray(listEst) && listEst.length > 0 && listEst[0]?.codigo) {
-                estCode = listEst[0].codigo;
-              }
-            }
-          } catch {}
-        }
-
-        if (!estCode) {
-          try {
-            const resFb = await fetch(
-              `${supabaseUrl}/rest/v1/estabelecimentos?ifood_status=eq.conectado&select=codigo&limit=1`,
-              { headers }
-            );
-            if (resFb.ok) {
-              const listFb = await resFb.json();
-              if (Array.isArray(listFb) && listFb.length > 0 && listFb[0]?.codigo) {
-                estCode = listFb[0].codigo;
-              }
-            }
-          } catch {}
-        }
+        console.log(`[Server iFood PLC] Processando pedido iFood ID: '${orderId}' | Merchant ID: '${merchantId}'`);
 
         if (!orderId) continue;
 
-        // Evita inserção duplicada
+        // 1. Busca estabelecimento mapeado
+        let estCodigo = "CD-1001";
+        let estId: string | null = null;
+        let estUserId: string | null = null;
+
+        try {
+          let foundEst: any = null;
+          if (merchantId) {
+            const resDirect = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?ifood_merchant_id=ilike.${encodeURIComponent(merchantId)}&select=id,codigo,user_id,ifood_merchant_id,ifood_status`,
+              { headers }
+            );
+            if (resDirect.ok) {
+              const listDirect = await resDirect.json();
+              if (Array.isArray(listDirect) && listDirect.length > 0) {
+                foundEst = listDirect[0];
+              }
+            }
+          }
+
+          if (!foundEst) {
+            const resAll = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?select=id,codigo,user_id,ifood_merchant_id,ifood_status&order=created_at.desc`,
+              { headers }
+            );
+            if (resAll.ok) {
+              const allList = await resAll.json();
+              if (Array.isArray(allList) && allList.length > 0) {
+                const connected = allList.find((e: any) => e.ifood_status === "conectado");
+                foundEst = connected || allList[0];
+                if (merchantId && foundEst && !foundEst.ifood_merchant_id) {
+                  await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?id=eq.${foundEst.id}`, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({ ifood_merchant_id: merchantId, updated_at: new Date().toISOString() }),
+                  }).catch(() => {});
+                }
+              }
+            }
+          }
+
+          if (foundEst) {
+            estCodigo = foundEst.codigo || "CD-1001";
+            estId = foundEst.id || null;
+            estUserId = foundEst.user_id || null;
+          }
+        } catch (eM) {
+          console.warn("[Server iFood Match Warn]", eM);
+        }
+
+        console.log(`[Server iFood Mapeamento] merchantId '${merchantId}' -> Loja: '${estCodigo}' (UUID: ${estId})`);
+
+        // 2. Extrai dados do pedido
+        const p = event?.order || event?.data || event?.details || event || {};
+        let valorTotal = 0;
+        if (typeof p.total?.orderAmount === "number" && p.total.orderAmount > 0) valorTotal = p.total.orderAmount;
+        else if (typeof p.orderAmount === "number" && p.orderAmount > 0) valorTotal = p.orderAmount;
+        else if (typeof p.payments?.total?.value === "number" && p.payments.total.value > 0) valorTotal = p.payments.total.value;
+        else if (typeof p.payments?.total === "number" && p.payments.total > 0) valorTotal = p.payments.total;
+        else if (typeof p.valor_total === "number" && p.valor_total > 0) valorTotal = p.valor_total;
+
+        const clienteNome = String(p.customer?.name || p.order?.customer?.name || p.client_name || p.cliente_nome || "Cliente iFood").trim();
+        const clienteWhatsapp = String(p.customer?.phone?.number || p.customer?.phone || p.cliente_whatsapp || "").trim();
+
+        const rawItems: any[] = (Array.isArray(p.items) && p.items) || (Array.isArray(p.order?.items) && p.order.items) || (Array.isArray(p.itens) && p.itens) || [];
+        const itensNomes: string[] = [];
+        const itensDetalhes: any[] = [];
+        rawItems.forEach((it: any, idx: number) => {
+          const nome = String(it.name || it.nome || `Item #${idx + 1}`).trim();
+          const quantidade = Number(it.quantity || it.qtd || 1);
+          itensNomes.push(`${quantidade > 1 ? `${quantidade}x ` : ""}${nome}`);
+          itensDetalhes.push({ id: String(it.id || `item_${idx}`), nome, quantidade, precoUnitario: Number(it.unitPrice || it.price || 0) });
+        });
+
+        // 3. Evita duplicata
         try {
           const resDup = await fetch(
-            `${supabaseUrl}/rest/v1/encomendas?codigo_pedido_ifood=eq.${encodeURIComponent(orderId)}&select=id`,
+            `${supabaseUrl}/rest/v1/encomendas?codigo_pedido_ifood=eq.${encodeURIComponent(orderId)}&select=id,estabelecimento_codigo`,
             { headers }
           );
           if (resDup.ok) {
             const listDup = await resDup.json();
             if (Array.isArray(listDup) && listDup.length > 0) {
-              console.log(`[Server iFood PLC] Pedido ${orderId} já existe na tabela encomendas. Ignorando.`);
+              const existing = listDup[0];
+              if (existing.estabelecimento_codigo !== estCodigo) {
+                await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${existing.id}`, {
+                  method: "PATCH",
+                  headers,
+                  body: JSON.stringify({
+                    estabelecimento_codigo: estCodigo,
+                    codigo: estCodigo,
+                    store_id: estCodigo,
+                    ...(estId ? { estabelecimento_id: estId } : {}),
+                    ...(estUserId ? { user_id: estUserId } : {}),
+                    updated_at: new Date().toISOString(),
+                  }),
+                }).catch(() => {});
+              }
               continue;
             }
           }
         } catch {}
 
-        const targetCode = estCode || "CD-1001";
-
-        const payloadEncomenda = {
+        const payloadEncomenda: any = {
           origem: "iFood",
           codigo_pedido_ifood: orderId,
           dados_brutos: event,
           status: "pendente",
-          client_name: "Cliente iFood",
-          estabelecimento_codigo: targetCode,
+          estabelecimento_codigo: estCodigo,
+          codigo: estCodigo,
+          store_id: estCodigo,
+          client_name: clienteNome,
+          cliente_nome: clienteNome,
+          customer_name: clienteNome,
+          itens: itensNomes.join(", ") || `Pedido iFood #${orderId}`,
+          itens_detalhes: itensDetalhes,
+          valor_total: valorTotal,
+          total_price: valorTotal,
+          total_amount: valorTotal,
+          status_pagamento: "pendente",
+          data_entrega: new Date().toISOString().split("T")[0],
+          horario_entrega: "14:00",
         };
+
+        if (clienteWhatsapp) {
+          payloadEncomenda.cliente_whatsapp = clienteWhatsapp;
+        }
+        if (estId) {
+          payloadEncomenda.estabelecimento_id = estId;
+        }
+        if (estUserId) {
+          payloadEncomenda.user_id = estUserId;
+        }
 
         const insertRes = await fetch(`${supabaseUrl}/rest/v1/encomendas`, {
           method: "POST",
@@ -1077,7 +1159,7 @@ async function processIFoodEventsInServer(body: any, env?: any) {
         });
 
         if (insertRes.ok) {
-          console.log(`[Server iFood PLC Success] Pedido ${orderId} inserido com sucesso para ${targetCode}`);
+          console.log(`[Server iFood PLC Success] Pedido ${orderId} inserido com sucesso para ${estCodigo} (UUID: ${estId})`);
         } else {
           const errTxt = await insertRes.text();
           console.error(`[Server iFood PLC Error] Falha ao inserir pedido: ${errTxt}`);
