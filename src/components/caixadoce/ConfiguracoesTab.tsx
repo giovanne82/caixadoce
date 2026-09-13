@@ -2259,6 +2259,37 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           {/* SEÇÃO: HORÁRIO DE FUNCIONAMENTO & CONTROLE DE EXPEDIENTE */}
           {activeSection === "horarios" && (
             <div className="space-y-6">
+              {/* BANNER EDUCATIVO / STATUS DINÂMICO DE CONTROLE MANUAL */}
+              {horariosConfig.loja_pausada || (horariosConfig.modo_controle === "manual" && horariosConfig.status_manual === "fechada") ? (
+                <div className="p-4 rounded-2xl bg-amber-500/15 dark:bg-amber-950/40 border border-amber-500/40 flex items-start gap-3 text-amber-950 dark:text-amber-200 shadow-xs animate-in fade-in duration-200">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <p className="font-extrabold text-sm text-amber-900 dark:text-amber-100 flex items-center gap-1.5">
+                      <span>⚠️ Atenção: Sua loja está fechada manualmente no momento.</span>
+                    </p>
+                    <p className="leading-relaxed">
+                      O cardápio público está operando apenas em <strong>Modo Orçamento</strong>, ignorando a grade de horários configurada abaixo. Você pode reabrir a loja a qualquer instante usando a chave manual na aba <strong>Cardápio</strong> ou o botão de despausar abaixo.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-purple-500/10 dark:bg-purple-950/30 border border-purple-500/25 flex items-start gap-3 text-purple-950 dark:text-purple-200 shadow-xs">
+                  <div className="p-2 rounded-xl bg-purple-500/20 text-purple-700 dark:text-purple-300 shrink-0 mt-0.5">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <p className="font-extrabold text-sm text-purple-900 dark:text-purple-100 flex items-center gap-1.5">
+                      <span>💡 Dica: Controle Manual Rápido</span>
+                    </p>
+                    <p className="leading-relaxed">
+                      Você pode pausar ou abrir sua loja a qualquer momento usando a chave manual na aba <strong>Cardápio</strong>. O controle manual sempre terá prioridade sobre os horários automáticos configurados abaixo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* CARD 1: CABEÇALHO & STATUS EM TEMPO REAL */}
               <Card className="border-border shadow-sm">
                 <CardHeader>
