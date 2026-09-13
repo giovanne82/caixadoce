@@ -4555,14 +4555,14 @@ export function OrdersView({
 
       {/* MODAL DE DETALHES DA ENCOMENDA (SOMENTE LEITURA) */}
       <Dialog open={modalDetalhesOpen} onOpenChange={setModalDetalhesOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base font-extrabold flex items-center justify-between gap-2 pr-6">
-              <span className="flex items-center gap-2">
+        <DialogContent className="w-[95%] sm:max-w-2xl max-h-[85vh] p-4 sm:p-6 flex flex-col gap-0 rounded-2xl sm:rounded-3xl border border-border shadow-2xl bg-card overflow-hidden">
+          <DialogHeader className="shrink-0 pb-3 border-b border-border/60 text-left">
+            <DialogTitle className="text-base font-extrabold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-8">
+              <span className="flex items-center gap-2 text-foreground">
                 <Package className="w-5 h-5 text-primary" /> Detalhes do Pedido
               </span>
               {encomendaDetalhes && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {isPedidoIFood(encomendaDetalhes) ? (
                     renderBotoesAcaoIFood(encomendaDetalhes)
                   ) : encomendaDetalhes.status === "entregue" ? (
@@ -4622,13 +4622,13 @@ export function OrdersView({
                 </div>
               )}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
               Visualização completa de cliente, itens solicitados, notinhas/insumos vinculados e histórico de pagamentos.
             </DialogDescription>
           </DialogHeader>
 
           {encomendaDetalhes && (
-            <div className="space-y-4 py-2">
+            <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-1 sm:pr-2">
               {/* BLOCO 1: DADOS DO CLIENTE & DATA/ENTREGA */}
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -4895,9 +4895,15 @@ export function OrdersView({
             </div>
           )}
 
-          <DialogFooter className="pt-2 border-t flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button type="button" variant="outline" size="sm" onClick={() => setModalDetalhesOpen(false)} className="text-xs">
+          <DialogFooter className="pt-3 border-t border-border/60 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 w-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalDetalhesOpen(false)}
+                className="flex-1 sm:flex-initial text-xs h-8 px-3 rounded-xl border-border hover:bg-muted font-semibold"
+              >
                 Fechar
               </Button>
               {encomendaDetalhes && (
@@ -4912,12 +4918,15 @@ export function OrdersView({
                       handleAbrirEdicao(target);
                     }
                   }}
-                  className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/40"
+                  className="flex-1 sm:flex-initial text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/40 h-8 px-3 rounded-xl"
                 >
                   <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar Pedido
                 </Button>
               )}
-              {encomendaDetalhes && (
+            </div>
+
+            {encomendaDetalhes && (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -4925,29 +4934,16 @@ export function OrdersView({
                   onClick={() => {
                     try {
                       handleGerarPdfOrcamento(encomendaDetalhes);
-                      toast.success("PDF do orçamento gerado com sucesso!");
+                      toast.success("PDF gerado com sucesso!");
                     } catch (err) {
                       console.error("Erro ao gerar PDF:", err);
-                      toast.error("Erro ao gerar PDF do orçamento.");
+                      toast.error("Erro ao gerar PDF.");
                     }
                   }}
-                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 shadow-2xs"
+                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1"
                 >
-                  <FileText className="w-3.5 h-3.5 mr-1 text-amber-600" /> Gerar PDF do Orçamento
-                </Button>
-              )}
-            </div>
-
-            {encomendaDetalhes && (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleGerarPdfOrcamento(encomendaDetalhes)}
-                  className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800"
-                >
-                  <FileText className="w-3.5 h-3.5 mr-1" /> Imprimir Orçamento (PDF)
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Gerar PDF / Imprimir</span>
                 </Button>
                 <Button
                   type="button"
@@ -4956,9 +4952,10 @@ export function OrdersView({
                     setModalDetalhesOpen(false);
                     handleEnviarResumoWhatsApp(encomendaDetalhes);
                   }}
-                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-4 rounded-xl shadow-xs flex items-center justify-center gap-1.5"
                 >
-                  <Send className="w-3.5 h-3.5 mr-1" /> {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}</span>
                 </Button>
               </div>
             )}
