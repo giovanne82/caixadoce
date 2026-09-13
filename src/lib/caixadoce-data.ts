@@ -2085,15 +2085,28 @@ export async function enviarAcaoIFood(
   motivoCancelamento?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    const res = await fetch(`/api/ifood/orders/${encodeURIComponent(orderId)}/${acao}`, {
+    const payload = {
+      orderId,
+      id: orderId,
+      estabelecimento_codigo: estabelecimentoCodigo,
+      reason: motivoCancelamento || "Cancelado pelo estabelecimento",
+      cancellationCode: "501",
+    };
+
+    let res = await fetch(`/api/ifood/orders/${encodeURIComponent(orderId)}/${acao}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        estabelecimento_codigo: estabelecimentoCodigo,
-        reason: motivoCancelamento || "Cancelado pelo estabelecimento",
-        cancellationCode: "501",
-      }),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
     });
+
+    // Fallback de rota caso dynamic routing [orderId] retorne 404
+    if (res.status === 404) {
+      res = await fetch(`/api/ifood/orders/${acao}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
