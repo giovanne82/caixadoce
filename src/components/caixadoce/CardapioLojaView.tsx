@@ -4934,6 +4934,30 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             ))}
           </div>
 
+          {/* Próximos Feriados e Folgas Programadas */}
+          {statusHorario.datasExcecoes && statusHorario.datasExcecoes.length > 0 && (
+            <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+              <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                📅 Feriados &amp; Folgas Programadas
+              </span>
+              <div className="space-y-1">
+                {statusHorario.datasExcecoes.map((exc) => {
+                  const [ano, mes, dia] = exc.data.split("-");
+                  const dataFmt = ano && mes && dia ? `${dia}/${mes}/${ano}` : exc.data;
+                  const isHoje = exc.data === statusHorario.dataHojeStr;
+                  return (
+                    <div key={exc.data} className="flex items-center justify-between text-xs py-0.5">
+                      <span className="font-mono font-semibold text-foreground flex items-center gap-1.5">
+                        {dataFmt} {isHoje && <Badge className="bg-amber-600 text-white text-[9px] px-1 py-0">Hoje</Badge>}
+                      </span>
+                      <span className="text-muted-foreground text-[11px] truncate max-w-[200px]">{exc.motivo}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Nota Explicativa */}
           <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 text-[11px] text-muted-foreground leading-relaxed">
             💡 <strong>Dica:</strong> Mesmo fora do expediente, você pode montar sua lista e solicitar orçamentos normalmente. Nossa equipe responderá assim que abrirmos!

@@ -43,6 +43,7 @@ import {
   MapPin,
   Loader2,
   Calendar as CalendarIcon,
+  CalendarX,
   Clock,
   Crown,
   Plus,
@@ -69,6 +70,9 @@ import {
   ArrowLeft,
   ChevronRight,
   Zap,
+  AlertTriangle,
+  Pause,
+  Play,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import {
@@ -92,12 +96,15 @@ import {
 } from "@/lib/mercadopago-service";
 import {
   DIAS_SEMANA_ORDEM,
-  normalizarHorarios,
+  normalizarConfiguracaoCompleta,
   verificarStatusFuncionamento,
   salvarHorariosLocal,
   obterHorariosLocal,
+  type ConfiguracaoHorariosCompleta,
   type HorariosFuncionamento,
   type DiaSemana,
+  type ModoControleExpediente,
+  type DataExcecaoItem,
 } from "@/lib/horarios-service";
 
 interface ConfiguracoesTabProps {
@@ -355,17 +362,21 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
   const [salvandoPixPref, setSalvandoPixPref] = useState(false);
 
-  // Horários de Funcionamento da Loja
-  const [horariosConfig, setHorariosConfig] = useState<HorariosFuncionamento>(() =>
-    normalizarHorarios(profile?.horarios_funcionamento || profile?.horariosFuncionamento || obterHorariosLocal(activeCode))
+  // Horários de Funcionamento, Exceções & Controle Master da Loja
+  const [horariosConfig, setHorariosConfig] = useState<ConfiguracaoHorariosCompleta>(() =>
+    normalizarConfiguracaoCompleta(profile?.horarios_funcionamento || profile?.horariosFuncionamento || obterHorariosLocal(activeCode))
   );
   const [salvandoHorarios, setSalvandoHorarios] = useState(false);
+  const [novaExcecaoData, setNovaExcecaoData] = useState("");
+  const [novaExcecaoMotivo, setNovaExcecaoMotivo] = useState("");
 
   useEffect(() => {
     if (profile?.horarios_funcionamento || profile?.horariosFuncionamento) {
-      setHorariosConfig(normalizarHorarios(profile.horarios_funcionamento || profile.horariosFuncionamento));
+      setHorariosConfig(normalizarConfiguracaoCompleta(profile.horarios_funcionamento || profile.horariosFuncionamento));
     }
   }, [profile?.horarios_funcionamento, profile?.horariosFuncionamento]);
+
+  const statusFuncionamento = verificarStatusFuncionamento(horariosConfig);
 
   const handleAlterarHorarioDia = (
     dia: DiaSemana,
@@ -374,36 +385,113 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   ) => {
     setHorariosConfig((prev) => ({
       ...prev,
-      [dia]: {
-        ...prev[dia],
-        [field]: value,
+      dias: {
+        ...prev.dias,
+        [dia]: {
+          ...prev.dias[dia],
+          [field]: value,
+        },
       },
     }));
   };
 
   const handleCopiarSegundaParaUteis = () => {
-    const seg = horariosConfig.segunda;
+    const seg = horariosConfig.dias.segunda;
     setHorariosConfig((prev) => ({
       ...prev,
-      terca: { ...seg },
-      quarta: { ...seg },
-      quinta: { ...seg },
-      sexta: { ...seg },
+      dias: {
+        ...prev.dias,
+        terca: { ...seg },
+        quarta: { ...seg },
+        quinta: { ...seg },
+        sexta: { ...seg },
+      },
     }));
     toast.success("Horário de Segunda copiado para Terça a Sexta!");
   };
 
   const handleDefinirPadraoComercial = () => {
-    setHorariosConfig({
-      segunda: { aberto: true, inicio: "08:00", fim: "18:00" },
-      terca: { aberto: true, inicio: "08:00", fim: "18:00" },
-      quarta: { aberto: true, inicio: "08:00", fim: "18:00" },
-      quinta: { aberto: true, inicio: "08:00", fim: "18:00" },
-      sexta: { aberto: true, inicio: "08:00", fim: "18:00" },
-      sabado: { aberto: true, inicio: "08:00", fim: "18:00" },
-      domingo: { aberto: false, inicio: "08:00", fim: "14:00" },
-    });
+    setHorariosConfig((prev) => ({
+      ...prev,
+      dias: {
+        segunda: { aberto: true, inicio: "08:00", fim: "18:00" },
+        terca: { aberto: true, inicio: "08:00", fim: "18:00" },
+        quarta: { aberto: true, inicio: "08:00", fim: "18:00" },
+        quinta: { aberto: true, inicio: "08:00", fim: "18:00" },
+        sexta: { aberto: true, inicio: "08:00", fim: "18:00" },
+        sabado: { aberto: true, inicio: "08:00", fim: "18:00" },
+        domingo: { aberto: false, inicio: "08:00", fim: "14:00" },
+      },
+    }));
     toast.info("Horários padrão definidos (08:00 às 18:00, Domingo fechado).");
+  };
+
+  const handleTogglePausaMaster = async (pausar: boolean) => {
+    const novaConfig: ConfiguracaoHorariosCompleta = {
+      ...horariosConfig,
+      loja_pausada: pausar,
+    };
+    setHorariosConfig(novaConfig);
+    if (activeCode) {
+      salvarHorariosLocal(activeCode, novaConfig);
+    }
+    try {
+      await updateUserProfile({
+        horarios_funcionamento: novaConfig,
+      });
+      if (activeCode) {
+        await supabase
+          .from("estabelecimentos")
+          .update({
+            horarios_funcionamento: novaConfig,
+            updated_at: new Date().toISOString(),
+          })
+          .ilike("codigo", activeCode.toUpperCase().trim());
+      }
+      if (pausar) {
+        toast.error("🛑 Vendas Imediatas PAUSADAS! O cardápio público está aceitando apenas orçamentos.");
+      } else {
+        toast.success("✅ Loja despausada! O cardápio voltou a operar normalmente conforme o horário.");
+      }
+    } catch (err: any) {
+      console.error("[ConfiguracoesTab] Erro ao alterar pausa master:", err);
+      toast.error("Erro ao sincronizar pausa com o servidor.");
+    }
+  };
+
+  const handleAdicionarExcecao = () => {
+    if (!novaExcecaoData) {
+      toast.error("Selecione a data da folga ou feriado.");
+      return;
+    }
+    if (horariosConfig.datas_excecoes.some((e) => e.data === novaExcecaoData)) {
+      toast.warning("Esta data já está na lista de exceções.");
+      return;
+    }
+    const novaLista: DataExcecaoItem[] = [
+      ...horariosConfig.datas_excecoes,
+      {
+        data: novaExcecaoData,
+        motivo: novaExcecaoMotivo.trim() || "Feriado / Folga programada",
+      },
+    ].sort((a, b) => a.data.localeCompare(b.data));
+
+    setHorariosConfig((prev) => ({
+      ...prev,
+      datas_excecoes: novaLista,
+    }));
+    setNovaExcecaoData("");
+    setNovaExcecaoMotivo("");
+    toast.success("Data de exceção adicionada!");
+  };
+
+  const handleRemoverExcecao = (dataStr: string) => {
+    const filtrado = horariosConfig.datas_excecoes.filter((e) => e.data !== dataStr);
+    setHorariosConfig((prev) => ({
+      ...prev,
+      datas_excecoes: filtrado,
+    }));
+    toast.info("Data removida das exceções.");
   };
 
   const handleSalvarHorarios = async () => {
@@ -424,7 +512,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           })
           .ilike("codigo", activeCode.toUpperCase().trim());
       }
-      toast.success("Horários de funcionamento salvos com sucesso!");
+      toast.success("Horários, exceções e modo de controle salvos com sucesso!");
     } catch (err: any) {
       console.error("[ConfiguracoesTab] Erro ao salvar horários:", err);
       toast.error(`Erro ao salvar horários: ${err?.message || "Falha no servidor"}`);
@@ -1587,8 +1675,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     contato: "Fale Conosco",
   };
 
-  const statusFuncionamento = verificarStatusFuncionamento(horariosConfig);
-
   const MENU_ITEMS = [
     {
       id: "perfil",
@@ -2147,156 +2233,463 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </Card>
           )}
 
-          {/* SEÇÃO: HORÁRIO DE FUNCIONAMENTO */}
+          {/* SEÇÃO: HORÁRIO DE FUNCIONAMENTO & CONTROLE DE EXPEDIENTE */}
           {activeSection === "horarios" && (
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-indigo-600" />
-                      <span>Horário de Funcionamento da Loja</span>
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-1">
-                      Defina o expediente da confeitaria para cada dia da semana. Fora do horário configurado, o cardápio público recua automaticamente para aceitar apenas solicitações de orçamento.
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    className={`text-xs font-bold py-1 px-3 self-start sm:self-auto ${
-                      statusFuncionamento.aberta
-                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30"
-                    }`}
-                    variant="outline"
-                  >
-                    {statusFuncionamento.aberta
-                      ? `🟢 Aberto agora (${statusFuncionamento.horarioHojeFormatado})`
-                      : `🟠 Fechado agora (${statusFuncionamento.motivo})`}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Banner de Ações Rápidas */}
-                <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/40 rounded-xl border border-border">
-                  <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Ações Rápidas:
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopiarSegundaParaUteis}
-                    className="text-xs h-7 px-2.5 rounded-lg border-border hover:bg-background"
-                  >
-                    Copiar Seg para Seg-Sex
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDefinirPadraoComercial}
-                    className="text-xs h-7 px-2.5 rounded-lg border-border hover:bg-background"
-                  >
-                    Padrão Comercial (08h às 18h)
-                  </Button>
-                </div>
-
-                {/* Grade dos 7 Dias da Semana */}
-                <div className="space-y-3">
-                  {DIAS_SEMANA_ORDEM.map((diaItem) => {
-                    const cfg = horariosConfig[diaItem.key] || { aberto: true, inicio: "08:00", fim: "18:00" };
-                    const isHoje = statusFuncionamento.diaAtualKey === diaItem.key;
-
-                    return (
-                      <div
-                        key={diaItem.key}
-                        className={`p-3.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isHoje
-                            ? "border-indigo-500/40 bg-indigo-500/5 shadow-xs"
-                            : "border-border bg-card hover:border-border/80"
+            <div className="space-y-6">
+              {/* CARD 1: CABEÇALHO & STATUS EM TEMPO REAL */}
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-indigo-600" />
+                        <span>Horários de Funcionamento &amp; Atendimento</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Gerencie o expediente da confeitaria, pausas emergenciais e folgas programadas. Fora do expediente, o cardápio público opera exclusivamente no modo <strong>Solicitação de Orçamento</strong>.
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge
+                        className={`text-xs font-bold py-1.5 px-3 self-start sm:self-auto flex items-center gap-1.5 shadow-2xs ${
+                          statusFuncionamento.aberta
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30"
                         }`}
+                        variant="outline"
                       >
-                        <div className="flex items-center gap-3 min-w-[180px]">
-                          <Switch
-                            checked={cfg.aberto}
-                            onCheckedChange={(val) => handleAlterarHorarioDia(diaItem.key, "aberto", val)}
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-foreground">{diaItem.label}</span>
-                              {isHoje && (
-                                <Badge className="bg-indigo-600 text-white text-[9px] font-black uppercase px-1.5 py-0">
-                                  Hoje
-                                </Badge>
-                              )}
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {cfg.aberto ? "Loja Aberta" : "Fechado"}
-                            </span>
-                          </div>
-                        </div>
+                        <span className={`w-2 h-2 rounded-full ${statusFuncionamento.aberta ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
+                        <span>
+                          {statusFuncionamento.aberta
+                            ? `Aberto agora (${statusFuncionamento.horarioHojeFormatado})`
+                            : `Fechado agora (${statusFuncionamento.motivo})`}
+                        </span>
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
 
-                        {cfg.aberto ? (
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-muted-foreground font-medium">De:</span>
-                              <Input
-                                type="time"
-                                value={cfg.inicio || "08:00"}
-                                onChange={(e) => handleAlterarHorarioDia(diaItem.key, "inicio", e.target.value)}
-                                className="h-8 w-28 text-xs font-mono"
-                              />
-                            </div>
-                            <span className="text-xs text-muted-foreground font-medium">até</span>
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                type="time"
-                                value={cfg.fim || "18:00"}
-                                onChange={(e) => handleAlterarHorarioDia(diaItem.key, "fim", e.target.value)}
-                                className="h-8 w-28 text-xs font-mono"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground italic self-end sm:self-auto py-1.5 px-3 bg-muted/60 rounded-lg border border-border/50">
-                            Loja fechada o dia todo (Apenas Orçamentos)
-                          </div>
+              {/* CARD 2: MASTER SWITCH / BOTÃO DE PÂNICO (PRIORIDADE MÁXIMA) */}
+              <Card className={`border shadow-sm transition-all ${
+                horariosConfig.loja_pausada
+                  ? "bg-rose-500/10 border-rose-500/40 dark:bg-rose-950/20"
+                  : "bg-card border-border"
+              }`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className={`w-5 h-5 ${horariosConfig.loja_pausada ? "text-rose-600 animate-bounce" : "text-amber-500"}`} />
+                        <CardTitle className="text-base font-bold text-foreground">
+                          {horariosConfig.loja_pausada ? "Pausa Emergencial Ativada" : "Botão de Pânico / Pausa Imediata"}
+                        </CardTitle>
+                        <Badge className={`text-[10px] font-black uppercase tracking-wider ${
+                          horariosConfig.loja_pausada ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground"
+                        }`}>
+                          Prioridade 1 (Máxima)
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-xs">
+                        {horariosConfig.loja_pausada
+                          ? "A loja está com as vendas imediatas pausadas. O cardápio público está operando exclusivamente no modo de Orçamento, ignorando horários e regras automáticas."
+                          : "Atingiu o limite de pedidos na cozinha ou teve um imprevisto? Acione a pausa para fechar a loja imediatamente e impedir novas vendas diretas no cardápio."}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {horariosConfig.loja_pausada ? (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-rose-500/15 rounded-2xl border border-rose-500/30">
+                      <div className="text-xs font-semibold text-rose-950 dark:text-rose-200 flex items-center gap-2">
+                        <span>🛑 Vendas Imediatas Bloqueadas no Cardápio Público</span>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => handleTogglePausaMaster(false)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md rounded-xl px-4 py-2 shrink-0 flex items-center gap-1.5"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        Despausar e Retomar Vendas
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-muted/40 rounded-2xl border border-border">
+                      <div className="text-xs text-muted-foreground">
+                        Status atual: <span className="font-bold text-emerald-600 dark:text-emerald-400">Operação Normal</span> (respeitando modo e horários)
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => handleTogglePausaMaster(true)}
+                        className="font-extrabold text-xs shadow-xs rounded-xl px-4 py-2 shrink-0 flex items-center gap-1.5"
+                      >
+                        <Pause className="w-4 h-4 fill-white" />
+                        Pausar Vendas / Fechar Loja Agora
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* CARD 3: MODO DE CONTROLE DE OPERAÇÃO */}
+              <Card className="border-border shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <CardTitle className="text-base font-bold text-foreground">Modo de Operação do Expediente</CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        Escolha se a loja deve abrir e fechar automaticamente pelo relógio ou manualmente por você.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Opção Automático */}
+                    <button
+                      type="button"
+                      onClick={() => setHorariosConfig((prev) => ({ ...prev, modo_controle: "automatico" }))}
+                      className={`p-4 rounded-2xl border text-left space-y-2 transition-all cursor-pointer ${
+                        horariosConfig.modo_controle === "automatico"
+                          ? "border-purple-600 bg-purple-500/10 ring-2 ring-purple-600/20 shadow-xs"
+                          : "border-border bg-card hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-foreground flex items-center gap-1.5">
+                          ⏰ Automático (Por Horário)
+                        </span>
+                        {horariosConfig.modo_controle === "automatico" && (
+                          <Badge className="bg-purple-600 text-white text-[10px] font-bold">Ativo</Badge>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Abre e fecha de acordo com a grade semanal e o calendário de feriados e folgas configurados abaixo.
+                      </p>
+                    </button>
 
-                {/* Nota de Regra de Negócio */}
-                <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs text-muted-foreground space-y-1">
-                  <p className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Regra Automática de Vendas Diretas &amp; Orçamentos
-                  </p>
-                  <p>
-                    Quando sua loja estiver fora do horário de atendimento ou marcada como Fechada, o cliente que acessar seu cardápio público não poderá finalizar compras para entrega imediata no carrinho — o sistema o direcionará para o modo <strong>Solicitação de Orçamento</strong>.
-                  </p>
-                </div>
+                    {/* Opção Manual */}
+                    <button
+                      type="button"
+                      onClick={() => setHorariosConfig((prev) => ({ ...prev, modo_controle: "manual" }))}
+                      className={`p-4 rounded-2xl border text-left space-y-2 transition-all cursor-pointer ${
+                        horariosConfig.modo_controle === "manual"
+                          ? "border-purple-600 bg-purple-500/10 ring-2 ring-purple-600/20 shadow-xs"
+                          : "border-border bg-card hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-foreground flex items-center gap-1.5">
+                          ✋ Apenas Manual
+                        </span>
+                        {horariosConfig.modo_controle === "manual" && (
+                          <Badge className="bg-purple-600 text-white text-[10px] font-bold">Ativo</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Você decide quando a loja está aberta ou fechada através de um botão no painel, sem horários fixos.
+                      </p>
+                    </button>
+                  </div>
 
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    onClick={handleSalvarHorarios}
-                    disabled={salvandoHorarios}
-                    className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
-                  >
-                    {salvandoHorarios ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Salvando Horários...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" /> Salvar Horários de Funcionamento
-                      </>
+                  {/* Toggle Exclusivo para Modo Manual */}
+                  {horariosConfig.modo_controle === "manual" && (
+                    <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                      <div>
+                        <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                          <span>Status da Loja no Modo Manual</span>
+                          <Badge className={horariosConfig.status_manual === "aberta" ? "bg-emerald-600 text-white text-[10px]" : "bg-zinc-600 text-white text-[10px]"}>
+                            {horariosConfig.status_manual === "aberta" ? "Loja Aberta" : "Loja Fechada"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Alterne o status para abrir ou fechar o cardápio público imediatamente.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {horariosConfig.status_manual === "aberta" ? "Aberto para Vendas" : "Apenas Orçamentos"}
+                        </span>
+                        <Switch
+                          checked={horariosConfig.status_manual === "aberta"}
+                          onCheckedChange={(aberta) =>
+                            setHorariosConfig((prev) => ({
+                              ...prev,
+                              status_manual: aberta ? "aberta" : "fechada",
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* CARD 4: CALENDÁRIO DE EXCEÇÕES (FERIADOS E FOLGAS PROGRAMADAS) */}
+              <Card className="border-border shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-5 h-5 text-indigo-600" />
+                      <div>
+                        <CardTitle className="text-base font-bold text-foreground">
+                          Calendário de Exceções &amp; Feriados
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-0.5">
+                          Cadastre datas específicas em que a confeitaria estará fechada (feriados, recessos ou folgas da equipe).
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {horariosConfig.datas_excecoes.length > 0 && (
+                      <Badge variant="outline" className="text-xs font-bold self-start sm:self-auto">
+                        {horariosConfig.datas_excecoes.length} {horariosConfig.datas_excecoes.length === 1 ? "data cadastrada" : "datas cadastradas"}
+                      </Badge>
                     )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Formulário para Adicionar Data de Exceção */}
+                  <div className="p-3.5 bg-muted/40 rounded-2xl border border-border space-y-3">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-purple-600" /> Adicionar Folga ou Feriado Programado:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                      <div className="sm:col-span-4">
+                        <Label htmlFor="exc-data" className="text-[11px] text-muted-foreground mb-1 block">
+                          Data da Folga / Feriado
+                        </Label>
+                        <Input
+                          id="exc-data"
+                          type="date"
+                          value={novaExcecaoData}
+                          onChange={(e) => setNovaExcecaoData(e.target.value)}
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="sm:col-span-5">
+                        <Label htmlFor="exc-motivo" className="text-[11px] text-muted-foreground mb-1 block">
+                          Motivo / Descrição
+                        </Label>
+                        <Input
+                          id="exc-motivo"
+                          type="text"
+                          placeholder="Ex: Feriado de Páscoa, Folga da Confeiteira"
+                          value={novaExcecaoMotivo}
+                          onChange={(e) => setNovaExcecaoMotivo(e.target.value)}
+                          className="h-9 text-xs"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAdicionarExcecao();
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="sm:col-span-3 flex items-end">
+                        <Button
+                          type="button"
+                          onClick={handleAdicionarExcecao}
+                          className="w-full h-9 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" /> Adicionar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Datas Cadastradas */}
+                  {horariosConfig.datas_excecoes.length === 0 ? (
+                    <div className="p-4 rounded-2xl border border-dashed border-border text-center text-xs text-muted-foreground">
+                      Nenhuma folga ou feriado programado cadastrado no momento.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {horariosConfig.datas_excecoes.map((excecao) => {
+                        const [ano, mes, dia] = excecao.data.split("-");
+                        const dataFormatada = ano && mes && dia ? `${dia}/${mes}/${ano}` : excecao.data;
+                        const isHoje = excecao.data === statusFuncionamento.dataHojeStr;
+
+                        return (
+                          <div
+                            key={excecao.data}
+                            className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                              isHoje
+                                ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200"
+                                : "bg-card border-border hover:border-border/80"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`p-2 rounded-lg shrink-0 ${isHoje ? "bg-amber-500/20 text-amber-700" : "bg-muted text-muted-foreground"}`}>
+                                <CalendarX className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-extrabold text-xs text-foreground font-mono">{dataFormatada}</span>
+                                  {isHoje && (
+                                    <Badge className="bg-amber-600 text-white text-[9px] font-black uppercase px-1.5 py-0">
+                                      Hoje
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-muted-foreground truncate block">
+                                  {excecao.motivo}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoverExcecao(excecao.data)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
+                              title="Remover data de exceção"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* CARD 5: GRADE SEMANAL DE HORÁRIOS (SEGUNDA A DOMINGO) */}
+              <Card className="border-border shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-indigo-600" />
+                      <div>
+                        <CardTitle className="text-base font-bold text-foreground">Grade Semanal de Expediente</CardTitle>
+                        <CardDescription className="text-xs mt-0.5">
+                          Defina o horário de abertura e fechamento para cada dia da semana.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {/* Banner de Ações Rápidas */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopiarSegundaParaUteis}
+                        className="text-[11px] h-7 px-2.5 rounded-lg border-border hover:bg-background"
+                      >
+                        Copiar Seg para Seg-Sex
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDefinirPadraoComercial}
+                        className="text-[11px] h-7 px-2.5 rounded-lg border-border hover:bg-background"
+                      >
+                        Padrão Comercial (08h às 18h)
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Grade dos 7 Dias da Semana */}
+                  <div className="space-y-2.5">
+                    {DIAS_SEMANA_ORDEM.map((diaItem) => {
+                      const cfg = horariosConfig.dias?.[diaItem.key] || { aberto: true, inicio: "08:00", fim: "18:00" };
+                      const isHoje = statusFuncionamento.diaAtualKey === diaItem.key;
+
+                      return (
+                        <div
+                          key={diaItem.key}
+                          className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isHoje
+                              ? "border-indigo-500/40 bg-indigo-500/5 shadow-xs"
+                              : "border-border bg-card hover:border-border/80"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-[180px]">
+                            <Switch
+                              checked={cfg.aberto}
+                              onCheckedChange={(val) => handleAlterarHorarioDia(diaItem.key, "aberto", val)}
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-foreground">{diaItem.label}</span>
+                                {isHoje && (
+                                  <Badge className="bg-indigo-600 text-white text-[9px] font-black uppercase px-1.5 py-0">
+                                    Hoje
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {cfg.aberto ? "Loja Aberta" : "Fechado o dia todo"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {cfg.aberto ? (
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground font-medium">De:</span>
+                                <Input
+                                  type="time"
+                                  value={cfg.inicio || "08:00"}
+                                  onChange={(e) => handleAlterarHorarioDia(diaItem.key, "inicio", e.target.value)}
+                                  className="h-8 w-28 text-xs font-mono"
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground font-medium">até</span>
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  type="time"
+                                  value={cfg.fim || "18:00"}
+                                  onChange={(e) => handleAlterarHorarioDia(diaItem.key, "fim", e.target.value)}
+                                  className="h-8 w-28 text-xs font-mono"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground italic self-end sm:self-auto py-1 px-3 bg-muted/60 rounded-lg border border-border/50">
+                              Apenas Solicitação de Orçamentos
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Nota de Regra de Negócio */}
+                  <div className="p-3.5 rounded-2xl bg-purple-500/5 border border-purple-500/20 text-xs text-muted-foreground space-y-1">
+                    <p className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Hierarquia de Liberação das Vendas Diretas
+                    </p>
+                    <p>
+                      <strong>1. Botão de Pânico (Pausa)</strong> &gt; <strong>2. Modo Apenas Manual</strong> &gt; <strong>3. Calendário de Feriados/Folgas</strong> &gt; <strong>4. Grade Semanal Automática</strong>. Se qualquer camada indicar que a loja está fechada, o cardápio público continuará navegável, mas direcionará o cliente para o modo <strong>Solicitação de Orçamento</strong>.
+                    </p>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      onClick={handleSalvarHorarios}
+                      disabled={salvandoHorarios}
+                      className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
+                    >
+                      {salvandoHorarios ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Salvando Configurações...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" /> Salvar Horários &amp; Regras de Atendimento
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* 3. SEÇÃO: APARÊNCIA DO CARDÁPIO */}
