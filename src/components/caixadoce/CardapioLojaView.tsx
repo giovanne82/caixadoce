@@ -2954,11 +2954,11 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 <h1 className="text-base sm:text-xl font-black tracking-tight text-foreground truncate max-w-[180px] sm:max-w-sm md:max-w-md">
                   {lojaInfo?.nome || "Confeitaria Artesanal"}
                 </h1>
-                {/* Status de Horário no Top Header */}
+                {/* Status de Horário Integrado no Header */}
                 <button
                   type="button"
                   onClick={() => setModalHorariosOpen(true)}
-                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border transition-colors shadow-2xs ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] sm:text-xs font-bold border transition-colors shadow-2xs cursor-pointer ${
                     statusHorario.aberta
                       ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
                       : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
@@ -2967,7 +2967,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusHorario.aberta ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
                   <span>{statusHorario.aberta ? "🟢 Aberto agora" : "🟠 Fechado"}</span>
-                  <span className="underline opacity-80 font-normal hidden sm:inline">Ver horários</span>
+                  <span className="underline opacity-80 font-normal hidden sm:inline ml-0.5">Ver horários</span>
                 </button>
               </div>
 
@@ -3055,9 +3055,30 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
         </div>
       </header>
 
+      {/* Tarja Informativa de Modo Orçamento / Fora de Expediente */}
+      {(purchaseIntent === "orcamento" || !statusHorario.aberta) && (
+        <div className="bg-amber-500 text-amber-950 dark:bg-amber-600 dark:text-white border-b border-amber-600/30 shadow-xs">
+          <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm shrink-0">📝</span>
+              <span className="truncate">
+                <strong>MODO ORÇAMENTO ATIVO:</strong> {!statusHorario.aberta ? `Loja fora do horário de atendimento imediato (${statusHorario.motivo}). Aceitando apenas orçamentos.` : "Monte sua lista e receba uma cotação personalizada sem compromisso."}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalHorariosOpen(true)}
+              className="underline text-[11px] font-semibold text-amber-900 dark:text-amber-100 hover:opacity-80 shrink-0 whitespace-nowrap cursor-pointer"
+            >
+              Ver horários
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* HERO BANNER DE CAPA (Caso Cadastrado pelo Lojista) */}
       {bannerUrlCapa ? (
-        <div className="relative w-full h-44 sm:h-64 md:h-72 overflow-hidden bg-stone-900 shadow-md">
+        <div className="relative w-full h-48 sm:h-64 md:h-72 overflow-hidden bg-stone-900 shadow-md">
           <img
             src={bannerUrlCapa}
             alt="Capa do Cardápio"
@@ -3079,21 +3100,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       ? "🎂 Apenas Sob Encomenda"
                       : "✨ Pronta-Entrega & Encomendas"}
                   </Badge>
-
-                  {/* Status do Horário no Banner */}
-                  <button
-                    type="button"
-                    onClick={() => setModalHorariosOpen(true)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border backdrop-blur-md shadow-xs transition-colors ${
-                      statusHorario.aberta
-                        ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30"
-                        : "bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30"
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${statusHorario.aberta ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
-                    <span>{statusHorario.aberta ? "🟢 Aberto agora" : "🟠 Fechado (Aceitando apenas orçamentos)"}</span>
-                    <span className="underline opacity-90 text-[10px] ml-0.5">Ver horários</span>
-                  </button>
                 </div>
                 <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight drop-shadow-md">
                   {lojaInfo?.titulo_cardapio || lojaInfo?.menu_title || "Cardápio de Bolos & Doces Especiais"}
@@ -3135,21 +3141,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 ? "🎂 Vitrine de Doces Sob Encomenda"
                 : "✨ Pronta-Entrega & Encomendas Especiais"}
             </div>
-
-            {/* Status do Horário no Banner Padrão */}
-            <button
-              type="button"
-              onClick={() => setModalHorariosOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-colors shadow-2xs ${
-                statusHorario.aberta
-                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
-                  : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full shrink-0 ${statusHorario.aberta ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
-              <span>{statusHorario.aberta ? "🟢 Aberto agora" : "🟠 Fechado (Aceitando apenas orçamentos)"}</span>
-              <span className="underline opacity-80 text-[10.5px] ml-0.5">Ver horários</span>
-            </button>
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-foreground">
@@ -3169,36 +3160,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             telefone={lojaInfo?.telefone}
             variant="banner"
           />
-        </div>
-      )}
-
-      {/* AVISO EM DESTAQUE SE A LOJA ESTIVER FECHADA */}
-      {!statusHorario.aberta && (
-        <div className="max-w-5xl mx-auto px-4 pt-3 pb-0">
-          <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200 shadow-xs backdrop-blur-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
-                <Clock className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-extrabold text-xs block">
-                  Loja fora do horário de atendimento imediato ({statusHorario.motivo})
-                </span>
-                <span className="text-[11px] text-muted-foreground block mt-0.5">
-                  Compras de entrega imediata estão suspensas no momento. Monte sua lista e envie sua <strong>Solicitação de Orçamento</strong> para agendamento!
-                </span>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setModalHorariosOpen(true)}
-              className="self-start sm:self-auto h-7 px-3 text-xs font-bold border-amber-400 text-amber-900 dark:text-amber-200 hover:bg-amber-500/15 shrink-0 rounded-xl"
-            >
-              Ver Tabela de Horários
-            </Button>
-          </div>
         </div>
       )}
 
