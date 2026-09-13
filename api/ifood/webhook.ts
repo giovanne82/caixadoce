@@ -5,6 +5,8 @@ const DEFAULT_SUPABASE_URL = "https://camuhitzmsfmxvsowzlf.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
+let cachedAppToken: { token: string; expiresAt: number } | null = null;
+
 function getSupabaseConfig() {
   const supabaseUrl =
     process.env.SUPABASE_URL ||
@@ -32,6 +34,137 @@ function getSupabaseBackendClient() {
       detectSessionInUrl: false,
     },
   });
+}
+
+/**
+ * Obtém o access_token oficial da Aplicação (CaixaDoce) via client_credentials
+ * para responder a eventos e realizar Acknowledgment na esteira do iFood.
+ */
+async function obterTokenAppIFood(): Promise<string> {
+  const now = Date.now();
+  if (cachedAppToken && cachedAppToken.expiresAt > now + 60000 && cachedAppToken.token) {
+    return cachedAppToken.token;
+  }
+
+  const ifoodClientId =
+    (typeof process !== "undefined" && (process.env?.IFOOD_CLIENT_ID || process.env?.VITE_IFOOD_CLIENT_ID)) || "";
+  const ifoodClientSecret =
+    (typeof process !== "undefined" && (process.env?.IFOOD_CLIENT_SECRET || process.env?.VITE_IFOOD_CLIENT_SECRET)) || "";
+
+  if (ifoodClientId && ifoodClientSecret) {
+    try {
+      console.log(`[iFood Webhook App Token] Solicitando token de autenticação da aplicação CaixaDoce (${ifoodClientId.slice(0, 8)}...)...`);
+      const bodyParams = new URLSearchParams();
+      bodyParams.append("grantType", "client_credentials");
+      bodyParams.append("clientId", ifoodClientId.trim());
+      bodyParams.append("clientSecret", ifoodClientSecret.trim());
+
+      const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: bodyParams.toString(),
+      });
+
+      if (res.ok) {
+        const data: any = await res.json();
+        const token = data.accessToken || data.access_token;
+        const expiresIn = Number(data.expiresIn || data.expires_in || 21599);
+        if (token) {
+          cachedAppToken = {
+            token,
+            expiresAt: now + expiresIn * 1000,
+          };
+          console.log("[iFood Webhook App Token Success] Token de aplicação CaixaDoce gerado e cacheado com sucesso!");
+
+          // Sincroniza o token no banco para a loja CD-5411 para garantir que outras rotas também usem o token atualizado da aplicação
+          try {
+            const supabase = getSupabaseBackendClient();
+            await supabase
+              .from("estabelecimentos")
+              .update({
+                ifood_access_token: token,
+                ifood_status: "conectado",
+                updated_at: new Date().toISOString(),
+              })
+              .ilike("codigo", "CD-5411");
+          } catch (e) {
+            console.warn("[iFood Webhook Token Sync Warn]", e);
+          }
+
+          return token;
+        }
+      } else {
+        const errTxt = await res.text();
+        console.error(`[iFood Webhook App Token Error] HTTP ${res.status}: ${errTxt}`);
+      }
+    } catch (err) {
+      console.error("[iFood Webhook App Token Exception]", err);
+    }
+  }
+
+  // Fallback: Busca token no Supabase (loja CD-5411)
+  try {
+    const supabase = getSupabaseBackendClient();
+    const { data: est } = await supabase
+      .from("estabelecimentos")
+      .select("ifood_access_token")
+      .ilike("codigo", "CD-5411")
+      .maybeSingle();
+
+    if (est?.ifood_access_token) {
+      return est.ifood_access_token;
+    }
+  } catch (dbErr) {
+    console.warn("[iFood Webhook DB Token Fallback Error]", dbErr);
+  }
+
+  return "";
+}
+
+/**
+ * Envia o Acknowledgment (confirmação de recebimento) dos eventos para a API do iFood
+ * utilizando estritamente o token de autenticação da Aplicação CaixaDoce.
+ */
+async function acknowledgeIFoodEvents(eventIds: string[], appToken: string) {
+  if (!eventIds || eventIds.length === 0 || !appToken) return false;
+
+  const payload = JSON.stringify(eventIds.map((id) => ({ id })));
+  console.log(`[iFood Webhook ACK] Confirmando ${eventIds.length} eventos no iFood com token do App CaixaDoce... Payload:`, payload);
+
+  const endpoints = [
+    "https://merchant-api.ifood.com.br/order/v1.0/events/acknowledgment",
+    "https://merchant-api.ifood.com.br/order/v1.0/events:acknowledgment",
+    "https://merchant-api.ifood.com.br/events/v1.0/events/acknowledgment",
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${appToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: payload,
+      });
+
+      if (res.ok || res.status === 200 || res.status === 202 || res.status === 204) {
+        console.log(`[iFood Webhook ACK Success] Eventos confirmados com sucesso no endpoint ${endpoint} (HTTP ${res.status})!`);
+        return true;
+      } else {
+        const errText = await res.text();
+        console.warn(`[iFood Webhook ACK Warn] Endpoint ${endpoint} retornou ${res.status}: ${errText}`);
+      }
+    } catch (err) {
+      console.warn(`[iFood Webhook ACK Error] Falha ao enviar acknowledgment para ${endpoint}:`, err);
+    }
+  }
+
+  return false;
 }
 
 // Helper para extrair dados consolidados do payload do iFood
@@ -261,7 +394,7 @@ async function buscarEstabelecimentoMapeado(supabase: any, merchantId: string) {
   return { codigo: "CD-5411" };
 }
 
-// Processamento dos eventos do iFood (com await explícito para execução completa na Vercel)
+// Processamento dos eventos do iFood (com await explícito e ACK via token de aplicação)
 async function processIFoodEvents(rawBody: any) {
   try {
     let body = rawBody;
@@ -276,6 +409,14 @@ async function processIFoodEvents(rawBody: any) {
     const events = Array.isArray(body) ? body : body ? [body] : [];
     if (events.length === 0) return;
 
+    // 1. Obter Token da Aplicação (CaixaDoce) e fazer Acknowledgment imediato
+    const eventIds = events.map((e: any) => e.id).filter(Boolean);
+    const appToken = await obterTokenAppIFood();
+
+    if (eventIds.length > 0 && appToken) {
+      await acknowledgeIFoodEvents(eventIds, appToken);
+    }
+
     const supabase = getSupabaseBackendClient();
     const { supabaseUrl, supabaseKey } = getSupabaseConfig();
 
@@ -283,12 +424,65 @@ async function processIFoodEvents(rawBody: any) {
       if (!event || typeof event !== "object") continue;
 
       const code = String(event.code || event.type || "").toUpperCase();
+      const orderId = String(event.correlationId || event.orderId || event.id || "").trim();
+      const merchantId = String(event.merchantId || event.merchant?.id || "").trim();
 
-      // Isole os eventos cujo campo code seja igual a 'PLC' (Placed - Novo Pedido Criado)
+      // Tratamento de eventos de Heartbeat / Conectividade / Status
+      if (
+        code === "HEARTBEAT" ||
+        code === "STATUS" ||
+        code === "TEST" ||
+        code === "KTM" ||
+        code === "KEEP_ALIVE" ||
+        code === "INFO"
+      ) {
+        console.log(`[iFood Webhook Heartbeat] Evento de teste de conectividade recebido: ID '${event.id}' | Code '${code}'. Acknowledged com token do App CaixaDoce.`);
+        continue;
+      }
+
+      // Atualização de status de pedidos existentes
+      if (code === "CFM" || code === "CONFIRMED") {
+        if (orderId) {
+          await supabase
+            .from("encomendas")
+            .update({ status: "em_producao", updated_at: new Date().toISOString() })
+            .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`);
+        }
+        continue;
+      }
+
+      if (code === "DSP" || code === "DISPATCHED") {
+        if (orderId) {
+          await supabase
+            .from("encomendas")
+            .update({ status: "pronta", updated_at: new Date().toISOString() })
+            .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`);
+        }
+        continue;
+      }
+
+      if (code === "CAN" || code === "CANCELLED" || code === "CANCELLATION_REQUESTED") {
+        if (orderId) {
+          await supabase
+            .from("encomendas")
+            .update({ status: "cancelada", updated_at: new Date().toISOString() })
+            .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`);
+        }
+        continue;
+      }
+
+      if (code === "CON" || code === "CONCLUDED") {
+        if (orderId) {
+          await supabase
+            .from("encomendas")
+            .update({ status: "entregue", updated_at: new Date().toISOString() })
+            .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`);
+        }
+        continue;
+      }
+
+      // Evento PLC (Placed - Novo Pedido Criado)
       if (code === "PLC" || code === "PLACED" || code === "ORDER_PLACED") {
-        const orderId = String(event.correlationId || event.orderId || event.id || "").trim();
-        const merchantId = String(event.merchantId || event.merchant?.id || "").trim();
-
         console.log(`[iFood Webhook PLC] Processando pedido iFood ID: '${orderId}' | Merchant ID: '${merchantId}'`);
 
         if (!orderId) {
@@ -318,7 +512,6 @@ async function processIFoodEvents(rawBody: any) {
 
           if (existingOrder?.id) {
             console.log(`[iFood Webhook PLC] Pedido ${orderId} já existe na tabela encomendas (ID: ${existingOrder.id}).`);
-            // Se já existia mas estava com o código errado (ex: merchantId cru), atualiza para o código correto
             if (existingOrder.estabelecimento_codigo !== estCodigo) {
               console.log(`[iFood Webhook Correção] Atualizando estabelecimento_codigo da encomenda ${existingOrder.id} para '${estCodigo}'...`);
               await supabase
@@ -446,9 +639,8 @@ export default async function handler(req: any, res: any) {
       const body = req.body;
       console.log("📦 Evento iFood Recebido:", typeof body === "object" ? JSON.stringify(body) : body);
 
-      // IMPORTANTE (Vercel Serverless): Damos AWAIT para garantir que a inserção no banco
-      // termine antes de encerrar a função serverless. Caso contrário, a Vercel fecha as
-      // conexões de socket prematuramente (SocketError: other side closed).
+      // IMPORTANTE (Vercel Serverless): Damos AWAIT para garantir que o Acknowledgment e a inserção no banco
+      // terminem antes de encerrar a função serverless.
       await processIFoodEvents(body);
     } catch (err) {
       console.error("[iFood Webhook Handler Error]", err);
@@ -460,3 +652,4 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).send("OK");
 }
+

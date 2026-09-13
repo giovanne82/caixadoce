@@ -988,6 +988,122 @@ async function calcularNovaDataExpiracaoBackend(
   return new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
 }
 
+let cachedServerAppToken: { token: string; expiresAt: number } | null = null;
+
+async function obterTokenAppIFoodServer(env?: any): Promise<string> {
+  const now = Date.now();
+  if (cachedServerAppToken && cachedServerAppToken.expiresAt > now + 60000 && cachedServerAppToken.token) {
+    return cachedServerAppToken.token;
+  }
+
+  const envObj = (env as Record<string, string>) || {};
+  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+  const ifoodClientId =
+    envObj.IFOOD_CLIENT_ID ||
+    procObj.IFOOD_CLIENT_ID ||
+    envObj.VITE_IFOOD_CLIENT_ID ||
+    procObj.VITE_IFOOD_CLIENT_ID ||
+    "";
+  const ifoodClientSecret =
+    envObj.IFOOD_CLIENT_SECRET ||
+    procObj.IFOOD_CLIENT_SECRET ||
+    envObj.VITE_IFOOD_CLIENT_SECRET ||
+    procObj.VITE_IFOOD_CLIENT_SECRET ||
+    "";
+
+  if (ifoodClientId && ifoodClientSecret) {
+    try {
+      console.log(`[Server iFood App Token] Solicitando token de autenticação da aplicação CaixaDoce (${ifoodClientId.slice(0, 8)}...)...`);
+      const bodyParams = new URLSearchParams();
+      bodyParams.append("grantType", "client_credentials");
+      bodyParams.append("clientId", ifoodClientId.trim());
+      bodyParams.append("clientSecret", ifoodClientSecret.trim());
+
+      const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: bodyParams.toString(),
+      });
+
+      if (res.ok) {
+        const data: any = await res.json();
+        const token = data.accessToken || data.access_token;
+        const expiresIn = Number(data.expiresIn || data.expires_in || 21599);
+        if (token) {
+          cachedServerAppToken = {
+            token,
+            expiresAt: now + expiresIn * 1000,
+          };
+          console.log("[Server iFood App Token Success] Token de aplicação CaixaDoce obtido com sucesso!");
+          return token;
+        }
+      } else {
+        const errTxt = await res.text();
+        console.error(`[Server iFood App Token Error] HTTP ${res.status}: ${errTxt}`);
+      }
+    } catch (err) {
+      console.error("[Server iFood App Token Exception]", err);
+    }
+  }
+
+  // Fallback: Busca token no Supabase (loja CD-5411)
+  try {
+    const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+    const headers = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
+    const res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.CD-5411&select=ifood_access_token`, { headers });
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list[0]?.ifood_access_token) {
+        return list[0].ifood_access_token;
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[Server iFood DB Token Fallback Error]", dbErr);
+  }
+
+  return "";
+}
+
+async function acknowledgeIFoodEventsServer(eventIds: string[], appToken: string) {
+  if (!eventIds || eventIds.length === 0 || !appToken) return false;
+
+  const payload = JSON.stringify(eventIds.map((id) => ({ id })));
+  console.log(`[Server iFood ACK] Confirmando ${eventIds.length} eventos no iFood com token do App CaixaDoce...`);
+
+  const endpoints = [
+    "https://merchant-api.ifood.com.br/order/v1.0/events/acknowledgment",
+    "https://merchant-api.ifood.com.br/order/v1.0/events:acknowledgment",
+    "https://merchant-api.ifood.com.br/events/v1.0/events/acknowledgment",
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${appToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: payload,
+      });
+
+      if (res.ok || res.status === 200 || res.status === 202 || res.status === 204) {
+        console.log(`[Server iFood ACK Success] Eventos confirmados no endpoint ${endpoint} (HTTP ${res.status})`);
+        return true;
+      }
+    } catch (err) {
+      console.warn(`[Server iFood ACK Error] Falha no endpoint ${endpoint}:`, err);
+    }
+  }
+
+  return false;
+}
+
 // Helper assíncrono para processar eventos do iFood no server.ts (ex: evento 'PLC' -> Tabela encomendas)
 async function processIFoodEventsInServer(body: any, env?: any) {
   try {
@@ -997,6 +1113,13 @@ async function processIFoodEventsInServer(body: any, env?: any) {
     }
     const events = Array.isArray(parsedBody) ? parsedBody : parsedBody ? [parsedBody] : [];
     if (events.length === 0) return;
+
+    // Acknowledgment imediato com token oficial da aplicação CaixaDoce
+    const eventIds = events.map((e: any) => e.id).filter(Boolean);
+    const appToken = await obterTokenAppIFoodServer(env);
+    if (eventIds.length > 0 && appToken) {
+      await acknowledgeIFoodEventsServer(eventIds, appToken);
+    }
 
     const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
     const headers = {
@@ -1009,6 +1132,19 @@ async function processIFoodEventsInServer(body: any, env?: any) {
     for (const event of events) {
       if (!event || typeof event !== "object") continue;
       const code = String(event.code || event.type || "").toUpperCase();
+
+      // Tratamento de Heartbeat / Conectividade
+      if (
+        code === "HEARTBEAT" ||
+        code === "STATUS" ||
+        code === "TEST" ||
+        code === "KTM" ||
+        code === "KEEP_ALIVE" ||
+        code === "INFO"
+      ) {
+        console.log(`[Server iFood Heartbeat] Evento de teste de conectividade recebido: ID '${event.id}' | Code '${code}'. Acknowledged com token do App CaixaDoce.`);
+        continue;
+      }
 
       if (code === "PLC" || code === "PLACED" || code === "ORDER_PLACED") {
         const orderId = String(event.correlationId || event.orderId || event.id || "").trim();
