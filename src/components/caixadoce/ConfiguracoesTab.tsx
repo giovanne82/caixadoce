@@ -404,27 +404,44 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   }, [checarIfoodStatus]);
 
-  const handleConectarIFood = async () => {
+  const handleConectarIFood = async (forceGrantType?: string) => {
     if (!activeCode) {
       toast.error("Código do estabelecimento não encontrado.");
       return;
     }
     setGerandoUserCode(true);
     try {
-      const res = await fetch(`/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}`, {
+      const url = forceGrantType
+        ? `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}&grantType=${encodeURIComponent(forceGrantType)}`
+        : `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estabelecimento_codigo: activeCode }),
+        body: JSON.stringify({
+          estabelecimento_codigo: activeCode,
+          grantType: forceGrantType || "",
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success && data.userCode) {
-        setUserCodeGerado(data.userCode);
-        const targetUrl = data.verificationUrlComplete || data.verificationUrl;
-        setUrlVerificacao(targetUrl);
-        if (targetUrl) {
-          window.open(targetUrl, "_blank");
+      if (res.ok && data.success) {
+        if (data.connected || data.mode === "client_credentials" || (!data.userCode && data.accessToken)) {
+          toast.success(data.message || "Sua loja foi conectada com sucesso ao iFood via Client Credentials!");
+          setUserCodeGerado(null);
+          setUrlVerificacao(null);
+          await checarIfoodStatus();
+          return;
         }
-        toast.success(`Código gerado: ${data.userCode}. Autorize no portal do iFood e cole o código final abaixo.`);
+
+        if (data.userCode) {
+          setUserCodeGerado(data.userCode);
+          const targetUrl = data.verificationUrlComplete || data.verificationUrl;
+          setUrlVerificacao(targetUrl);
+          if (targetUrl) {
+            window.open(targetUrl, "_blank");
+          }
+          toast.success(`Código gerado: ${data.userCode}. Autorize no portal do iFood e cole o código final abaixo.`);
+        }
       } else {
         toast.error(data.error || "Não foi possível gerar o código com o iFood. Verifique as credenciais.");
       }
@@ -1897,7 +1914,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
-                      onClick={handleConectarIFood}
+                      onClick={() => handleConectarIFood()}
                       disabled={gerandoUserCode}
                       className="w-full sm:w-auto font-black text-xs h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md gap-2"
                     >
@@ -1906,7 +1923,19 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       ) : (
                         <Store className="w-4 h-4" />
                       )}
-                      {gerandoUserCode ? "Gerando Código..." : "Conectar iFood"}
+                      {gerandoUserCode ? "Conectando..." : "Conectar iFood"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleConectarIFood("client_credentials")}
+                      disabled={gerandoUserCode}
+                      className="w-full sm:w-auto font-bold text-xs h-10 px-4 rounded-xl border-red-300 text-red-700 dark:text-red-300 hover:bg-red-500/10 gap-2"
+                      title="Obtém o token direto via Client Credentials para App Centralizado"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-red-600" />
+                      Conexão Direta (Centralizado / Teste)
                     </Button>
 
                     {userCodeGerado && urlVerificacao && (
