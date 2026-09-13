@@ -86,6 +86,7 @@ import {
   RotateCcw,
   Copy,
   Loader2,
+  Printer,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1022,204 +1023,352 @@ export function OrdersView({
     }
   };
 
-  // Gerador do PDF / Comprovante do Orçamento de Encomenda
+  // Gerador de Impressão de Comanda / Cupom Térmico (80mm / 58mm)
   const handleGerarPdfOrcamento = (ord: Encomenda) => {
-    const printWindow = window.open("", "_blank", "width=850,height=950");
+    const printWindow = window.open("", "_blank", "width=420,height=700");
     if (!printWindow) {
-      toast.error("Permita pop-ups no seu navegador para visualizar e imprimir o PDF do Orçamento.");
+      toast.error("Permita pop-ups no seu navegador para imprimir a comanda do pedido.");
       return;
     }
 
-    const estNome = profile?.establishmentName || estabelecimentoNome || "Confeitaria";
+    const estNome = profile?.establishmentName || estabelecimentoNome || "CaixaDoce Confeitaria";
     const estEnd = profile?.establishmentAddress || (
       [profile?.logradouro, profile?.numero, profile?.bairro, profile?.cidade && profile?.estado ? `${profile.cidade}/${profile.estado}` : "", profile?.cep ? `CEP: ${profile.cep}` : ""]
         .filter(Boolean).join(", ")
-    ) || "Endereço não cadastrado";
-    const estTel = profile?.whatsapp || profile?.telefone || "Não informado";
-    const sigUrl = profile?.signature_data_url || (profile as any)?.assinatura_data_url || "";
-    const confeiteiroNome = profile?.responsavel || profile?.establishmentName || estNome;
+    ) || "";
+    const estTel = profile?.whatsapp || profile?.telefone || "";
 
     const totalPago = calcularTotalPagoEncomenda(ord);
     const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+    const formaPagto = obterMetodoPagamentoFormatado(ord);
+    const dataEntregaFmt = ord.dataEntrega ? ord.dataEntrega.split("-").reverse().join("/") : "A combinar";
+    const horaEntregaFmt = ord.horarioEntrega || "14:00";
+    const numPedido = ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(-6).toUpperCase();
+
+    const itemsHtml = ord.itensDetalhes && ord.itensDetalhes.length > 0
+      ? ord.itensDetalhes.map((it: any) => {
+          const opcaoNome =
+            (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
+              ? it.opcoes_selecionadas
+                  .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                  .join(", ")
+              : null) ||
+            it.opcaoNome ||
+            it.opcao_selecionada?.nome;
+          const qtd = it.quantidade || 1;
+          const subtotal = it.subtotal ?? ((it.precoUnitario || it.preco || 0) * qtd);
+
+          return `
+            <div class="item-block">
+              <div class="item-main">
+                <span class="item-name"><strong>${qtd}x</strong> ${it.nome}</span>
+                <span class="item-val">${subtotal > 0 ? formatarMoeda(subtotal) : ""}</span>
+              </div>
+              ${opcaoNome ? `<div class="item-sub">Sabores: ${opcaoNome}</div>` : ""}
+            </div>
+          `;
+        }).join("")
+      : `
+        <div class="item-block">
+          <div class="item-main">
+            <span class="item-name">${ord.itens || "Itens diversos"}</span>
+          </div>
+        </div>
+      `;
 
     const hist = ord.historicoPagamentos || ord.paymentsHistory || [];
-
-    const paymentRowsHtml = hist.length > 0 ? hist.map((pag, idx) => {
-      const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
-      const dataPrev = pag.data ? pag.data.split("-").reverse().join("/") : "-";
-      const dataEf = pag.dataEfetiva || pag.data_pagamento;
-      const dataEfFmt = dataEf ? dataEf.split("-").reverse().join("/") : dataPrev;
-      const statusLabel = isPaid
-        ? `<span style="color: #059669; font-weight: bold; background: #d1fae5; padding: 2px 8px; border-radius: 4px;">✓ Pago em ${dataEfFmt}</span>`
-        : `<span style="color: #d97706; font-weight: bold; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">⌛ Pendente (Vencimento em ${dataPrev})</span>`;
-      const rotulo = pag.isEntrada || idx === 0 ? "Entrada / Sinal" : `${idx + 1}ª Parcela`;
-      const forma = pag.formaPagamento || "Pix";
-
-      return `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${rotulo}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${dataPrev}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">${forma}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; font-family: monospace;">${formatarMoeda(pag.valor)}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${statusLabel}</td>
-        </tr>
-      `;
-    }).join("") : `
-      <tr>
-        <td colspan="5" style="padding: 14px; text-align: center; color: #64748b; font-style: italic;">Nenhum histórico de pagamento cadastrado. Pagamento integral na entrega.</td>
-      </tr>
-    `;
-
-    const itemsRowsHtml = ord.itensDetalhes && ord.itensDetalhes.length > 0
-      ? ord.itensDetalhes.map((it) => `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${it.nome} ${it.opcaoNome ? `<span style="color:#64748b;">(${it.opcaoNome})</span>` : ""}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.quantidade}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;">${it.precoUnitario ? formatarMoeda(it.precoUnitario) : "-"}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace; font-weight: bold;">${it.subtotal ? formatarMoeda(it.subtotal) : "-"}</td>
-        </tr>
-      `).join("")
-      : `
-        <tr>
-          <td colspan="4" style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${ord.itens || "Itens diversos"}</td>
-        </tr>
-      `;
+    const histHtml = hist.length > 0 ? `
+      <div class="divider"></div>
+      <div class="section-title">HISTÓRICO DE PAGAMENTOS</div>
+      ${hist.map((pag, idx) => {
+        const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
+        const rotulo = pag.isEntrada || idx === 0 ? "Entrada/Sinal" : `Parcela ${idx + 1}`;
+        return `
+          <div class="row text-xs">
+            <span>${rotulo} (${pag.formaPagamento || "Pix"}):</span>
+            <span><strong>${formatarMoeda(pag.valor)}</strong> [${isPaid ? "PAGO" : "PENDENTE"}]</span>
+          </div>
+        `;
+      }).join("")}
+    ` : "";
 
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8">
-        <title>Orçamento de Encomenda - ${ord.clienteNome}</title>
+        <title>Comanda #${numPedido} - ${ord.clienteNome}</title>
         <style>
-          @page { size: A4; margin: 12mm; }
-          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; margin: 0; padding: 24px; line-height: 1.5; font-size: 13px; background: #fff; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 3px solid #7c3aed; margin-bottom: 20px; }
-          .company-title { font-size: 22px; font-weight: 800; color: #6d28d9; margin: 0 0 4px 0; }
-          .company-info { color: #475569; font-size: 11px; margin: 2px 0; }
-          .doc-title { text-align: right; }
-          .doc-title h2 { font-size: 18px; font-weight: 800; color: #1e293b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-          .doc-meta { font-size: 11px; color: #64748b; font-family: monospace; }
-          .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #6d28d9; letter-spacing: 0.5px; margin: 20px 0 8px 0; padding-bottom: 4px; border-bottom: 1.5px solid #e2e8f0; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; background-color: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e2e8f0; }
-          .info-item { font-size: 12px; }
-          .info-label { font-weight: 700; color: #64748b; font-size: 10px; text-transform: uppercase; display: block; margin-bottom: 2px; }
-          .info-val { font-weight: 700; color: #0f172a; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-          th { background-color: #f1f5f9; text-align: left; padding: 10px; font-size: 11px; font-weight: 700; color: #475569; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
-          .totals-box { margin-left: auto; width: 300px; background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 24px; }
-          .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
-          .totals-row.final { border-top: 2px dashed #cbd5e1; margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 800; }
-          .footer-container { margin-top: 40px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid; }
-          .signature-box { text-align: center; width: 260px; }
-          .signature-img { max-height: 75px; max-width: 220px; object-fit: contain; margin-bottom: 4px; }
-          .signature-line { border-top: 1.5px solid #64748b; margin-top: 6px; padding-top: 6px; font-size: 12px; font-weight: 800; color: #1e293b; }
-          .no-print { display: flex; gap: 8px; margin-bottom: 20px; background: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; }
+          @page {
+            margin: 0;
+            size: auto;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            width: 100%;
+            max-width: 80mm;
+            margin: 0 auto;
+            padding: 10px 8px 30px 8px;
+            font-family: 'Courier New', Courier, monospace, sans-serif;
+            color: #000;
+            background: #fff;
+            font-size: 12px;
+            line-height: 1.35;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ccc;
+          }
+          .no-print button {
+            flex: 1;
+            padding: 8px 12px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+          }
+          .btn-print {
+            background: #000;
+            color: #fff;
+            border: 1px solid #000;
+          }
+          .btn-close {
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+          }
           @media print {
-            body { padding: 0; }
-            .no-print { display: none !important; }
+            .no-print {
+              display: none !important;
+            }
+            body {
+              max-width: 100% !important;
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 4px 6px 12px 6px !important;
+            }
+          }
+          .divider {
+            border-top: 1px dashed #000;
+            margin: 6px 0;
+          }
+          .divider-solid {
+            border-top: 1px solid #000;
+            margin: 6px 0;
+          }
+          .divider-double {
+            border-top: 2px solid #000;
+            margin: 8px 0;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-bold { font-weight: bold; }
+          .text-xs { font-size: 11px; }
+          .store-name {
+            font-size: 15px;
+            font-weight: 900;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .store-info {
+            font-size: 10px;
+            text-align: center;
+            margin-top: 2px;
+          }
+          .cupom-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 4px 0 2px 0;
+            text-transform: uppercase;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2px;
+            word-break: break-word;
+          }
+          .item-block {
+            margin-bottom: 5px;
+          }
+          .item-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .item-name {
+            flex: 1;
+            padding-right: 6px;
+            word-break: break-word;
+          }
+          .item-val {
+            white-space: nowrap;
+            font-weight: bold;
+          }
+          .item-sub {
+            font-size: 10.5px;
+            padding-left: 10px;
+            margin-top: 1px;
+            word-break: break-word;
+          }
+          .total-highlight {
+            font-size: 14px;
+            font-weight: 900;
+            margin: 4px 0;
+          }
+          .obs-box {
+            font-size: 11px;
+            word-break: break-word;
+            margin-top: 2px;
+          }
+          .footer-note {
+            text-align: center;
+            font-size: 10px;
+            margin-top: 12px;
+            font-weight: bold;
           }
         </style>
       </head>
       <body>
         <div class="no-print">
-          <button onclick="window.print()" style="background: #6d28d9; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px;">🖨️ Imprimir / Salvar em PDF</button>
-          <button onclick="window.close()" style="background: #e2e8f0; color: #334155; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px;">Fechar</button>
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir Comanda</button>
+          <button class="btn-close" onclick="window.close()">Fechar</button>
         </div>
 
-        <div class="header">
-          <div>
-            <h1 class="company-title">${estNome}</h1>
-            <p class="company-info">📍 ${estEnd}</p>
-            <p class="company-info">📞 WhatsApp / Tel: ${estTel}</p>
-          </div>
-          <div class="doc-title">
-            <h2>Orçamento de Encomenda</h2>
-            <p class="doc-meta">Nº PEDIDO: #${ord.id.slice(-6).toUpperCase()}</p>
-            <p class="doc-meta">DATA DE EMISSÃO: ${new Date().toLocaleDateString("pt-BR")}</p>
-          </div>
+        <div class="store-name">${estNome}</div>
+        ${estEnd ? `<div class="store-info">${estEnd}</div>` : ""}
+        ${estTel ? `<div class="store-info">WhatsApp / Tel: ${estTel}</div>` : ""}
+
+        <div class="divider"></div>
+
+        <div class="cupom-header">*** COMPROVANTE DE PEDIDO ***</div>
+        <div class="row">
+          <span><strong>PEDIDO: #${numPedido}</strong></span>
+          <span>${isPedidoIFood(ord) ? "iFood" : "Cardápio"}</span>
+        </div>
+        <div class="row text-xs">
+          <span>Emissão:</span>
+          <span>${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
 
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">Cliente</span>
-            <span class="info-val">${ord.clienteNome}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">WhatsApp</span>
-            <span class="info-val">${ord.clienteWhatsapp || "Não informado"}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Data & Horário de Entrega</span>
-            <span class="info-val">${ord.dataEntrega.split("-").reverse().join("/")} às ${ord.horarioEntrega || "14:00"}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Tipo de Entrega</span>
-            <span class="info-val" style="text-transform: capitalize;">${ord.tipoEntrega === "delivery" ? `Delivery (${ord.enderecoEntrega || "Endereço a combinar"})` : "Retirada na Loja"}</span>
-          </div>
+        <div class="divider"></div>
+
+        <div class="section-title">DADOS DO CLIENTE &amp; ENTREGA</div>
+        <div class="row">
+          <span>Cliente:</span>
+          <span><strong>${ord.clienteNome}</strong></span>
         </div>
-
-        <div class="section-title">Itens do Pedido</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Descrição do Produto / Item</th>
-              <th style="text-align: center;">Qtd</th>
-              <th style="text-align: right;">Valor Unit.</th>
-              <th style="text-align: right;">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsRowsHtml}
-          </tbody>
-        </thead>
-        </table>
-
-        <div class="section-title">Condições de Pagamento &amp; Cronograma</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Parcela / Condição</th>
-              <th>Data Acordada</th>
-              <th>Forma de Pagamento</th>
-              <th>Valor (R$)</th>
-              <th>Status do Pagamento</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${paymentRowsHtml}
-          </tbody>
-        </table>
-
-        <div class="totals-box">
-          <div class="totals-row">
-            <span>Valor Total da Encomenda:</span>
-            <span style="font-family: monospace; font-weight: bold;">${formatarMoeda(ord.valorTotal)}</span>
+        ${ord.clienteWhatsapp ? `
+          <div class="row">
+            <span>WhatsApp:</span>
+            <span>${ord.clienteWhatsapp}</span>
           </div>
-          <div class="totals-row">
-            <span>Total Pago (Quitado):</span>
-            <span style="font-family: monospace; font-weight: bold; color: #059669;">${formatarMoeda(totalPago)}</span>
-          </div>
-          <div class="totals-row final">
-            <span>Saldo Restante:</span>
-            <span style="font-family: monospace; color: ${saldoRestante > 0 ? '#dc2626' : '#059669'};">${formatarMoeda(saldoRestante)}</span>
-          </div>
+        ` : ""}
+        <div class="row">
+          <span>Tipo:</span>
+          <span><strong>${ord.tipoEntrega === "delivery" ? "DELIVERY / ENTREGA" : "RETIRADA NO BALCÃO"}</strong></span>
         </div>
-
-        ${ord.observacoes ? `
-          <div class="section-title">Observações do Pedido</div>
-          <p style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-style: italic; margin-bottom: 20px;">${ord.observacoes}</p>
+        <div class="row">
+          <span>Data/Hora:</span>
+          <span><strong>${dataEntregaFmt} às ${horaEntregaFmt}</strong></span>
+        </div>
+        ${ord.tipoEntrega === "delivery" && ord.enderecoEntrega ? `
+          <div class="row">
+            <span>Endereço:</span>
+            <span style="text-align: right; max-width: 65%;"><strong>${ord.enderecoEntrega}</strong></span>
+          </div>
         ` : ""}
 
-        <div class="footer-container">
-          <div class="signature-box">
-            ${sigUrl ? `<img src="${sigUrl}" class="signature-img" alt="Assinatura Digital" />` : `<div style="height: 40px;"></div>`}
-            <div class="signature-line">
-              ${confeiteiroNome}<br/>
-              <span style="font-size: 10px; color: #64748b; font-weight: normal;">Confeitaria / Responsável</span>
-            </div>
+        <div class="divider"></div>
+
+        <div class="section-title">ITENS DO PEDIDO</div>
+        ${itemsHtml}
+
+        ${(ord.temTopoBolo || ord.temVela) ? `
+          <div class="divider"></div>
+          <div class="section-title">PERSONALIZAÇÃO ESPECIAL</div>
+          ${ord.temTopoBolo ? `<div class="row text-xs"><span>🎂 Topo de Bolo:</span><span>${ord.detalhesTopoBolo || "Sim"}</span></div>` : ""}
+          ${ord.temVela ? `<div class="row text-xs"><span>🕯️ Vela:</span><span>${ord.detalhesVela || "Sim"}</span></div>` : ""}
+        ` : ""}
+
+        ${ord.observacoes ? `
+          <div class="divider"></div>
+          <div class="section-title">OBSERVAÇÕES</div>
+          <div class="obs-box">${ord.observacoes}</div>
+        ` : ""}
+
+        <div class="divider-solid"></div>
+
+        ${ord.taxaEntrega !== undefined && Number(ord.taxaEntrega) > 0 ? `
+          <div class="row text-xs">
+            <span>Subtotal Produtos:</span>
+            <span>${formatarMoeda(ord.valorTotal - Number(ord.taxaEntrega))}</span>
           </div>
+          <div class="row text-xs">
+            <span>Taxa de Entrega:</span>
+            <span>${formatarMoeda(Number(ord.taxaEntrega))}</span>
+          </div>
+        ` : ""}
+
+        <div class="row total-highlight">
+          <span>TOTAL DO PEDIDO:</span>
+          <span>${formatarMoeda(ord.valorTotal)}</span>
         </div>
+
+        <div class="row">
+          <span>Forma de Pagto:</span>
+          <span><strong>${formaPagto}</strong></span>
+        </div>
+        <div class="row text-xs">
+          <span>Total Pago:</span>
+          <span>${formatarMoeda(totalPago)}</span>
+        </div>
+        ${saldoRestante > 0 ? `
+          <div class="row text-bold" style="color: #000;">
+            <span>A PAGAR NA ENTREGA:</span>
+            <span>${formatarMoeda(saldoRestante)}</span>
+          </div>
+        ` : `
+          <div class="row text-bold">
+            <span>SITUAÇÃO:</span>
+            <span>PAGO INTEGRALMENTE</span>
+          </div>
+        `}
+
+        ${histHtml}
+
+        <div class="divider-double"></div>
+
+        <div class="footer-note">
+          OBRIGADO PELA PREFERÊNCIA!<br/>
+          ${estNome}
+        </div>
+        <div style="height: 18px;"></div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          };
+        </script>
       </body>
       </html>
     `;
@@ -4934,16 +5083,16 @@ export function OrdersView({
                   onClick={() => {
                     try {
                       handleGerarPdfOrcamento(encomendaDetalhes);
-                      toast.success("PDF gerado com sucesso!");
+                      toast.success("Comanda aberta para impressão!");
                     } catch (err) {
-                      console.error("Erro ao gerar PDF:", err);
-                      toast.error("Erro ao gerar PDF.");
+                      console.error("Erro ao imprimir:", err);
+                      toast.error("Erro ao abrir comanda.");
                     }
                   }}
-                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1"
+                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
                 >
-                  <FileText className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Gerar PDF / Imprimir</span>
+                  <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>🖨️ Imprimir Pedido (80mm)</span>
                 </Button>
                 <Button
                   type="button"
