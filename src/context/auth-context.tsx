@@ -154,7 +154,7 @@ type AuthContextType = {
   sendEmailOtpSignUp: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyEmailOtp: (email: string, token: string, name: string, password: string) => Promise<{ success: boolean; error?: string }>;
   resendEmailOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (customRedirectTo?: string) => Promise<void>;
   createEstablishment: (nome: string, endereco: string, role?: StaffRole) => Promise<{ code: string }>;
   updateEstablishmentDetails: (details: UpdateEstablishmentDetailsInput) => Promise<void>;
   updateEstablishmentPlan: (planoId: PlanoId, pagamentoConfirmado?: boolean) => Promise<void>;
@@ -822,10 +822,27 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (customRedirectTo?: string) => {
     try {
-      const redirectUrl = getAppBaseUrl();
-      console.log("[Auth] Iniciando OAuth do Google com redirectTo:", redirectUrl);
+      // Captura a URL/origem atual de forma dinâmica e resiliente (Preview Vercel, localhost ou Prod)
+      let origin = "https://www.caixadoce.com.br";
+      if (typeof window !== "undefined" && window.location?.origin) {
+        origin = window.location.origin.replace(/\/+$/, "");
+      } else {
+        origin = getAppBaseUrl();
+      }
+
+      // Constrói o destino final pós-login
+      let targetPath = customRedirectTo || (typeof window !== "undefined" ? window.location.pathname : "/");
+      if (targetPath.startsWith("/login")) {
+        targetPath = "/";
+      }
+      if (!targetPath.startsWith("/")) {
+        targetPath = `/${targetPath}`;
+      }
+
+      const redirectUrl = `${origin}${targetPath}`;
+      console.log("[Auth] Iniciando OAuth do Google com redirectTo explícito:", redirectUrl);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
