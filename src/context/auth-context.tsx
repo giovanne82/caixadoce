@@ -250,7 +250,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
       establishmentName: masterEst?.nome || (formattedCode ? `Confeitaria ${formattedCode}` : "Minha Confeitaria"),
+      slug: masterEst?.slug || undefined,
       establishmentAddress: masterEst?.endereco || "",
+      whatsapp: masterEst?.whatsapp || undefined,
       chavePix: masterEst?.chavePix || "",
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
@@ -375,6 +377,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                 ...baseProf,
                 establishmentCode: data.codigo || baseProf.establishmentCode,
                 establishmentName: data.nome || baseProf.establishmentName,
+                slug: data.slug || baseProf.slug,
                 establishmentAddress: data.endereco || baseProf.establishmentAddress,
                 logradouro: data.logradouro || baseProf.logradouro,
                 numero: data.numero || baseProf.numero,
@@ -868,6 +871,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       ...details,
       establishmentName: details.nome || profile.establishmentName,
       establishmentAddress: details.endereco || profile.establishmentAddress,
+      slug: details.slug !== undefined ? details.slug : profile.slug,
+      whatsapp: details.whatsapp !== undefined ? details.whatsapp : profile.whatsapp,
     };
     setProfile(updatedProfile);
     localStorage.setItem("caixadoce_profile", JSON.stringify(updatedProfile));
@@ -1174,6 +1179,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         ...details,
         establishmentName: details.nome !== undefined ? details.nome : current.establishmentName,
         establishmentAddress: details.endereco !== undefined ? details.endereco : current.establishmentAddress,
+        slug: details.slug !== undefined ? details.slug : current.slug,
+        whatsapp: details.whatsapp !== undefined ? details.whatsapp : current.whatsapp,
         chavePix: details.chavePix !== undefined ? details.chavePix : current.chavePix,
         tipoChavePix: details.tipoChavePix !== undefined ? details.tipoChavePix : current.tipoChavePix,
         contasPix: details.contasPix !== undefined ? details.contasPix : current.contasPix,

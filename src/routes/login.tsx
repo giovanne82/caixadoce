@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { LoginView } from "@/components/auth/LoginView";
 import { useAuth } from "@/context/auth-context";
+import { isStoreNeedsOnboarding } from "@/lib/onboarding-utils";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginComponent() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,15 +41,24 @@ function LoginComponent() {
     }
   }, []);
 
-  useEffect(() => {
-    if (user) {
+  const handleSuccess = () => {
+    if (profile && isStoreNeedsOnboarding(profile)) {
+      navigate({ to: "/onboarding" });
+    } else {
       navigate({ to: "/" });
     }
-  }, [user, navigate]);
+  };
+
+  useEffect(() => {
+    if (user) {
+      handleSuccess();
+    }
+  }, [user, profile, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <LoginView onSuccess={() => navigate({ to: "/" })} />
+      <LoginView onSuccess={handleSuccess} />
     </div>
   );
 }
+

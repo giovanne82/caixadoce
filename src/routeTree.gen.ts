@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AfiliadosRouteImport } from './routes/afiliados'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PdvRouteImport } from './routes/pdv'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
@@ -40,6 +42,11 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LandingRoute = LandingRouteImport.update({
   id: '/landing',
   path: '/landing',
@@ -48,6 +55,11 @@ const LandingRoute = LandingRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PdvRoute = PdvRouteImport.update({
@@ -105,8 +117,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -122,8 +136,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -140,8 +156,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/afiliados': typeof AfiliadosRoute
   '/configuracoes': typeof ConfiguracoesRoute
+  '/dashboard': typeof DashboardRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
   '/privacidade': typeof PrivacidadeRoute
@@ -159,8 +177,10 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliados'
     | '/configuracoes'
+    | '/dashboard'
     | '/landing'
     | '/login'
+    | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
@@ -176,8 +196,10 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliados'
     | '/configuracoes'
+    | '/dashboard'
     | '/landing'
     | '/login'
+    | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
@@ -193,8 +215,10 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliados'
     | '/configuracoes'
+    | '/dashboard'
     | '/landing'
     | '/login'
+    | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
     | '/privacidade'
@@ -211,8 +235,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfiliadosRoute: typeof AfiliadosRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
+  DashboardRoute: typeof DashboardRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   PdvRoute: typeof PdvRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
@@ -248,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/landing': {
       id: '/landing'
       path: '/landing'
@@ -260,6 +293,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pdv': {
@@ -339,8 +379,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfiliadosRoute: AfiliadosRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
+  DashboardRoute: DashboardRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   PdvRoute: PdvRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
   PrivacidadeRoute: PrivacidadeRoute,

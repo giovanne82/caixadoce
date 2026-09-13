@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useAuth } from "@/context/auth-context";
 import { ScannerProvider, useScanner } from "@/context/scanner-context";
 import { supabase } from "@/integrations/supabase/client";
 import { isEmailAdmin } from "@/lib/admin-guard";
+import { isStoreNeedsOnboarding } from "@/lib/onboarding-utils";
 
 // Components
 import { LoginView } from "@/components/auth/LoginView";
@@ -1987,6 +1988,11 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
   // 2. Sem estabelecimento / perfil selecionado
   if (!profile) {
     return <ProfileSelectionView />;
+  }
+
+  // 3. Onboarding Obrigatório: Se a loja estiver com campos essenciais pendentes (nome, slug ou whatsapp), redireciona para /onboarding
+  if (isStoreNeedsOnboarding(profile)) {
+    return <Navigate to="/onboarding" />;
   }
 
   return (
