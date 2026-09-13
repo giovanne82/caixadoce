@@ -172,10 +172,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function getAppBaseUrl(path: string = ""): string {
   let origin = "https://www.caixadoce.com.br";
   if (typeof window !== "undefined" && window.location.origin) {
-    const host = window.location.hostname;
-    if (!host.includes("caixadoce-nine") && !host.includes("vercel.app")) {
-      origin = window.location.origin;
-    }
+    origin = window.location.origin;
+  } else if (typeof process !== "undefined" && process.env) {
+    origin =
+      process.env.VITE_SITE_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.SITE_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.caixadoce.com.br");
   }
 
   if (!path) return origin;
