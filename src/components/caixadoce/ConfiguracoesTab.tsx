@@ -1836,7 +1836,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </CardContent>
           </Card>
 
-          {/* CARD: INTEGRAÇÃO IFOOD (OAUTH 2.0 CENTRALIZADO) */}
+          {/* CARD: INTEGRAÇÃO IFOOD (OAUTH 2.0 CENTRALIZADO) - Ocultado temporariamente até liberação das credenciais */}
+          {false && (
           <Card className="border-border shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -2041,6 +2042,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
               )}
             </CardContent>
           </Card>
+          )}
 
 
           {/* CARD: DADOS DO ESTABELECIMENTO & PIX */}
