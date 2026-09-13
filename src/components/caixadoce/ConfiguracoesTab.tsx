@@ -287,11 +287,9 @@ export type SectionKey =
   | "redes"
   | "pagamentos"
   | "frete"
-  | "ifood"
-  | "99food"
+  | "integracoes"
   | "equipe"
   | "planos"
-  | "integracoes"
   | "seguranca"
   | "contato";
 
@@ -1693,8 +1691,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     redes: "Redes Sociais",
     pagamentos: "Pagamentos",
     frete: "Frete & Entrega",
-    ifood: "iFood Delivery",
-    "99food": "99Food Delivery",
     integracoes: "Integrações Delivery",
     equipe: "Equipe & Colaboradores",
     planos: "Planos & Parcerias",
@@ -1757,22 +1753,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       colorClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
     },
     {
-      id: "ifood",
-      title: "iFood",
-      description: "Integração oficial de pedidos e cardápio iFood",
+      id: "integracoes",
+      title: "Integrações Delivery",
+      description: "Conecte sua loja ao iFood, 99Food e outros",
       icon: ShoppingBag,
-      colorClass: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+      colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
       badge: "Homologação",
-      disabled: true,
-    },
-    {
-      id: "99food",
-      title: "99Food",
-      description: "Integração oficial de pedidos e delivery 99Food",
-      icon: Store,
-      colorClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-      badge: "Homologação",
-      disabled: true,
     },
     {
       id: "equipe",
@@ -1860,33 +1846,22 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {MENU_ITEMS.map((item) => {
               const Icon = item.icon;
-              const isDisabled = Boolean((item as any).disabled);
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    if (isDisabled) {
-                      toast.info(`A integração com o ${item.title} está em fase de homologação e estará disponível em breve!`);
-                      return;
-                    }
-                    setActiveSection(item.id as SectionKey);
-                  }}
-                  className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between gap-3.5 group shadow-2xs ${
-                    isDisabled
-                      ? "opacity-80 bg-muted/20 border-dashed border-border/80 cursor-not-allowed hover:border-amber-500/40"
-                      : "border-border/80 bg-card hover:border-purple-500/50 hover:shadow-md hover:scale-[1.01]"
-                  }`}
+                  onClick={() => setActiveSection(item.id as SectionKey)}
+                  className="p-4 rounded-2xl border border-border/80 bg-card hover:border-purple-500/50 hover:shadow-md hover:scale-[1.01] transition-all text-left flex items-center justify-between gap-3.5 group shadow-2xs"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${item.colorClass} shadow-xs ${!isDisabled ? "group-hover:scale-105 transition-transform" : ""}`}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${item.colorClass} shadow-xs group-hover:scale-105 transition-transform`}
                     >
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className={`text-sm font-extrabold text-foreground ${!isDisabled ? "group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" : ""}`}>
+                        <h4 className="text-sm font-extrabold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                           {item.title}
                         </h4>
                         {item.badge && (
@@ -1906,12 +1881,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     </div>
                   </div>
 
-                  <div className="w-8 h-8 rounded-xl bg-muted/40 text-muted-foreground flex items-center justify-center shrink-0 transition-colors">
-                    {isDisabled ? (
-                      <Lock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                    )}
+                  <div className="w-8 h-8 rounded-xl bg-muted/40 group-hover:bg-purple-500/10 text-muted-foreground group-hover:text-purple-600 flex items-center justify-center shrink-0 transition-colors">
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </button>
               );
