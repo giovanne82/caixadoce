@@ -166,6 +166,25 @@ function extrairDetalhesEventoIFood(event: any) {
 async function buscarEstabelecimentoMapeado(supabase: any, merchantId: string) {
   const cleanMerchantId = String(merchantId || "").trim();
 
+  // Helper para persistir o merchantId no estabelecimento encontrado
+  const persistirMerchantId = async (est: any) => {
+    if (!est?.id || !cleanMerchantId) return est;
+    try {
+      await supabase
+        .from("estabelecimentos")
+        .update({
+          ifood_merchant_id: cleanMerchantId,
+          ifood_status: "conectado",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", est.id);
+      console.log(`[iFood Merchant Persist] merchantId '${cleanMerchantId}' salvo com sucesso na loja '${est.codigo}' (ID: ${est.id})`);
+    } catch (pErr) {
+      console.warn("[iFood Merchant Persist Warn]", pErr);
+    }
+    return est;
+  };
+
   // 1. Busca direta por ifood_merchant_id
   if (cleanMerchantId) {
     try {
@@ -176,15 +195,31 @@ async function buscarEstabelecimentoMapeado(supabase: any, merchantId: string) {
         .maybeSingle();
 
       if (estMatch?.codigo) {
-        console.log(`[iFood Match Direct] Loja encontrada: '${estMatch.codigo}' (UUID: ${estMatch.id}) para merchantId '${cleanMerchantId}'`);
-        return estMatch;
+        console.log(`[iFood Match Direct] Loja encontrada por merchantId: '${estMatch.codigo}' (UUID: ${estMatch.id})`);
+        return await persistirMerchantId(estMatch);
       }
     } catch (e) {
       console.warn("[iFood Match Direct Error]", e);
     }
   }
 
-  // 2. Busca ampla em todos os estabelecimentos para vincular por status conectado ou único estabelecimento
+  // 2. Busca específica pela loja ativa prioritária 'CD-5411'
+  try {
+    const { data: estCd5411 } = await supabase
+      .from("estabelecimentos")
+      .select("id, codigo, user_id, ifood_merchant_id, ifood_status")
+      .ilike("codigo", "CD-5411")
+      .maybeSingle();
+
+    if (estCd5411?.codigo) {
+      console.log(`[iFood Match CD-5411] Loja ativa CD-5411 encontrada (UUID: ${estCd5411.id}). Vinculando merchantId '${cleanMerchantId}'...`);
+      return await persistirMerchantId(estCd5411);
+    }
+  } catch (err5411) {
+    console.warn("[iFood Match CD-5411 Warn]", err5411);
+  }
+
+  // 3. Busca ampla em todos os estabelecimentos para vincular
   try {
     const { data: todosEsts } = await supabase
       .from("estabelecimentos")
@@ -192,7 +227,7 @@ async function buscarEstabelecimentoMapeado(supabase: any, merchantId: string) {
       .order("created_at", { ascending: false });
 
     if (Array.isArray(todosEsts) && todosEsts.length > 0) {
-      // 2.1 Verifica se algum estabelecimento tem o merchantId dentro do texto
+      // 3.1 Verifica se algum estabelecimento tem o merchantId dentro do texto
       if (cleanMerchantId) {
         const porSubstring = todosEsts.find(
           (e: any) =>
@@ -202,46 +237,28 @@ async function buscarEstabelecimentoMapeado(supabase: any, merchantId: string) {
         );
         if (porSubstring) {
           console.log(`[iFood Match Substring] Loja encontrada: '${porSubstring.codigo}' (UUID: ${porSubstring.id})`);
-          return porSubstring;
+          return await persistirMerchantId(porSubstring);
         }
       }
 
-      // 2.2 Prioriza estabelecimento com ifood_status = 'conectado'
+      // 3.2 Prioriza estabelecimento com ifood_status = 'conectado'
       const conectado = todosEsts.find((e: any) => e.ifood_status === "conectado");
       if (conectado) {
         console.log(`[iFood Match Conectado] Vinculando merchantId '${cleanMerchantId}' à loja conectada '${conectado.codigo}' (UUID: ${conectado.id})`);
-        if (cleanMerchantId && !conectado.ifood_merchant_id) {
-          await supabase
-            .from("estabelecimentos")
-            .update({ ifood_merchant_id: cleanMerchantId, updated_at: new Date().toISOString() })
-            .eq("id", conectado.id);
-        }
-        return conectado;
+        return await persistirMerchantId(conectado);
       }
 
-      // 2.3 Se houver apenas 1 estabelecimento cadastrado, utiliza e vincula
-      if (todosEsts.length === 1) {
-        const unico = todosEsts[0];
-        console.log(`[iFood Match Único] Utilizando único estabelecimento existente '${unico.codigo}' (UUID: ${unico.id})`);
-        if (cleanMerchantId && !unico.ifood_merchant_id) {
-          await supabase
-            .from("estabelecimentos")
-            .update({ ifood_merchant_id: cleanMerchantId, updated_at: new Date().toISOString() })
-            .eq("id", unico.id);
-        }
-        return unico;
-      }
-
-      // 2.4 Utiliza o estabelecimento mais recente
+      // 3.3 Utiliza o primeiro estabelecimento disponível (mais recente)
       const fallbackEst = todosEsts[0];
-      console.log(`[iFood Match Fallback] Utilizando loja mais recente '${fallbackEst.codigo}' (UUID: ${fallbackEst.id})`);
-      return fallbackEst;
+      console.log(`[iFood Match Fallback] Utilizando loja '${fallbackEst.codigo}' (UUID: ${fallbackEst.id})`);
+      return await persistirMerchantId(fallbackEst);
     }
   } catch (errG) {
     console.warn("[iFood Match List Error]", errG);
   }
 
-  return null;
+  // Fallback padrão final
+  return { codigo: "CD-5411" };
 }
 
 // Processamento dos eventos do iFood (com await explícito para execução completa na Vercel)
@@ -281,7 +298,7 @@ async function processIFoodEvents(rawBody: any) {
 
         // 1. Mapeamento do merchant_id para o estabelecimento correto (UUID e Código)
         const est = await buscarEstabelecimentoMapeado(supabase, merchantId);
-        const estCodigo = est?.codigo || "CD-1001";
+        const estCodigo = est?.codigo || "CD-5411";
         const estId = est?.id || null;
         const estUserId = est?.user_id || null;
 

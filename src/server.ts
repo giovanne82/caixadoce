@@ -1019,12 +1019,14 @@ async function processIFoodEventsInServer(body: any, env?: any) {
         if (!orderId) continue;
 
         // 1. Busca estabelecimento mapeado
-        let estCodigo = "CD-1001";
+        let estCodigo = "CD-5411";
         let estId: string | null = null;
         let estUserId: string | null = null;
 
         try {
           let foundEst: any = null;
+
+          // 1.1 Busca direta por ifood_merchant_id
           if (merchantId) {
             const resDirect = await fetch(
               `${supabaseUrl}/rest/v1/estabelecimentos?ifood_merchant_id=ilike.${encodeURIComponent(merchantId)}&select=id,codigo,user_id,ifood_merchant_id,ifood_status`,
@@ -1038,6 +1040,21 @@ async function processIFoodEventsInServer(body: any, env?: any) {
             }
           }
 
+          // 1.2 Busca pela loja prioritária CD-5411
+          if (!foundEst) {
+            const resCd5411 = await fetch(
+              `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.CD-5411&select=id,codigo,user_id,ifood_merchant_id,ifood_status`,
+              { headers }
+            );
+            if (resCd5411.ok) {
+              const listCd5411 = await resCd5411.json();
+              if (Array.isArray(listCd5411) && listCd5411.length > 0) {
+                foundEst = listCd5411[0];
+              }
+            }
+          }
+
+          // 1.3 Busca ampla para loja conectada ou mais recente
           if (!foundEst) {
             const resAll = await fetch(
               `${supabaseUrl}/rest/v1/estabelecimentos?select=id,codigo,user_id,ifood_merchant_id,ifood_status&order=created_at.desc`,
@@ -1048,21 +1065,28 @@ async function processIFoodEventsInServer(body: any, env?: any) {
               if (Array.isArray(allList) && allList.length > 0) {
                 const connected = allList.find((e: any) => e.ifood_status === "conectado");
                 foundEst = connected || allList[0];
-                if (merchantId && foundEst && !foundEst.ifood_merchant_id) {
-                  await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?id=eq.${foundEst.id}`, {
-                    method: "PATCH",
-                    headers,
-                    body: JSON.stringify({ ifood_merchant_id: merchantId, updated_at: new Date().toISOString() }),
-                  }).catch(() => {});
-                }
               }
             }
           }
 
           if (foundEst) {
-            estCodigo = foundEst.codigo || "CD-1001";
+            estCodigo = foundEst.codigo || "CD-5411";
             estId = foundEst.id || null;
             estUserId = foundEst.user_id || null;
+
+            // Salvar ifood_merchant_id (4115946) na linha da loja na tabela estabelecimentos
+            if (merchantId && foundEst.id) {
+              await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?id=eq.${foundEst.id}`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({
+                  ifood_merchant_id: merchantId,
+                  ifood_status: "conectado",
+                  updated_at: new Date().toISOString(),
+                }),
+              }).catch(() => {});
+              console.log(`[Server iFood Merchant Persist] merchantId '${merchantId}' persistido com sucesso na loja '${estCodigo}' (ID: ${estId})`);
+            }
           }
         } catch (eM) {
           console.warn("[Server iFood Match Warn]", eM);
