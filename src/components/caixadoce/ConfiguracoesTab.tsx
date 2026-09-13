@@ -436,18 +436,27 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       salvarHorariosLocal(activeCode, novaConfig);
     }
     try {
-      await updateUserProfile({
+      await updateEstablishmentDetails({
         horarios_funcionamento: novaConfig,
       });
+
       if (activeCode) {
-        await supabase
-          .from("estabelecimentos")
-          .update({
-            horarios_funcionamento: novaConfig,
-            updated_at: new Date().toISOString(),
-          })
-          .ilike("codigo", activeCode.toUpperCase().trim());
+        try {
+          const { error } = await supabase
+            .from("estabelecimentos")
+            .update({
+              horarios_funcionamento: novaConfig,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("codigo", activeCode.toUpperCase().trim());
+          if (error) {
+            console.warn("[ConfiguracoesTab] Aviso ao atualizar coluna horarios_funcionamento no Supabase:", error.message);
+          }
+        } catch (dbErr) {
+          console.warn("[ConfiguracoesTab] Falha na gravação remota de horários:", dbErr);
+        }
       }
+
       if (pausar) {
         toast.error("🛑 Vendas Imediatas PAUSADAS! O cardápio público está aceitando apenas orçamentos.");
       } else {
@@ -500,18 +509,28 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (activeCode) {
         salvarHorariosLocal(activeCode, horariosConfig);
       }
-      await updateUserProfile({
+      
+      await updateEstablishmentDetails({
         horarios_funcionamento: horariosConfig,
       });
+
       if (activeCode) {
-        await supabase
-          .from("estabelecimentos")
-          .update({
-            horarios_funcionamento: horariosConfig,
-            updated_at: new Date().toISOString(),
-          })
-          .ilike("codigo", activeCode.toUpperCase().trim());
+        try {
+          const { error } = await supabase
+            .from("estabelecimentos")
+            .update({
+              horarios_funcionamento: horariosConfig,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("codigo", activeCode.toUpperCase().trim());
+          if (error) {
+            console.warn("[ConfiguracoesTab] Aviso ao atualizar coluna horarios_funcionamento no Supabase:", error.message);
+          }
+        } catch (dbErr) {
+          console.warn("[ConfiguracoesTab] Falha na gravação remota de horários:", dbErr);
+        }
       }
+
       toast.success("Horários, exceções e modo de controle salvos com sucesso!");
     } catch (err: any) {
       console.error("[ConfiguracoesTab] Erro ao salvar horários:", err);
@@ -1451,6 +1470,10 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           if (tk) setTiktokEst(tk);
           const fb = d.facebook || d.social_facebook || d.social_media?.facebook;
           if (fb) setFacebookEst(fb);
+
+          if (d.horarios_funcionamento || d.opening_hours) {
+            setHorariosConfig(normalizarConfiguracaoCompleta(d.horarios_funcionamento || d.opening_hours));
+          }
 
           const rawPixList = Array.isArray(d.pix_accounts) && d.pix_accounts.length > 0
             ? d.pix_accounts

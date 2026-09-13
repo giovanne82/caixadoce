@@ -1140,6 +1140,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           delete fallbackUpdatePayload.cnpj;
           delete fallbackUpdatePayload.signature_data_url;
           delete (fallbackUpdatePayload as any).assinatura_data_url;
+          delete fallbackUpdatePayload.horarios_funcionamento;
+          delete (fallbackUpdatePayload as any).horariosFuncionamento;
           delete (fallbackUpdatePayload as any).codigo;
           delete (fallbackUpdatePayload as any).user_id;
 
