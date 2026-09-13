@@ -77,6 +77,8 @@ export type UpdateEstablishmentDetailsInput = {
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
   signature_data_url?: string;
   assinatura_data_url?: string;
+  horarios_funcionamento?: any;
+  horariosFuncionamento?: any;
 };
 
 export type StaffProfile = {
@@ -128,6 +130,8 @@ export type StaffProfile = {
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
   signature_data_url?: string;
   assinatura_data_url?: string;
+  horarios_funcionamento?: any;
+  horariosFuncionamento?: any;
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
@@ -405,6 +409,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                 modo_venda: data.modo_venda || baseProf.modo_venda || "ambos",
                 signature_data_url: data.signature_data_url || (data as any)?.assinatura_data_url || baseProf.signature_data_url,
                 assinatura_data_url: (data as any)?.assinatura_data_url || data.signature_data_url || baseProf.assinatura_data_url,
+                horarios_funcionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
+                horariosFuncionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
                 ownerUserId: data.user_id || u.id,
                 userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
               };
@@ -999,6 +1005,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       if (details.signature_data_url !== undefined || details.assinatura_data_url !== undefined) {
         const sig = details.signature_data_url || details.assinatura_data_url;
         updatePayload.signature_data_url = sig || null;
+      }
+
+      if (details.horarios_funcionamento !== undefined || details.horariosFuncionamento !== undefined) {
+        const h = details.horarios_funcionamento || details.horariosFuncionamento;
+        updatePayload.horarios_funcionamento = h;
       }
 
       if (

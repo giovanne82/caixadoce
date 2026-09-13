@@ -90,6 +90,15 @@ import {
   trocarCodigoOAuthMercadoPago,
   desconectarMercadoPago,
 } from "@/lib/mercadopago-service";
+import {
+  DIAS_SEMANA_ORDEM,
+  normalizarHorarios,
+  verificarStatusFuncionamento,
+  salvarHorariosLocal,
+  obterHorariosLocal,
+  type HorariosFuncionamento,
+  type DiaSemana,
+} from "@/lib/horarios-service";
 
 interface ConfiguracoesTabProps {
   onIrParaPlano?: () => void;
@@ -266,6 +275,7 @@ export type SectionKey =
   | null
   | "perfil"
   | "loja"
+  | "horarios"
   | "aparencia"
   | "redes"
   | "pagamentos"
@@ -344,6 +354,84 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const [usarMercadopago, setUsarMercadopago] = useState<boolean>(Boolean(profile?.usar_mercadopago));
   const [chavePixManual, setChavePixManual] = useState<string>(profile?.chave_pix_manual || profile?.chavePix || "");
   const [salvandoPixPref, setSalvandoPixPref] = useState(false);
+
+  // Horários de Funcionamento da Loja
+  const [horariosConfig, setHorariosConfig] = useState<HorariosFuncionamento>(() =>
+    normalizarHorarios(profile?.horarios_funcionamento || profile?.horariosFuncionamento || obterHorariosLocal(activeCode))
+  );
+  const [salvandoHorarios, setSalvandoHorarios] = useState(false);
+
+  useEffect(() => {
+    if (profile?.horarios_funcionamento || profile?.horariosFuncionamento) {
+      setHorariosConfig(normalizarHorarios(profile.horarios_funcionamento || profile.horariosFuncionamento));
+    }
+  }, [profile?.horarios_funcionamento, profile?.horariosFuncionamento]);
+
+  const handleAlterarHorarioDia = (
+    dia: DiaSemana,
+    field: "aberto" | "inicio" | "fim",
+    value: any
+  ) => {
+    setHorariosConfig((prev) => ({
+      ...prev,
+      [dia]: {
+        ...prev[dia],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleCopiarSegundaParaUteis = () => {
+    const seg = horariosConfig.segunda;
+    setHorariosConfig((prev) => ({
+      ...prev,
+      terca: { ...seg },
+      quarta: { ...seg },
+      quinta: { ...seg },
+      sexta: { ...seg },
+    }));
+    toast.success("Horário de Segunda copiado para Terça a Sexta!");
+  };
+
+  const handleDefinirPadraoComercial = () => {
+    setHorariosConfig({
+      segunda: { aberto: true, inicio: "08:00", fim: "18:00" },
+      terca: { aberto: true, inicio: "08:00", fim: "18:00" },
+      quarta: { aberto: true, inicio: "08:00", fim: "18:00" },
+      quinta: { aberto: true, inicio: "08:00", fim: "18:00" },
+      sexta: { aberto: true, inicio: "08:00", fim: "18:00" },
+      sabado: { aberto: true, inicio: "08:00", fim: "18:00" },
+      domingo: { aberto: false, inicio: "08:00", fim: "14:00" },
+    });
+    toast.info("Horários padrão definidos (08:00 às 18:00, Domingo fechado).");
+  };
+
+  const handleSalvarHorarios = async () => {
+    setSalvandoHorarios(true);
+    try {
+      if (activeCode) {
+        salvarHorariosLocal(activeCode, horariosConfig);
+      }
+      await updateUserProfile({
+        horarios_funcionamento: horariosConfig,
+      });
+      if (activeCode) {
+        await supabase
+          .from("estabelecimentos")
+          .update({
+            horarios_funcionamento: horariosConfig,
+            updated_at: new Date().toISOString(),
+          })
+          .ilike("codigo", activeCode.toUpperCase().trim());
+      }
+      toast.success("Horários de funcionamento salvos com sucesso!");
+    } catch (err: any) {
+      console.error("[ConfiguracoesTab] Erro ao salvar horários:", err);
+      toast.error(`Erro ao salvar horários: ${err?.message || "Falha no servidor"}`);
+    } finally {
+      setSalvandoHorarios(false);
+    }
+  };
 
 
   // Estado do Mercado Pago Connect (OAuth) com hidratação imediata do cache local
@@ -1487,6 +1575,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
   const SECTION_NAMES: Record<string, string> = {
     perfil: "Meu Perfil",
     loja: "Minha Loja",
+    horarios: "Horário de Funcionamento",
     aparencia: "Aparência do Cardápio",
     redes: "Redes Sociais",
     pagamentos: "Pagamentos",
@@ -1497,6 +1586,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     seguranca: "Segurança",
     contato: "Fale Conosco",
   };
+
+  const statusFuncionamento = verificarStatusFuncionamento(horariosConfig);
 
   const MENU_ITEMS = [
     {
@@ -1514,6 +1605,14 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       icon: Store,
       colorClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
       badge: slugEst ? `@${slugEst}` : undefined,
+    },
+    {
+      id: "horarios",
+      title: "Horário de Funcionamento",
+      description: "Expediente da loja, dias de abertura e fechamento para vendas diretas",
+      icon: Clock,
+      colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+      badge: statusFuncionamento.aberta ? "Aberto Agora" : "Fechado",
     },
     {
       id: "aparencia",
@@ -2044,6 +2143,158 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     {salvandoEst ? "Salvando..." : "Salvar Dados da Loja"}
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* SEÇÃO: HORÁRIO DE FUNCIONAMENTO */}
+          {activeSection === "horarios" && (
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-indigo-600" />
+                      <span>Horário de Funcionamento da Loja</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Defina o expediente da confeitaria para cada dia da semana. Fora do horário configurado, o cardápio público recua automaticamente para aceitar apenas solicitações de orçamento.
+                    </CardDescription>
+                  </div>
+                  <Badge
+                    className={`text-xs font-bold py-1 px-3 self-start sm:self-auto ${
+                      statusFuncionamento.aberta
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30"
+                    }`}
+                    variant="outline"
+                  >
+                    {statusFuncionamento.aberta
+                      ? `🟢 Aberto agora (${statusFuncionamento.horarioHojeFormatado})`
+                      : `🟠 Fechado agora (${statusFuncionamento.motivo})`}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Banner de Ações Rápidas */}
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/40 rounded-xl border border-border">
+                  <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Ações Rápidas:
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopiarSegundaParaUteis}
+                    className="text-xs h-7 px-2.5 rounded-lg border-border hover:bg-background"
+                  >
+                    Copiar Seg para Seg-Sex
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDefinirPadraoComercial}
+                    className="text-xs h-7 px-2.5 rounded-lg border-border hover:bg-background"
+                  >
+                    Padrão Comercial (08h às 18h)
+                  </Button>
+                </div>
+
+                {/* Grade dos 7 Dias da Semana */}
+                <div className="space-y-3">
+                  {DIAS_SEMANA_ORDEM.map((diaItem) => {
+                    const cfg = horariosConfig[diaItem.key] || { aberto: true, inicio: "08:00", fim: "18:00" };
+                    const isHoje = statusFuncionamento.diaAtualKey === diaItem.key;
+
+                    return (
+                      <div
+                        key={diaItem.key}
+                        className={`p-3.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isHoje
+                            ? "border-indigo-500/40 bg-indigo-500/5 shadow-xs"
+                            : "border-border bg-card hover:border-border/80"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-[180px]">
+                          <Switch
+                            checked={cfg.aberto}
+                            onCheckedChange={(val) => handleAlterarHorarioDia(diaItem.key, "aberto", val)}
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-foreground">{diaItem.label}</span>
+                              {isHoje && (
+                                <Badge className="bg-indigo-600 text-white text-[9px] font-black uppercase px-1.5 py-0">
+                                  Hoje
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {cfg.aberto ? "Loja Aberta" : "Fechado"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {cfg.aberto ? (
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground font-medium">De:</span>
+                              <Input
+                                type="time"
+                                value={cfg.inicio || "08:00"}
+                                onChange={(e) => handleAlterarHorarioDia(diaItem.key, "inicio", e.target.value)}
+                                className="h-8 w-28 text-xs font-mono"
+                              />
+                            </div>
+                            <span className="text-xs text-muted-foreground font-medium">até</span>
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                type="time"
+                                value={cfg.fim || "18:00"}
+                                onChange={(e) => handleAlterarHorarioDia(diaItem.key, "fim", e.target.value)}
+                                className="h-8 w-28 text-xs font-mono"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground italic self-end sm:self-auto py-1.5 px-3 bg-muted/60 rounded-lg border border-border/50">
+                            Loja fechada o dia todo (Apenas Orçamentos)
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Nota de Regra de Negócio */}
+                <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs text-muted-foreground space-y-1">
+                  <p className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Regra Automática de Vendas Diretas &amp; Orçamentos
+                  </p>
+                  <p>
+                    Quando sua loja estiver fora do horário de atendimento ou marcada como Fechada, o cliente que acessar seu cardápio público não poderá finalizar compras para entrega imediata no carrinho — o sistema o direcionará para o modo <strong>Solicitação de Orçamento</strong>.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleSalvarHorarios}
+                    disabled={salvandoHorarios}
+                    className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
+                  >
+                    {salvandoHorarios ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Salvando Horários...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" /> Salvar Horários de Funcionamento
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
