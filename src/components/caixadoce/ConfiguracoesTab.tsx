@@ -68,6 +68,7 @@ import {
   ExternalLink,
   ArrowLeft,
   ChevronRight,
+  Zap,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import {
@@ -2383,6 +2384,84 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           {/* 5. SEÇÃO: PAGAMENTOS */}
           {activeSection === "pagamentos" && (
             <div className="space-y-6">
+              {/* MODO DE RECEBIMENTO DO CARDÁPIO (SWITCH PIX MANUAL VS PIX AUTOMÁTICO MERCADO PAGO) */}
+              <Card className="border-border shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-emerald-600" />
+                        <span>Modo de Recebimento do Cardápio</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Escolha como seus clientes farão o pagamento das compras no seu cardápio digital
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      className={`text-[10px] font-extrabold px-2.5 py-1 ${
+                        usarMercadopago
+                          ? "bg-blue-600 text-white"
+                          : "bg-emerald-600 text-white"
+                      }`}
+                    >
+                      {usarMercadopago ? "Automático (Mercado Pago)" : "Manual (Chave Pix)"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 rounded-2xl border border-border bg-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+                    <div className="flex items-start gap-3.5">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                          usarMercadopago
+                            ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                            : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                        }`}
+                      >
+                        {usarMercadopago ? (
+                          <Zap className="w-5 h-5 text-blue-600" />
+                        ) : (
+                          <QrCode className="w-5 h-5 text-emerald-600" />
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-extrabold text-foreground">
+                          {usarMercadopago
+                            ? "⚡ Pix Automático (Mercado Pago Connect)"
+                            : "🔑 Pix Manual (Copia e Cola / Chave do Estabelecimento)"}
+                        </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
+                          {usarMercadopago
+                            ? "O cardápio gera um QR Code Pix dinâmico no checkout. Assim que o cliente paga, o pedido é confirmado automaticamente sem necessidade de envio de comprovante."
+                            : "O cardápio exibe sua chave Pix cadastrada abaixo e solicita que o cliente copie a chave e envie o comprovante de pagamento via WhatsApp."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                      <span className="text-xs font-bold text-muted-foreground">
+                        {usarMercadopago ? "Ativo" : "Desativado"}
+                      </span>
+                      <Switch
+                        checked={usarMercadopago}
+                        onCheckedChange={handleToggleModoRecebimento}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  {usarMercadopago && !mpConectado && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2.5 font-medium">
+                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Atenção:</strong> Você ativou o Pix Automático, mas sua conta do Mercado Pago ainda não está conectada. Conecte sua conta no card abaixo para autenticar os recebimentos.
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* GERENCIADOR DE CHAVES PIX */}
               <Card className="border-border shadow-sm">
                 <CardHeader>
                   <div className="flex items-center justify-between">
