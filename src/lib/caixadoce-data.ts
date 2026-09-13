@@ -1173,6 +1173,29 @@ export function isEncomendaTotalmentePaga(encomenda: Partial<Encomenda>): boolea
   return (encomenda.statusPagamento as string) === "pago" || encomenda.statusPagamento === "pago_integral";
 }
 
+export type OrigemEncomendaTipo = "manual" | "cardapio" | "ifood";
+
+export function obterOrigemEncomenda(encomenda?: Partial<Encomenda> | null): OrigemEncomendaTipo {
+  if (!encomenda) return "manual";
+  if (isPedidoIFood(encomenda as any)) return "ifood";
+
+  const origemStr = String(encomenda.origem || "").trim().toLowerCase();
+  if (origemStr === "ifood") return "ifood";
+  if (origemStr === "cardapio" || origemStr === "catalogo" || origemStr === "site" || origemStr === "cardapio_digital") return "cardapio";
+  if (origemStr === "manual" || origemStr === "painel" || origemStr === "balcao" || origemStr === "pdv") return "manual";
+
+  if (encomenda.codigo_pedido_ifood || (encomenda as any).codigoPedidoIfood || encomenda.is_ifood) {
+    return "ifood";
+  }
+
+  const origemPag = String(encomenda.origem_pagamento || "").trim().toLowerCase();
+  if (origemPag === "mercadopago" || (encomenda as any).is_orcamento || (encomenda as any).origem_pedido === "cardapio" || (encomenda as any).forma_pagamento === "Orçamento") {
+    return "cardapio";
+  }
+
+  return "manual";
+}
+
 export interface Encomenda {
   id: string;
   estabelecimentoCodigo: string;

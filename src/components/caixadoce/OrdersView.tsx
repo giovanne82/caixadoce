@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
@@ -117,6 +117,8 @@ import {
   salvarNotinhasVinculadasPorLista,
   calcularTotalPagoEncomenda,
   isEncomendaTotalmentePaga,
+  obterOrigemEncomenda,
+  type OrigemEncomendaTipo,
   STATUS_ENCOMENDA_CONFIG,
   CATEGORIAS_DESPESA_CONFIG,
   type Encomenda,
@@ -168,22 +170,62 @@ function obterEstiloPilula(status: StatusEncomenda) {
   }
 }
 
-function renderizarBadgeOrigem(origem?: string) {
-  if (!origem || String(origem).trim().toLowerCase() !== "ifood") return null;
+function renderizarBadgeOrigem(ordOrOrigem?: Encomenda | string) {
+  const enc: Partial<Encomenda> | undefined = typeof ordOrOrigem === "string" ? { origem: ordOrOrigem } : ordOrOrigem;
+  const origem = obterOrigemEncomenda(enc);
+
+  if (origem === "ifood") {
+    return (
+      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
+        <Store className="w-3 h-3 text-white fill-white shrink-0" />
+        <span>iFood</span>
+      </Badge>
+    );
+  }
+
+  if (origem === "cardapio") {
+    return (
+      <Badge className="bg-purple-600 hover:bg-purple-700 text-white border-none text-[10px] font-bold flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
+        <ShoppingCart className="w-3 h-3 text-white shrink-0" />
+        <span>Meu Cardápio</span>
+      </Badge>
+    );
+  }
+
   return (
-    <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
-      <Store className="w-3 h-3 text-white fill-white shrink-0" />
-      <span>iFood</span>
+    <Badge variant="outline" className="text-zinc-600 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 text-[10px] font-medium flex items-center gap-1 shrink-0 px-2 py-0.5">
+      <Edit2 className="w-3 h-3 text-zinc-500 shrink-0" />
+      <span>Manual</span>
     </Badge>
   );
 }
 
-function renderizarBadgeOrigemMobile(origem?: string) {
-  if (!origem || String(origem).trim().toLowerCase() !== "ifood") return null;
+function renderizarBadgeOrigemMobile(ordOrOrigem?: Encomenda | string) {
+  const enc: Partial<Encomenda> | undefined = typeof ordOrOrigem === "string" ? { origem: ordOrOrigem } : ordOrOrigem;
+  const origem = obterOrigemEncomenda(enc);
+
+  if (origem === "ifood") {
+    return (
+      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] font-black uppercase flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
+        <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
+        <span>iFood</span>
+      </Badge>
+    );
+  }
+
+  if (origem === "cardapio") {
+    return (
+      <Badge className="bg-purple-600 hover:bg-purple-700 text-white border-none text-[9px] font-bold flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
+        <ShoppingCart className="w-2.5 h-2.5 text-white shrink-0" />
+        <span>Cardápio</span>
+      </Badge>
+    );
+  }
+
   return (
-    <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] font-black uppercase flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
-      <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
-      <span>iFood</span>
+    <Badge variant="outline" className="text-zinc-600 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 text-[9px] font-medium flex items-center gap-0.5 shrink-0 px-1.5 py-0">
+      <Edit2 className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
+      <span>Manual</span>
     </Badge>
   );
 }
@@ -739,6 +781,7 @@ export function OrdersView({
 
   // Filtros da Lista
   const [filtroPagamento, setFiltroPagamento] = useState<string>("todos");
+  const [filtroOrigem, setFiltroOrigem] = useState<string>("todas");
   const [busca, setBusca] = useState<string>("");
 
   // Formulário de Encomenda
@@ -1739,6 +1782,7 @@ export function OrdersView({
         detalhesTopoBolo: temTopoBolo ? detalhesTopoBolo : "",
         temVela,
         detalhesVela: temVela ? detalhesVela : "",
+        origem: editingId ? undefined : "manual",
       };
 
       if (editingId) {
@@ -1890,10 +1934,38 @@ export function OrdersView({
     setDrawerOpen(true);
   };
 
+  // Função de validação unificada de filtros (Pagamento, Origem e Busca)
+  const atendeFiltrosGerais = useCallback((e: Encomenda) => {
+    const totalmentePaga = isEncomendaTotalmentePaga(e);
+
+    let matchPagamento = true;
+    if (filtroPagamento === "pendente") {
+      matchPagamento = !totalmentePaga; // Possui qualquer saldo devedor em aberto (valor_pago < valor_total)
+    } else if (filtroPagamento === "pago") {
+      matchPagamento = totalmentePaga; // Totalmente quitada (valor_pago >= valor_total)
+    }
+
+    let matchOrigem = true;
+    if (filtroOrigem !== "todas") {
+      matchOrigem = obterOrigemEncomenda(e) === filtroOrigem;
+    }
+
+    const matchBusca =
+      !busca ||
+      e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
+      e.itens.toLowerCase().includes(busca.toLowerCase()) ||
+      e.clienteWhatsapp.includes(busca) ||
+      (e.codigoPedidoIfood && e.codigoPedidoIfood.toLowerCase().includes(busca.toLowerCase())) ||
+      (e.codigo_pedido_ifood && e.codigo_pedido_ifood.toLowerCase().includes(busca.toLowerCase())) ||
+      (e.id && e.id.toLowerCase().includes(busca.toLowerCase()));
+
+    return matchPagamento && matchOrigem && matchBusca;
+  }, [filtroPagamento, filtroOrigem, busca]);
+
   const encomendasDoDiaDrawer = useMemo(() => {
     if (!selectedDrawerDate) return [];
-    return encomendas.filter((e) => e.dataEntrega === selectedDrawerDate);
-  }, [encomendas, selectedDrawerDate]);
+    return encomendas.filter((e) => e.dataEntrega === selectedDrawerDate && atendeFiltrosGerais(e));
+  }, [encomendas, selectedDrawerDate, atendeFiltrosGerais]);
 
   const bloqueioDoDiaDrawer = useMemo(() => {
     if (!selectedDrawerDate) return null;
@@ -1919,24 +1991,8 @@ export function OrdersView({
   // Lista Filtrada para a Tabela / Cards (Regra Matemática: valor_pago < valor_total -> Pendente)
   const encomendasFiltradas = useMemo(() => {
     const listaBase = viewMode === "concluidos" ? encomendasConcluidas : (viewMode === "lista" ? encomendasAtivas : encomendas);
-    return listaBase.filter((e) => {
-      const totalmentePaga = isEncomendaTotalmentePaga(e);
-
-      let matchPagamento = true;
-      if (filtroPagamento === "pendente") {
-        matchPagamento = !totalmentePaga; // Possui qualquer saldo devedor em aberto (valor_pago < valor_total)
-      } else if (filtroPagamento === "pago") {
-        matchPagamento = totalmentePaga; // Totalmente quitada (valor_pago >= valor_total)
-      }
-
-      const matchBusca =
-        !busca ||
-        e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
-        e.itens.toLowerCase().includes(busca.toLowerCase()) ||
-        e.clienteWhatsapp.includes(busca);
-      return matchPagamento && matchBusca;
-    });
-  }, [viewMode, encomendasAtivas, encomendasConcluidas, encomendas, filtroPagamento, busca]);
+    return listaBase.filter(atendeFiltrosGerais);
+  }, [viewMode, encomendasAtivas, encomendasConcluidas, encomendas, atendeFiltrosGerais]);
 
   // Navegação de Período
   const navegarPeriodo = (delta: number) => {
@@ -2282,29 +2338,40 @@ export function OrdersView({
           </div>
         )}
 
-        {(viewMode === "lista" || viewMode === "concluidos") && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por cliente ou item..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="h-8 text-xs pl-8 w-44 sm:w-52 font-medium"
-              />
-            </div>
-            <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
-              <SelectTrigger className="h-8 text-xs w-40 font-semibold">
-                <SelectValue placeholder="Pagamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os Pagamentos</SelectItem>
-                <SelectItem value="pendente">Pendente (Com Saldo)</SelectItem>
-                <SelectItem value="pago">Pago (Quitado)</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente ou item..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="h-8 text-xs pl-8 w-44 sm:w-52 font-medium"
+            />
           </div>
-        )}
+
+          <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+            <SelectTrigger className="h-8 text-xs w-44 font-semibold">
+              <SelectValue placeholder="Origem" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas as Origens</SelectItem>
+              <SelectItem value="manual">Inserida Manualmente</SelectItem>
+              <SelectItem value="cardapio">Meu Cardápio</SelectItem>
+              <SelectItem value="ifood">iFood</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filtroPagamento} onValueChange={setFiltroPagamento}>
+            <SelectTrigger className="h-8 text-xs w-40 font-semibold">
+              <SelectValue placeholder="Pagamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os Pagamentos</SelectItem>
+              <SelectItem value="pendente">Pendente (Com Saldo)</SelectItem>
+              <SelectItem value="pago">Pago (Quitado)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -2324,7 +2391,7 @@ export function OrdersView({
 
           <div className="grid grid-cols-7 divide-x divide-y divide-border/60 bg-muted/10">
             {diasDoMesGrid.map((dia, idx) => {
-              const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso);
+              const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso && atendeFiltrosGerais(e));
               const bloqueio = datasBloqueadas.find((b) => b.data === dia.dataIso);
               const isHoje = dia.dataIso === new Date().toISOString().split("T")[0];
 
@@ -2420,7 +2487,7 @@ export function OrdersView({
       {viewMode === "semana" && (
         <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
           {diasDaSemanaGrid.map((dia) => {
-            const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso);
+            const encomendasDoDia = encomendas.filter((e) => e.dataEntrega === dia.dataIso && atendeFiltrosGerais(e));
             const bloqueio = datasBloqueadas.find((b) => b.data === dia.dataIso);
             const isHoje = dia.dataIso === new Date().toISOString().split("T")[0];
 

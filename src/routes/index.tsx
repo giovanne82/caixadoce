@@ -1241,6 +1241,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       detalhes_topo_bolo: detTopo,
       tem_vela: temVela,
       tipo_vela: detVela,
+      origem: item.origem || "manual",
     };
 
     let { error } = await supabase.from("encomendas").insert([payloadStandard]);
@@ -1264,6 +1265,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         status: item.status || "pendente",
         status_pagamento: item.statusPagamento || "pendente",
         observacoes: item.observacoes || "",
+        origem: item.origem || "manual",
       };
 
       let resMin = await supabase.from("encomendas").insert([payloadMinimal]);
@@ -1279,6 +1281,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     // 2. Atualizar estado local SOMENTE se a gravação no Supabase retornou sucesso
     const itemFormatadoComHistorico = {
       ...item,
+      origem: item.origem || "manual",
       historicoPagamentos: histSanitizadoCriar,
       paymentsHistory: histSanitizadoCriar,
       valorEntrada: valEntrada,

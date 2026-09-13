@@ -383,6 +383,7 @@ function PublicStoreView() {
         tipo_entrega: novaEncomenda.tipoEntrega,
         endereco_entrega: novaEncomenda.enderecoEntrega,
         observacoes: novaEncomenda.observacoes,
+        origem: "cardapio",
       };
 
       const { error } = await supabase.from("encomendas").insert([payloadInsert]);

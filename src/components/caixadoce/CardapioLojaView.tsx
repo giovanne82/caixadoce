@@ -1889,6 +1889,7 @@ export function CardapioLojaView() {
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
+        origem: "cardapio",
       };
 
       let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
@@ -1917,6 +1918,7 @@ export function CardapioLojaView() {
           forma_pagamento: payloadInsert.forma_pagamento,
           origem_pagamento: payloadInsert.origem_pagamento,
           observacoes: obsFinal,
+          origem: "cardapio",
         };
 
         const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
@@ -2387,6 +2389,7 @@ export function CardapioLojaView() {
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
+        origem: "cardapio",
       };
 
       let { error: insertError } = await supabase.from("encomendas").insert([payloadOrcamento]);
@@ -2791,6 +2794,7 @@ export function CardapioLojaView() {
           }
         ] : [],
         observacoes: obsFinal,
+        origem: "cardapio",
       };
 
       let { error: insertError } = await supabase.from("encomendas").insert([payloadInsert]);
