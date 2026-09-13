@@ -66,6 +66,8 @@ import {
   ShoppingBag,
   Copy,
   ExternalLink,
+  ArrowLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import {
@@ -259,7 +261,23 @@ function DigitalSignatureCanvas({
   );
 }
 
+export type SectionKey =
+  | null
+  | "perfil"
+  | "loja"
+  | "aparencia"
+  | "redes"
+  | "pagamentos"
+  | "frete"
+  | "equipe"
+  | "planos"
+  | "integracoes"
+  | "seguranca"
+  | "contato";
+
 export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
+  const [activeSection, setActiveSection] = useState<SectionKey>(null);
+
   const {
     user,
     profile,
@@ -1465,851 +1483,924 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   };
 
+  const SECTION_NAMES: Record<string, string> = {
+    perfil: "Meu Perfil",
+    loja: "Minha Loja",
+    aparencia: "Aparência do Cardápio",
+    redes: "Redes Sociais",
+    pagamentos: "Pagamentos & Pix",
+    planos: "Planos & Parcerias",
+    integracoes: "Integrações",
+    frete: "Frete & Entrega",
+    equipe: "Equipe & Colaboradores",
+    seguranca: "Segurança",
+    contato: "Fale Conosco",
+  };
+
+  const MENU_ITEMS = [
+    {
+      id: "perfil",
+      title: "Meu Perfil",
+      description: "Dados da conta, e-mail e Assinatura Digital do Confeiteiro",
+      icon: UserCheck,
+      colorClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+      badge: signatureDataUrl ? "Assinatura ✓" : undefined,
+    },
+    {
+      id: "loja",
+      title: "Minha Loja",
+      description: "Nome do estabelecimento, link do cardápio, endereço e CPF/CNPJ",
+      icon: Store,
+      colorClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
+      badge: slugEst ? `@${slugEst}` : undefined,
+    },
+    {
+      id: "aparencia",
+      title: "Aparência do Cardápio",
+      description: "Logo, imagem de capa, cores do tema, título e slogan público",
+      icon: Sparkles,
+      colorClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    },
+    {
+      id: "redes",
+      title: "Redes Sociais",
+      description: "WhatsApp, Instagram, TikTok e Facebook no cardápio",
+      icon: Share2,
+      colorClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    },
+    {
+      id: "pagamentos",
+      title: "Pagamentos",
+      description: "Chaves Pix cadastradas e recebimento online",
+      icon: CreditCard,
+      colorClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+      badge: contasPix.length > 0 ? `${contasPix.length} Pix` : undefined,
+    },
+    {
+      id: "planos",
+      title: "Planos & Parcerias",
+      description: "Cards de Assinatura, Painel de Afiliado e Admin",
+      icon: Crown,
+      colorClass: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+      badge: "Assinatura",
+    },
+    {
+      id: "integracoes",
+      title: "Integrações",
+      description: "iFood e plataformas parceiras de delivery",
+      icon: ShoppingBag,
+      colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+      badge: "Em Breve",
+    },
+    {
+      id: "frete",
+      title: "Frete & Entrega",
+      description: "Taxas por km, bairros de entrega e opções de retirada",
+      icon: Truck,
+      colorClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+    },
+    {
+      id: "equipe",
+      title: "Equipe & Colaboradores",
+      description: "Gestão de acessos, atendentes e confeiteiros",
+      icon: Users,
+      colorClass: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20",
+    },
+    {
+      id: "seguranca",
+      title: "Segurança",
+      description: "Alteração de senha e encerramento de conta",
+      icon: Lock,
+      colorClass: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+    },
+    {
+      id: "contato",
+      title: "Fale Conosco",
+      description: "Dúvidas, sugestões e suporte técnico CaixaDoce",
+      icon: Mail,
+      colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-extrabold text-foreground">Configurações &amp; Perfil</h2>
-        <p className="text-sm text-muted-foreground">
-          Gerencie dados do seu perfil, informações da empresa, Pix e segurança.
-        </p>
-      </div>
-
-      {/* CARD DE PERFIL DESTACADO NO TOPO */}
-      <Card className="border-2 border-purple-500/30 bg-gradient-to-r from-purple-900/10 via-card to-purple-950/20 shadow-md rounded-2xl overflow-hidden">
-        <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center font-extrabold text-lg shadow-md shrink-0">
-              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-            </div>
-            <div className="space-y-0.5 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-extrabold text-foreground truncate">{user?.name || "Usuário"}</h3>
-                <Badge className="bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] uppercase font-mono font-bold">
-                  {profile?.role || "ADMIN"}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground font-mono truncate">{user?.email || "Sem e-mail"}</p>
-            </div>
+    <div className="space-y-6 max-w-5xl">
+      {/* SEÇÃO PRINCIPAL: HUB DE AJUSTES (MENU INICIAL) */}
+      {activeSection === null ? (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-extrabold text-foreground tracking-tight">Ajustes &amp; Configurações</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Selecione uma opção abaixo para personalizar sua confeitaria, pagamentos e conta.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-background/80 border border-border px-3.5 py-2 rounded-xl text-xs font-mono font-bold text-foreground shrink-0 shadow-2xs">
-            <span className="text-muted-foreground uppercase text-[10px] font-sans">Código da Loja:</span>
-            <span className="text-purple-600 dark:text-purple-400 font-extrabold">{activeCode}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* CARD / BANNER DEDICADO: MEU PLANO & ASSINATURA */}
-      {(() => {
-        const infoPlano = obterPlanoEfetivoEstabelecimento(activeCode);
-        return (
-          <Card className="border-purple-200 bg-gradient-to-r from-purple-50/80 via-pink-50/60 to-purple-50/80 shadow-sm">
+          {/* CARD DE PERFIL & LOJA NO TOPO */}
+          <Card className="border border-purple-500/30 bg-gradient-to-r from-purple-900/10 via-card to-pink-950/10 shadow-xs rounded-2xl overflow-hidden">
             <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                  <Crown className="w-5 h-5 text-amber-300" />
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center font-extrabold text-lg shadow-md shrink-0">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
                 </div>
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Assinatura &amp; Meu Plano</h4>
-                    <Badge className="bg-purple-600 text-white text-[10px] font-bold">
-                      {infoPlano.status === "trial"
-                        ? `Teste Pro (${infoPlano.diasRestantesTrial || 7} dias restantes)`
-                        : infoPlano.planoId === "basico"
-                        ? "Plano Básico Gratuito"
-                        : "Plano Pro Ativo"}
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-foreground truncate">
+                      {nomeEst || user?.name || "Minha Confeitaria"}
+                    </h3>
+                    <Badge className="bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] uppercase font-mono font-bold">
+                      {profile?.role || "ADMIN"}
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-600">
-                    {infoPlano.planoId === "basico"
-                      ? "Você está usando o Plano Básico. Faça upgrade para o Plano Pro e libere o scanner por IA ilimitado."
-                      : "Acesso ilimitado liberado para leitura por IA, ficha técnica e agendamento de encomendas."}
-                  </p>
+                  <p className="text-xs text-muted-foreground font-mono truncate">{user?.email || "Sem e-mail"}</p>
                 </div>
               </div>
-              {onIrParaPlano && (
-                <Button
-                  type="button"
-                  onClick={onIrParaPlano}
-                  className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md rounded-xl shrink-0"
-                >
-                  <Crown className="w-4 h-4 mr-1.5 text-amber-300" /> Gerenciar Assinatura
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })()}
 
-      {/* CARD / BANNER: MEU PAINEL DE PARCEIRO / AFILIADO */}
-      {(isAfiliado || isEmailAdmin(user?.email)) && (
-        <Card className="border-emerald-400/50 bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-emerald-500/10 shadow-sm">
-          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
-                <Users className="w-5 h-5" />
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Meu Painel de Parceiro / Afiliado</h4>
-                  <Badge className="bg-emerald-500 text-slate-950 font-bold text-[10px]">Parceiro</Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-background/90 border border-border px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-foreground shrink-0 shadow-2xs">
+                  <span className="text-muted-foreground uppercase text-[10px] font-sans">Loja:</span>
+                  <span className="text-purple-600 dark:text-purple-400 font-extrabold">{activeCode}</span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Acompanhe suas indicações, lojas convertidas e estimativa de comissões.
-                </p>
-              </div>
-            </div>
-            <Link to="/afiliados">
-              <Button
-                type="button"
-                className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-md rounded-xl shrink-0 border border-emerald-400/40"
-              >
-                <Users className="w-4 h-4 mr-1.5" /> Meu Painel de Parceiro / Afiliado
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* CARD / BANNER EXCLUSIVO: PAINEL DE ADMINISTRAÇÃO & AFILIADOS (SOMENTE PARA SÓCIOS/WHITELIST) */}
-      {isEmailAdmin(user?.email) && (
-        <Card className="border-amber-400/50 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-500/10 shadow-sm">
-          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Painel de Administração</h4>
-                  <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">Exclusivo Sócios</Badge>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Gestão do programa de afiliados, cupons exclusivos e relatórios de repasses financeiros.
-                </p>
-              </div>
-            </div>
-            <Link to="/admin/afiliados">
-              <Button
-                type="button"
-                className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-md rounded-xl shrink-0 border border-amber-400/40"
-              >
-                <Shield className="w-4 h-4 mr-1.5 fill-slate-950/20" /> Acessar Painel Admin
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      <Tabs defaultValue="empresa" className="space-y-6">
-        <div className="w-full overflow-x-auto scrollbar-none pb-1">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full bg-muted/80 p-1 sm:p-1.5 rounded-2xl border border-border/50 gap-1 h-auto">
-            <TabsTrigger
-              value="empresa"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
-            >
-              <Building2 className="w-4 h-4 text-primary shrink-0" /> Loja
-            </TabsTrigger>
-            <TabsTrigger
-              value="frete"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
-            >
-              <Truck className="w-4 h-4 text-primary shrink-0" /> Frete &amp; Entrega
-            </TabsTrigger>
-            <TabsTrigger
-              value="colaboradores"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
-            >
-              <Users className="w-4 h-4 text-primary shrink-0" /> Equipe
-            </TabsTrigger>
-            <TabsTrigger
-              value="seguranca"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold"
-            >
-              <Lock className="w-4 h-4 text-primary shrink-0" /> Segurança
-            </TabsTrigger>
-            <TabsTrigger
-              value="contato"
-              className="flex items-center justify-center gap-1.5 font-bold px-1.5 sm:px-3 py-2 text-xs sm:text-sm rounded-xl transition-all text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-extrabold col-span-2 sm:col-span-1"
-            >
-              <Mail className="w-4 h-4 text-primary shrink-0" /> Contato
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* TAB: FRETE & REGRAS DE ENTREGA */}
-        <TabsContent value="frete" className="space-y-6">
-          <FreteConfigView estabelecimentoCodigo={activeCode} />
-        </TabsContent>
-
-        {/* TAB: PERFIL & ESTABELECIMENTO */}
-        <TabsContent value="empresa" className="space-y-6">
-          {/* CARD: DADOS DO USUÁRIO */}
-          <Card className="border-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold text-foreground">Dados do Usuário</CardTitle>
-              <CardDescription>Informações da sua conta de acesso ao CaixaDoce</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSalvarUsuario} className="space-y-4 max-w-lg">
-                <div className="space-y-1.5">
-                  <Label htmlFor="usr-name">Nome Completo</Label>
-                  <Input
-                    id="usr-name"
-                    value={nomeUsuario}
-                    onChange={(e) => setNomeUsuario(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="usr-email">E-mail de Login</Label>
-                    <Input id="usr-email" value={emailUsuario} disabled className="bg-muted font-medium" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="usr-matricula">Matrícula / Perfil de Acesso</Label>
-                    <Input
-                      id="usr-matricula"
-                      value={`${activeCode}-${(profile?.role || "admin").toUpperCase()}`}
-                      disabled
-                      className="bg-muted font-mono font-bold text-purple-600 dark:text-purple-400"
-                    />
-                  </div>
-                </div>
-                <Button type="submit" disabled={salvandoUser} className="font-semibold shadow-sm">
-                  <Save className="w-4 h-4 mr-1.5" />
-                  {salvandoUser ? "Salvando..." : "Salvar Alterações do Perfil"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* CARD: INTEGRAÇÃO DE PAGAMENTO (MERCADO PAGO CONNECT) */}
-          <Card className="border-border shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span>Integração de Pagamento (Mercado Pago Connect)</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-1">
-                    Conecte sua conta do Mercado Pago para receber pagamentos de vendas diretamente no seu estabelecimento no cardápio digital.
-                  </CardDescription>
-                </div>
-                {mpConectado && (
-                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Conta Conectada
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-2">
-              {carregandoMp || processandoOAuthMp ? (
-                <div className="p-4 rounded-2xl bg-muted/30 border border-border flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {processandoOAuthMp ? "Conectando e salvando tokens da sua conta Mercado Pago..." : "Verificando status da conexão..."}
-                  </span>
-                </div>
-              ) : mpConectado ? (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
-                          Sua conta do Mercado Pago está conectada e pronta para receber!
-                        </span>
-                      </div>
-                      {mpUserId && (
-                        <p className="text-[11px] font-mono text-muted-foreground">
-                          User ID Mercado Pago: <strong>{mpUserId}</strong>
-                        </p>
-                      )}
-                      {mpPublicKey && (
-                        <p className="text-[10px] font-mono text-muted-foreground truncate max-w-md">
-                          Chave Pública: {mpPublicKey.substring(0, 20)}...
-                        </p>
-                      )}
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleDesconectarMercadoPago}
-                      disabled={desconectandoMp}
-                      className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-500/15 hover:text-rose-700 h-9 rounded-xl gap-1.5"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {desconectandoMp ? "Desconectando..." : "Desconectar Mercado Pago"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-4">
-                  <div className="space-y-1.5">
-                    <h4 className="text-xs font-extrabold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                      Receba pagamentos direto no seu Mercado Pago
-                    </h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Ao conectar sua conta, todas as vendas pagas por Pix ou Cartão no seu cardápio serão creditadas em tempo real na sua conta do Mercado Pago.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    onClick={handleConectarMercadoPago}
-                    className="w-full sm:w-auto font-black text-xs h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2"
+                {slugEst && (
+                  <a
+                    href={`/cardapio/${slugEst}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-purple-600 hover:text-purple-700 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-3 py-1.5 rounded-xl transition-colors"
                   >
-                    <CreditCard className="w-4 h-4" />
-                    Conectar com Mercado Pago
-                  </Button>
-                </div>
-              )}
-
-              {/* CONFIGURAÇÃO DO MODO DE RECEBIMENTO DO PIX NO CHECKOUT */}
-              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-4 mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      Modo de Recebimento via Pix no Cardápio
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Escolha entre Pix Automático (Mercado Pago com QR Code gerado em tempo real) ou Pix Manual (exibe sua chave direta).
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 bg-background p-2 rounded-xl border border-border shrink-0">
-                    <span className={`text-xs font-bold ${!usarMercadopago ? "text-purple-600 dark:text-purple-400 font-extrabold" : "text-muted-foreground"}`}>
-                      Pix Manual
-                    </span>
-                    <Switch
-                      checked={usarMercadopago}
-                      onCheckedChange={handleToggleModoRecebimento}
-                    />
-                    <span className={`text-xs font-bold ${usarMercadopago ? "text-purple-600 dark:text-purple-400 font-extrabold" : "text-muted-foreground"}`}>
-                      Pix Automático (Mercado Pago)
-                    </span>
-                  </div>
-                </div>
-
-                {!usarMercadopago && (
-                  <div className="space-y-2 pt-2 border-t border-purple-500/20">
-                    <Label htmlFor="chave-pix-manual" className="text-xs font-bold text-foreground">
-                      Chave Pix Manual (Direto na Conta)
-                    </Label>
-                    <Input
-                      id="chave-pix-manual"
-                      placeholder="Digite seu CPF, CNPJ, E-mail, Celular ou Chave Aleatória"
-                      value={chavePixManual}
-                      onChange={(e) => setChavePixManual(e.target.value)}
-                      onBlur={async () => {
-                        try {
-                          let targetId = estId;
-                          if (!targetId && activeCode) {
-                            const { data: estRow } = await supabase
-                              .from("estabelecimentos")
-                              .select("id")
-                              .ilike("codigo", activeCode.toUpperCase().trim())
-                              .maybeSingle();
-                            if (estRow?.id) targetId = estRow.id;
-                          }
-                          if (targetId) {
-                            await supabase.from("estabelecimentos").update({ chave_pix_manual: chavePixManual }).eq("id", targetId);
-                          } else if (activeCode) {
-                            await supabase.from("estabelecimentos").update({ chave_pix_manual: chavePixManual }).ilike("codigo", activeCode.toUpperCase().trim());
-                          }
-                          updateEstablishmentDetails({ chave_pix_manual: chavePixManual });
-                        } catch {}
-                      }}
-                      className="bg-background text-xs h-9"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Esta chave será exibida diretamente para o cliente ao finalizar o pedido no cardápio com o botão &quot;Copiar Chave&quot;.
-                    </p>
-                  </div>
+                    <Link2 className="w-3.5 h-3.5" /> Ver Cardápio ↗
+                  </a>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* CARD: INTEGRAÇÃO IFOOD (OAUTH 2.0 CENTRALIZADO) - Ocultado temporariamente até liberação das credenciais */}
-          {false && (
-          <Card className="border-border shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                    <Store className="w-5 h-5 text-red-600 dark:text-red-400" />
-                    <span>Integração iFood (Integração Centralizada)</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-1">
-                    Receba seus pedidos do iFood diretamente no painel do CaixaDoce em tempo real. (Sincronização de cardápio e status em breve).
-                  </CardDescription>
-                </div>
-                {ifoodConectado && (
-                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Loja Conectada
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-2">
-              {carregandoIfood ? (
-                <div className="p-4 rounded-2xl bg-muted/30 border border-border flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 animate-spin text-red-600 shrink-0" />
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    Verificando status da conexão com o iFood...
-                  </span>
-                </div>
-              ) : ifoodConectado ? (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
-                          Sua loja está conectada ao iFood!
-                        </span>
-                      </div>
-                      {ifoodMerchantId && (
-                        <p className="text-[11px] font-mono text-muted-foreground">
-                          ID da Loja no iFood (Merchant ID): <strong>{ifoodMerchantId}</strong>
-                        </p>
-                      )}
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleDesconectarIFood}
-                      disabled={desconectandoIfood}
-                      className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-500/15 hover:text-rose-700 h-9 rounded-xl gap-1.5"
+          {/* GRID DE CARDS DO MENU DE OPÇÕES */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {MENU_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveSection(item.id as SectionKey)}
+                  className="p-4 rounded-2xl border border-border/80 bg-card hover:border-purple-500/50 hover:shadow-md hover:scale-[1.01] transition-all text-left flex items-center justify-between gap-3.5 group shadow-2xs"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${item.colorClass} shadow-xs group-hover:scale-105 transition-transform`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {desconectandoIfood ? "Desconectando..." : "Desconectar iFood"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-4">
-                  <div className="space-y-1.5">
-                    <h4 className="text-xs font-extrabold text-red-900 dark:text-red-200 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-red-600 shrink-0" />
-                      Conecte seu iFood ao CaixaDoce
-                    </h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Clique no botão abaixo para gerar seu código de dispositivo e abrir o portal do iFood para autorizar a conexão.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => handleConectarIFood()}
-                      disabled={gerandoUserCode}
-                      className="w-full sm:w-auto font-black text-xs h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md gap-2"
-                    >
-                      {gerandoUserCode ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Store className="w-4 h-4" />
-                      )}
-                      {gerandoUserCode ? "Gerando Código..." : "Conectar iFood (Gerar Código)"}
-                    </Button>
-
-                    {userCodeGerado && urlVerificacao && (
-                      <a
-                        href={urlVerificacao}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-white hover:bg-red-700 font-bold px-4 py-2 bg-red-600 rounded-xl shadow-xs transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" /> Abrir Portal do iFood
-                      </a>
-                    )}
-                  </div>
-
-                  {/* BOX DE PASSO A PASSO COM CÓDIGO DO DISPOSITIVO E INPUT DO CÓDIGO DE AUTORIZAÇÃO */}
-                  {userCodeGerado && (
-                    <div className="p-4 rounded-xl bg-background/95 border border-red-500/40 space-y-4 mt-2 shadow-xs">
-                      <div className="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-border/50">
-                        <div>
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                            Código de Verificação do seu Dispositivo:
-                          </span>
-                          <span className="text-xl font-black text-red-600 font-mono tracking-widest select-all">
-                            {userCodeGerado}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              navigator.clipboard.writeText(userCodeGerado);
-                              toast.success("Código de verificação copiado!");
-                            }}
-                            className="h-8 text-xs font-bold gap-1.5"
-                          >
-                            <Copy className="w-3.5 h-3.5" /> Copiar Código
-                          </Button>
-                          {urlVerificacao && (
-                            <a
-                              href={urlVerificacao}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:underline font-bold px-3 py-1.5 bg-red-500/10 rounded-lg border border-red-500/20"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" /> Portal iFood
-                            </a>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* INSTRUÇÕES PASSO A PASSO */}
-                      <div className="space-y-1.5 text-[11px] text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/40">
-                        <p className="font-bold text-foreground text-xs">Instruções para vincular a loja:</p>
-                        <p>1. Copie o <strong>Código de Verificação</strong> acima ({userCodeGerado}).</p>
-                        <p>2. Clique no botão <strong>Abrir Portal do iFood</strong> para autorizar a aplicação <strong>CaixaDoce</strong>.</p>
-                        <p>3. Após autorizar no iFood, copie o <strong>Código de Autorização</strong> gerado na tela e cole abaixo.</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="ifood-auth-code-input" className="text-xs font-bold text-foreground block">
-                          Cole aqui o Código de Autorização do iFood:
-                        </Label>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          <Input
-                            id="ifood-auth-code-input"
-                            placeholder="Ex: ABC-12345 ou código gerado"
-                            value={authCodeInput}
-                            onChange={(e) => setAuthCodeInput(e.target.value)}
-                            className="text-xs h-10 font-mono"
-                          />
-                          <Button
-                            type="button"
-                            onClick={handleConfirmarCodigoIFood}
-                            disabled={confirmandoAuthCode || !authCodeInput.trim()}
-                            className="font-bold text-xs h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 shadow-sm"
-                          >
-                            {confirmandoAuthCode ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4" />
-                            )}
-                            {confirmandoAuthCode ? "Validando..." : "Validar Código"}
-                          </Button>
-                        </div>
-                      </div>
+                      <Icon className="w-5 h-5" />
                     </div>
-                  )}
-
-                  {!userCodeGerado && (
-                    <div className="p-3.5 rounded-xl bg-background/60 border border-border/60 space-y-2 mt-2">
-                      <Label htmlFor="ifood-auth-code-direct" className="text-xs font-bold text-foreground block">
-                        Já possui um Código de Autorização do iFood? Cole abaixo:
-                      </Label>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <Input
-                          id="ifood-auth-code-direct"
-                          placeholder="Cole aqui o Código de Autorização do iFood"
-                          value={authCodeInput}
-                          onChange={(e) => setAuthCodeInput(e.target.value)}
-                          className="text-xs h-9.5 font-mono"
-                        />
-                        <Button
-                          type="button"
-                          onClick={handleConfirmarCodigoIFood}
-                          disabled={confirmandoAuthCode || !authCodeInput.trim()}
-                          className="font-bold text-xs h-9.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5 shadow-sm"
-                        >
-                          {confirmandoAuthCode ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4" />
-                          )}
-                          {confirmandoAuthCode ? "Validando..." : "Validar Código"}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          )}
-
-
-          {/* CARD: DADOS DO ESTABELECIMENTO & PIX */}
-          <Card className="border-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold text-foreground">
-                Dados do Estabelecimento &amp; Chave Pix
-              </CardTitle>
-              <CardDescription>
-                Configure os dados da sua confeitaria/loja para exibição em recibos e cobranças
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSalvarEstabelecimento} className="space-y-4 max-w-xl">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="est-nome">Nome da Loja / Fantasia</Label>
-                    <Input
-                      id="est-nome"
-                      value={nomeEst}
-                      onChange={(e) => setNomeEst(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="est-resp">Responsável Principal</Label>
-                    <Input
-                      id="est-resp"
-                      value={responsavelEst}
-                      onChange={(e) => setResponsavelEst(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* CAMPO DE LINK PERSONALIZADO DO CARDÁPIO (SLUG) */}
-                <div className="space-y-2.5 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/25 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="est-slug" className="text-xs font-black text-foreground flex items-center gap-1.5">
-                      <Link2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      Link Personalizado do Cardápio (Slug)
-                    </Label>
-                    <Badge variant="outline" className={`text-[10px] font-mono font-bold ${slugEst ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400" : "bg-muted text-muted-foreground"}`}>
-                      {slugEst ? "Personalizado" : "Padrão"}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <div className="flex items-center rounded-xl border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/30 flex-1">
-                      <span className="px-3 py-2 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-border shrink-0">
-                        caixadoce.com.br/cardapio/
-                      </span>
-                      <Input
-                        id="est-slug"
-                        value={slugEst}
-                        onChange={(e) => {
-                          // Regex em tempo real: apenas letras minúsculas, números e hífens
-                          const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
-                          setSlugEst(val);
-                        }}
-                        placeholder="minha-confeitaria"
-                        className="border-0 focus-visible:ring-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300 h-9"
-                      />
-                    </div>
-
-                    <Button
-                      type="button"
-                      onClick={handleSalvarSlugDireto}
-                      disabled={salvandoSlug}
-                      className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white h-9 rounded-xl shadow-xs shrink-0"
-                    >
-                      {salvandoSlug ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-                      Salvar Link
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-muted-foreground gap-1 pt-0.5">
-                    <span>Permitido: apenas letras minúsculas, números e hífens.</span>
-                    {slugEst && (
-                      <a
-                        href={`/cardapio/${slugEst}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline font-bold truncate flex items-center gap-1"
-                      >
-                        Abrir: /cardapio/{slugEst} ↗
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                {/* SEÇÃO DE ENDEREÇO ESTRUTURADO COM VIA CEP */}
-                <div className="space-y-3 pt-2 border-t border-border">
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-primary" /> Endereço do Estabelecimento
-                  </h4>
-
-                  {/* Linha 1: CEP (com Busca ViaCEP) + Logradouro */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5 sm:col-span-1">
-                      <Label htmlFor="est-cep" className="flex items-center gap-1">
-                        CEP <span className="text-rose-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          id="est-cep"
-                          value={cepEst}
-                          onChange={(e) => {
-                            const formatted = formatarCep(e.target.value);
-                            setCepEst(formatted);
-                            const clean = e.target.value.replace(/\D/g, "");
-                            if (clean.length === 8) {
-                              buscarCepViaCep(clean);
-                            }
-                          }}
-                          onBlur={() => {
-                            const clean = cepEst.replace(/\D/g, "");
-                            if (clean.length === 8) {
-                              buscarCepViaCep(clean);
-                            }
-                          }}
-                          placeholder="00000-000"
-                          className="pr-8 font-mono"
-                          required
-                        />
-                        {buscandoCep && (
-                          <Loader2 className="w-4 h-4 text-primary animate-spin absolute right-2.5 top-2.5" />
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-extrabold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                          {item.title}
+                        </h4>
+                        {item.badge && (
+                          <Badge variant="outline" className="text-[10px] font-bold py-0 px-2 h-4.5 bg-muted/60">
+                            {item.badge}
+                          </Badge>
                         )}
                       </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
                     </div>
+                  </div>
 
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="est-logradouro">
-                        Logradouro / Endereço <span className="text-rose-500">*</span>
-                      </Label>
+                  <div className="w-8 h-8 rounded-xl bg-muted/40 group-hover:bg-purple-500/10 text-muted-foreground group-hover:text-purple-600 flex items-center justify-center shrink-0 transition-colors">
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* SUB-PÁGINA DEDICADA DA SEÇÃO SELECIONADA */
+        <div className="space-y-6 animate-in fade-in-50 duration-200">
+          {/* BARRA SUPERIOR DE RETORNO */}
+          <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveSection(null)}
+              className="font-bold text-xs gap-2 rounded-xl h-9 px-4 border-border/80 hover:bg-purple-500/10 hover:text-purple-700 hover:border-purple-300 shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4" /> Voltar para Ajustes
+            </Button>
+
+            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+              <span className="hidden sm:inline">Ajustes</span>
+              <span className="hidden sm:inline">&gt;</span>
+              <span className="text-foreground font-extrabold">{SECTION_NAMES[activeSection]}</span>
+            </div>
+          </div>
+
+          {/* 1. SEÇÃO: MEU PERFIL */}
+          {activeSection === "perfil" && (
+            <div className="space-y-6">
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-foreground">Dados do Usuário</CardTitle>
+                  <CardDescription>Informações da sua conta de acesso ao CaixaDoce</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSalvarUsuario} className="space-y-4 max-w-lg">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="usr-name">Nome Completo</Label>
                       <Input
-                        id="est-logradouro"
-                        value={logradouroEst}
-                        onChange={(e) => setLogradouroEst(e.target.value)}
-                        placeholder="Rua, Avenida, Alameda..."
+                        id="usr-name"
+                        value={nomeUsuario}
+                        onChange={(e) => setNomeUsuario(e.target.value)}
                         required
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="usr-email">E-mail de Login</Label>
+                        <Input id="usr-email" value={emailUsuario} disabled className="bg-muted font-medium" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="usr-matricula">Matrícula / Perfil de Acesso</Label>
+                        <Input
+                          id="usr-matricula"
+                          value={`${activeCode}-${(profile?.role || "admin").toUpperCase()}`}
+                          disabled
+                          className="bg-muted font-mono font-bold text-purple-600 dark:text-purple-400"
+                        />
+                      </div>
+                    </div>
+                    <Button type="submit" disabled={salvandoUser} className="font-semibold shadow-sm">
+                      <Save className="w-4 h-4 mr-1.5" />
+                      {salvandoUser ? "Salvando..." : "Salvar Alterações do Perfil"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* ASSINATURA DIGITAL DO CONFEITEIRO */}
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <Edit2 className="w-5 h-5 text-purple-600" />
+                        <span>Assinatura Digital do Confeiteiro</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Utilizada na emissão de orçamentos, recibos e comprovantes em PDF
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] font-mono font-bold ${
+                        signatureDataUrl
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {signatureDataUrl ? "✓ Cadastrada" : "Pendente"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Desenhe sua assinatura no quadro abaixo ou faça upload de um arquivo de imagem.
+                  </p>
+                  <DigitalSignatureCanvas value={signatureDataUrl} onChange={(val) => setSignatureDataUrl(val)} />
+                  <Button
+                    type="button"
+                    onClick={handleSalvarEstabelecimento}
+                    disabled={salvandoEst}
+                    className="font-semibold shadow-sm bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    <Save className="w-4 h-4 mr-1.5" />
+                    {salvandoEst ? "Salvando..." : "Salvar Assinatura Digital"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* 2. SEÇÃO: MINHA LOJA */}
+          {activeSection === "loja" && (
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-foreground">
+                  Dados do Estabelecimento &amp; Endereço
+                </CardTitle>
+                <CardDescription>
+                  Configure as informações principais da sua confeitaria para exibição em recibos, cardápio e cobranças
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSalvarEstabelecimento} className="space-y-4 max-w-xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-nome">Nome da Loja / Fantasia</Label>
+                      <Input
+                        id="est-nome"
+                        value={nomeEst}
+                        onChange={(e) => setNomeEst(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-resp">Responsável Principal</Label>
+                      <Input
+                        id="est-resp"
+                        value={responsavelEst}
+                        onChange={(e) => setResponsavelEst(e.target.value)}
                       />
                     </div>
                   </div>
 
-                  {/* Linha 2: Número + Complemento */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5 sm:col-span-1">
-                      <Label htmlFor="est-numero">
-                        Número <span className="text-rose-500">*</span>
+                  {/* CAMPO DE LINK PERSONALIZADO DO CARDÁPIO (SLUG) */}
+                  <div className="space-y-2.5 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/25 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="est-slug" className="text-xs font-black text-foreground flex items-center gap-1.5">
+                        <Link2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        Link Personalizado do Cardápio (Slug)
                       </Label>
-                      <Input
-                        ref={numeroInputRef}
-                        id="est-numero"
-                        value={numeroEst}
-                        onChange={(e) => setNumeroEst(e.target.value)}
-                        placeholder="Ex: 123 ou S/N"
-                        required
-                      />
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-mono font-bold ${
+                          slugEst
+                            ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {slugEst ? "Personalizado" : "Padrão"}
+                      </Badge>
                     </div>
 
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="est-complemento">
-                        Complemento <span className="text-xs text-muted-foreground">(Opcional)</span>
-                      </Label>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <div className="flex items-center rounded-xl border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/30 flex-1">
+                        <span className="px-3 py-2 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-border shrink-0">
+                          caixadoce.com.br/cardapio/
+                        </span>
+                        <Input
+                          id="est-slug"
+                          value={slugEst}
+                          onChange={(e) => {
+                            const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+                            setSlugEst(val);
+                          }}
+                          placeholder="minha-confeitaria"
+                          className="border-0 focus-visible:ring-0 text-xs font-mono font-bold text-purple-700 dark:text-purple-300 h-9"
+                        />
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={handleSalvarSlugDireto}
+                        disabled={salvandoSlug}
+                        className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white h-9 rounded-xl shadow-xs shrink-0"
+                      >
+                        {salvandoSlug ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                        Salvar Link
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-muted-foreground gap-1 pt-0.5">
+                      <span>Permitido: apenas letras minúsculas, números e hífens.</span>
+                      {slugEst && (
+                        <a
+                          href={`/cardapio/${slugEst}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline font-bold truncate flex items-center gap-1"
+                        >
+                          Abrir: /cardapio/{slugEst} ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SEÇÃO DE ENDEREÇO ESTRUTURADO COM VIA CEP */}
+                  <div className="space-y-3 pt-2 border-t border-border">
+                    <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-primary" /> Endereço do Estabelecimento
+                    </h4>
+
+                    {/* Linha 1: CEP + Logradouro */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <Label htmlFor="est-cep" className="flex items-center gap-1">
+                          CEP <span className="text-rose-500">*</span>
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="est-cep"
+                            value={cepEst}
+                            onChange={(e) => {
+                              const formatted = formatarCep(e.target.value);
+                              setCepEst(formatted);
+                              const clean = e.target.value.replace(/\D/g, "");
+                              if (clean.length === 8) {
+                                buscarCepViaCep(clean);
+                              }
+                            }}
+                            onBlur={() => {
+                              const clean = cepEst.replace(/\D/g, "");
+                              if (clean.length === 8) {
+                                buscarCepViaCep(clean);
+                              }
+                            }}
+                            placeholder="00000-000"
+                            className="pr-8 font-mono"
+                            required
+                          />
+                          {buscandoCep && (
+                            <Loader2 className="w-4 h-4 text-primary animate-spin absolute right-2.5 top-2.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="est-logradouro">
+                          Logradouro / Endereço <span className="text-rose-500">*</span>
+                        </Label>
+                        <Input
+                          id="est-logradouro"
+                          value={logradouroEst}
+                          onChange={(e) => setLogradouroEst(e.target.value)}
+                          placeholder="Rua, Avenida, Alameda..."
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Linha 2: Número + Complemento */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <Label htmlFor="est-numero">
+                          Número <span className="text-rose-500">*</span>
+                        </Label>
+                        <Input
+                          ref={numeroInputRef}
+                          id="est-numero"
+                          value={numeroEst}
+                          onChange={(e) => setNumeroEst(e.target.value)}
+                          placeholder="Ex: 123 ou S/N"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="est-complemento">
+                          Complemento <span className="text-xs text-muted-foreground">(Opcional)</span>
+                        </Label>
+                        <Input
+                          id="est-complemento"
+                          value={complementoEst}
+                          onChange={(e) => setComplementoEst(e.target.value)}
+                          placeholder="Ex: Sala 02, Bloco B, Térreo"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Linha 3: Bairro + Cidade + Estado */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <Label htmlFor="est-bairro">
+                          Bairro <span className="text-rose-500">*</span>
+                        </Label>
+                        <Input
+                          id="est-bairro"
+                          value={bairroEst}
+                          onChange={(e) => setBairroEst(e.target.value)}
+                          placeholder="Bairro"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <Label htmlFor="est-cidade">
+                          Cidade <span className="text-rose-500">*</span>
+                        </Label>
+                        <Input
+                          id="est-cidade"
+                          value={cidadeEst}
+                          onChange={(e) => setCidadeEst(e.target.value)}
+                          placeholder="Cidade"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <Label htmlFor="est-uf">
+                          Estado (UF) <span className="text-rose-500">*</span>
+                        </Label>
+                        <Input
+                          id="est-uf"
+                          value={ufEst}
+                          onChange={(e) => setUfEst(e.target.value.toUpperCase().slice(0, 2))}
+                          placeholder="SP"
+                          maxLength={2}
+                          className="font-mono uppercase"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DOCUMENTO (CPF / CNPJ) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-tipodoc">Tipo de Documento</Label>
+                      <Select value={tipoDoc} onValueChange={setTipoDoc}>
+                        <SelectTrigger id="est-tipodoc">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CNPJ">CNPJ</SelectItem>
+                          <SelectItem value="CPF">CPF</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="est-doc">Número do Documento</Label>
                       <Input
-                        id="est-complemento"
-                        value={complementoEst}
-                        onChange={(e) => setComplementoEst(e.target.value)}
-                        placeholder="Ex: Sala 02, Bloco B, Térreo"
+                        id="est-doc"
+                        value={numDoc}
+                        onChange={(e) => {
+                          const formatted = formatarCpfCnpj(e.target.value);
+                          setNumDoc(formatted);
+                          const digits = e.target.value.replace(/\D/g, "");
+                          if (digits.length > 11) {
+                            setTipoDoc("CNPJ");
+                          } else if (digits.length > 0) {
+                            setTipoDoc("CPF");
+                          }
+                        }}
+                        placeholder="000.000.000-00 ou 00.000.000/0001-00"
                       />
                     </div>
                   </div>
 
-                  {/* Linha 3: Bairro + Cidade + Estado (UF) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1.5 sm:col-span-1">
-                      <Label htmlFor="est-bairro">
-                        Bairro <span className="text-rose-500">*</span>
-                      </Label>
-                      <Input
-                        id="est-bairro"
-                        value={bairroEst}
-                        onChange={(e) => setBairroEst(e.target.value)}
-                        placeholder="Bairro"
-                        required
-                      />
+                  <Button type="submit" disabled={salvandoEst} className="font-semibold shadow-sm mt-4">
+                    <Save className="w-4 h-4 mr-1.5" />
+                    {salvandoEst ? "Salvando..." : "Salvar Dados da Loja"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 3. SEÇÃO: APARÊNCIA DO CARDÁPIO */}
+          {activeSection === "aparencia" && (
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      <span>Identidade Visual &amp; Personalização do Cardápio</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Personalize imagem de capa, logo, cor de destaque e slogan do seu cardápio público
+                    </CardDescription>
+                  </div>
+                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
+                    Vitrine Pública
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* 1. IMAGEM DE CAPA (BANNER) */}
+                <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                      <ImageIcon className="w-4 h-4 text-primary" /> Imagem de Capa (Banner do Topo)
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground">Recomendado: 1200x400 (Máx. 2MB)</span>
+                  </div>
+
+                  <div className="relative w-full h-32 sm:h-40 rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 border border-dashed border-border flex items-center justify-center group">
+                    {bannerUrl ? (
+                      <>
+                        <img src={bannerUrl} alt="Capa do Cardápio" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => fileInputBannerRef.current?.click()}
+                            className="text-xs font-bold bg-white/90 hover:bg-white text-stone-900"
+                          >
+                            <Upload className="w-3.5 h-3.5 mr-1" /> Trocar Imagem
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setBannerUrl("")}
+                            className="text-xs font-bold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-4 space-y-2">
+                        <ImageIcon className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                        <p className="text-xs text-muted-foreground font-medium">
+                          Nenhuma capa selecionada. Será exibido o cabeçalho padrão com cor de destaque.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={enviandoBanner}
+                          onClick={() => fileInputBannerRef.current?.click()}
+                          className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                        >
+                          <Upload className="w-3.5 h-3.5 mr-1.5" />
+                          {enviandoBanner ? "Enviando..." : "Enviar Imagem de Capa"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    ref={fileInputBannerRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadBannerFile}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* 2. LOGO DO ESTABELECIMENTO */}
+                <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                  <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <ImageIcon className="w-4 h-4 text-primary" /> Logo da Loja / Confeitaria
+                  </Label>
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 dark:bg-stone-800 border-2 border-primary/20 flex items-center justify-center shrink-0 shadow-sm">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <CaixaDoceLogo size="sm" />
+                      )}
                     </div>
 
-                    <div className="space-y-1.5 sm:col-span-1">
-                      <Label htmlFor="est-cidade">
-                        Cidade <span className="text-rose-500">*</span>
-                      </Label>
-                      <Input
-                        id="est-cidade"
-                        value={cidadeEst}
-                        onChange={(e) => setCidadeEst(e.target.value)}
-                        placeholder="Cidade"
-                        required
+                    <div className="space-y-2 text-center sm:text-left flex-1">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadLogoFile}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={enviandoLogo}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
+                        >
+                          <Upload className="w-3.5 h-3.5 mr-1.5" />
+                          {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
+                        </Button>
+                        {logoUrl && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setLogoUrl("")}
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Formatos: PNG, JPG, WEBP, SVG (Máx. 2MB)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. COR PRINCIPAL DE DESTAQUE */}
+                <div className="space-y-2.5 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                      <Sparkles className="w-4 h-4 text-primary" /> Cor Principal de Destaque
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-bold text-muted-foreground uppercase">{themeColor}</span>
+                      <div
+                        className="w-5 h-5 rounded-full border border-black/20 shadow-xs shrink-0"
+                        style={{ backgroundColor: themeColor }}
                       />
                     </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Aplicada aos botões de ação, badges e preços no cardápio público.
+                  </p>
 
-                    <div className="space-y-1.5 sm:col-span-1">
-                      <Label htmlFor="est-uf">
-                        Estado (UF) <span className="text-rose-500">*</span>
-                      </Label>
+                  {/* Paletas Predefinidas */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    {PALETAS_CORES_TEMA.map((paleta) => {
+                      const isSelected = themeColor.toLowerCase() === paleta.hex.toLowerCase();
+                      return (
+                        <button
+                          type="button"
+                          key={paleta.id}
+                          onClick={() => setThemeColor(paleta.hex)}
+                          className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? "border-primary ring-2 ring-primary/30 bg-primary/5 font-bold shadow-xs"
+                              : "border-border hover:border-border/80 bg-background/50 hover:bg-background"
+                          }`}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full border border-black/15 shrink-0 flex items-center justify-center text-white"
+                            style={{ backgroundColor: paleta.hex }}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </span>
+                          <span className="text-[11px] text-foreground truncate">{paleta.nome.split(" ")[0]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Cor Customizada */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <Label className="text-[11px] font-semibold text-muted-foreground shrink-0">
+                      Cor personalizada:
+                    </Label>
+                    <div className="flex items-center gap-1.5 flex-1 max-w-[180px]">
+                      <input
+                        type="color"
+                        value={themeColor}
+                        onChange={(e) => setThemeColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
+                      />
                       <Input
-                        id="est-uf"
-                        value={ufEst}
-                        onChange={(e) => setUfEst(e.target.value.toUpperCase().slice(0, 2))}
-                        placeholder="SP"
-                        maxLength={2}
-                        className="font-mono uppercase"
-                        required
+                        value={themeColor}
+                        onChange={(e) => setThemeColor(e.target.value)}
+                        placeholder="#8E7CC3"
+                        className="h-8 text-xs font-mono uppercase"
+                        maxLength={7}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 4. TÍTULO E SLOGAN DO CARDÁPIO */}
+                <div className="space-y-3 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
                   <div className="space-y-1.5">
-                    <Label htmlFor="est-tipodoc">Tipo de Documento</Label>
-                    <Select value={tipoDoc} onValueChange={setTipoDoc}>
-                      <SelectTrigger id="est-tipodoc">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CNPJ">CNPJ</SelectItem>
-                        <SelectItem value="CPF">CPF</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="est-doc">Número do Documento</Label>
+                    <Label htmlFor="cfg-menu-title" className="text-xs font-bold">
+                      Título do Cardápio (Público)
+                    </Label>
                     <Input
-                      id="est-doc"
-                      value={numDoc}
-                      onChange={(e) => {
-                        const formatted = formatarCpfCnpj(e.target.value);
-                        setNumDoc(formatted);
-                        const digits = e.target.value.replace(/\D/g, "");
-                        if (digits.length > 11) {
-                          setTipoDoc("CNPJ");
-                        } else if (digits.length > 0) {
-                          setTipoDoc("CPF");
-                        }
-                      }}
-                      placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                      id="cfg-menu-title"
+                      value={tituloCardapio}
+                      onChange={(e) => setTituloCardapio(e.target.value)}
+                      placeholder="Cardápio de Bolos &amp; Doces Especiais"
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cfg-menu-slogan" className="text-xs font-bold">
+                      Slogan / Mensagem de Apresentação
+                    </Label>
+                    <Textarea
+                      id="cfg-menu-slogan"
+                      rows={2}
+                      value={sloganCardapio}
+                      onChange={(e) => setSloganCardapio(e.target.value)}
+                      placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
+                      className="text-xs"
                     />
                   </div>
                 </div>
 
-                {/* SEÇÃO: GERENCIAMENTO DE MÚLTIPLAS CONTAS PIX */}
-                <div className="pt-3 border-t space-y-3">
+                <Button
+                  type="button"
+                  onClick={handleSalvarEstabelecimento}
+                  disabled={salvandoEst}
+                  className="font-semibold shadow-sm bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <Save className="w-4 h-4 mr-1.5" />
+                  {salvandoEst ? "Salvando..." : "Salvar Aparência do Cardápio"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 4. SEÇÃO: REDES SOCIAIS */}
+          {activeSection === "redes" && (
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                      <Share2 className="w-5 h-5 text-blue-600" />
+                      <span>Redes Sociais no Cardápio Público</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Perfis oficiais da confeitaria para que seus clientes acessem diretamente do seu cardápio
+                    </CardDescription>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">
+                    Exibição Automática
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="est-instagram" className="text-xs font-bold flex items-center gap-1.5">
+                      <Instagram className="w-3.5 h-3.5 text-pink-600" /> Instagram
+                    </Label>
+                    <Input
+                      id="est-instagram"
+                      placeholder="Ex: @suaconfeitaria ou link completo"
+                      value={instagramEst}
+                      onChange={(e) => setInstagramEst(e.target.value)}
+                      className="text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="est-tiktok" className="text-xs font-bold flex items-center gap-1.5">
+                      <Music className="w-3.5 h-3.5 text-slate-800 dark:text-slate-200" /> TikTok
+                    </Label>
+                    <Input
+                      id="est-tiktok"
+                      placeholder="Ex: @suaconfeitaria ou link completo"
+                      value={tiktokEst}
+                      onChange={(e) => setTiktokEst(e.target.value)}
+                      className="text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="est-facebook" className="text-xs font-bold flex items-center gap-1.5">
+                      <Facebook className="w-3.5 h-3.5 text-blue-600" /> Facebook
+                    </Label>
+                    <Input
+                      id="est-facebook"
+                      placeholder="Ex: facebook.com/suaconfeitaria"
+                      value={facebookEst}
+                      onChange={(e) => setFacebookEst(e.target.value)}
+                      className="text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="est-whatsapp-social" className="text-xs font-bold flex items-center gap-1.5">
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp de Atendimento
+                    </Label>
+                    <Input
+                      id="est-whatsapp-social"
+                      placeholder="Ex: (11) 99999-9999"
+                      value={telEst}
+                      onChange={(e) => setTelEst(e.target.value)}
+                      className="text-xs bg-background"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleSalvarEstabelecimento}
+                  disabled={salvandoEst}
+                  className="font-semibold shadow-sm bg-blue-600 hover:bg-blue-700 text-white mt-2"
+                >
+                  <Save className="w-4 h-4 mr-1.5" />
+                  {salvandoEst ? "Salvando..." : "Salvar Redes Sociais"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 5. SEÇÃO: PAGAMENTOS */}
+          {activeSection === "pagamentos" && (
+            <div className="space-y-6">
+              <Card className="border-border shadow-sm">
+                <CardHeader>
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4 text-emerald-600" /> Gerenciador de Chaves Pix
-                    </h4>
+                    <div>
+                      <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <QrCode className="w-5 h-5 text-emerald-600" />
+                        <span>Gerenciador de Chaves Pix</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Cadastre suas chaves Pix para recebimento das encomendas pelo cardápio digital
+                      </CardDescription>
+                    </div>
                     <Badge variant="outline" className="text-[10px] font-mono">
                       {contasPix.length} chave(s)
                     </Badge>
                   </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    Cadastre suas chaves Pix e informe o Nome do Favorecido para facilitar o recebimento das encomendas.
-                  </p>
-
-                  {/* LISTA DE CHAVES PIX */}
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {contasPix.length > 0 ? (
                     <div className="space-y-2">
                       {contasPix.map((conta) => (
@@ -2319,9 +2410,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         >
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-extrabold text-foreground">
-                                👤 {conta.favorecido}
-                              </span>
+                              <span className="text-xs font-extrabold text-foreground">👤 {conta.favorecido}</span>
                               {conta.isDefault ? (
                                 <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2">
                                   Principal / Padrão
@@ -2339,7 +2428,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                               )}
                             </div>
                             <p className="text-xs font-mono font-bold text-muted-foreground">
-                              🔑 {conta.chave} <span className="uppercase text-[10px] text-muted-foreground">({conta.tipo})</span>
+                              🔑 {conta.chave}{" "}
+                              <span className="uppercase text-[10px] text-muted-foreground">({conta.tipo})</span>
                             </p>
                           </div>
 
@@ -2375,7 +2465,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     </div>
                   )}
 
-                  {/* FORMULÁRIO INLINE PARA ADICIONAR NOVA CHAVE */}
                   {!mostrarFormNovaContaPix ? (
                     <Button
                       type="button"
@@ -2389,9 +2478,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   ) : (
                     <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                          Nova Chave Pix
-                        </span>
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Nova Chave Pix</span>
                         <Button
                           type="button"
                           variant="ghost"
@@ -2405,13 +2492,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-[11px] font-semibold text-muted-foreground">
-                            Tipo de Chave
-                          </Label>
-                          <Select
-                            value={novaContaTipo}
-                            onValueChange={(val: any) => setNovaContaTipo(val)}
-                          >
+                          <Label className="text-[11px] font-semibold text-muted-foreground">Tipo de Chave</Label>
+                          <Select value={novaContaTipo} onValueChange={(val: any) => setNovaContaTipo(val)}>
                             <SelectTrigger className="h-8 text-xs bg-background">
                               <SelectValue />
                             </SelectTrigger>
@@ -2426,9 +2508,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-[11px] font-semibold text-muted-foreground">
-                            Chave Pix *
-                          </Label>
+                          <Label className="text-[11px] font-semibold text-muted-foreground">Chave Pix *</Label>
                           <Input
                             placeholder="Informe a chave Pix"
                             value={novaContaChave}
@@ -2438,11 +2518,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-[11px] font-semibold text-muted-foreground">
-                            Nome do Favorecido *
-                          </Label>
+                          <Label className="text-[11px] font-semibold text-muted-foreground">Nome do Favorecido *</Label>
                           <Input
-                            placeholder="Ex: ArtFesta Confeitaria"
+                            placeholder="Ex: Minha Confeitaria"
                             value={novaContaFavorecido}
                             onChange={(e) => setNovaContaFavorecido(e.target.value)}
                             className="h-8 text-xs bg-background"
@@ -2458,7 +2536,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                             onChange={(e) => setNovaContaDefault(e.target.checked)}
                             className="rounded border-border text-emerald-600 focus:ring-emerald-500"
                           />
-                          Definir como Chave Principal / Padrão
+                          Definir como Chave Principal
                         </label>
 
                         <div className="flex gap-2">
@@ -2483,507 +2561,397 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* 📱 REDES SOCIAIS NO CARDÁPIO PÚBLICO */}
-                <div className="pt-4 border-t space-y-3">
+                  <Button
+                    type="button"
+                    onClick={handleSalvarEstabelecimento}
+                    disabled={salvandoEst}
+                    className="font-semibold shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white mt-2"
+                  >
+                    <Save className="w-4 h-4 mr-1.5" />
+                    {salvandoEst ? "Salvando..." : "Salvar Configurações de Pagamento"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* MERCADO PAGO CONNECT */}
+              <Card className="border-border shadow-sm">
+                <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
-                      <Share2 className="w-4 h-4" /> Redes Sociais no Cardápio Público
-                    </h4>
-                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
-                      Exibição Automática
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Cadastre os perfis da sua confeitaria para que seus clientes possam acessar seu Instagram, TikTok, Facebook ou WhatsApp diretamente do seu cardápio público.
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="est-instagram" className="text-xs font-bold flex items-center gap-1.5">
-                        <Instagram className="w-3.5 h-3.5 text-pink-600" /> Instagram
-                      </Label>
-                      <Input
-                        id="est-instagram"
-                        placeholder="Ex: @suaconfeitaria ou link completo"
-                        value={instagramEst}
-                        onChange={(e) => setInstagramEst(e.target.value)}
-                        className="text-xs bg-background"
-                      />
+                    <div>
+                      <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <span>Integração Mercado Pago Connect</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Conecte sua conta do Mercado Pago para receber pagamentos automatizados de vendas no cardápio
+                      </CardDescription>
                     </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="est-tiktok" className="text-xs font-bold flex items-center gap-1.5">
-                        <Music className="w-3.5 h-3.5 text-slate-800 dark:text-slate-200" /> TikTok
-                      </Label>
-                      <Input
-                        id="est-tiktok"
-                        placeholder="Ex: @suaconfeitaria ou link completo"
-                        value={tiktokEst}
-                        onChange={(e) => setTiktokEst(e.target.value)}
-                        className="text-xs bg-background"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="est-facebook" className="text-xs font-bold flex items-center gap-1.5">
-                        <Facebook className="w-3.5 h-3.5 text-blue-600" /> Facebook
-                      </Label>
-                      <Input
-                        id="est-facebook"
-                        placeholder="Ex: facebook.com/suaconfeitaria"
-                        value={facebookEst}
-                        onChange={(e) => setFacebookEst(e.target.value)}
-                        className="text-xs bg-background"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="est-whatsapp-social" className="text-xs font-bold flex items-center gap-1.5">
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp de Atendimento
-                      </Label>
-                      <Input
-                        id="est-whatsapp-social"
-                        placeholder="Ex: (11) 99999-9999"
-                        value={telEst}
-                        onChange={(e) => setTelEst(e.target.value)}
-                        className="text-xs bg-background"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 🎨 IDENTIDADE VISUAL & PERSONALIZAÇÃO DO CARDÁPIO */}
-                <div id="identidade-visual" className="pt-4 border-t space-y-4 scroll-mt-24">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-purple-600" /> Identidade Visual &amp; Personalização do Cardápio
-                    </h4>
-                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
-                      Vitrine Pública
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Personalize a imagem de capa, logo, cor de destaque e títulos para deixar seu cardápio com a identidade única da sua marca.
-                  </p>
-
-                  {/* 1. IMAGEM DE CAPA (BANNER) */}
-                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        <ImageIcon className="w-4 h-4 text-primary" /> Imagem de Capa (Banner do Topo)
-                      </Label>
-                      <span className="text-[10px] text-muted-foreground">Recomendado: 1200x400 (Máx. 2MB)</span>
-                    </div>
-
-                    <div className="relative w-full h-32 sm:h-40 rounded-xl overflow-hidden bg-stone-200 dark:bg-stone-800 border border-dashed border-border flex items-center justify-center group">
-                      {bannerUrl ? (
-                        <>
-                          <img
-                            src={bannerUrl}
-                            alt="Capa do Cardápio"
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => fileInputBannerRef.current?.click()}
-                              className="text-xs font-bold bg-white/90 hover:bg-white text-stone-900"
-                            >
-                              <Upload className="w-3.5 h-3.5 mr-1" /> Trocar Imagem
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => setBannerUrl("")}
-                              className="text-xs font-bold"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-center p-4 space-y-2">
-                          <ImageIcon className="w-8 h-8 text-muted-foreground/50 mx-auto" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Nenhuma capa selecionada. Será exibido o cabeçalho padrão com cor de destaque.
-                          </p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={enviandoBanner}
-                            onClick={() => fileInputBannerRef.current?.click()}
-                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
-                          >
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                            {enviandoBanner ? "Enviando..." : "Enviar Imagem de Capa"}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    <input
-                      ref={fileInputBannerRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadBannerFile}
-                      className="hidden"
-                    />
-
-                    {bannerUrl && (
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setBannerUrl("")}
-                          className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Imagem de Capa
-                        </Button>
-                      </div>
+                    {mpConectado && (
+                      <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-1 flex items-center gap-1 shadow-xs">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Conectado
+                      </Badge>
                     )}
                   </div>
-
-                  {/* 2. LOGO DO ESTABELECIMENTO */}
-                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
-                    <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                      <ImageIcon className="w-4 h-4 text-primary" /> Logo da Loja / Confeitaria
-                    </Label>
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 dark:bg-stone-800 border-2 border-primary/20 flex items-center justify-center shrink-0 shadow-sm">
-                        {logoUrl ? (
-                          <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                        ) : (
-                          <CaixaDoceLogo size="sm" />
-                        )}
-                      </div>
-
-                      <div className="space-y-2 text-center sm:text-left flex-1">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleUploadLogoFile}
-                          className="hidden"
-                        />
-                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={enviandoLogo}
-                            onClick={() => fileInputRef.current?.click()}
-                            className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50"
-                          >
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                            {enviandoLogo ? "Enviando..." : "Enviar Logo Personalizada"}
-                          </Button>
-                          {logoUrl && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setLogoUrl("")}
-                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remover Logo
-                            </Button>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-2">
+                  {carregandoMp ? (
+                    <div className="p-4 rounded-2xl bg-muted/30 border border-border flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Verificando conexão com o Mercado Pago...
+                      </span>
+                    </div>
+                  ) : mpConectado ? (
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                            Sua conta do Mercado Pago está conectada com sucesso!
+                          </span>
+                          {mpUserId && (
+                            <p className="text-[11px] font-mono text-muted-foreground">ID da Conta: {mpUserId}</p>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground">Formatos suportados: PNG, JPG, WEBP, SVG (Máx. 2MB)</p>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleDesconectarMercadoPago}
+                          disabled={desconectandoMp}
+                          className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-500/15 hover:text-rose-700 h-9 rounded-xl gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          {desconectandoMp ? "Desconectando..." : "Desconectar"}
+                        </Button>
                       </div>
                     </div>
-                  </div>
-
-                  {/* 3. COR PRINCIPAL DE DESTAQUE */}
-                  <div className="space-y-2.5 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        <Sparkles className="w-4 h-4 text-primary" /> Cor Principal de Destaque
-                      </Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono font-bold text-muted-foreground uppercase">{themeColor}</span>
-                        <div
-                          className="w-5 h-5 rounded-full border border-black/20 shadow-xs shrink-0"
-                          style={{ backgroundColor: themeColor }}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Aplicada aos botões de ação, badges de disponibilidade, preços e elementos de destaque no cardápio.
-                    </p>
-
-                    {/* Paletas Predefinidas */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                      {PALETAS_CORES_TEMA.map((paleta) => {
-                        const isSelected = themeColor.toLowerCase() === paleta.hex.toLowerCase();
-                        return (
-                          <button
-                            type="button"
-                            key={paleta.id}
-                            onClick={() => setThemeColor(paleta.hex)}
-                            className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
-                              isSelected
-                                ? "border-primary ring-2 ring-primary/30 bg-primary/5 font-bold shadow-xs"
-                                : "border-border hover:border-border/80 bg-background/50 hover:bg-background"
-                            }`}
-                          >
-                            <span
-                              className="w-4 h-4 rounded-full border border-black/15 shrink-0 flex items-center justify-center text-white"
-                              style={{ backgroundColor: paleta.hex }}
-                            >
-                              {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                            </span>
-                            <span className="text-[11px] text-foreground truncate">{paleta.nome.split(" ")[0]}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Cor Customizada */}
-                    <div className="flex items-center gap-2 pt-2">
-                      <Label className="text-[11px] font-semibold text-muted-foreground shrink-0">
-                        Ou escolha uma cor personalizada:
-                      </Label>
-                      <div className="flex items-center gap-1.5 flex-1 max-w-[180px]">
-                        <input
-                          type="color"
-                          value={themeColor}
-                          onChange={(e) => setThemeColor(e.target.value)}
-                          className="w-8 h-8 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
-                        />
-                        <Input
-                          value={themeColor}
-                          onChange={(e) => setThemeColor(e.target.value)}
-                          placeholder="#8E7CC3"
-                          className="h-8 text-xs font-mono uppercase"
-                          maxLength={7}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4. TÍTULO E SLOGAN DO CARDÁPIO */}
-                  <div className="space-y-3 p-3.5 rounded-2xl bg-muted/30 border border-border/80">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cfg-menu-title" className="text-xs font-bold">
-                        Título do Cardápio (Público)
-                      </Label>
-                      <Input
-                        id="cfg-menu-title"
-                        value={tituloCardapio}
-                        onChange={(e) => setTituloCardapio(e.target.value)}
-                        placeholder="Cardápio de Bolos & Doces Especiais"
-                        className="text-xs"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Exibido no cabeçalho do seu cardápio público aos clientes.
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-4">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Conecte sua conta do Mercado Pago com segurança através da autorização OAuth oficial.
                       </p>
+                      <Button
+                        type="button"
+                        onClick={handleConectarMercadoPago}
+                        disabled={processandoOAuthMp}
+                        className="font-black text-xs h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2"
+                      >
+                        {processandoOAuthMp ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                        {processandoOAuthMp ? "Iniciando..." : "Conectar Mercado Pago"}
+                      </Button>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cfg-menu-slogan" className="text-xs font-bold">
-                        Slogan / Mensagem de Apresentação
-                      </Label>
-                      <Textarea
-                        id="cfg-menu-slogan"
-                        rows={2}
-                        value={sloganCardapio}
-                        onChange={(e) => setSloganCardapio(e.target.value)}
-                        placeholder="Doces frescos feitos sob encomenda com ingredientes nobres e amor em cada detalhe."
-                        className="text-xs"
-                      />
+          {/* 6. SEÇÃO: PLANOS & PARCERIAS */}
+          {activeSection === "planos" && (
+            <div className="space-y-6">
+              {/* MEU PLANO & ASSINATURA */}
+              {(() => {
+                const infoPlano = obterPlanoEfetivoEstabelecimento(activeCode);
+                return (
+                  <Card className="border-purple-200 bg-gradient-to-r from-purple-50/80 via-pink-50/60 to-purple-50/80 shadow-sm">
+                    <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                          <Crown className="w-5 h-5 text-amber-300" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Assinatura &amp; Meu Plano</h4>
+                            <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                              {infoPlano.status === "trial"
+                                ? `Teste Pro (${infoPlano.diasRestantesTrial || 7} dias restantes)`
+                                : infoPlano.planoId === "basico"
+                                ? "Plano Básico Gratuito"
+                                : "Plano Pro Ativo"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            {infoPlano.planoId === "basico"
+                              ? "Você está usando o Plano Básico. Faça upgrade para o Plano Pro e libere scanner por IA ilimitado."
+                              : "Acesso ilimitado liberado para leitura por IA, ficha técnica e agendamento de encomendas."}
+                          </p>
+                        </div>
+                      </div>
+                      {onIrParaPlano && (
+                        <Button
+                          type="button"
+                          onClick={onIrParaPlano}
+                          className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md rounded-xl shrink-0"
+                        >
+                          <Crown className="w-4 h-4 mr-1.5 text-amber-300" /> Gerenciar Assinatura
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* PAINEL DE AFILIADO / PARCEIRO */}
+              {(isAfiliado || isEmailAdmin(user?.email)) && (
+                <Card className="border-emerald-400/50 bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-emerald-500/10 shadow-sm">
+                  <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
+                            Meu Painel de Parceiro / Afiliado
+                          </h4>
+                          <Badge className="bg-emerald-500 text-slate-950 font-bold text-[10px]">Parceiro</Badge>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          Acompanhe suas indicações, lojas convertidas e estimativa de comissões.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                    <Link to="/afiliados">
+                      <Button
+                        type="button"
+                        className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-md rounded-xl shrink-0 border border-emerald-400/40"
+                      >
+                        <Users className="w-4 h-4 mr-1.5" /> Meu Painel de Parceiro / Afiliado
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
 
-                {/* ✍️ ASSINATURA DIGITAL DO CONFEITEIRO */}
-                <div className="pt-4 border-t space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
-                      <Edit2 className="w-4 h-4 text-purple-600" /> Assinatura Digital do Confeiteiro (Orçamentos &amp; Pedidos)
-                    </h4>
-                    <Badge variant="outline" className={`text-[10px] font-mono font-bold ${signatureDataUrl ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400" : "bg-muted text-muted-foreground"}`}>
-                      {signatureDataUrl ? "✓ Cadastrada" : "Pendente"}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Desenhe sua assinatura digital no quadro abaixo ou faça upload da sua assinatura digitalizada. Ela será impressa no rodapé dos comprovantes e orçamentos em PDF.
-                  </p>
-                  <DigitalSignatureCanvas
-                    value={signatureDataUrl}
-                    onChange={(val) => setSignatureDataUrl(val)}
-                  />
-                </div>
+              {/* PAINEL DE ADMIN */}
+              {isEmailAdmin(user?.email) && (
+                <Card className="border-amber-400/50 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-500/10 shadow-sm">
+                  <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
+                            Painel de Administração
+                          </h4>
+                          <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">Exclusivo Sócios</Badge>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          Gestão do programa de afiliados, cupons exclusivos e relatórios de repasses financeiros.
+                        </p>
+                      </div>
+                    </div>
+                    <Link to="/admin/afiliados">
+                      <Button
+                        type="button"
+                        className="w-full sm:w-auto font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-md rounded-xl shrink-0 border border-amber-400/40"
+                      >
+                        <Shield className="w-4 h-4 mr-1.5 fill-slate-950/20" /> Acessar Painel Admin
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
 
-                <Button type="submit" disabled={salvandoEst} className="font-semibold shadow-sm mt-2">
-                  <Save className="w-4 h-4 mr-1.5" />
-                  {salvandoEst ? "Salvando..." : "Salvar Dados do Estabelecimento"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TAB: GESTÃO DE COLABORADORES & EQUIPE */}
-        <TabsContent value="colaboradores" className="space-y-6">
-          <ColaboradoresTab />
-        </TabsContent>
-
-        {/* TAB: SEGURANÇA */}
-        <TabsContent value="seguranca">
-          <div className="space-y-6 max-w-xl">
+          {/* 7. SEÇÃO: INTEGRAÇÕES (IFOOD) */}
+          {activeSection === "integracoes" && (
             <Card className="border-border shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg font-bold text-foreground">Alterar Senha</CardTitle>
-                <CardDescription>Atualize sua senha de acesso ao sistema</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                      <ShoppingBag className="w-5 h-5 text-red-600 dark:text-red-400" />
+                      <span>Integrações com Plataformas de Delivery</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Conecte sua conta do iFood para receber pedidos automaticamente no painel do CaixaDoce
+                    </CardDescription>
+                  </div>
+                  <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                    Em Homologação
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Store className="w-5 h-5 text-red-600" />
+                    <h4 className="text-xs font-bold text-foreground">iFood Delivery (Em Breve)</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    A integração oficial com o iFood está em fase final de homologação técnica. Assim que liberada, você poderá conectar seu restaurante e gerenciar todos os pedidos diretamente aqui!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 8. SEÇÃO: FRETE & ENTREGA */}
+          {activeSection === "frete" && (
+            <div className="space-y-6">
+              <FreteConfigView estabelecimentoCodigo={activeCode} />
+            </div>
+          )}
+
+          {/* 9. SEÇÃO: EQUIPE & COLABORADORES */}
+          {activeSection === "equipe" && (
+            <div className="space-y-6">
+              <ColaboradoresTab />
+            </div>
+          )}
+
+          {/* 10. SEÇÃO: SEGURANÇA */}
+          {activeSection === "seguranca" && (
+            <div className="space-y-6 max-w-xl">
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-foreground">Alterar Senha</CardTitle>
+                  <CardDescription>Atualize sua senha de acesso ao sistema</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAlterarSenha} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec-pass">Nova Senha</Label>
+                      <Input
+                        id="sec-pass"
+                        type="password"
+                        placeholder="Mínimo 6 dígitos"
+                        value={novaSenha}
+                        onChange={(e) => setNovaSenha(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec-conf">Confirmar Nova Senha</Label>
+                      <Input
+                        id="sec-conf"
+                        type="password"
+                        placeholder="Repita a nova senha"
+                        value={confirmaSenha}
+                        onChange={(e) => setConfirmaSenha(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" disabled={salvandoSenha} className="font-semibold shadow-sm">
+                      {salvandoSenha ? "Alterando..." : "Atualizar Senha"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="border-rose-200 dark:border-rose-900/50 bg-rose-50/20 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-rose-600 flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5" /> Zona de Perigo
+                  </CardTitle>
+                  <CardDescription>Ações irreversíveis na sua conta</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Ao excluir sua conta, todos os dados, lançamentos e históricos vinculados serão removidos permanentemente.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setModalDeleteOpen(true)}
+                    className="font-semibold"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    Excluir Minha Conta
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* 11. SEÇÃO: FALE CONOSCO */}
+          {activeSection === "contato" && (
+            <Card className="border-border shadow-sm max-w-2xl">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-foreground">Fale Conosco</CardTitle>
+                    <CardDescription className="text-xs">
+                      Envie sua dúvida, sugestão de funcionalidade ou pedido de suporte diretamente para nossa equipe.
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleAlterarSenha} className="space-y-4">
+                <form onSubmit={handleEnviarContato} className="space-y-4">
+                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3.5 space-y-1 text-xs">
+                    <p className="font-extrabold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Identificação Automática da Conta
+                    </p>
+                    <p className="text-muted-foreground">
+                      Sua mensagem será enviada vinculada a <strong>{nomeUsuario || "Usuário"}</strong> ({emailUsuario}) do estabelecimento <span className="font-mono font-bold text-foreground">{activeCode}</span>.
+                    </p>
+                  </div>
+
                   <div className="space-y-1.5">
-                    <Label htmlFor="sec-pass">Nova Senha</Label>
-                    <Input
-                      id="sec-pass"
-                      type="password"
-                      placeholder="Mínimo 6 dígitos"
-                      value={novaSenha}
-                      onChange={(e) => setNovaSenha(e.target.value)}
+                    <Label htmlFor="contato-motivo" className="text-xs font-bold text-foreground">
+                      Motivo do Contato
+                    </Label>
+                    <Select value={motivoContato} onValueChange={(val: any) => setMotivoContato(val)}>
+                      <SelectTrigger id="contato-motivo" className="w-full text-xs font-medium">
+                        <SelectValue placeholder="Selecione o motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Sugestão" className="text-xs font-medium">
+                          💡 Sugestão de Funcionalidade
+                        </SelectItem>
+                        <SelectItem value="Suporte" className="text-xs font-medium">
+                          🛠️ Suporte Técnico
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="contato-mensagem" className="text-xs font-bold text-foreground">
+                      Mensagem
+                    </Label>
+                    <Textarea
+                      id="contato-mensagem"
+                      placeholder="Descreva detalhadamente sua sugestão ou dúvida..."
+                      rows={6}
+                      value={mensagemContato}
+                      onChange={(e) => setMensagemContato(e.target.value)}
                       required
+                      className="text-xs resize-y min-h-[120px]"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="sec-conf">Confirmar Nova Senha</Label>
-                    <Input
-                      id="sec-conf"
-                      type="password"
-                      placeholder="Repita a nova senha"
-                      value={confirmaSenha}
-                      onChange={(e) => setConfirmaSenha(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" disabled={salvandoSenha} className="font-semibold shadow-sm">
-                    {salvandoSenha ? "Alterando..." : "Atualizar Senha"}
+
+                  <Button
+                    type="submit"
+                    disabled={enviandoContato || !mensagemContato.trim()}
+                    className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
+                  >
+                    {enviandoContato ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" /> Enviar Mensagem
+                      </>
+                    )}
                   </Button>
                 </form>
               </CardContent>
             </Card>
-
-            <Card className="border-rose-200 dark:border-rose-900/50 bg-rose-50/20 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold text-rose-600 flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5" /> Zona de Perigo
-                </CardTitle>
-                <CardDescription>Ações irreversíveis na sua conta</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Ao excluir sua conta, todos os dados, lançamentos e históricos vinculados serão removidos permanentemente.
-                </p>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setModalDeleteOpen(true)}
-                  className="font-semibold"
-                >
-                  <Trash2 className="w-4 h-4 mr-1.5" />
-                  Excluir Minha Conta
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* TAB: CONTATO */}
-        <TabsContent value="contato" className="space-y-6">
-          <Card className="border-border shadow-sm max-w-2xl">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
-                  <Mail className="w-6 h-6" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg font-bold text-foreground">Fale Conosco</CardTitle>
-                  <CardDescription className="text-xs">
-                    Envie sua dúvida, sugestão de funcionalidade ou pedido de suporte diretamente para nossa equipe.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleEnviarContato} className="space-y-4">
-                {/* Identificação Automática Oculta */}
-                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3.5 space-y-1 text-xs">
-                  <p className="font-extrabold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Identificação Automática da Conta
-                  </p>
-                  <p className="text-muted-foreground">
-                    Sua mensagem será enviada vinculada a <strong>{nomeUsuario || "Usuário"}</strong> ({emailUsuario}) do estabelecimento <span className="font-mono font-bold text-foreground">{activeCode}</span>.
-                  </p>
-                </div>
-
-                {/* Motivo do Contato */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="contato-motivo" className="text-xs font-bold text-foreground">
-                    Motivo do Contato
-                  </Label>
-                  <Select value={motivoContato} onValueChange={(val: any) => setMotivoContato(val)}>
-                    <SelectTrigger id="contato-motivo" className="w-full text-xs font-medium">
-                      <SelectValue placeholder="Selecione o motivo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Sugestão" className="text-xs font-medium">
-                        💡 Sugestão de Funcionalidade
-                      </SelectItem>
-                      <SelectItem value="Suporte" className="text-xs font-medium">
-                        🛠️ Suporte Técnico
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Mensagem */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="contato-mensagem" className="text-xs font-bold text-foreground">
-                    Mensagem
-                  </Label>
-                  <Textarea
-                    id="contato-mensagem"
-                    placeholder="Descreva detalhadamente sua sugestão ou dúvida..."
-                    rows={6}
-                    value={mensagemContato}
-                    onChange={(e) => setMensagemContato(e.target.value)}
-                    required
-                    className="text-xs resize-y min-h-[120px]"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={enviandoContato || !mensagemContato.trim()}
-                  className="w-full sm:w-auto font-extrabold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs px-6 py-2.5 rounded-xl flex items-center justify-center gap-2"
-                >
-                  {enviandoContato ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" /> Enviar Mensagem
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          )}
+        </div>
+      )}
 
       {/* Modal: Exclusão de Conta */}
       <Dialog open={modalDeleteOpen} onOpenChange={setModalDeleteOpen}>
