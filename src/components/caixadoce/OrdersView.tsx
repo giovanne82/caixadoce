@@ -190,9 +190,9 @@ function renderizarBadgeOrigemMobile(origem?: string) {
 function renderizarBadgePagamento(ord: Encomenda) {
   if (isPedidoIFood(ord)) {
     return (
-      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shadow-xs">
-        <Store className="w-3 h-3 text-white fill-white shrink-0" />
-        <span>iFood</span>
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
+        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span>Pago (iFood)</span>
       </Badge>
     );
   }
@@ -268,9 +268,9 @@ function renderizarBadgePagamento(ord: Encomenda) {
 function renderizarBadgePagamentoMobile(ord: Encomenda) {
   if (isPedidoIFood(ord)) {
     return (
-      <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] px-1.5 py-0 mt-0.5 font-black uppercase flex items-center gap-0.5 shadow-xs">
-        <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
-        <span>iFood</span>
+      <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0 mt-0.5 font-bold flex items-center gap-0.5">
+        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+        <span>Pago (iFood)</span>
       </Badge>
     );
   }
@@ -537,15 +537,75 @@ export function OrdersView({
     }
   };
 
-  const renderBotoesAcaoIFood = (ord: Encomenda) => {
+  const renderBotoesAcaoIFood = (ord: Encomenda, mode: "desktop" | "mobile" = "desktop") => {
     const acaoAtual = processandoAcaoIfood[ord.id];
     const isCancelado = ord.status === "cancelada" || ord.status === "cancelado";
     const isEntregue = ord.status === "entregue" || ord.status === "concluido" || ord.status === "concluida";
     const isProduzindo = ord.status === "em_producao";
     const isPronto = ord.status === "pronta";
 
+    if (mode === "mobile") {
+      return (
+        <div className="grid grid-cols-2 gap-1.5 w-full pt-1" onClick={(e) => e.stopPropagation()}>
+          {/* 1. CONFIRMAR */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={Boolean(acaoAtual) || isProduzindo || isPronto || isEntregue || isCancelado}
+            onClick={(e) => handleAcaoIFood(ord, "confirm", e)}
+            title="Confirmar pedido no iFood"
+            className="col-span-1 h-8 px-2 text-xs bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 font-bold disabled:opacity-50 flex items-center justify-center gap-1 rounded-xl shadow-2xs"
+          >
+            {acaoAtual === "confirm" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+            )}
+            <span>Confirmar</span>
+          </Button>
+
+          {/* 2. DESPACHAR */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={Boolean(acaoAtual) || isPronto || isEntregue || isCancelado}
+            onClick={(e) => handleAcaoIFood(ord, "dispatch", e)}
+            title="Despachar pedido para entrega no iFood"
+            className="col-span-1 h-8 px-2 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 font-bold disabled:opacity-50 flex items-center justify-center gap-1 rounded-xl shadow-2xs"
+          >
+            {acaoAtual === "dispatch" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Truck className="w-3.5 h-3.5 text-amber-600" />
+            )}
+            <span>Despachar</span>
+          </Button>
+
+          {/* 3. CANCELAR */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={Boolean(acaoAtual) || isCancelado || isEntregue}
+            onClick={(e) => handleAcaoIFood(ord, "cancel", e)}
+            title="Solicitar cancelamento do pedido no iFood"
+            className="col-span-2 h-7 px-2 text-xs font-medium text-rose-600 dark:text-rose-400 bg-transparent hover:bg-rose-500/10 border border-rose-500/20 disabled:opacity-40 flex items-center justify-center gap-1 rounded-xl"
+          >
+            {acaoAtual === "cancel" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <X className="w-3.5 h-3.5 text-rose-600" />
+            )}
+            <span>Cancelar Pedido</span>
+          </Button>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-row items-center justify-end gap-1 flex-nowrap" onClick={(e) => e.stopPropagation()}>
         {/* 1. CONFIRMAR */}
         <Button
           type="button"
@@ -554,7 +614,7 @@ export function OrdersView({
           disabled={Boolean(acaoAtual) || isProduzindo || isPronto || isEntregue || isCancelado}
           onClick={(e) => handleAcaoIFood(ord, "confirm", e)}
           title="Confirmar pedido no iFood"
-          className="h-7 px-2 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 font-bold disabled:opacity-50"
+          className="h-7 px-2 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 font-bold disabled:opacity-50 whitespace-nowrap"
         >
           {acaoAtual === "confirm" ? (
             <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
@@ -572,7 +632,7 @@ export function OrdersView({
           disabled={Boolean(acaoAtual) || isPronto || isEntregue || isCancelado}
           onClick={(e) => handleAcaoIFood(ord, "dispatch", e)}
           title="Despachar pedido para entrega no iFood"
-          className="h-7 px-2 text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 font-bold disabled:opacity-50"
+          className="h-7 px-2 text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 font-bold disabled:opacity-50 whitespace-nowrap"
         >
           {acaoAtual === "dispatch" ? (
             <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
@@ -590,7 +650,7 @@ export function OrdersView({
           disabled={Boolean(acaoAtual) || isCancelado || isEntregue}
           onClick={(e) => handleAcaoIFood(ord, "cancel", e)}
           title="Solicitar cancelamento do pedido no iFood"
-          className="h-7 px-2 text-xs bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/20 font-bold disabled:opacity-50"
+          className="h-7 px-2 text-xs bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/20 font-bold disabled:opacity-50 whitespace-nowrap"
         >
           {acaoAtual === "cancel" ? (
             <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
@@ -2281,7 +2341,7 @@ export function OrdersView({
                   <TableHead className="text-xs">Cliente</TableHead>
                   <TableHead className="text-xs">Valor Total</TableHead>
                   <TableHead className="text-xs">Status de Pagamento</TableHead>
-                  <TableHead className="text-xs text-right w-64">Ações</TableHead>
+                  <TableHead className="text-xs text-right w-72">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2343,8 +2403,13 @@ export function OrdersView({
                             <span>{ord.clienteNome}</span>
                             {renderizarBadgeOrigem(ord.origem)}
                           </div>
+                          {(isPedidoIFood(ord) || ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood) && (
+                            <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                              ID: #{ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(0, 8)}
+                            </div>
+                          )}
                           {ord.clienteWhatsapp && (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-mono">
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-mono mt-0.5">
                               <MessageCircle className="w-3 h-3" /> {ord.clienteWhatsapp}
                             </span>
                           )}
@@ -2361,7 +2426,7 @@ export function OrdersView({
                                   it.opcao_selecionada?.nome;
                                 return (
                                   <div key={idx} className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-1">
-                                    <span className="font-medium text-foreground">{it.quantidade}x {it.nome}</span>
+                                    <span className="font-medium text-foreground">{it.quantidade ? `${it.quantidade}x ` : ""}{it.nome}</span>
                                     {opcaoNome && (
                                       <span className="inline-flex items-center text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
                                         Sabores: {opcaoNome}
@@ -2371,7 +2436,11 @@ export function OrdersView({
                                 );
                               })
                             ) : (
-                              <div className="text-[11px] text-muted-foreground line-clamp-1">{ord.itens}</div>
+                              <div className="text-[11px] text-muted-foreground line-clamp-1">
+                                {(!ord.itens || ord.itens.toLowerCase().startsWith("pedido ifood #") || ord.itens.toLowerCase().startsWith("pedido ifood"))
+                                  ? "Itens integrados do pedido iFood"
+                                  : ord.itens}
+                              </div>
                             )}
                           </div>
                         </TableCell>
@@ -2403,7 +2472,6 @@ export function OrdersView({
 
                         <TableCell className="text-xs space-y-1">
                           <div className="flex items-center gap-1 flex-wrap">
-                            {renderizarBadgeOrigem(ord.origem)}
                             {renderizarBadgePagamento(ord)}
                           </div>
                           <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-medium pt-0.5">
@@ -2413,9 +2481,9 @@ export function OrdersView({
                         </TableCell>
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex flex-row items-center justify-end gap-1 flex-nowrap">
                             {isPedidoIFood(ord) ? (
-                              renderBotoesAcaoIFood(ord)
+                              renderBotoesAcaoIFood(ord, "desktop")
                             ) : ord.status === "entregue" ? (
                               <Button
                                 variant="outline"
@@ -2426,7 +2494,7 @@ export function OrdersView({
                                   toast.success("Pedido reaberto como pendente!");
                                 }}
                                 title="Reabrir pedido para pendente"
-                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground font-semibold border-border"
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground font-semibold border-border whitespace-nowrap"
                               >
                                 <RotateCcw className="w-3.5 h-3.5 mr-1" />
                                 Reabrir
@@ -2441,7 +2509,7 @@ export function OrdersView({
                                   toast.success("Pedido marcado como entregue!");
                                 }}
                                 title="Marcar pedido como Entregue"
-                                className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold"
+                                className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold whitespace-nowrap"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
                                 Entregue
@@ -2456,7 +2524,7 @@ export function OrdersView({
                                 handleEnviarResumoWhatsApp(ord);
                               }}
                               title="Enviar resumo do pedido para o WhatsApp do cliente"
-                              className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold"
+                              className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold whitespace-nowrap"
                             >
                               <MessageCircle className="w-3.5 h-3.5 mr-1 text-emerald-600 fill-emerald-600" />
                               Enviar
@@ -2469,7 +2537,8 @@ export function OrdersView({
                                 e.stopPropagation();
                                 handleAbrirEdicao(ord);
                               }}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                              title="Editar pedido"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary shrink-0"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </Button>
@@ -2483,7 +2552,8 @@ export function OrdersView({
                                   onExcluirEncomenda(ord.id);
                                 }
                               }}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
+                              title="Excluir pedido"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 shrink-0"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
@@ -2542,9 +2612,9 @@ export function OrdersView({
                     )}
 
                     <div className="flex items-start justify-between gap-2 border-b border-border/40 pb-2.5">
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-extrabold">{ord.clienteNome}</span>
+                          <span className="text-sm font-extrabold truncate">{ord.clienteNome}</span>
                           {renderizarBadgeOrigemMobile(ord.origem)}
                           {ord.status === "entregue" && (
                             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
@@ -2552,6 +2622,14 @@ export function OrdersView({
                             </Badge>
                           )}
                         </div>
+
+                        {/* ID do Pedido em texto pequeno e cinza logo abaixo do nome */}
+                        {(isPedidoIFood(ord) || ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood) && (
+                          <div className="text-[10px] font-mono text-muted-foreground">
+                            ID: #{ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(0, 8)}
+                          </div>
+                        )}
+
                         <div className="text-[11.5px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
                           <CalendarDays className="w-3.5 h-3.5 shrink-0 text-purple-600" />
                           <span>Entrega: {ord.dataEntrega ? ord.dataEntrega.split("-").reverse().join("/") : (ord.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {ord.horarioEntrega || (ord.origem === "iFood" ? "Hora a confirmar" : "14:00")}</span>
@@ -2567,26 +2645,69 @@ export function OrdersView({
                         </div>
                       </div>
 
-                      {/* Hierarquia Financeira: Destaque do Valor Restante a Pagar */}
-                      <div className="text-right shrink-0 space-y-0.5">
+                      {/* Top Right: Botões Secundários & Hierarquia Financeira */}
+                      <div className="text-right shrink-0 space-y-1.5">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          {ord.clienteWhatsapp && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnviarResumoWhatsApp(ord);
+                              }}
+                              title="Enviar WhatsApp"
+                              className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-500/15 rounded-lg"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 fill-emerald-600" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAbrirEdicao(ord);
+                            }}
+                            title="Editar pedido"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary rounded-lg"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
+                                onExcluirEncomenda(ord.id);
+                              }
+                            }}
+                            title="Excluir pedido"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 rounded-lg"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+
                         {saldoRestante > 0 ? (
                           <div>
-                            <span className="text-[9.5px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
-                              {statusFin === "sinal_pago" ? "Restante a Cobrar:" : "A Cobrar (100%):"}
+                            <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
+                              {statusFin === "sinal_pago" ? "Restante:" : "A Cobrar:"}
                             </span>
-                            <div className="text-base font-black text-rose-600 dark:text-rose-400 font-mono tracking-tight leading-tight">
+                            <div className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono tracking-tight leading-tight">
                               {formatarMoeda(saldoRestante)}
                             </div>
-                            <div className="text-[10px] text-muted-foreground font-medium">
+                            <div className="text-[9.5px] text-muted-foreground font-medium">
                               Total: <span className="font-semibold text-foreground">{formatarMoeda(ord.valorTotal)}</span>
                             </div>
                           </div>
                         ) : (
                           <div>
-                            <span className="text-[9.5px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+                            <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
                               Total Quitado:
                             </span>
-                            <div className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">
+                            <div className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">
                               {formatarMoeda(ord.valorTotal)}
                             </div>
                           </div>
@@ -2613,7 +2734,7 @@ export function OrdersView({
                               it.opcao_selecionada?.nome;
                             return (
                               <div key={idx} className="text-xs">
-                                <span className="font-bold text-foreground">{it.quantidade}x {it.nome}</span>
+                                <span className="font-bold text-foreground">{it.quantidade ? `${it.quantidade}x ` : ""}{it.nome}</span>
                                 {opcaoNome && (
                                   <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
                                     <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
@@ -2626,86 +2747,50 @@ export function OrdersView({
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs text-foreground/90 font-medium">{ord.itens}</p>
+                        <p className="text-xs text-foreground/90 font-medium">
+                          {(!ord.itens || ord.itens.toLowerCase().startsWith("pedido ifood #") || ord.itens.toLowerCase().startsWith("pedido ifood"))
+                            ? "Itens integrados do pedido iFood"
+                            : ord.itens}
+                        </p>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10.5px] text-primary font-bold hover:underline">Ver todos os detalhes &gt;</span>
-
-                      <div className="flex items-center gap-1">
-                        {isPedidoIFood(ord) ? (
-                          renderBotoesAcaoIFood(ord)
-                        ) : ord.status === "entregue" ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditarEncomenda(ord.id, { status: "pendente" });
-                              toast.success("Pedido reaberto como pendente!");
-                            }}
-                            className="h-7 px-2 text-xs text-muted-foreground font-semibold"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                            Reabrir
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditarEncomenda(ord.id, { status: "entregue" });
-                              toast.success("Pedido marcado como entregue!");
-                            }}
-                            className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                            Entregue
-                          </Button>
-                        )}
-
+                    {/* BOTÕES DE AÇÃO DO RODAPÉ DO CARD */}
+                    {isPedidoIFood(ord) ? (
+                      renderBotoesAcaoIFood(ord, "mobile")
+                    ) : ord.status === "entregue" ? (
+                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleEnviarResumoWhatsApp(ord);
+                            onEditarEncomenda(ord.id, { status: "pendente" });
+                            toast.success("Pedido reaberto como pendente!");
                           }}
-                          className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold"
+                          className="w-full h-8 text-xs text-muted-foreground font-semibold rounded-xl"
                         >
-                          <MessageCircle className="w-3.5 h-3.5 mr-1 text-emerald-600 fill-emerald-600" />
-                          Enviar
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAbrirEdicao(ord);
-                          }}
-                          className="h-7 w-7 p-0 text-muted-foreground"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`Deseja excluir a encomenda de ${ord.clienteNome}?`)) {
-                              onExcluirEncomenda(ord.id);
-                            }
-                          }}
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                          Reabrir Pedido
                         </Button>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditarEncomenda(ord.id, { status: "entregue" });
+                            toast.success("Pedido marcado como entregue!");
+                          }}
+                          className="w-full h-8 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold rounded-xl"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                          Marcar como Entregue
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -3218,6 +3303,11 @@ export function OrdersView({
 
                         <div>
                           <p className="text-sm font-extrabold text-foreground">{ord.clienteNome}</p>
+                          {(isPedidoIFood(ord) || ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood) && (
+                            <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                              ID: #{ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(0, 8)}
+                            </div>
+                          )}
                           {ord.clienteWhatsapp && (
                             <a
                               href={formatarWhatsappLink(ord.clienteWhatsapp)}
@@ -3238,7 +3328,7 @@ export function OrdersView({
                                 const opcaoNome = it.opcaoNome || it.opcao_selecionada?.nome;
                                 return (
                                   <div key={idx} className="text-xs">
-                                    <span className="font-semibold text-foreground">{it.quantidade}x {it.nome}</span>
+                                    <span className="font-semibold text-foreground">{it.quantidade ? `${it.quantidade}x ` : ""}{it.nome}</span>
                                     {opcaoNome && (
                                       <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
                                         <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
@@ -3251,7 +3341,11 @@ export function OrdersView({
                               })}
                             </div>
                           ) : (
-                            <p className="font-medium text-foreground">{ord.itens}</p>
+                            <p className="font-medium text-foreground">
+                              {(!ord.itens || ord.itens.toLowerCase().startsWith("pedido ifood #") || ord.itens.toLowerCase().startsWith("pedido ifood"))
+                                ? "Itens integrados do pedido iFood"
+                                : ord.itens}
+                            </p>
                           )}
                           {ord.observacoes && (
                             <p className="text-[11px] text-muted-foreground italic">Obs: {ord.observacoes}</p>
