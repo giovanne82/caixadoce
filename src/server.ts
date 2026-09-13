@@ -1567,20 +1567,7 @@ export default {
 
           if (!ifoodRes.ok) {
             const errTxt = await ifoodRes.text();
-            console.warn(`[iFood OAuth userCode Fail (${ifoodRes.status})]: ${errTxt}. Acionando fallback client_credentials...`);
-
-            if (ifoodClientSecret) {
-              try {
-                const ccResult = await runClientCredentials();
-                return new Response(JSON.stringify(ccResult), { status: 200, headers: corsHeaders });
-              } catch (ccErr: any) {
-                return new Response(
-                  JSON.stringify({ success: false, error: `Erro ao conectar iFood: ${ccErr.message || errTxt}` }),
-                  { status: 400, headers: corsHeaders }
-                );
-              }
-            }
-
+            console.error(`[Server iFood OAuth userCode Fail (${ifoodRes.status})]: ${errTxt}`);
             return new Response(
               JSON.stringify({ success: false, error: `Erro do iFood (${ifoodRes.status}): ${errTxt}` }),
               { status: ifoodRes.status || 400, headers: corsHeaders }

@@ -404,43 +404,37 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     }
   }, [checarIfoodStatus]);
 
-  const handleConectarIFood = async (forceGrantType?: string) => {
+  const handleConectarIFood = async () => {
     if (!activeCode) {
       toast.error("Código do estabelecimento não encontrado.");
       return;
     }
     setGerandoUserCode(true);
     try {
-      const url = forceGrantType
-        ? `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}&grantType=${encodeURIComponent(forceGrantType)}`
-        : `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
+      const url = `/api/ifood/auth?estabelecimento_codigo=${encodeURIComponent(activeCode)}`;
 
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           estabelecimento_codigo: activeCode,
-          grantType: forceGrantType || "",
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
-        if (data.connected || data.mode === "client_credentials" || (!data.userCode && data.accessToken)) {
-          toast.success(data.message || "Sua loja foi conectada com sucesso ao iFood via Client Credentials!");
-          setUserCodeGerado(null);
-          setUrlVerificacao(null);
-          await checarIfoodStatus();
-          return;
-        }
-
         if (data.userCode) {
           setUserCodeGerado(data.userCode);
-          const targetUrl = data.verificationUrlComplete || data.verificationUrl;
+          const targetUrl = data.verificationUrlComplete || data.verificationUrl || `https://portal.ifood.com.br/autorizacao?code=${data.userCode}`;
           setUrlVerificacao(targetUrl);
           if (targetUrl) {
             window.open(targetUrl, "_blank");
           }
-          toast.success(`Código gerado: ${data.userCode}. Autorize no portal do iFood e cole o código final abaixo.`);
+          toast.success(`Código de verificação gerado: ${data.userCode}. Autorize no portal do iFood.`);
+        } else if (data.connected || data.accessToken) {
+          toast.success("Sua loja foi conectada ao iFood!");
+          setUserCodeGerado(null);
+          setUrlVerificacao(null);
+          await checarIfoodStatus();
         }
       } else {
         toast.error(data.error || "Não foi possível gerar o código com o iFood. Verifique as credenciais.");
@@ -1923,19 +1917,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                       ) : (
                         <Store className="w-4 h-4" />
                       )}
-                      {gerandoUserCode ? "Conectando..." : "Conectar iFood"}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleConectarIFood("client_credentials")}
-                      disabled={gerandoUserCode}
-                      className="w-full sm:w-auto font-bold text-xs h-10 px-4 rounded-xl border-red-300 text-red-700 dark:text-red-300 hover:bg-red-500/10 gap-2"
-                      title="Obtém o token direto via Client Credentials para App Centralizado"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-red-600" />
-                      Conexão Direta (Centralizado / Teste)
+                      {gerandoUserCode ? "Gerando Código..." : "Conectar iFood (Gerar Código)"}
                     </Button>
 
                     {userCodeGerado && urlVerificacao && (
@@ -1943,7 +1925,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         href={urlVerificacao}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:underline font-bold px-3 py-2 bg-red-500/10 rounded-xl border border-red-500/20"
+                        className="inline-flex items-center gap-1.5 text-xs text-white hover:bg-red-700 font-bold px-4 py-2 bg-red-600 rounded-xl shadow-xs transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" /> Abrir Portal do iFood
                       </a>
@@ -1952,28 +1934,48 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
                   {/* BOX DE PASSO A PASSO COM CÓDIGO DO DISPOSITIVO E INPUT DO CÓDIGO DE AUTORIZAÇÃO */}
                   {userCodeGerado && (
-                    <div className="p-3.5 rounded-xl bg-background/90 border border-red-500/30 space-y-3 mt-2 shadow-2xs">
-                      <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b border-border/50">
+                    <div className="p-4 rounded-xl bg-background/95 border border-red-500/40 space-y-4 mt-2 shadow-xs">
+                      <div className="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-border/50">
                         <div>
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
                             Código de Verificação do seu Dispositivo:
                           </span>
-                          <span className="text-base font-black text-red-600 font-mono tracking-wider">
+                          <span className="text-xl font-black text-red-600 font-mono tracking-widest select-all">
                             {userCodeGerado}
                           </span>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            navigator.clipboard.writeText(userCodeGerado);
-                            toast.success("Código copiado!");
-                          }}
-                          className="h-7 text-xs font-bold gap-1"
-                        >
-                          <Copy className="w-3.5 h-3.5" /> Copiar Código
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(userCodeGerado);
+                              toast.success("Código de verificação copiado!");
+                            }}
+                            className="h-8 text-xs font-bold gap-1.5"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar Código
+                          </Button>
+                          {urlVerificacao && (
+                            <a
+                              href={urlVerificacao}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:underline font-bold px-3 py-1.5 bg-red-500/10 rounded-lg border border-red-500/20"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Portal iFood
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* INSTRUÇÕES PASSO A PASSO */}
+                      <div className="space-y-1.5 text-[11px] text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/40">
+                        <p className="font-bold text-foreground text-xs">Instruções para vincular a loja:</p>
+                        <p>1. Copie o <strong>Código de Verificação</strong> acima ({userCodeGerado}).</p>
+                        <p>2. Clique no botão <strong>Abrir Portal do iFood</strong> para autorizar a aplicação <strong>CaixaDoce</strong>.</p>
+                        <p>3. Após autorizar no iFood, copie o <strong>Código de Autorização</strong> gerado na tela e cole abaixo.</p>
                       </div>
 
                       <div className="space-y-2">
@@ -1983,7 +1985,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                           <Input
                             id="ifood-auth-code-input"
-                            placeholder="Cole aqui o Código de Autorização do iFood"
+                            placeholder="Ex: ABC-12345 ou código gerado"
                             value={authCodeInput}
                             onChange={(e) => setAuthCodeInput(e.target.value)}
                             className="text-xs h-10 font-mono"
@@ -2002,9 +2004,6 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                             {confirmandoAuthCode ? "Validando..." : "Validar Código"}
                           </Button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Após autorizar no portal do iFood na outra aba, copie o código final exibido na tela e clique em Validar Código.
-                        </p>
                       </div>
                     </div>
                   )}
@@ -2012,7 +2011,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                   {!userCodeGerado && (
                     <div className="p-3.5 rounded-xl bg-background/60 border border-border/60 space-y-2 mt-2">
                       <Label htmlFor="ifood-auth-code-direct" className="text-xs font-bold text-foreground block">
-                        Cole aqui o Código de Autorização do iFood:
+                        Já possui um Código de Autorização do iFood? Cole abaixo:
                       </Label>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <Input

@@ -177,7 +177,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json(credsResult);
     }
 
-    // Fluxo padrão 1: Tenta o fluxo de Device Authorization (userCode)
+    // Fluxo oficial: Device Authorization (userCode) para Aplicativo Distribuído
     console.log(`[iFood OAuth userCode] Solicitando userCode para loja '${estCode}' com clientId '${ifoodClientId}'...`);
 
     const bodyParams = new URLSearchParams();
@@ -192,25 +192,9 @@ export default async function handler(req: any, res: any) {
       body: bodyParams.toString(),
     });
 
-    // Se o iFood recusar o userCode (ex: 400 "Grant type not authorized for client" para App Centralizado),
-    // aciona fallback automático imediato para client_credentials!
     if (!ifoodRes.ok) {
       const errTxt = await ifoodRes.text();
-      console.warn(`[iFood OAuth userCode Fail (${ifoodRes.status})]: ${errTxt}. Acionando fallback para client_credentials...`);
-
-      if (ifoodClientSecret) {
-        try {
-          const fallbackResult = await conectarClientCredentials(ifoodClientId, ifoodClientSecret, estCode);
-          return res.status(200).json(fallbackResult);
-        } catch (fbErr: any) {
-          console.error("[iFood Client Credentials Fallback Error]", fbErr);
-          return res.status(400).json({
-            success: false,
-            error: `Erro ao conectar via credenciais iFood: ${fbErr.message || errTxt}`,
-          });
-        }
-      }
-
+      console.error(`[iFood OAuth userCode Fail (${ifoodRes.status})]: ${errTxt}`);
       return res.status(ifoodRes.status || 400).json({
         success: false,
         error: `Erro ao obter código de autorização do iFood (${ifoodRes.status}): ${errTxt}`,
@@ -232,14 +216,18 @@ export default async function handler(req: any, res: any) {
 
     // Salvar authorizationCodeVerifier no banco de dados (na tabela estabelecimentos)
     if (estCode) {
-      const supabase = getSupabaseBackendClient();
-      await supabase
-        .from("estabelecimentos")
-        .update({
-          ifood_code_verifier: authorizationCodeVerifier,
-          updated_at: new Date().toISOString(),
-        })
-        .ilike("codigo", estCode.trim());
+      try {
+        const supabase = getSupabaseBackendClient();
+        await supabase
+          .from("estabelecimentos")
+          .update({
+            ifood_code_verifier: authorizationCodeVerifier,
+            updated_at: new Date().toISOString(),
+          })
+          .ilike("codigo", estCode.trim());
+      } catch (dbErr) {
+        console.warn("[iFood OAuth DB Verifier Save Warn]", dbErr);
+      }
     }
 
     return res.status(200).json({
@@ -250,10 +238,13 @@ export default async function handler(req: any, res: any) {
       verificationUrlComplete,
       verificationUrl,
       expiresIn,
+      message: `Código ${userCode} gerado com sucesso. Autorize no portal do iFood e valide com o código de autorização final.`,
     });
   } catch (err: any) {
-    console.error("[iFood OAuth userCode Exception]", err);
-    return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    console.error("[iFood OAuth Exception]", err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || "Internal server error",
+    });
   }
 }
-
