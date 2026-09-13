@@ -71,6 +71,12 @@ import {
   type KitProduto,
   type ProdutoOpcao,
 } from "@/lib/caixadoce-data";
+import {
+  normalizarConfiguracaoCompleta,
+  salvarHorariosLocal,
+  obterHorariosLocal,
+  type ConfiguracaoHorariosCompleta,
+} from "@/lib/horarios-service";
 import { toast } from "sonner";
 
 interface ProductsViewProps {
@@ -131,6 +137,67 @@ export function ProductsView({
       setModoVenda(profile.modo_venda as any);
     }
   }, [profile?.modo_venda]);
+
+  // Horários de Funcionamento e Controle Master da Loja (Abrir / Pausar Vendas)
+  const [horariosConfig, setHorariosConfig] = useState<ConfiguracaoHorariosCompleta>(() =>
+    normalizarConfiguracaoCompleta(profile?.horarios_funcionamento || profile?.horariosFuncionamento || (estabelecimentoCodigo ? obterHorariosLocal(estabelecimentoCodigo) : null))
+  );
+  const [salvandoStatusLoja, setSalvandoStatusLoja] = useState(false);
+
+  useEffect(() => {
+    if (profile?.horarios_funcionamento || profile?.horariosFuncionamento) {
+      setHorariosConfig(normalizarConfiguracaoCompleta(profile.horarios_funcionamento || profile.horariosFuncionamento));
+    }
+  }, [profile?.horarios_funcionamento, profile?.horariosFuncionamento]);
+
+  const handleToggleLojaAtiva = async (abrir: boolean) => {
+    const pausar = !abrir;
+    const novaConfig: ConfiguracaoHorariosCompleta = {
+      ...horariosConfig,
+      loja_pausada: pausar,
+      ...(horariosConfig.modo_controle === "manual" ? { status_manual: abrir ? "aberta" : "fechada" } : {}),
+    };
+
+    setHorariosConfig(novaConfig);
+    if (estabelecimentoCodigo) {
+      salvarHorariosLocal(estabelecimentoCodigo, novaConfig);
+    }
+
+    setSalvandoStatusLoja(true);
+    try {
+      await updateEstablishmentDetails({
+        horarios_funcionamento: novaConfig,
+      });
+
+      if (estabelecimentoCodigo) {
+        try {
+          const { error } = await supabase
+            .from("estabelecimentos")
+            .update({
+              horarios_funcionamento: novaConfig,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("codigo", estabelecimentoCodigo.toUpperCase().trim());
+          if (error) {
+            console.warn("[ProductsView] Aviso ao atualizar horarios_funcionamento no Supabase:", error.message);
+          }
+        } catch (dbErr) {
+          console.warn("[ProductsView] Falha na gravação remota de status da loja:", dbErr);
+        }
+      }
+
+      if (pausar) {
+        toast.error("🛑 Vendas Imediatas PAUSADAS! O cardápio público está aceitando apenas orçamentos.");
+      } else {
+        toast.success("✅ Loja ABERTA! O cardápio está pronto para receber pedidos normalmente.");
+      }
+    } catch (err: any) {
+      console.error("[ProductsView] Erro ao alternar status da loja:", err);
+      toast.error("Erro ao sincronizar status da loja com o servidor.");
+    } finally {
+      setSalvandoStatusLoja(false);
+    }
+  };
 
   const handleSalvarModoVenda = async (novoModo: "apenas_pedido" | "apenas_orcamento" | "ambos") => {
     const modoAnterior = modoVenda;
@@ -565,14 +632,39 @@ export function ProductsView({
     <div className="space-y-6">
       {/* Banner de Compartilhamento do Cardápio Público em Lilás Suave / Lavanda #8E7CC3 */}
       <div className="bg-gradient-to-r from-[#8E7CC3] via-[#7C69B3] to-[#5B478E] rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="bg-white/20 border border-white/30 text-white font-mono text-xs font-black px-2.5 py-0.5 rounded-full">
               Código da sua Confeitaria: {estabelecimentoCodigo}
             </span>
-            <Badge className="bg-emerald-500 text-white border-0 text-[10px] font-bold">
-              Cardápio Ativo
-            </Badge>
+
+            {/* Switch Interativo de Controle Manual / Status da Loja */}
+            <div className="flex items-center gap-2 bg-black/25 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs">
+              <Switch
+                id="switch-loja-status-cardapio"
+                checked={!horariosConfig.loja_pausada && (horariosConfig.modo_controle === "manual" ? horariosConfig.status_manual === "aberta" : true)}
+                onCheckedChange={handleToggleLojaAtiva}
+                disabled={salvandoStatusLoja}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-rose-500 scale-90"
+              />
+              <Label
+                htmlFor="switch-loja-status-cardapio"
+                className="text-xs font-black cursor-pointer select-none flex items-center gap-1.5"
+              >
+                {!horariosConfig.loja_pausada && (horariosConfig.modo_controle === "manual" ? horariosConfig.status_manual === "aberta" : true) ? (
+                  <span className="text-emerald-300 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>🟢 Loja Aberta</span>
+                  </span>
+                ) : (
+                  <span className="text-rose-300 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                    <span>🔴 Loja Fechada (Pausada)</span>
+                  </span>
+                )}
+              </Label>
+              {salvandoStatusLoja && <Loader2 className="w-3 h-3 animate-spin text-white/80 ml-0.5" />}
+            </div>
           </div>
           <h3 className="text-lg font-extrabold">Seu Cardápio Público Digital</h3>
           <p className="text-xs text-white/80 max-w-xl">
