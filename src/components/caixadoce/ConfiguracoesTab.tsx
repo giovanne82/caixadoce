@@ -287,6 +287,8 @@ export type SectionKey =
   | "redes"
   | "pagamentos"
   | "frete"
+  | "ifood"
+  | "99food"
   | "equipe"
   | "planos"
   | "integracoes"
@@ -1691,7 +1693,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     redes: "Redes Sociais",
     pagamentos: "Pagamentos",
     frete: "Frete & Entrega",
-    integracoes: "Integrações",
+    ifood: "iFood Delivery",
+    "99food": "99Food Delivery",
+    integracoes: "Integrações Delivery",
     equipe: "Equipe & Colaboradores",
     planos: "Planos & Parcerias",
     seguranca: "Segurança",
@@ -1753,12 +1757,22 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       colorClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
     },
     {
-      id: "integracoes",
-      title: "Integrações",
-      description: "iFood (preparado nos bastidores com badge informativo de homologação)",
+      id: "ifood",
+      title: "iFood",
+      description: "Integração oficial de pedidos e cardápio iFood",
       icon: ShoppingBag,
-      colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+      colorClass: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
       badge: "Homologação",
+      disabled: true,
+    },
+    {
+      id: "99food",
+      title: "99Food",
+      description: "Integração oficial de pedidos e delivery 99Food",
+      icon: Store,
+      colorClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+      badge: "Homologação",
+      disabled: true,
     },
     {
       id: "equipe",
@@ -1846,26 +1860,44 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {MENU_ITEMS.map((item) => {
               const Icon = item.icon;
+              const isDisabled = Boolean((item as any).disabled);
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveSection(item.id as SectionKey)}
-                  className="p-4 rounded-2xl border border-border/80 bg-card hover:border-purple-500/50 hover:shadow-md hover:scale-[1.01] transition-all text-left flex items-center justify-between gap-3.5 group shadow-2xs"
+                  onClick={() => {
+                    if (isDisabled) {
+                      toast.info(`A integração com o ${item.title} está em fase de homologação e estará disponível em breve!`);
+                      return;
+                    }
+                    setActiveSection(item.id as SectionKey);
+                  }}
+                  className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between gap-3.5 group shadow-2xs ${
+                    isDisabled
+                      ? "opacity-80 bg-muted/20 border-dashed border-border/80 cursor-not-allowed hover:border-amber-500/40"
+                      : "border-border/80 bg-card hover:border-purple-500/50 hover:shadow-md hover:scale-[1.01]"
+                  }`}
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${item.colorClass} shadow-xs group-hover:scale-105 transition-transform`}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${item.colorClass} shadow-xs ${!isDisabled ? "group-hover:scale-105 transition-transform" : ""}`}
                     >
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-extrabold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                        <h4 className={`text-sm font-extrabold text-foreground ${!isDisabled ? "group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" : ""}`}>
                           {item.title}
                         </h4>
                         {item.badge && (
-                          <Badge variant="outline" className="text-[10px] font-bold py-0 px-2 h-4.5 bg-muted/60">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-bold py-0 px-2 h-4.5 ${
+                              item.badge === "Homologação" || item.badge === "Em Breve"
+                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                : "bg-muted/60"
+                            }`}
+                          >
                             {item.badge}
                           </Badge>
                         )}
@@ -1874,8 +1906,12 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     </div>
                   </div>
 
-                  <div className="w-8 h-8 rounded-xl bg-muted/40 group-hover:bg-purple-500/10 text-muted-foreground group-hover:text-purple-600 flex items-center justify-center shrink-0 transition-colors">
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  <div className="w-8 h-8 rounded-xl bg-muted/40 text-muted-foreground flex items-center justify-center shrink-0 transition-colors">
+                    {isDisabled ? (
+                      <Lock className="w-3.5 h-3.5 text-muted-foreground/60" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    )}
                   </div>
                 </button>
               );
@@ -3536,37 +3572,91 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </div>
           )}
 
-          {/* 7. SEÇÃO: INTEGRAÇÕES (IFOOD) */}
-          {activeSection === "integracoes" && (
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                      <ShoppingBag className="w-5 h-5 text-red-600 dark:text-red-400" />
-                      <span>Integrações com Plataformas de Delivery</span>
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-1">
-                      Conecte sua conta do iFood para receber pedidos automaticamente no painel do CaixaDoce
-                    </CardDescription>
+          {/* 7. SEÇÃO: INTEGRAÇÕES DELIVERY (IFOOD & 99FOOD) */}
+          {(activeSection === "integracoes" || activeSection === "ifood" || activeSection === "99food") && (
+            <div className="space-y-6">
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                        <ShoppingBag className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                        <span>Integrações com Plataformas de Delivery</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        Conecte sua confeitaria aos principais aplicativos de entrega para receber pedidos automaticamente no painel do CaixaDoce
+                      </CardDescription>
+                    </div>
+                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                      Em Homologação
+                    </Badge>
                   </div>
-                  <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                    Em Homologação
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Store className="w-5 h-5 text-red-600" />
-                    <h4 className="text-xs font-bold text-foreground">iFood Delivery (Em Breve)</h4>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* CARD IFOOD */}
+                  <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-3 shadow-2xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 border border-red-500/20">
+                          <ShoppingBag className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-foreground">iFood Delivery</h4>
+                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                              Em Homologação
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Receba e sincronize pedidos do iFood diretamente nas suas encomendas em tempo real.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        disabled={true}
+                        variant="outline"
+                        className="text-xs font-bold shrink-0 opacity-70 cursor-not-allowed border-dashed"
+                      >
+                        <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Conectar (Em Breve)
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    A integração oficial com o iFood está em fase final de homologação técnica. Assim que liberada, você poderá conectar seu restaurante e gerenciar todos os pedidos diretamente aqui!
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+
+                  {/* CARD 99FOOD */}
+                  <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-3 shadow-2xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                          <Store className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-foreground">99Food Delivery</h4>
+                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                              Em Homologação
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Integração de pedidos e entregadores do 99Food com cálculo e impressão automática de cupom.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        disabled={true}
+                        variant="outline"
+                        className="text-xs font-bold shrink-0 opacity-70 cursor-not-allowed border-dashed"
+                      >
+                        <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Conectar (Em Breve)
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* 8. SEÇÃO: FRETE & ENTREGA */}

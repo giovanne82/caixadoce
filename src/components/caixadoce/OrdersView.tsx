@@ -183,6 +183,15 @@ function renderizarBadgeOrigem(ordOrOrigem?: Encomenda | string) {
     );
   }
 
+  if (origem === "99food") {
+    return (
+      <Badge className="bg-amber-500 hover:bg-amber-600 text-slate-950 border-none text-[10px] font-black uppercase flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
+        <Store className="w-3 h-3 text-slate-950 fill-slate-950 shrink-0" />
+        <span>99Food</span>
+      </Badge>
+    );
+  }
+
   if (origem === "cardapio") {
     return (
       <Badge className="bg-purple-600 hover:bg-purple-700 text-white border-none text-[10px] font-bold flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
@@ -209,6 +218,15 @@ function renderizarBadgeOrigemMobile(ordOrOrigem?: Encomenda | string) {
       <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[9px] font-black uppercase flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
         <Store className="w-2.5 h-2.5 text-white fill-white shrink-0" />
         <span>iFood</span>
+      </Badge>
+    );
+  }
+
+  if (origem === "99food") {
+    return (
+      <Badge className="bg-amber-500 hover:bg-amber-600 text-slate-950 border-none text-[9px] font-black uppercase flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
+        <Store className="w-2.5 h-2.5 text-slate-950 fill-slate-950 shrink-0" />
+        <span>99Food</span>
       </Badge>
     );
   }
@@ -2358,6 +2376,7 @@ export function OrdersView({
               <SelectItem value="manual">Inserida Manualmente</SelectItem>
               <SelectItem value="cardapio">Meu Cardápio</SelectItem>
               <SelectItem value="ifood">iFood</SelectItem>
+              <SelectItem value="99food">99Food</SelectItem>
             </SelectContent>
           </Select>
 

@@ -511,6 +511,33 @@ async function seedIfoodEncomendasColumnsInSupabase() {
 }
 seedIfoodEncomendasColumnsInSupabase();
 
+// Injeção de Colunas do 99Food na Tabela estabelecimentos e encomendas do Supabase
+async function seedNineNineFoodColumnsInSupabase() {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+  try {
+    const alterSql = `
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS nine_nine_food_access_token TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS nine_nine_food_merchant_id TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS nine_nine_food_status TEXT DEFAULT 'desconectado';
+      ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS codigo_pedido_99food TEXT;
+      CREATE INDEX IF NOT EXISTS idx_estabelecimentos_99food_merchant ON public.estabelecimentos(nine_nine_food_merchant_id);
+      CREATE INDEX IF NOT EXISTS idx_encomendas_codigo_99food ON public.encomendas(codigo_pedido_99food);
+    `;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: alterSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed 99Food Columns Log]", err);
+  }
+}
+seedNineNineFoodColumnsInSupabase();
+
 const processedPaymentsSet = new Set<string>();
 
 // Helper de Segurança Anti-Fraude: Verifica se o estabelecimento já utilizou qualquer cupom no passado ou já foi assinante
@@ -1331,6 +1358,102 @@ async function processIFoodEventsInServer(body: any, env?: any) {
   }
 }
 
+// Helper assíncrono para processar eventos do 99Food no server.ts usando o NineNineFoodAdapter
+async function processNineNineFoodEventsInServer(body: any, env?: any) {
+  try {
+    const { NineNineFoodAdapter } = await import("./lib/integrations/nineNineFoodAdapter");
+    const adapter = new NineNineFoodAdapter();
+    const orders = adapter.parseWebhook(body);
+    if (!orders || orders.length === 0) return;
+
+    const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    };
+
+    for (const order of orders) {
+      if (!order.orderId) continue;
+      console.log(`[Server 99Food Webhook] Processando pedido 99Food ID: '${order.orderId}' | Merchant: '${order.merchantId}'`);
+
+      let estCodigo = "CD-5411";
+      let estId: string | null = null;
+      let estUserId: string | null = null;
+
+      try {
+        let foundEst: any = null;
+        if (order.merchantId) {
+          const resDirect = await fetch(
+            `${supabaseUrl}/rest/v1/estabelecimentos?nine_nine_food_merchant_id=ilike.${encodeURIComponent(order.merchantId)}&select=id,codigo,user_id,nine_nine_food_merchant_id,nine_nine_food_status`,
+            { headers }
+          );
+          if (resDirect.ok) {
+            const listDirect = await resDirect.json();
+            if (Array.isArray(listDirect) && listDirect.length > 0) {
+              foundEst = listDirect[0];
+            }
+          }
+        }
+
+        if (!foundEst) {
+          const resCd5411 = await fetch(
+            `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.CD-5411&select=id,codigo,user_id,nine_nine_food_merchant_id,nine_nine_food_status`,
+            { headers }
+          );
+          if (resCd5411.ok) {
+            const listCd5411 = await resCd5411.json();
+            if (Array.isArray(listCd5411) && listCd5411.length > 0) {
+              foundEst = listCd5411[0];
+            }
+          }
+        }
+
+        if (foundEst) {
+          estCodigo = foundEst.codigo || "CD-5411";
+          estId = foundEst.id || null;
+          estUserId = foundEst.user_id || null;
+        }
+      } catch (eM) {
+        console.warn("[Server 99Food Match Warn]", eM);
+      }
+
+      // Evita duplicata
+      try {
+        const resDup = await fetch(
+          `${supabaseUrl}/rest/v1/encomendas?codigo_pedido_99food=eq.${encodeURIComponent(order.orderId)}&select=id,estabelecimento_codigo`,
+          { headers }
+        );
+        if (resDup.ok) {
+          const listDup = await resDup.json();
+          if (Array.isArray(listDup) && listDup.length > 0) {
+            console.log(`[Server 99Food Dup] Pedido ${order.orderId} já existe.`);
+            continue;
+          }
+        }
+      } catch {}
+
+      const payloadEncomenda = adapter.toEncomendaPayload(order, estCodigo, estId, estUserId);
+
+      const insertRes = await fetch(`${supabaseUrl}/rest/v1/encomendas`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payloadEncomenda),
+      });
+
+      if (insertRes.ok) {
+        console.log(`[Server 99Food Success] Pedido 99Food #${order.orderId} inserido com sucesso para ${estCodigo}`);
+      } else {
+        const errTxt = await insertRes.text();
+        console.error(`[Server 99Food Error] Falha ao inserir pedido: ${errTxt}`);
+      }
+    }
+  } catch (err) {
+    console.error("[Server 99Food Events Exception]", err);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -1410,6 +1533,45 @@ export default {
             await processIFoodEventsInServer(body, env);
           } catch (wErr) {
             console.error("[Server iFood Webhook Error]", wErr);
+          }
+          return new Response("OK", { status: 200, headers: corsHeaders });
+        }
+
+        return new Response("OK", { status: 200, headers: corsHeaders });
+      }
+
+      // =========================================================================
+      // ENDPOINT DE WEBHOOK 99FOOD (/api/99food/webhook)
+      // =========================================================================
+      if (url.pathname === "/api/99food/webhook") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "text/plain",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        if (request.method === "GET") {
+          return new Response("Webhook 99Food CaixaDoce Ativo (Homologação)", { status: 200, headers: corsHeaders });
+        }
+
+        if (request.method === "POST") {
+          try {
+            let body: any = null;
+            try {
+              body = await request.json();
+            } catch {
+              const txt = await request.text();
+              try { body = JSON.parse(txt); } catch { body = []; }
+            }
+            console.log("📦 [Server.ts] Evento 99Food Recebido:", typeof body === "object" ? JSON.stringify(body) : body);
+            await processNineNineFoodEventsInServer(body, env);
+          } catch (wErr) {
+            console.error("[Server 99Food Webhook Error]", wErr);
           }
           return new Response("OK", { status: 200, headers: corsHeaders });
         }
