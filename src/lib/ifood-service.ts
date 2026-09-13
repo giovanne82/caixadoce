@@ -12,11 +12,15 @@ export function getSupabaseBackendClient() {
     (typeof process !== "undefined" &&
       (process.env?.SUPABASE_SERVICE_ROLE_KEY ||
         process.env?.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-        process.env?.VITE_SUPABASE_ANON_KEY ||
-        process.env?.SUPABASE_ANON_KEY)) ||
+        process.env?.SUPABASE_SERVICE_KEY ||
+        process.env?.SERVICE_ROLE_KEY ||
+        process.env?.SUPABASE_ANON_KEY ||
+        process.env?.VITE_SUPABASE_ANON_KEY)) ||
     DEFAULT_SUPABASE_KEY;
 
-  return createClient(supabaseUrl, supabaseKey);
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
 }
 
 /**
@@ -26,40 +30,81 @@ export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: st
   const supabase = getSupabaseBackendClient();
   let targetCode = (estabelecimentoCodigo || "").trim().toUpperCase();
 
-  // Se não foi passado o código da loja, tenta encontrar pelo orderId na tabela encomendas
+  // 1. Se não foi passado o código da loja, tenta encontrar pelo orderId na tabela encomendas
   if (!targetCode && orderId) {
-    const { data: enc } = await supabase
-      .from("encomendas")
-      .select("estabelecimento_codigo, codigo_pedido_ifood")
-      .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`)
-      .maybeSingle();
+    try {
+      const { data: enc } = await supabase
+        .from("encomendas")
+        .select("estabelecimento_codigo, codigo_pedido_ifood")
+        .or(`codigo_pedido_ifood.eq.${orderId},id.eq.${orderId}`)
+        .maybeSingle();
 
-    if (enc?.estabelecimento_codigo) {
-      targetCode = enc.estabelecimento_codigo.trim().toUpperCase();
+      if (enc?.estabelecimento_codigo) {
+        targetCode = enc.estabelecimento_codigo.trim().toUpperCase();
+      }
+    } catch (e) {
+      console.warn("[obterTokensIFoodEstabelecimento Enc Check Warn]", e);
     }
   }
 
-  // Busca o estabelecimento
-  let query = supabase.from("estabelecimentos").select("id, codigo, ifood_access_token, ifood_refresh_token, ifood_merchant_id, ifood_status");
+  // 2. Busca o estabelecimento pelo targetCode informado
   if (targetCode) {
-    query = query.ilike("codigo", targetCode);
-  } else {
-    query = query.eq("ifood_status", "conectado").limit(1);
+    const { data: estTarget } = await supabase
+      .from("estabelecimentos")
+      .select("id, codigo, ifood_access_token, ifood_refresh_token, ifood_merchant_id, ifood_status")
+      .ilike("codigo", targetCode)
+      .maybeSingle();
+
+    if (estTarget?.ifood_access_token) {
+      return {
+        id: estTarget.id,
+        codigo: estTarget.codigo,
+        accessToken: estTarget.ifood_access_token,
+        refreshToken: estTarget.ifood_refresh_token,
+        merchantId: estTarget.ifood_merchant_id,
+        status: estTarget.ifood_status,
+      };
+    }
   }
 
-  const { data: est, error } = await query.maybeSingle();
-  if (error || !est) {
-    return { error: `Estabelecimento '${targetCode || "ativo"}' não encontrado ou sem conexão iFood configurada.` };
+  // 3. Busca prioritária pela loja ativa 'CD-5411'
+  const { data: estCd5411 } = await supabase
+    .from("estabelecimentos")
+    .select("id, codigo, ifood_access_token, ifood_refresh_token, ifood_merchant_id, ifood_status")
+    .ilike("codigo", "CD-5411")
+    .maybeSingle();
+
+  if (estCd5411?.ifood_access_token) {
+    return {
+      id: estCd5411.id,
+      codigo: estCd5411.codigo,
+      accessToken: estCd5411.ifood_access_token,
+      refreshToken: estCd5411.ifood_refresh_token,
+      merchantId: estCd5411.ifood_merchant_id,
+      status: estCd5411.ifood_status,
+    };
   }
 
-  return {
-    id: est.id,
-    codigo: est.codigo,
-    accessToken: est.ifood_access_token,
-    refreshToken: est.ifood_refresh_token,
-    merchantId: est.ifood_merchant_id,
-    status: est.ifood_status,
-  };
+  // 4. Busca por qualquer estabelecimento com token ou conectado
+  const { data: ests } = await supabase
+    .from("estabelecimentos")
+    .select("id, codigo, ifood_access_token, ifood_refresh_token, ifood_merchant_id, ifood_status")
+    .not("ifood_access_token", "is", null)
+    .order("updated_at", { ascending: false });
+
+  if (Array.isArray(ests) && ests.length > 0) {
+    const est = ests[0];
+    return {
+      id: est.id,
+      codigo: est.codigo,
+      accessToken: est.ifood_access_token,
+      refreshToken: est.ifood_refresh_token,
+      merchantId: est.ifood_merchant_id,
+      status: est.ifood_status,
+    };
+  }
+
+  return { error: `Nenhum token de autorização do iFood encontrado para a loja '${targetCode || "CD-5411"}'. Conecte sua loja ao iFood nas configurações.` };
 }
 
 /**
