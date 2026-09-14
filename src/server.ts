@@ -1697,15 +1697,14 @@ export default {
       // =========================================================================
       // ENDPOINT DE WEBHOOK MERCADO PAGO (/api/webhooks/mercadopago, /api/webhook-mp, etc.)
       // =========================================================================
-      const pathToCheck = request.headers.get("x-matched-path") || request.headers.get("x-invoke-path") || url.pathname;
+      const requestTargetStr = `${url.pathname} ${request.url} ${request.headers.get("x-original-url") || ""} ${request.headers.get("x-forwarded-uri") || ""} ${request.headers.get("x-invoke-path") || ""} ${request.headers.get("x-matched-path") || ""}`.toLowerCase();
       if (
-        pathToCheck.includes("mercadopago") ||
-        pathToCheck.includes("webhook-mp") ||
-        url.pathname === "/api/webhooks/mercadopago" ||
-        url.pathname === "/api/webhook-mp" ||
-        url.pathname === "/api/mercadopago/webhook" ||
-        url.pathname === "/api/webhook/mercadopago" ||
-        url.pathname === "/api/mercadopago"
+        requestTargetStr.includes("mercadopago") ||
+        requestTargetStr.includes("webhook-mp") ||
+        url.pathname.startsWith("/api/webhooks/mercadopago") ||
+        url.pathname.startsWith("/api/mercadopago") ||
+        url.pathname.startsWith("/api/webhook-mp") ||
+        url.pathname === "/api/webhooks/mercadopago"
       ) {
         const corsHeaders = {
           "Access-Control-Allow-Origin": "*",
