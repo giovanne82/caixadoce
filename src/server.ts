@@ -1694,256 +1694,7 @@ export default {
         return new Response("OK", { status: 200, headers: corsHeaders });
       }
 
-      // =========================================================================
-      // ENDPOINT DE WEBHOOK MERCADO PAGO (/api/webhooks/mercadopago, /api/webhook-mp, etc.)
-      // =========================================================================
-      const requestTargetStr = `${url.pathname} ${request.url} ${request.headers.get("x-original-url") || ""} ${request.headers.get("x-forwarded-uri") || ""} ${request.headers.get("x-invoke-path") || ""} ${request.headers.get("x-matched-path") || ""}`.toLowerCase();
-      if (
-        requestTargetStr.includes("mercadopago") ||
-        requestTargetStr.includes("webhook-mp") ||
-        url.pathname.startsWith("/api/webhooks/mercadopago") ||
-        url.pathname.startsWith("/api/mercadopago") ||
-        url.pathname.startsWith("/api/webhook-mp") ||
-        url.pathname === "/api/webhooks/mercadopago"
-      ) {
-        const corsHeaders = {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "*",
-          "Content-Type": "application/json",
-        };
 
-        if (request.method === "OPTIONS") {
-          return new Response(null, { status: 200, headers: corsHeaders });
-        }
-
-        if (request.method === "GET") {
-          return new Response(
-            JSON.stringify({ status: "ok", message: "Webhook Mercado Pago CaixaDoce Ativo" }),
-            { status: 200, headers: corsHeaders }
-          );
-        }
-
-        if (request.method === "POST") {
-          try {
-            let paymentId =
-              url.searchParams.get("data.id") ||
-              url.searchParams.get("id") ||
-              url.searchParams.get("data_id");
-
-            let bodyJson: any = null;
-            try {
-              const bodyText = await request.text().catch(() => "");
-              if (bodyText) {
-                try {
-                  bodyJson = JSON.parse(bodyText);
-                } catch {}
-              }
-            } catch {}
-
-            if (!paymentId && bodyJson) {
-              paymentId =
-                bodyJson.data?.id ||
-                bodyJson.id ||
-                (bodyJson.resource ? String(bodyJson.resource).split("/").pop() : null);
-            }
-
-            console.log(`[Server MercadoPago Webhook] Notificação recebida. Payment ID: ${paymentId}`);
-
-            const isMockOrTest =
-              !paymentId ||
-              paymentId === "123456" ||
-              paymentId === "123456789" ||
-              paymentId === "12345" ||
-              paymentId === "1234567" ||
-              bodyJson?.live_mode === false ||
-              bodyJson?.action === "test" ||
-              bodyJson?.type === "test";
-
-            if (isMockOrTest) {
-              console.log(`[Server MercadoPago Webhook] Evento de SIMULAÇÃO/TESTE recebido (Payment ID: '${paymentId}'). Retornando HTTP 200 OK.`);
-              return new Response(
-                JSON.stringify({ received: true, status: "ok_simulation", payment_id: paymentId }),
-                { status: 200, headers: corsHeaders }
-              );
-            }
-
-            const envObj = (env as Record<string, string>) || {};
-            const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
-
-            const mpToken =
-              envObj.MERCADOPAGO_ACCESS_TOKEN ||
-              procObj.MERCADOPAGO_ACCESS_TOKEN ||
-              envObj.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-              procObj.VITE_MERCADOPAGO_ACCESS_TOKEN ||
-              "APP_USR-3682622436709302-082412-8dce93a51299673df017bb9caf9b848b-78387856";
-
-            const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
-            const headers = {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-            };
-
-            try {
-              const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-                headers: { Authorization: `Bearer ${mpToken}`, Accept: "application/json" },
-              });
-
-              if (!mpRes.ok) {
-                const errText = await mpRes.text().catch(() => "");
-                console.warn(`[Server MercadoPago Webhook Warn] MP API retornou HTTP ${mpRes.status} para Payment ID '${paymentId}': ${errText}`);
-                return new Response(
-                  JSON.stringify({ received: true, status: "mp_api_non_ok_captured", http_code: mpRes.status, payment_id: paymentId }),
-                  { status: 200, headers: corsHeaders }
-                );
-              }
-
-              const paymentData: any = await mpRes.json();
-              const status = String(paymentData.status || "").toLowerCase();
-              const externalRef = String(
-                paymentData.external_reference ||
-                paymentData.metadata?.external_reference ||
-                paymentData.metadata?.estabelecimento_codigo ||
-                paymentData.metadata?.pedido_id ||
-                paymentData.metadata?.order_id ||
-                ""
-              ).trim();
-
-              const amount = Number(
-                paymentData.transaction_amount ||
-                paymentData.transaction_details?.total_paid_amount ||
-                0
-              );
-
-              const payerEmail = String(
-                paymentData.payer?.email ||
-                paymentData.metadata?.email ||
-                ""
-              ).trim();
-
-              console.log(`[Server MercadoPago Webhook] Payment ${paymentId}: status='${status}', externalRef='${externalRef}', amount=${amount}`);
-
-              if (status === "approved" || status === "authorized") {
-                const agoraMs = Date.now();
-                let estMatch: any = null;
-
-                // 1. Buscar estabelecimento por external_reference ou e-mail
-                if (externalRef) {
-                  const estRes = await fetch(
-                    `${supabaseUrl}/rest/v1/estabelecimentos?or=(codigo.ilike.${encodeURIComponent(externalRef)},id.eq.${encodeURIComponent(externalRef)},slug.ilike.${encodeURIComponent(externalRef)})&select=id,codigo,plano_expira_em,plano_exp`,
-                    { headers }
-                  );
-                  if (estRes.ok) {
-                    const list = await estRes.json();
-                    if (Array.isArray(list) && list.length > 0) estMatch = list[0];
-                  }
-                }
-
-                if (!estMatch && payerEmail) {
-                  const estEmailRes = await fetch(
-                    `${supabaseUrl}/rest/v1/estabelecimentos?email=ilike.${encodeURIComponent(payerEmail)}&select=id,codigo,plano_expira_em,plano_exp`,
-                    { headers }
-                  );
-                  if (estEmailRes.ok) {
-                    const listEmail = await estEmailRes.json();
-                    if (Array.isArray(listEmail) && listEmail.length > 0) estMatch = listEmail[0];
-                  }
-                }
-
-                if (estMatch) {
-                  const isAnual =
-                    amount >= 100 ||
-                    String(paymentData.description || "").toLowerCase().includes("anual") ||
-                    String(paymentData.metadata?.plano || "").toLowerCase().includes("anual");
-
-                  const duracaoDias = isAnual ? 365 : 30;
-
-                  let baseMs = agoraMs;
-                  const expStr = estMatch.plano_expira_em || estMatch.plano_exp;
-                  if (expStr) {
-                    const expMs = new Date(expStr).getTime();
-                    if (!isNaN(expMs) && expMs > agoraMs) {
-                      baseMs = expMs;
-                    }
-                  }
-
-                  const novaExpiraIso = new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-
-                  await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?id=eq.${estMatch.id}`, {
-                    method: "PATCH",
-                    headers,
-                    body: JSON.stringify({
-                      plano_expira_em: novaExpiraIso,
-                      plano_exp: novaExpiraIso,
-                      status: "ativo",
-                      plano_status: "ativo",
-                      status_assinatura: "ativo",
-                      is_pro: true,
-                      plano_id: isAnual ? "anual" : "mensal",
-                      updated_at: new Date().toISOString(),
-                    }),
-                  });
-
-                  console.log(`[Server MercadoPago Webhook Success] Assinatura renovada para a loja '${estMatch.codigo}'! Nova expiração: ${novaExpiraIso}`);
-                }
-
-                // 2. Buscar encomenda por external_reference
-                if (externalRef) {
-                  const encRes = await fetch(
-                    `${supabaseUrl}/rest/v1/encomendas?or=(id.eq.${encodeURIComponent(externalRef)},codigo_pedido_ifood.eq.${encodeURIComponent(externalRef)},codigo.eq.${encodeURIComponent(externalRef)})&select=id,valor_total,historico_pagamentos`,
-                    { headers }
-                  );
-                  if (encRes.ok) {
-                    const listEnc = await encRes.json();
-                    if (Array.isArray(listEnc) && listEnc.length > 0) {
-                      const encRow = listEnc[0];
-                      const valorPago = amount > 0 ? amount : Number(encRow.valor_total || 0);
-                      const historico = Array.isArray(encRow.historico_pagamentos) ? encRow.historico_pagamentos : [];
-                      historico.push({
-                        id: `mp_${paymentId}`,
-                        data: new Date().toISOString().split("T")[0],
-                        valor: valorPago,
-                        observacao: "Pagamento aprovado via Webhook Mercado Pago",
-                      });
-
-                      await fetch(`${supabaseUrl}/rest/v1/encomendas?id=eq.${encRow.id}`, {
-                        method: "PATCH",
-                        headers,
-                        body: JSON.stringify({
-                          status_pagamento: "pago_integral",
-                          metodo_pagamento: "Mercado Pago",
-                          forma_pagamento: "Mercado Pago",
-                          origem_pagamento: "mercadopago",
-                          valor_entrada: valorPago,
-                          historico_pagamentos: historico,
-                          updated_at: new Date().toISOString(),
-                        }),
-                      });
-                      console.log(`[Server MercadoPago Webhook Success] Encomenda ID ${encRow.id} atualizada para PAGO!`);
-                    }
-                  }
-                }
-              }
-            } catch (mpFetchErr: any) {
-              console.warn(`[Server MercadoPago Webhook Exception Captured] Erro ao consultar MP para ID '${paymentId}':`, mpFetchErr?.message || mpFetchErr);
-            }
-
-            return new Response(
-              JSON.stringify({ received: true, status: "processed", payment_id: paymentId }),
-              { status: 200, headers: corsHeaders }
-            );
-          } catch (err: any) {
-            console.error("[Server MercadoPago Webhook Handler Error]", err);
-            return new Response(
-              JSON.stringify({ received: true, error: err?.message || "Internal server error" }),
-              { status: 200, headers: corsHeaders }
-            );
-          }
-        }
-
-        return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
-      }
 
       // =========================================================================
       // ENDPOINT DE INICIALIZAÇÃO IFOOD DEVICE GRANT (/api/ifood/auth, /api/ifood/userCode)
@@ -4082,30 +3833,76 @@ export default {
       // MERCADO PAGO: WEBHOOK DE NOTIFICAÇÃO ASSÍNCRONA (/api/webhook-mp, /webhook-mp, /api/webhooks/mercadopago, /api/mercadopago/webhook)
       // =========================================================================
       if (
-        (url.pathname === "/api/webhook-mp" ||
-          url.pathname === "/webhook-mp" ||
-          url.pathname === "/api/webhooks/mercadopago" ||
-          url.pathname === "/api/mercadopago/webhook") &&
-        (request.method === "POST" || request.method === "GET")
+        url.pathname.includes("mercadopago") ||
+        url.pathname.includes("webhook-mp") ||
+        url.pathname === "/api/webhook-mp" ||
+        url.pathname === "/webhook-mp" ||
+        url.pathname === "/api/webhooks/mercadopago" ||
+        url.pathname === "/api/mercadopago/webhook"
       ) {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        if (request.method === "GET") {
+          return new Response(
+            JSON.stringify({ status: "ok", message: "Webhook Mercado Pago CaixaDoce Ativo" }),
+            { status: 200, headers: corsHeaders }
+          );
+        }
+
         try {
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
-          let paymentId = url.searchParams.get("data.id") || url.searchParams.get("id");
+          let paymentId =
+            url.searchParams.get("data.id") ||
+            url.searchParams.get("id") ||
+            url.searchParams.get("data_id");
 
-          if (!paymentId && request.method === "POST") {
+          let bodyJson: any = null;
+          if (request.method === "POST") {
             try {
-              const bodyText = await request.text();
+              const bodyText = await request.text().catch(() => "");
               if (bodyText) {
-                const payload = JSON.parse(bodyText);
-                paymentId =
-                  payload.data?.id ||
-                  payload.id ||
-                  (payload.resource ? String(payload.resource).split("/").pop() : null);
+                try {
+                  bodyJson = JSON.parse(bodyText);
+                } catch {}
               }
             } catch {}
           }
 
+          if (!paymentId && bodyJson) {
+            paymentId =
+              bodyJson.data?.id ||
+              bodyJson.id ||
+              (bodyJson.resource ? String(bodyJson.resource).split("/").pop() : null);
+          }
+
           console.log("[MercadoPago Webhook] Notificação recebida. Payment ID:", paymentId);
+
+          const isMockOrTest =
+            !paymentId ||
+            paymentId === "123456" ||
+            paymentId === "123456789" ||
+            paymentId === "12345" ||
+            paymentId === "1234567" ||
+            bodyJson?.live_mode === false ||
+            bodyJson?.action === "test" ||
+            bodyJson?.type === "test";
+
+          if (isMockOrTest) {
+            console.log(`[MercadoPago Webhook] Simulação/Teste detectado (ID: '${paymentId}'). Retornando HTTP 200 OK.`);
+            return new Response(
+              JSON.stringify({ received: true, status: "ok_simulation", payment_id: paymentId || "123456" }),
+              { status: 200, headers: corsHeaders }
+            );
+          }
 
           if (paymentId) {
             const accessToken =
