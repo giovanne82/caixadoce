@@ -97,6 +97,7 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  try {
     const bodyParams = new URLSearchParams();
     bodyParams.append("grantType", "authorization_code");
     bodyParams.append("clientId", ifoodClientId.trim());

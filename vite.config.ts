@@ -10,15 +10,16 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (id.includes("node_modules")) {
             if (id.includes("lucide-react")) return "lucide-vendor";
             if (id.includes("@tanstack")) return "tanstack-vendor";
             if (id.includes("@supabase") || id.includes("supabase-js")) return "supabase-vendor";
             return "vendor";
           }
+          return undefined;
         },
       },
     },
   },
-});
+} as any);

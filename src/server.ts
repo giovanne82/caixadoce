@@ -3971,8 +3971,8 @@ export default {
                 planId,
                 paymentId: mpData.id,
                 paymentMethod: "cartao_credito",
-                amount,
-                cupomUtilizado: cupomEnviado || (amount <= 19.90 ? "CUPOM_DESCONTO" : undefined),
+                amount: transaction_amount,
+                cupomUtilizado: cupomEnviado || (transaction_amount <= 19.90 ? "CUPOM_DESCONTO" : undefined),
               });
               console.log(`[Supabase] Estabelecimento ${establishmentCode} ativado com sucesso após pagamento por cartão aprovado.`);
             } catch (dbErr) {
