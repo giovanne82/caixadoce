@@ -255,13 +255,10 @@ export function verificarAcessoModulo(
   modulo: "despesas" | "insumos" | "scanner" | "encomendas" | "produtos" | "financeiro",
   infoPlano: InfoPlanoEstabelecimento
 ): boolean {
-  // 1. O plano gratuito permite EXCLUSIVAMENTE Insumos ('insumos' / 'despesas')
-  if (modulo === "despesas" || modulo === "insumos") return true;
-
-  // 2. No período de teste de 7 dias (trial), todos os módulos ficam liberados
+  // 1. No período de teste de 7 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
 
-  // 3. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado
+  // 2. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado
   if (infoPlano.status === "ativo") {
     if (
       infoPlano.planoId === "mensal" ||
@@ -273,7 +270,7 @@ export function verificarAcessoModulo(
     }
   }
 
-  // 4. Caso contrário (Plano Gratuito / Básico ou trial expirado), bloqueia acesso
+  // 3. Caso contrário (trial expirado sem assinatura Pro ativa), bloqueia acesso aos módulos funcionais
   return false;
 }
 

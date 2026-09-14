@@ -580,68 +580,7 @@ export function MeuPlanoTab() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 items-stretch">
-        <Card className="border-border shadow-md flex flex-col justify-between bg-card hover:border-border/80 transition-all">
-          <CardHeader className="pb-4">
-            <Badge variant="outline" className="w-fit mb-2 text-[10px] font-bold text-stone-500 border-stone-300">
-              GRATUITO PARA SEMPRE
-            </Badge>
-            <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-primary" /> Plano Básico
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Para organizar suas compras e matérias-primas com acesso exclusivo à Lista de Compras.
-            </CardDescription>
-            <div className="pt-3">
-              <span className="text-3xl font-black text-foreground">R$ 0,00</span>
-              <span className="text-xs text-muted-foreground font-semibold"> / mês</span>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Recursos Incluídos:</p>
-            <ul className="space-y-2 text-xs text-foreground font-medium">
-              <li className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span><strong>Acesso Exclusivo à Lista de Compras Interativa</strong></span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Escanear a Notinha com IA (Bloqueado no Básico)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Calendário de Encomendas &amp; Clientes (Bloqueado)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Painel Financeiro &amp; Fluxo de Caixa (Bloqueado)</span>
-              </li>
-              <li className="flex items-start gap-2 text-stone-400">
-                <X className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                <span className="line-through">Cardápio Digital Público &amp; Produtos (Bloqueado)</span>
-              </li>
-            </ul>
-          </CardContent>
-          <div className="p-6 pt-0">
-            <Button
-              variant="outline"
-              className={`w-full text-xs font-bold transition-all ${
-                infoPlano.planoId === "basico" || isProOuTrialAtivo
-                  ? "opacity-60 bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-300 dark:border-stone-700 cursor-not-allowed pointer-events-none"
-                  : ""
-              }`}
-              disabled={infoPlano.planoId === "basico" || isProOuTrialAtivo}
-              onClick={handleMudarParaBasico}
-            >
-              {infoPlano.planoId === "basico"
-                ? "Plano Atual"
-                : isProOuTrialAtivo
-                ? "Plano Básico Desativado (Possui Assinatura PRO Ativa)"
-                : "Usar Plano Gratuito"}
-            </Button>
-          </div>
-        </Card>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto gap-6 pt-2 items-stretch">
         <Card className={`border-2 shadow-lg relative flex flex-col justify-between bg-card hover:scale-[1.01] transition-all ${
           isPlanoMensalAtivo ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-[#8E7CC3]"
         }`}>

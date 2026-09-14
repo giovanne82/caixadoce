@@ -122,26 +122,26 @@ function RouteErrorFallback({ error, reset }: { error?: Error; reset?: () => voi
 
 function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
   return (
-    <div className="py-12 px-6 text-center max-w-xl mx-auto space-y-5 bg-card border-2 border-dashed border-amber-500/40 rounded-3xl shadow-xl">
-      <div className="w-16 h-16 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto">
+    <div className="py-12 px-6 text-center max-w-xl mx-auto space-y-5 bg-card border-2 border-dashed border-purple-500/40 rounded-3xl shadow-xl my-8">
+      <div className="w-16 h-16 rounded-full bg-purple-500/15 text-purple-600 flex items-center justify-center mx-auto">
         <Crown className="w-9 h-9 animate-bounce text-amber-500" />
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Pro</h3>
+        <h3 className="text-xl font-extrabold text-foreground">Seu Período de Teste de 7 Dias Expirou</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 7 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
+          Para continuar gerenciando suas encomendas, cardápio, insumos, leitura por IA e financeiro, assine um dos nossos planos completos.
         </p>
-        <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-          Assine o Plano Mensal Completo (R$ 24,90/mês) ou Anual (R$ 154,90/ano) para desbloquear todos os módulos.
+        <p className="text-xs font-bold text-purple-700 dark:text-purple-300">
+          Escolha entre o Plano Mensal Completo (R$ 24,90/mês) ou Anual Completo para liberar o acesso ilimitado.
         </p>
       </div>
 
       <Button
         onClick={onIrParaPlano}
-        className="font-extrabold shadow-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs py-5 px-6"
+        className="font-extrabold shadow-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs py-5 px-6 rounded-xl transition-all transform hover:scale-105"
       >
-        <Sparkles className="w-4 h-4 mr-2" /> Ver Plano &amp; Desbloquear Acesso Completo
+        <Sparkles className="w-4 h-4 mr-2 text-amber-300" /> Ver Planos &amp; Assinar Agora
       </Button>
     </div>
   );
@@ -270,12 +270,31 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     return true;
   }, [profile]);
 
+  const handleSelectTab = useCallback(
+    (tab: string) => {
+      const isFuncional = ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(tab);
+      if (isFuncional && !isPlanoPagoAtivo && isTrialExpirado) {
+        toast.error("Seu teste gratuito de 7 dias expirou! Assine um dos planos para continuar utilizando o sistema.");
+        setActiveTab("plano");
+        return;
+      }
+      setActiveTab(tab);
+    },
+    [isPlanoPagoAtivo, isTrialExpirado]
+  );
+
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
       toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Insumos, Cardápio e Encomendas.");
       setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
+
+  useEffect(() => {
+    if (!isPlanoPagoAtivo && isTrialExpirado && ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(activeTab)) {
+      setActiveTab("plano");
+    }
+  }, [isPlanoPagoAtivo, isTrialExpirado, activeTab]);
 
   const [planoTick, setPlanoTick] = useState(0);
 
@@ -2120,7 +2139,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           </div>
         )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleSelectTab} className="space-y-6">
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
               {podeAcessarAba("encomendas") && (
@@ -2291,7 +2310,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         <div className="grid grid-cols-6 w-full items-center text-center gap-1">
           {podeAcessarAba("encomendas") && (
             <button
-              onClick={() => setActiveTab("encomendas")}
+              onClick={() => handleSelectTab("encomendas")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "encomendas"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
@@ -2305,7 +2324,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           {podeAcessarAba("produtos") && (
             <button
-              onClick={() => setActiveTab("produtos")}
+              onClick={() => handleSelectTab("produtos")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "produtos"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
@@ -2319,7 +2338,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           {(podeAcessarAba("insumos") || podeAcessarAba("despesas")) && (
             <button
-              onClick={() => setActiveTab("insumos")}
+              onClick={() => handleSelectTab("insumos")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "insumos" || activeTab === "despesas"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
@@ -2333,7 +2352,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           {podeAcessarAba("scanner") && (
             <button
-              onClick={() => setActiveTab("scanner")}
+              onClick={() => handleSelectTab("scanner")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "scanner"
                   ? "bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105"
@@ -2347,7 +2366,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           {podeAcessarAba("financeiro") && (
             <button
-              onClick={() => setActiveTab("financeiro")}
+              onClick={() => handleSelectTab("financeiro")}
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "financeiro"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"

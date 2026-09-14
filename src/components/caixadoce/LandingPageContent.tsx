@@ -997,57 +997,7 @@ export function LandingPageContent() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto items-stretch">
-            {/* PLANO BÁSICO (GRATUITO - APENAS LISTA DE COMPRAS) */}
-            <Card className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-md">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-xl font-bold text-slate-900">Plano Básico</h3>
-                  <p className="text-xs text-slate-500">Para organizar suas listas de compras de forma simples.</p>
-                </div>
-
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-slate-900">R$ 0</span>
-                  <span className="text-xs text-slate-500 font-semibold">/ mês para sempre</span>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 space-y-3 text-xs text-slate-700">
-                  <div className="flex items-center gap-2 font-bold text-emerald-700">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Lista de Compras Interativa</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Loja Virtual com Pix Mercado Pago</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">PDV de Balcão e Frente de Caixa</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Escanear a Notinha com IA</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Ficha Técnica &amp; Precificação</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <X className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="line-through">Calendário de Encomendas</span>
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                onClick={irParaLogin}
-                variant="outline"
-                className="w-full h-11 text-sm font-bold bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 rounded-xl"
-              >
-                Criar Conta Gratuita
-              </Button>
-            </Card>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto items-stretch">
             {/* PLANO MENSAL PRO (R$ 24,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-purple-600 text-white font-black text-[11px] px-3.5 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
