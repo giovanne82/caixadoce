@@ -270,31 +270,12 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     return true;
   }, [profile]);
 
-  const handleSelectTab = useCallback(
-    (tab: string) => {
-      const isFuncional = ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(tab);
-      if (isFuncional && !isPlanoPagoAtivo && isTrialExpirado) {
-        toast.error("Seu teste gratuito de 7 dias expirou! Assine um dos planos para continuar utilizando o sistema.");
-        setActiveTab("plano");
-        return;
-      }
-      setActiveTab(tab);
-    },
-    [isPlanoPagoAtivo, isTrialExpirado]
-  );
-
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
       toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Insumos, Cardápio e Encomendas.");
       setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
-
-  useEffect(() => {
-    if (!isPlanoPagoAtivo && isTrialExpirado && ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(activeTab)) {
-      setActiveTab("plano");
-    }
-  }, [isPlanoPagoAtivo, isTrialExpirado, activeTab]);
 
   const [planoTick, setPlanoTick] = useState(0);
 
@@ -452,9 +433,22 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     return infoPlano.status === "expirado" || (infoPlano.diasRestantesTrial ?? 0) <= 0;
   }, [isPlanoPagoAtivo, infoPlano.status, infoPlano.diasRestantesTrial]);
 
+  const handleSelectTab = useCallback(
+    (tab: string) => {
+      const isFuncional = ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(tab);
+      if (isFuncional && !isPlanoPagoAtivo && isTrialExpirado) {
+        toast.error("Seu teste gratuito de 7 dias expirou! Assine um dos planos para continuar utilizando o sistema.");
+        setActiveTab("plano");
+        return;
+      }
+      setActiveTab(tab);
+    },
+    [isPlanoPagoAtivo, isTrialExpirado]
+  );
+
   // Interceptação de Navegação e Hard Block (Paywall apenas se trial expirado e SEM plano PRO pago ativo)
   useEffect(() => {
-    if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
+    if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config") {
       toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
       setActiveTab("plano");
     }
