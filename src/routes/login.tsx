@@ -43,9 +43,9 @@ function LoginComponent() {
 
   const handleSuccess = () => {
     if (profile && isStoreNeedsOnboarding(profile)) {
-      navigate({ to: "/onboarding" });
+      navigate({ to: "/onboarding" as any });
     } else {
-      navigate({ to: "/" });
+      navigate({ to: "/" as any });
     }
   };
 
@@ -61,4 +61,3 @@ function LoginComponent() {
     </div>
   );
 }
-

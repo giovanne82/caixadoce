@@ -378,20 +378,21 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             const expMs = dataExpiracao ? new Date(dataExpiracao).getTime() : 0;
             const isValido = !dataExpiracao || (!isNaN(expMs) && expMs > Date.now());
 
+            const rAny = newRow as any;
             const isAtivo =
               newRow.status === "ativo" ||
               newRow.status_assinatura === "ativo" ||
               newRow.plano_status === "ativo" ||
               newRow.is_pro === true ||
-              newRow.plano === "pro" ||
-              newRow.plano === "mensal" ||
-              newRow.plano === "anual" ||
-              Boolean(newRow.mercadopago_pagamento_id);
+              rAny.plano === "pro" ||
+              rAny.plano === "mensal" ||
+              rAny.plano === "anual" ||
+              Boolean(rAny.mercadopago_pagamento_id);
 
             if (isAtivo && isValido) {
               salvarDadosPlanoEstabelecimento(activeCode, {
                 status: "ativo",
-                planoId: newRow.plano || newRow.plano_id || "mensal",
+                planoId: rAny.plano || rAny.plano_id || "mensal",
                 dataExpiracao: dataExpiracao || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               });
               toast.success("🎉 Assinatura PRO ativada com sucesso! Todos os recursos foram liberados.");
@@ -596,7 +597,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                   dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || undefined) : undefined,
                   data_pagamento: isPaid ? (p.data_pagamento || p.dataEfetiva || p.data_efetiva || null) : null,
                   formaPagamento: p.formaPagamento || p.forma_pagamento || p.method || "Pix",
-                  status: isPaid ? "pago" : "pendente",
+                  status: (isPaid ? "pago" : "pendente") as "pago" | "pendente" | undefined,
                   pago: isPaid,
                   is_paid: isPaid,
                   isEntrada: p.isEntrada !== undefined ? Boolean(p.isEntrada) : false,
@@ -611,7 +612,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 dataEfetiva: String(d.created_at || "").split("T")[0],
                 data_pagamento: String(d.created_at || "").split("T")[0],
                 formaPagamento: "Pix",
-                status: "pago",
+                status: "pago" as "pago" | "pendente" | undefined,
                 pago: true,
                 is_paid: true,
                 isEntrada: true,

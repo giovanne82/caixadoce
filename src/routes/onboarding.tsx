@@ -23,13 +23,13 @@ function OnboardingRouteComponent() {
 
     // 1. Não autenticado -> Redireciona para o login
     if (!user) {
-      navigate({ to: "/login" });
+      navigate({ to: "/login" as any });
       return;
     }
 
     // 2. Se a loja já tiver todos os dados essenciais configurados -> Redireciona para o painel principal
     if (profile && !isStoreNeedsOnboarding(profile)) {
-      navigate({ to: "/" });
+      navigate({ to: "/" as any });
     }
   }, [user, profile, isMounted, authLoading, navigate]);
 

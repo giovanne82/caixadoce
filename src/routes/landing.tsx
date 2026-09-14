@@ -9,7 +9,7 @@ function LandingPage() {
 
   useEffect(() => {
     if (user) {
-      navigate({ to: "/" });
+      navigate({ to: "/" as any });
     }
   }, [user, navigate]);
 
