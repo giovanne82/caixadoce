@@ -852,7 +852,7 @@ export function PdvView() {
       ...caixaAtual,
       data: hoje,
       status: "fechado" as const,
-      horaAbertura: caixaAtual.horaAbertura || "08:00",
+      horaAbertura: caixaAtual?.horaAbertura || "08:00",
       horaFechamento: horaAgora,
     } as CaixaTurno;
 

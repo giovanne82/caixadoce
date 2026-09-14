@@ -923,18 +923,21 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
   // Rolagem automática para âncoras (ex: #identidade-visual)
   useEffect(() => {
+    let timer: any = null;
     if (typeof window !== "undefined") {
       const hash = window.location.hash;
       if (hash === "#identidade-visual" || hash.includes("identidade-visual")) {
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
           const el = document.getElementById("identidade-visual");
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "start" });
           }
         }, 150);
-        return () => clearTimeout(timer);
       }
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const handleConectarMercadoPago = () => {

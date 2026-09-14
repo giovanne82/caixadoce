@@ -78,7 +78,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao } from "@/lib/caixadoce-data";
+import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao, type KitProduto } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,

@@ -265,7 +265,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       tipoChavePix: masterEst?.tipoChavePix || "cpf",
       abasPermitidas: isColab ? abasPermitidas : undefined,
       ownerUserId: isUserUuid ? authUser.id : undefined,
-      userCreatedAt: authUser?.created_at || authUser?.user_metadata?.created_at || masterEst?.created_at,
+      userCreatedAt: authUser?.created_at || (authUser as any)?.user_metadata?.created_at || (masterEst as any)?.created_at,
     };
   };
 
