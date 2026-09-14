@@ -373,6 +373,82 @@ async function seedClientesLojaTableInSupabase() {
 }
 seedClientesLojaTableInSupabase();
 
+// Hotfix de RLS para Acesso Público ao Cardápio no Supabase
+async function seedPublicCardapioRlsHotfixInSupabase() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+
+  try {
+    const hotfixSql = `
+      ALTER TABLE public.produtos ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura de produtos" ON public.produtos;
+      DROP POLICY IF EXISTS "Permitir leitura publica de produtos" ON public.produtos;
+      DROP POLICY IF EXISTS "allow_all_produtos" ON public.produtos;
+      DROP POLICY IF EXISTS "produtos_select_policy" ON public.produtos;
+      CREATE POLICY "Permitir leitura publica de produtos" ON public.produtos FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.produtos TO anon, authenticated, service_role;
+
+      ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura publica de produtos" ON public.products;
+      DROP POLICY IF EXISTS "Permitir leitura publica de products" ON public.products;
+      DROP POLICY IF EXISTS "allow_all_products" ON public.products;
+      DROP POLICY IF EXISTS "products_select_policy" ON public.products;
+      CREATE POLICY "Permitir leitura publica de products" ON public.products FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.products TO anon, authenticated, service_role;
+
+      ALTER TABLE public.kits ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em kits" ON public.kits;
+      DROP POLICY IF EXISTS "Permitir leitura publica em kits" ON public.kits;
+      CREATE POLICY "Permitir leitura publica em kits" ON public.kits FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.kits TO anon, authenticated, service_role;
+
+      ALTER TABLE public.kit_itens ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura total em kit_itens" ON public.kit_itens;
+      DROP POLICY IF EXISTS "Permitir leitura publica em kit_itens" ON public.kit_itens;
+      CREATE POLICY "Permitir leitura publica em kit_itens" ON public.kit_itens FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.kit_itens TO anon, authenticated, service_role;
+
+      ALTER TABLE public.estabelecimentos ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura publica de estabelecimentos" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "estabelecimentos_select_policy" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "allow_all_estabelecimentos" ON public.estabelecimentos;
+      CREATE POLICY "Permitir leitura publica de estabelecimentos" ON public.estabelecimentos FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.estabelecimentos TO anon, authenticated, service_role;
+
+      ALTER TABLE public.datas_bloqueadas ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Permitir leitura publica de datas bloqueadas" ON public.datas_bloqueadas;
+      DROP POLICY IF EXISTS "allow_all_datas" ON public.datas_bloqueadas;
+      CREATE POLICY "Permitir leitura publica de datas bloqueadas" ON public.datas_bloqueadas FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.datas_bloqueadas TO anon, authenticated, service_role;
+
+      ALTER TABLE public.pix_accounts ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Leitura publica de contas pix para clientes" ON public.pix_accounts;
+      DROP POLICY IF EXISTS "Usuarios gerenciam suas proprias contas pix" ON public.pix_accounts;
+      CREATE POLICY "Leitura publica de contas pix para clientes" ON public.pix_accounts FOR SELECT TO anon, authenticated USING (true);
+      GRANT ALL ON public.pix_accounts TO anon, authenticated, service_role;
+
+      NOTIFY pgrst, 'reload schema';
+    `;
+
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: hotfixSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed Cardapio RLS Hotfix Log]", err);
+  }
+}
+seedPublicCardapioRlsHotfixInSupabase();
+
 // Injeção de Inicialização da Tabela afiliados e Colunas de Afiliado no Supabase
 async function seedAfiliadosTableInSupabase() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
