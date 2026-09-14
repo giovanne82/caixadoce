@@ -1038,17 +1038,25 @@ export function CardapioLojaView() {
           }
         }
 
-        // Fallback por código de estabelecimento
+        // Fallback por código de estabelecimento (busca flexível em produtos e products)
         if (prodsDb.length === 0 && resolvedCode) {
-          console.log(`[Cardápio Público] Buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
+          console.log(`[Cardápio Público] Buscando produtos por código (${resolvedCode})...`);
           const { data: pByCode } = await supabase
             .from("produtos" as any)
             .select("*")
-            .eq("estabelecimento_codigo", resolvedCode)
+            .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`)
             .order("nome", { ascending: true });
 
           if (pByCode && pByCode.length > 0) {
             prodsDb = pByCode;
+          } else {
+            const { data: legacyProds } = await supabase
+              .from("products" as any)
+              .select("*")
+              .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`);
+            if (legacyProds && legacyProds.length > 0) {
+              prodsDb = legacyProds;
+            }
           }
         }
 

@@ -384,52 +384,92 @@ async function seedPublicCardapioRlsHotfixInSupabase() {
 
   try {
     const hotfixSql = `
+      DO $$
+      DECLARE
+          pol RECORD;
+      BEGIN
+          FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'produtos') LOOP
+              EXECUTE format('DROP POLICY IF EXISTS %I ON public.produtos', pol.policyname);
+          END LOOP;
+
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'products') THEN
+              FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'products') LOOP
+                  EXECUTE format('DROP POLICY IF EXISTS %I ON public.products', pol.policyname);
+              END LOOP;
+          END IF;
+
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'kits') THEN
+              FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'kits') LOOP
+                  EXECUTE format('DROP POLICY IF EXISTS %I ON public.kits', pol.policyname);
+              END LOOP;
+          END IF;
+
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'kit_itens') THEN
+              FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'kit_itens') LOOP
+                  EXECUTE format('DROP POLICY IF EXISTS %I ON public.kit_itens', pol.policyname);
+              END LOOP;
+          END IF;
+
+          FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'estabelecimentos') LOOP
+              EXECUTE format('DROP POLICY IF EXISTS %I ON public.estabelecimentos', pol.policyname);
+          END LOOP;
+
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'datas_bloqueadas') THEN
+              FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'datas_bloqueadas') LOOP
+                  EXECUTE format('DROP POLICY IF EXISTS %I ON public.datas_bloqueadas', pol.policyname);
+              END LOOP;
+          END IF;
+      END $$;
+
       ALTER TABLE public.produtos ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura de produtos" ON public.produtos;
-      DROP POLICY IF EXISTS "Permitir leitura publica de produtos" ON public.produtos;
-      DROP POLICY IF EXISTS "allow_all_produtos" ON public.produtos;
-      DROP POLICY IF EXISTS "produtos_select_policy" ON public.produtos;
-      CREATE POLICY "Permitir leitura publica de produtos" ON public.produtos FOR SELECT TO anon, authenticated USING (true);
+      CREATE POLICY "public_select_produtos" ON public.produtos FOR SELECT TO anon, authenticated USING (true);
+      CREATE POLICY "public_insert_produtos" ON public.produtos FOR INSERT TO anon, authenticated WITH CHECK (true);
+      CREATE POLICY "public_update_produtos" ON public.produtos FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+      CREATE POLICY "public_delete_produtos" ON public.produtos FOR DELETE TO anon, authenticated USING (true);
       GRANT ALL ON public.produtos TO anon, authenticated, service_role;
 
-      ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura publica de produtos" ON public.products;
-      DROP POLICY IF EXISTS "Permitir leitura publica de products" ON public.products;
-      DROP POLICY IF EXISTS "allow_all_products" ON public.products;
-      DROP POLICY IF EXISTS "products_select_policy" ON public.products;
-      CREATE POLICY "Permitir leitura publica de products" ON public.products FOR SELECT TO anon, authenticated USING (true);
-      GRANT ALL ON public.products TO anon, authenticated, service_role;
+      DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'products') THEN
+              ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+              CREATE POLICY "public_select_products" ON public.products FOR SELECT TO anon, authenticated USING (true);
+              GRANT ALL ON public.products TO anon, authenticated, service_role;
+          END IF;
+      END $$;
 
-      ALTER TABLE public.kits ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura total em kits" ON public.kits;
-      DROP POLICY IF EXISTS "Permitir leitura publica em kits" ON public.kits;
-      CREATE POLICY "Permitir leitura publica em kits" ON public.kits FOR SELECT TO anon, authenticated USING (true);
-      GRANT ALL ON public.kits TO anon, authenticated, service_role;
+      DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'kits') THEN
+              ALTER TABLE public.kits ENABLE ROW LEVEL SECURITY;
+              CREATE POLICY "public_select_kits" ON public.kits FOR SELECT TO anon, authenticated USING (true);
+              CREATE POLICY "public_insert_kits" ON public.kits FOR INSERT TO anon, authenticated WITH CHECK (true);
+              CREATE POLICY "public_update_kits" ON public.kits FOR UPDATE TO anon, authenticated USING (true);
+              CREATE POLICY "public_delete_kits" ON public.kits FOR DELETE TO anon, authenticated USING (true);
+              GRANT ALL ON public.kits TO anon, authenticated, service_role;
+          END IF;
+      END $$;
 
-      ALTER TABLE public.kit_itens ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura total em kit_itens" ON public.kit_itens;
-      DROP POLICY IF EXISTS "Permitir leitura publica em kit_itens" ON public.kit_itens;
-      CREATE POLICY "Permitir leitura publica em kit_itens" ON public.kit_itens FOR SELECT TO anon, authenticated USING (true);
-      GRANT ALL ON public.kit_itens TO anon, authenticated, service_role;
+      DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'kit_itens') THEN
+              ALTER TABLE public.kit_itens ENABLE ROW LEVEL SECURITY;
+              CREATE POLICY "public_select_kit_itens" ON public.kit_itens FOR SELECT TO anon, authenticated USING (true);
+              CREATE POLICY "public_insert_kit_itens" ON public.kit_itens FOR INSERT TO anon, authenticated WITH CHECK (true);
+              CREATE POLICY "public_update_kit_itens" ON public.kit_itens FOR UPDATE TO anon, authenticated USING (true);
+              CREATE POLICY "public_delete_kit_itens" ON public.kit_itens FOR DELETE TO anon, authenticated USING (true);
+              GRANT ALL ON public.kit_itens TO anon, authenticated, service_role;
+          END IF;
+      END $$;
 
       ALTER TABLE public.estabelecimentos ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura publica de estabelecimentos" ON public.estabelecimentos;
-      DROP POLICY IF EXISTS "estabelecimentos_select_policy" ON public.estabelecimentos;
-      DROP POLICY IF EXISTS "allow_all_estabelecimentos" ON public.estabelecimentos;
-      CREATE POLICY "Permitir leitura publica de estabelecimentos" ON public.estabelecimentos FOR SELECT TO anon, authenticated USING (true);
+      CREATE POLICY "public_select_estabelecimentos" ON public.estabelecimentos FOR SELECT TO anon, authenticated USING (true);
+      CREATE POLICY "public_all_estabelecimentos" ON public.estabelecimentos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
       GRANT ALL ON public.estabelecimentos TO anon, authenticated, service_role;
 
-      ALTER TABLE public.datas_bloqueadas ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Permitir leitura publica de datas bloqueadas" ON public.datas_bloqueadas;
-      DROP POLICY IF EXISTS "allow_all_datas" ON public.datas_bloqueadas;
-      CREATE POLICY "Permitir leitura publica de datas bloqueadas" ON public.datas_bloqueadas FOR SELECT TO anon, authenticated USING (true);
-      GRANT ALL ON public.datas_bloqueadas TO anon, authenticated, service_role;
-
-      ALTER TABLE public.pix_accounts ENABLE ROW LEVEL SECURITY;
-      DROP POLICY IF EXISTS "Leitura publica de contas pix para clientes" ON public.pix_accounts;
-      DROP POLICY IF EXISTS "Usuarios gerenciam suas proprias contas pix" ON public.pix_accounts;
-      CREATE POLICY "Leitura publica de contas pix para clientes" ON public.pix_accounts FOR SELECT TO anon, authenticated USING (true);
-      GRANT ALL ON public.pix_accounts TO anon, authenticated, service_role;
+      DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'datas_bloqueadas') THEN
+              ALTER TABLE public.datas_bloqueadas ENABLE ROW LEVEL SECURITY;
+              CREATE POLICY "public_select_datas_bloqueadas" ON public.datas_bloqueadas FOR SELECT TO anon, authenticated USING (true);
+              GRANT ALL ON public.datas_bloqueadas TO anon, authenticated, service_role;
+          END IF;
+      END $$;
 
       NOTIFY pgrst, 'reload schema';
     `;
