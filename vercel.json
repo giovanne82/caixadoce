@@ -13,5 +13,23 @@
       "destination": "https://www.caixadoce.com.br/:path*",
       "permanent": true
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/webhooks/mercadopago",
+      "destination": "/__server"
+    },
+    {
+      "source": "/api/mercadopago/webhook",
+      "destination": "/__server"
+    },
+    {
+      "source": "/api/webhook-mp",
+      "destination": "/__server"
+    },
+    {
+      "source": "/api/mercadopago/:path*",
+      "destination": "/__server"
+    }
   ]
 }
