@@ -1730,13 +1730,13 @@ export default {
 
             let bodyJson: any = null;
             try {
-              bodyJson = await request.json();
-            } catch {
-              try {
-                const txt = await request.text();
-                bodyJson = JSON.parse(txt);
-              } catch {}
-            }
+              const bodyText = await request.text().catch(() => "");
+              if (bodyText) {
+                try {
+                  bodyJson = JSON.parse(bodyText);
+                } catch {}
+              }
+            } catch {}
 
             if (!paymentId && bodyJson) {
               paymentId =
