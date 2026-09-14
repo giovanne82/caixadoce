@@ -750,7 +750,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   try {
     const searchRes = await fetch(
-      `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(code)}&select=id,codigo,status,status_assinatura,plano_status,is_pro,plano_exp,plano_expira_em`,
+      `${supabaseUrl}/rest/v1/estabelecimentos?or=(codigo.ilike.${encodeURIComponent(code)},slug.ilike.${encodeURIComponent(code)})&select=id,codigo,plano_expira_em`,
       {
         headers: {
           apikey: supabaseKey,
@@ -764,14 +764,8 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
         const estab = list[0];
         targetId = estab.id;
 
-        const isAtivo =
-          estab.status === "ativo" ||
-          estab.status_assinatura === "ativo" ||
-          estab.plano_status === "ativo" ||
-          estab.is_pro === true;
-
-        const currentExp = estab.plano_exp || estab.plano_expira_em;
-        if (isAtivo && currentExp) {
+        const currentExp = estab.plano_expira_em || (estab as any).plano_exp;
+        if (currentExp) {
           const expMs = new Date(currentExp).getTime();
           if (!isNaN(expMs) && expMs > agoraMs) {
             baseMs = expMs;
@@ -796,27 +790,21 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 
   const patchPayloads = [
     {
+      plano_expira_em: dataExpiracao,
+      updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+    },
+    {
+      status: "ativo",
+      plano_expira_em: dataExpiracao,
+      updated_at: agora,
+      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
+    },
+    {
       status: "ativo",
       plano: targetPlanId,
-      plano_id: targetPlanId,
-      plano_exp: dataExpiracao,
       plano_expira_em: dataExpiracao,
       is_pro: true,
-      metodo_pagamento: paymentMethod,
-      updated_at: agora,
-      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-    },
-    {
-      status: "ativo",
-      plano: targetPlanId,
-      plano_exp: dataExpiracao,
-      updated_at: agora,
-      ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
-    },
-    {
-      status_assinatura: "ativo",
-      plano_id: targetPlanId,
-      plano_expira_em: dataExpiracao,
       updated_at: agora,
       ...(cleanCupomCode ? { cupom_utilizado: cleanCupomCode } : {}),
     },
@@ -3409,6 +3397,17 @@ export default {
           const mpPayload: Record<string, any> = {
             transaction_amount: transaction_amount,
             description,
+            external_reference: codeTarget,
+            notification_url: `${url.origin}/api/webhooks/mercadopago`,
+            metadata: {
+              estabelecimento_codigo: codeTarget,
+              estabelecimentoCodigo: codeTarget,
+              establishmentCode: codeTarget,
+              loja_id: codeTarget,
+              planId: planTarget || "mensal",
+              plano_id: planTarget || "mensal",
+              cupom_utilizado: cupomEnviadoTarget || null,
+            },
           };
 
           if (isCard) {
