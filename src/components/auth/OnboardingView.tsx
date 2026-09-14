@@ -234,7 +234,7 @@ export function OnboardingView() {
 
       // 5. Redireciona com segurança para a tela principal (Dashboard)
       setTimeout(() => {
-        navigate({ to: "/" });
+        navigate({ to: "/" } as any);
       }, 300);
     } catch (err: any) {
       console.error("[Onboarding] Erro ao salvar dados da loja:", err);

@@ -1,4 +1,4 @@
-﻿// =========================================================================
+// =========================================================================
 // HORARIOS DE FUNCIONAMENTO, EXCEÇÕES & CONTROLE MASTER - CAIXADOCE
 // =========================================================================
 
@@ -88,6 +88,8 @@ export function normalizarHorariosDias(diasRaw?: any): HorariosFuncionamento {
   }
   return res as HorariosFuncionamento;
 }
+
+export const normalizarHorarios = normalizarHorariosDias;
 
 /**
  * Normaliza a configuração completa de expediente com suporte a legado (se vier apenas o objeto de dias).

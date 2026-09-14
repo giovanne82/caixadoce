@@ -918,6 +918,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           setProcessandoOAuthMp(false);
         });
     }
+    return undefined;
   }, [activeCode, checarMpStatus, queryClient]);
 
   // Rolagem automática para âncoras (ex: #identidade-visual)
@@ -1185,7 +1186,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         motivo: motivoContato,
         mensagem: mensagemContato.trim(),
         userEmail: emailUsuario || user?.email || "",
-        userName: nomeUsuario || user?.name || user?.user_metadata?.full_name || "",
+        userName: nomeUsuario || user?.name || (user as any)?.user_metadata?.full_name || "",
         establishmentName: nomeEst || profile?.establishmentName || activeCode,
         establishmentCode: activeCode,
       };
@@ -3544,7 +3545,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
           )}
 
           {/* 7. SEÇÃO: INTEGRAÇÕES DELIVERY (IFOOD & 99FOOD) */}
-          {(activeSection === "integracoes" || activeSection === "ifood" || activeSection === "99food") && (
+          {(activeSection === "integracoes" || (activeSection as any) === "ifood" || (activeSection as any) === "99food") && (
             <div className="space-y-6">
               <Card className="border-border shadow-sm">
                 <CardHeader>

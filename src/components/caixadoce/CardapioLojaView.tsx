@@ -103,7 +103,6 @@ import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import {
   obterKitsEstabelecimento,
   converterKitParaProdutoCardapio,
-  type KitProduto,
 } from "@/lib/kits-service";
 import {
   normalizarHorarios,
@@ -1211,19 +1210,20 @@ export function CardapioLojaView() {
           // Atualiza o pedido no Supabase para Cancelado/Expirado
           const targetPedidoId = ultimoPedidoId || pedidoCriadoId;
           if (targetPedidoId) {
-            supabase
-              .from("encomendas")
-              .update({
-                status: "cancelada",
-                status_pagamento: "cancelado",
-                observacoes: "Cancelado / Expirado: Pagamento Pix não efetuado dentro do prazo de 5 minutos.",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", targetPedidoId)
+            Promise.resolve(
+              supabase
+                .from("encomendas")
+                .update({
+                  status: "cancelada",
+                  status_pagamento: "cancelada",
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", targetPedidoId)
+            )
               .then(() => {
                 console.log(`[Pix Expirado 5min] Pedido ${targetPedidoId} atualizado no Supabase como cancelado.`);
               })
-              .catch((err) => {
+              .catch((err: any) => {
                 console.warn("[Pix Expirado] Falha ao atualizar pedido:", err);
               });
           }
@@ -3980,7 +3980,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                       theme: "default",
                                       customVariables: {
                                         themeColor: corTemaDestaque,
-                                      },
+                                      } as any,
                                     },
                                   },
                                 }}
