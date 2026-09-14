@@ -2770,6 +2770,19 @@ export function OrdersView({
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                handleGerarPdfOrcamento(ord);
+                              }}
+                              title="Imprimir comanda térmica (80mm)"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary shrink-0"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 handleAbrirEdicao(ord);
                               }}
                               title="Editar pedido"
@@ -2883,6 +2896,18 @@ export function OrdersView({
                       {/* Top Right: Botões Secundários & Hierarquia Financeira */}
                       <div className="text-right shrink-0 space-y-1.5">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGerarPdfOrcamento(ord);
+                            }}
+                            title="Imprimir comanda térmica (80mm)"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary rounded-lg"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
                           {ord.clienteWhatsapp && (
                             <Button
                               variant="ghost"
@@ -3688,6 +3713,15 @@ export function OrdersView({
                             className="h-7 text-xs px-2 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 font-bold"
                           >
                             <MessageCircle className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleGerarPdfOrcamento(ord)}
+                            className="h-7 text-xs px-2 font-bold"
+                            title="Imprimir comanda térmica (80mm)"
+                          >
+                            <Printer className="w-3.5 h-3.5 mr-1" /> Imprimir
                           </Button>
                           <Button
                             variant="outline"
