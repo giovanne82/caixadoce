@@ -6,6 +6,7 @@ export default defineConfig({
   },
   nitro: {
     preset: "vercel",
+    nodeVersion: "22.x",
   },
   build: {
     rollupOptions: {

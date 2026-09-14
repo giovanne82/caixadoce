@@ -5,6 +5,9 @@
   "description": "CaixaDoce — Sistema Moderno de Gestão Financeira, Vendas e Assinaturas",
   "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
