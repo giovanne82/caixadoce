@@ -179,16 +179,16 @@ export default async function handler(req: any, res: any) {
 
       const okResponse = JSON.stringify({ received: true, status: "processed", payment_id: paymentId });
       if (res && res.status) return res.status(200).send ? res.status(200).send(okResponse) : res.status(200).json({ received: true, status: "processed", payment_id: paymentId });
-      return new Response(okResponse, { status: 200, headers: corsHeaders });
+      return new Response(okResponse, { status: 200, headers: { "Content-Type": "application/json" } });
     } catch (err: any) {
       console.error("[MercadoPago Webhook Exception]", err);
       const errResponse = JSON.stringify({ received: true, error: err?.message || "Internal error" });
       if (res && res.status) return res.status(200).send ? res.status(200).send(errResponse) : res.status(200).json({ received: true });
-      return new Response(errResponse, { status: 200, headers: corsHeaders });
+      return new Response(errResponse, { status: 200, headers: { "Content-Type": "application/json" } });
     }
   }
 
   const defaultResponse = JSON.stringify({ received: true });
   if (res && res.status) return res.status(200).send ? res.status(200).send(defaultResponse) : res.status(200).json({ received: true });
-  return new Response(defaultResponse, { status: 200, headers: corsHeaders });
+  return new Response(defaultResponse, { status: 200, headers: { "Content-Type": "application/json" } });
 }
