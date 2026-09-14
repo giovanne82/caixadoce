@@ -214,7 +214,7 @@ export function CustomersView({
 
         <Card className="border-border shadow-xs p-4 bg-amber-500/5 border-amber-500/20">
           <p className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1.5">
-            <Cake className="w-4 h-4 text-amber-600" /> Total de Encomendas Realizadas
+            <Cake className="w-4 h-4 text-amber-600" /> Total de Vendas Realizadas
           </p>
           <p className="text-2xl font-black text-amber-600 mt-1">{metricas.totalPedidosConcluidos} pedidos</p>
         </Card>

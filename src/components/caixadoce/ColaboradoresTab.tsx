@@ -36,7 +36,7 @@ import { toast } from "sonner";
 const ABAS_DISPONIVEIS = [
   { id: "insumos", label: "Cadastro de Insumos" },
   { id: "produtos", label: "Cardápio Digital" },
-  { id: "encomendas", label: "Gestão de Encomendas" },
+  { id: "encomendas", label: "Gestão de Vendas" },
 ];
 
 function formatarTelefoneBR(val: string): string {
