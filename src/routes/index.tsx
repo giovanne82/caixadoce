@@ -2036,21 +2036,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 </div>
               </div>
 
-              {/* Bloco Direita: Painel Admin (SÓCIOS) + PDV + Notificações + Sair/Logout */}
+              {/* Bloco Direita: PDV + Notificações + Sair/Logout */}
               <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                {isEmailAdmin(user?.email) && (
-                  <Link to="/admin/afiliados">
-                    <Button
-                      size="sm"
-                      className="h-7 sm:h-8 px-2 sm:px-3 text-xs font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-xs flex items-center gap-1.5 shrink-0 border border-amber-400/40"
-                      title="Painel de Administração de Afiliados e Sócios"
-                    >
-                      <Shield className="w-3.5 h-3.5 fill-slate-950/20" />
-                      <span className="hidden sm:inline">Painel Admin</span>
-                      <span className="inline sm:hidden">Admin</span>
-                    </Button>
-                  </Link>
-                )}
 
                 <Link to="/pdv">
                   <Button

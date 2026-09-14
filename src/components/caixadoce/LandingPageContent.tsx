@@ -125,20 +125,21 @@ export function LandingPageContent() {
           </nav>
 
           {/* Destaque para o Login / CTA */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <Button
               onClick={irParaLogin}
               variant="outline"
-              className="hidden sm:flex font-bold border-2 border-purple-600 text-purple-700 hover:bg-purple-50 rounded-xl px-4 h-10 transition-all"
+              className="flex font-bold border-2 border-purple-600/80 text-purple-700 hover:bg-purple-50 rounded-xl px-2.5 sm:px-4 h-9 sm:h-10 text-xs sm:text-sm transition-all shrink-0 items-center gap-1"
             >
-              <LogIn className="w-4 h-4 mr-1.5" /> Entrar
+              <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Entrar</span>
             </Button>
 
             <Button
               onClick={irParaLogin}
-              className="font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md shadow-purple-600/20 rounded-xl py-2 px-5 h-10 flex items-center gap-2 transition-all transform hover:scale-[1.02]"
+              className="font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md shadow-purple-600/20 rounded-xl py-2 px-3 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm flex items-center gap-1 sm:gap-2 transition-all transform hover:scale-[1.02] shrink-0"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" /> Criar Loja Grátis
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300 shrink-0" />
+              <span>Criar<span className="hidden min-[380px]:inline"> Loja</span><span className="hidden min-[480px]:inline"> Grátis</span></span>
             </Button>
           </div>
         </div>

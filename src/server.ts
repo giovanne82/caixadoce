@@ -1459,6 +1459,17 @@ export default {
     try {
       const url = new URL(request.url);
 
+      // Redirecionamento 301 Forçado de Produção (caixadoce-nine.vercel.app -> www.caixadoce.com.br)
+      const host = request.headers.get("host") || url.hostname;
+      if (
+        request.method === "GET" &&
+        !url.pathname.startsWith("/api/") &&
+        (host.includes("caixadoce-nine") || (host.includes("vercel.app") && !host.includes("localhost")))
+      ) {
+        const targetUrl = `https://www.caixadoce.com.br${url.pathname}${url.search}${url.hash}`;
+        return Response.redirect(targetUrl, 301);
+      }
+
       // Proxy Handler para Redirecionamento 302 direto no Servidor (/pagar/*)
       if (url.pathname.startsWith("/pagar/") && request.method === "GET") {
         const cobrancaId = url.pathname.replace("/pagar/", "").trim();

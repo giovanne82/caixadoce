@@ -1,4 +1,17 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "caixadoce-nine.vercel.app"
+        }
+      ],
+      "destination": "https://www.caixadoce.com.br/:path*",
+      "permanent": true
+    }
+  ]
 }

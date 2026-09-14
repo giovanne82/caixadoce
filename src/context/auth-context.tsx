@@ -170,7 +170,9 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function getAppBaseUrl(path: string = ""): string {
-  let origin = "https://www.caixadoce.com.br";
+  let origin =
+    (typeof process !== "undefined" && (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL)) ||
+    "https://www.caixadoce.com.br";
   if (typeof window !== "undefined" && window.location.origin) {
     origin = window.location.origin;
   } else if (typeof process !== "undefined" && process.env) {
