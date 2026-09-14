@@ -37,150 +37,139 @@ function getMercadoPagoToken() {
   );
 }
 
-export default async function handler(req: any, res: any) {
-  try {
-    // Configuração de cabeçalhos CORS
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "*");
-
-    // Requisição OPTIONS (Preflight)
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-
-    // Requisição GET (Healthcheck)
-    if (req.method === "GET") {
-      return res.status(200).json({
-        status: "ok",
-        message: "Webhook Mercado Pago CaixaDoce Ativo",
-      });
-    }
-
-    // Requisição POST (Notificações do Mercado Pago)
-    if (req.method === "POST") {
-      let body = req.body;
-      if (typeof body === "string") {
-        try {
-          body = JSON.parse(body);
-        } catch {}
-      }
-
-      let paymentId =
-        req.query?.["data.id"] ||
-        req.query?.id ||
-        req.query?.data_id ||
-        body?.data?.id ||
-        body?.id ||
-        (body?.resource ? String(body.resource).split("/").pop() : null);
-
-      console.log(`[MercadoPago Webhook] Notificação POST recebida. Payment ID: ${paymentId}`);
-
-      const isMockOrTest =
-        !paymentId ||
-        paymentId === "123456" ||
-        paymentId === "123456789" ||
-        paymentId === "12345" ||
-        paymentId === "1234567" ||
-        body?.live_mode === false ||
-        body?.action === "test" ||
-        body?.type === "test";
-
-      if (isMockOrTest) {
-        console.log(`[MercadoPago Webhook] Simulação/Teste detectado (ID: ${paymentId}). Retornando 200 OK.`);
-        return res.status(200).json({
-          received: true,
-          status: "ok_simulation",
-          payment_id: paymentId || "123456",
-        });
-      }
-
-      const mpToken = getMercadoPagoToken();
-      let paymentData: any = null;
-
-      try {
-        const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: { Authorization: `Bearer ${mpToken}`, Accept: "application/json" },
-        });
-
-        if (mpRes.ok) {
-          paymentData = await mpRes.json();
-          console.log(`[MercadoPago API Success] Detalhes do Pagamento #${paymentId}: Status='${paymentData.status}'`);
-        } else {
-          console.warn(`[MercadoPago API Warn] Consulta ao pagamento #${paymentId} retornou HTTP ${mpRes.status}. Retornando 200 OK de segurança.`);
-        }
-      } catch (fetchErr: any) {
-        console.warn(`[MercadoPago Webhook Exception Captured] Erro ao consultar MP:`, fetchErr?.message || fetchErr);
-      }
-
-      if (paymentData && (paymentData.status === "approved" || paymentData.status === "authorized")) {
-        const externalRef = String(
-          paymentData.external_reference ||
-          paymentData.metadata?.external_reference ||
-          ""
-        ).trim();
-
-        const amount = Number(paymentData.transaction_amount || 0);
-        const payerEmail = String(paymentData.payer?.email || "").trim();
-
-        const supabase = getSupabaseBackendClient();
-        let estMatch: any = null;
-
-        if (externalRef) {
-          const { data: listCod } = await supabase
-            .from("estabelecimentos")
-            .select("id, codigo, plano_expira_em, plano_exp")
-            .or(`codigo.ilike.${externalRef},id.eq.${externalRef},slug.ilike.${externalRef}`)
-            .limit(1);
-          if (listCod && listCod.length > 0) estMatch = listCod[0];
-        }
-
-        if (!estMatch && payerEmail) {
-          const { data: listEmail } = await supabase
-            .from("estabelecimentos")
-            .select("id, codigo, plano_expira_em, plano_exp")
-            .ilike("email", payerEmail)
-            .limit(1);
-          if (listEmail && listEmail.length > 0) estMatch = listEmail[0];
-        }
-
-        if (estMatch) {
-          const isAnual = amount >= 100 || String(paymentData.description || "").toLowerCase().includes("anual");
-          const duracaoDias = isAnual ? 365 : 30;
-
-          let baseMs = Date.now();
-          const expStr = estMatch.plano_expira_em || estMatch.plano_exp;
-          if (expStr) {
-            const expMs = new Date(expStr).getTime();
-            if (!isNaN(expMs) && expMs > baseMs) baseMs = expMs;
-          }
-
-          const novaExpiraIso = new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
-
-          await supabase
-            .from("estabelecimentos")
-            .update({
-              plano_expira_em: novaExpiraIso,
-              plano_exp: novaExpiraIso,
-              status: "ativo",
-              plano_status: "ativo",
-              status_assinatura: "ativo",
-              is_pro: true,
-              plano_id: isAnual ? "anual" : "mensal",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", estMatch.id);
-
-          console.log(`[MercadoPago Webhook Success] Assinatura renovada para loja ${estMatch.codigo} até ${novaExpiraIso}`);
-        }
-      }
-
-      return res.status(200).json({ received: true, status: "processed", payment_id: paymentId });
-    }
-
-    return res.status(200).json({ received: true });
-  } catch (err: any) {
-    console.error("[MercadoPago Webhook Error]", err);
-    return res.status(200).json({ received: true, error: err?.message || "Internal error" });
+async function processMercadoPagoWebhook(req: any) {
+  let body = req.body;
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {}
   }
+
+  let paymentId =
+    req.query?.["data.id"] ||
+    req.query?.id ||
+    req.query?.data_id ||
+    body?.data?.id ||
+    body?.id ||
+    (body?.resource ? String(body.resource).split("/").pop() : null);
+
+  console.log(`[MercadoPago Webhook] Evento POST recebido. Payment ID: ${paymentId}`);
+
+  const isMockOrTest =
+    !paymentId ||
+    paymentId === "123456" ||
+    paymentId === "123456789" ||
+    paymentId === "12345" ||
+    paymentId === "1234567" ||
+    body?.live_mode === false ||
+    body?.action === "test" ||
+    body?.type === "test";
+
+  if (isMockOrTest) {
+    console.log(`[MercadoPago Webhook] Simulação/Teste detectado (ID: ${paymentId}). OK.`);
+    return;
+  }
+
+  const mpToken = getMercadoPagoToken();
+  let paymentData: any = null;
+
+  try {
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${mpToken}`, Accept: "application/json" },
+    });
+
+    if (mpRes.ok) {
+      paymentData = await mpRes.json();
+    }
+  } catch (fetchErr: any) {
+    console.warn(`[MercadoPago Webhook Exception Captured] Erro ao consultar MP:`, fetchErr?.message || fetchErr);
+  }
+
+  if (paymentData && (paymentData.status === "approved" || paymentData.status === "authorized")) {
+    const externalRef = String(
+      paymentData.external_reference ||
+      paymentData.metadata?.external_reference ||
+      ""
+    ).trim();
+
+    const amount = Number(paymentData.transaction_amount || 0);
+    const payerEmail = String(paymentData.payer?.email || "").trim();
+
+    const supabase = getSupabaseBackendClient();
+    let estMatch: any = null;
+
+    if (externalRef) {
+      const { data: listCod } = await supabase
+        .from("estabelecimentos")
+        .select("id, codigo, plano_expira_em, plano_exp")
+        .or(`codigo.ilike.${externalRef},id.eq.${externalRef},slug.ilike.${externalRef}`)
+        .limit(1);
+      if (listCod && listCod.length > 0) estMatch = listCod[0];
+    }
+
+    if (!estMatch && payerEmail) {
+      const { data: listEmail } = await supabase
+        .from("estabelecimentos")
+        .select("id, codigo, plano_expira_em, plano_exp")
+        .ilike("email", payerEmail)
+        .limit(1);
+      if (listEmail && listEmail.length > 0) estMatch = listEmail[0];
+    }
+
+    if (estMatch) {
+      const isAnual = amount >= 100 || String(paymentData.description || "").toLowerCase().includes("anual");
+      const duracaoDias = isAnual ? 365 : 30;
+
+      let baseMs = Date.now();
+      const expStr = estMatch.plano_expira_em || estMatch.plano_exp;
+      if (expStr) {
+        const expMs = new Date(expStr).getTime();
+        if (!isNaN(expMs) && expMs > baseMs) baseMs = expMs;
+      }
+
+      const novaExpiraIso = new Date(baseMs + duracaoDias * 24 * 60 * 60 * 1000).toISOString();
+
+      await supabase
+        .from("estabelecimentos")
+        .update({
+          plano_expira_em: novaExpiraIso,
+          plano_exp: novaExpiraIso,
+          status: "ativo",
+          plano_status: "ativo",
+          status_assinatura: "ativo",
+          is_pro: true,
+          plano_id: isAnual ? "anual" : "mensal",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", estMatch.id);
+
+      console.log(`[MercadoPago Webhook Success] Assinatura renovada para loja ${estMatch.codigo} até ${novaExpiraIso}`);
+    }
+  }
+}
+
+export default async function handler(req: any, res: any) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method === "GET") {
+    return res.status(200).send("Webhook Mercado Pago CaixaDoce Ativo");
+  }
+
+  if (req.method === "POST") {
+    try {
+      await processMercadoPagoWebhook(req);
+    } catch (err) {
+      console.error("[MercadoPago Webhook Handler Error]", err);
+    }
+
+    return res.status(200).send("OK");
+  }
+
+  return res.status(200).send("OK");
 }

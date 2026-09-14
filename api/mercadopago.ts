@@ -1,4 +1,4 @@
-// Vercel Serverless Function for Mercado Pago Webhook (/api/mercadopago/webhook)
+// Vercel Serverless Function for Mercado Pago Webhook (/api/mercadopago)
 import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_SUPABASE_URL = "https://camuhitzmsfmxvsowzlf.supabase.co";
