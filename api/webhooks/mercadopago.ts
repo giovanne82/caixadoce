@@ -38,28 +38,27 @@ function getMercadoPagoToken() {
 }
 
 export default async function handler(req: any, res: any) {
-  // Configuração de CORS
-  if (res && res.setHeader) {
+  try {
+    // Configuração de cabeçalhos CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "*");
-  }
 
-  if (req.method === "OPTIONS") {
-    return res.status ? res.status(200).end() : new Response(null, { status: 200 });
-  }
-
-  if (req.method === "GET") {
-    const jsonStr = JSON.stringify({ status: "ok", message: "Webhook Mercado Pago CaixaDoce Ativo" });
-    if (res && res.status) {
-      res.setHeader?.("Content-Type", "application/json");
-      return res.status(200).send(jsonStr);
+    // Requisição OPTIONS (Preflight)
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
     }
-    return new Response(jsonStr, { status: 200, headers: { "Content-Type": "application/json" } });
-  }
 
-  if (req.method === "POST") {
-    try {
+    // Requisição GET (Healthcheck)
+    if (req.method === "GET") {
+      return res.status(200).json({
+        status: "ok",
+        message: "Webhook Mercado Pago CaixaDoce Ativo",
+      });
+    }
+
+    // Requisição POST (Notificações do Mercado Pago)
+    if (req.method === "POST") {
       let body = req.body;
       if (typeof body === "string") {
         try {
@@ -75,7 +74,7 @@ export default async function handler(req: any, res: any) {
         body?.id ||
         (body?.resource ? String(body.resource).split("/").pop() : null);
 
-      console.log(`[MercadoPago Webhook] Evento POST recebido. Payment ID: ${paymentId}`);
+      console.log(`[MercadoPago Webhook] Notificação POST recebida. Payment ID: ${paymentId}`);
 
       const isMockOrTest =
         !paymentId ||
@@ -89,12 +88,11 @@ export default async function handler(req: any, res: any) {
 
       if (isMockOrTest) {
         console.log(`[MercadoPago Webhook] Simulação/Teste detectado (ID: ${paymentId}). Retornando 200 OK.`);
-        const mockPayload = JSON.stringify({ received: true, status: "ok_simulation", payment_id: paymentId });
-        if (res && res.status) {
-          res.setHeader?.("Content-Type", "application/json");
-          return res.status(200).send(mockPayload);
-        }
-        return new Response(mockPayload, { status: 200, headers: { "Content-Type": "application/json" } });
+        return res.status(200).json({
+          received: true,
+          status: "ok_simulation",
+          payment_id: paymentId || "123456",
+        });
       }
 
       const mpToken = getMercadoPagoToken();
@@ -102,7 +100,7 @@ export default async function handler(req: any, res: any) {
 
       try {
         const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: { Authorization: `Bearer ${mpToken}` },
+          headers: { Authorization: `Bearer ${mpToken}`, Accept: "application/json" },
         });
 
         if (mpRes.ok) {
@@ -177,18 +175,12 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      const okResponse = JSON.stringify({ received: true, status: "processed", payment_id: paymentId });
-      if (res && res.status) return res.status(200).send ? res.status(200).send(okResponse) : res.status(200).json({ received: true, status: "processed", payment_id: paymentId });
-      return new Response(okResponse, { status: 200, headers: { "Content-Type": "application/json" } });
-    } catch (err: any) {
-      console.error("[MercadoPago Webhook Exception]", err);
-      const errResponse = JSON.stringify({ received: true, error: err?.message || "Internal error" });
-      if (res && res.status) return res.status(200).send ? res.status(200).send(errResponse) : res.status(200).json({ received: true });
-      return new Response(errResponse, { status: 200, headers: { "Content-Type": "application/json" } });
+      return res.status(200).json({ received: true, status: "processed", payment_id: paymentId });
     }
-  }
 
-  const defaultResponse = JSON.stringify({ received: true });
-  if (res && res.status) return res.status(200).send ? res.status(200).send(defaultResponse) : res.status(200).json({ received: true });
-  return new Response(defaultResponse, { status: 200, headers: { "Content-Type": "application/json" } });
+    return res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error("[MercadoPago Webhook Error]", err);
+    return res.status(200).json({ received: true, error: err?.message || "Internal error" });
+  }
 }
