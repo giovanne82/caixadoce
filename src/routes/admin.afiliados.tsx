@@ -117,7 +117,7 @@ function AdminAfiliadosComponent() {
         toast.error(`Acesso Restrito: O e-mail "${userEmailTentado || "não autenticado"}" não possui permissão de administrador.`);
         setIsAdminAutorizado(false);
         setVerificandoAdmin(false);
-        navigate({ to: "/" });
+        navigate({ to: "/" } as any);
       }
     }
 

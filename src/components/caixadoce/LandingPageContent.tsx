@@ -61,7 +61,7 @@ export function LandingPageContent() {
   };
 
   const irParaLogin = () => {
-    navigate({ to: "/login" });
+    navigate({ to: "/login" } as any);
   };
 
   return (
@@ -1538,7 +1538,7 @@ export function LandingPageContent() {
             <a href="#precos" className="hover:text-purple-700 transition-colors">
               Planos
             </a>
-            <Link to="/login" className="hover:text-purple-700 transition-colors">
+            <Link to="/login" search={{} as any} className="hover:text-purple-700 transition-colors">
               Login
             </Link>
           </div>

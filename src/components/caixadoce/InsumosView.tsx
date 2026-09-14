@@ -620,7 +620,6 @@ export function InsumosView({
                       return (
                         <Badge
                           key={idx}
-                          type="button"
                           onClick={() => handleSelecionarSugestaoChip(sug)}
                           className={`cursor-pointer font-medium text-xs py-1 px-2.5 rounded-full transition-all flex items-center gap-1 select-none ${
                             isExactMatch

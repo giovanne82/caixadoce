@@ -848,12 +848,13 @@ export function PdvView() {
   // Confirmar e Gravar Fechamento de Caixa
   const handleConfirmarFechamentoCaixa = async () => {
     const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const caixaFechado: CaixaTurno = {
+    const caixaFechado = {
       ...caixaAtual,
       data: hoje,
-      status: "fechado",
+      status: "fechado" as const,
+      horaAbertura: caixaAtual.horaAbertura || "08:00",
       horaFechamento: horaAgora,
-    };
+    } as CaixaTurno;
 
     setCaixaAtual(caixaFechado);
     try {
@@ -1354,7 +1355,7 @@ export function PdvView() {
           <p className="text-xs text-slate-400">
             Você precisa estar autenticado como lojista para operar o frente de caixa.
           </p>
-          <Link to="/login">
+          <Link to="/login" search={{} as any}>
             <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold">
               Fazer Login
             </Button>
@@ -1373,7 +1374,7 @@ export function PdvView() {
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Lado Esquerdo: Voltar ao Painel & Identificação do Estabelecimento */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link to="/" title="Voltar ao Painel" className="shrink-0">
+            <Link to="/" search={{} as any} title="Voltar ao Painel" className="shrink-0">
               <Button
                 variant="ghost"
                 size="sm"

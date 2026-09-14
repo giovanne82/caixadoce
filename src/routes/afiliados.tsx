@@ -104,7 +104,7 @@ function AfiliadosComponent() {
       if (!emailLogado) {
         toast.error("Acesso restrito: Por favor, faça login para acessar o painel do afiliado.");
         setVerificandoSessao(false);
-        navigate({ to: "/login" });
+        navigate({ to: "/login" } as any);
         return;
       }
 
@@ -253,7 +253,7 @@ function AfiliadosComponent() {
     setNaoEParceiro(true);
     supabase.auth.signOut().catch(() => {});
     toast.info("Você saiu do painel do afiliado.");
-    navigate({ to: "/login" });
+    navigate({ to: "/login" } as any);
   }
 
   function copiarTexto(texto: string, tipo: "cupom" | "link") {
@@ -451,7 +451,7 @@ function AfiliadosComponent() {
               <div className="border-t border-slate-700/60 pt-4 space-y-3 text-xs text-slate-400">
                 <p>Entre em contato com o administrador do CaixaDoce para solicitar seu cadastro e cupom exclusivo.</p>
                 <button
-                  onClick={() => navigate({ to: "/" })}
+                  onClick={() => navigate({ to: "/" } as any)}
                   className="w-full py-2.5 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs transition-all"
                 >
                   Voltar para a Página Inicial

@@ -374,16 +374,16 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         (payload) => {
           const newRow = payload.new;
           if (newRow) {
-            const dataExpiracao = newRow.plano_exp || newRow.plano_expira_em || newRow.data_expiracao;
+            const rAny = newRow as any;
+            const dataExpiracao = rAny.plano_exp || rAny.plano_expira_em || rAny.data_expiracao;
             const expMs = dataExpiracao ? new Date(dataExpiracao).getTime() : 0;
             const isValido = !dataExpiracao || (!isNaN(expMs) && expMs > Date.now());
 
-            const rAny = newRow as any;
             const isAtivo =
-              newRow.status === "ativo" ||
-              newRow.status_assinatura === "ativo" ||
-              newRow.plano_status === "ativo" ||
-              newRow.is_pro === true ||
+              rAny.status === "ativo" ||
+              rAny.status_assinatura === "ativo" ||
+              rAny.plano_status === "ativo" ||
+              rAny.is_pro === true ||
               rAny.plano === "pro" ||
               rAny.plano === "mensal" ||
               rAny.plano === "anual" ||
@@ -1211,7 +1211,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         valor: Number(p.valor || p.amount || 0),
         observacao: p.observacao || "",
         formaPagamento: p.formaPagamento || p.forma_pagamento || "Pix",
-        status: isPaid ? "pago" : "pendente",
+        status: (isPaid ? "pago" : "pendente") as "pago" | "pendente",
         pago: isPaid,
         is_paid: isPaid,
         dataEfetiva: isPaid ? (p.dataEfetiva || p.data_efetiva || p.data_pagamento || p.data) : null,

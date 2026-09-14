@@ -411,7 +411,7 @@ export async function processarNotinhaComOCR(
       ? Number(it.unit_price_calculated)
       : qtd > 0 ? parseFloat((total / qtd).toFixed(2)) : total;
     const nomeOriginal = String(it.name || "Insumo").trim();
-    const rawPadronizado = String(it.nome_padronizado || it.standard_name || "").trim();
+    const rawPadronizado = String((it as any).nome_padronizado || it.standard_name || "").trim();
     const nomePadronizado = rawPadronizado ? sanitizarTexto(rawPadronizado) : normalizarNomeInsumo(nomeOriginal);
 
     return {

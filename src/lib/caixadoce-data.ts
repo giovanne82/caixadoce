@@ -195,7 +195,8 @@ export interface ProdutoOpcao {
 export interface ProdutoOpcaoSelecionada {
   id?: string;
   nome: string;
-  preco_adicional: number;
+  preco_adicional?: number;
+  preco?: number;
   quantidade?: number;
 }
 
@@ -1115,6 +1116,7 @@ export interface ItemPedidoEncomenda {
   nome: string;
   quantidade: number;
   precoUnitario?: number;
+  preco?: number;
   subtotal?: number;
   opcao_selecionada?: ProdutoOpcao;
   opcoes_selecionadas?: ProdutoOpcaoSelecionada[];
@@ -1225,7 +1227,9 @@ export interface Encomenda {
   origem_pagamento?: string;
   origem?: string;
   codigo_pedido_ifood?: string;
+  codigoPedidoIfood?: string;
   codigo_pedido_99food?: string;
+  codigoPedido99Food?: string;
   dados_brutos?: any;
   raw_payload?: any;
   payload?: any;
@@ -1341,6 +1345,7 @@ export interface DespesaNotaFiscal {
   valorUtensilios: number;
   valorConsumoProprio: number;
   valorOutros: number;
+  categoria?: string;
   itens: ItemNotaFiscal[];
   comprovanteUrl?: string;
   metodoPagamento?: MetodoPagamento;
@@ -1894,7 +1899,8 @@ export function gerarMensagemOrcamentoWhatsApp(
           (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
             ? ` (${it.opcoes_selecionadas.map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome)).join(", ")})`
             : "") || (it.opcaoNome ? ` (${it.opcaoNome})` : "");
-        const unit = (it.precoUnitario || it.preco) ? ` - ${formatarMoeda((it.precoUnitario || it.preco) * (it.quantidade || 1))}` : "";
+        const priceVal = it.precoUnitario || (it as any).preco || 0;
+        const unit = priceVal ? ` - ${formatarMoeda(priceVal * (it.quantidade || 1))}` : "";
         return `• ${it.quantidade || 1}x ${it.nome}${opc}${unit}`;
       })
       .join("\n");
@@ -1979,6 +1985,7 @@ export interface ItemListaCompra {
   encomendaId?: string;
   encomendaClienteNome?: string;
   categoria?: string;
+  clienteTags?: string[];
   createdAt?: string;
 }
 
@@ -2046,9 +2053,13 @@ export function formatarCep(val: string): string {
 // ==============================================================================
 
 export interface RegrasAgendamento {
-  antecedenciaMinimaDias: number; // 0 = mesmo dia, 1 = 24h, 2 = 48h...
-  diasSemanaDisponiveis: number[]; // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
-  datasBloqueadas: string[]; // YYYY-MM-DD
+  estabelecimentoCodigo?: string;
+  antecedenciaMinimaDias?: number; // 0 = mesmo dia, 1 = 24h, 2 = 48h...
+  antecedenciaMinimaHoras?: number;
+  permitirProntaEntregaDias?: number[];
+  intervaloEncaixesMinutos?: number;
+  diasSemanaDisponiveis?: number[]; // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  datasBloqueadas?: string[]; // YYYY-MM-DD
   horarioAbertura: string; // Ex: "09:00"
   horarioFechamento: string; // Ex: "18:00"
 }

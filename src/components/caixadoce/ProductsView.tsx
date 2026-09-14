@@ -205,7 +205,7 @@ export function ProductsView({
     setSalvandoModoVenda(true);
 
     try {
-      let targetId = profile?.establishmentId || null;
+      let targetId = (profile as any)?.establishmentId || null;
       if (!targetId && estabelecimentoCodigo) {
         const { data: estRow } = await supabase
           .from("estabelecimentos")
@@ -680,7 +680,7 @@ export function ProductsView({
               if (onIrParaConfiguracoes) {
                 onIrParaConfiguracoes();
               } else {
-                navigate({ to: "/configuracoes", hash: "identidade-visual" });
+                navigate({ to: "/configuracoes", hash: "identidade-visual" } as any);
               }
             }}
             className="h-8.5 font-bold text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 border-0 shadow-sm"

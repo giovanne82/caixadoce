@@ -150,7 +150,7 @@ interface OrdersViewProps {
   onBloquearData: (data: string, motivo: string) => Promise<void>;
   onDesbloquearData: (id: string) => Promise<void>;
   onCriarClienteRapido?: (nome: string, whatsapp: string, endereco?: string) => Promise<void>;
-  onCriarCliente?: (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => Promise<void>;
+  onCriarCliente?: (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => Promise<any>;
   onEditarCliente?: (id: string, dados: Partial<Cliente>) => Promise<void>;
   onExcluirCliente?: (id: string) => Promise<void>;
 }
@@ -600,8 +600,9 @@ export function OrdersView({
 
   const renderBotoesAcaoIFood = (ord: Encomenda, mode: "desktop" | "mobile" = "desktop") => {
     const acaoAtual = processandoAcaoIfood[ord.id];
-    const isCancelado = ord.status === "cancelada" || ord.status === "cancelado";
-    const isEntregue = ord.status === "entregue" || ord.status === "concluido" || ord.status === "concluida";
+    const stAny = ord.status as any;
+    const isCancelado = ord.status === "cancelada" || stAny === "cancelado";
+    const isEntregue = ord.status === "entregue" || stAny === "concluido" || stAny === "concluida";
     const isProduzindo = ord.status === "em_producao";
     const isPronto = ord.status === "pronta";
 

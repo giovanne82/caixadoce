@@ -54,9 +54,8 @@ export type UpdateEstablishmentDetailsInput = {
   menu_title?: string;
   sloganCardapio?: string;
   menu_slogan?: string;
-  bannerUrl?: string;
-  banner_url?: string;
   store_banner_url?: string;
+  created_at?: string;
   themeColor?: string;
   theme_color?: string;
   corTema?: string;
