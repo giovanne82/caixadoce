@@ -1243,7 +1243,7 @@ export function PdvView() {
         valor_restante: 0,
         historico_pagamentos: historicoPagamentosJson,
         observacoes: observacoesVenda ? `[PDV] ${observacoesVenda}` : "[PDV Balcão]",
-        origem: "manual",
+        origem: "pdv",
       };
 
       const { error: errInsert } = await supabase.from("encomendas").insert([payloadEncomenda]);

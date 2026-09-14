@@ -272,7 +272,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
   useEffect(() => {
     if (profile && profile.role === "operador" && !podeAcessarAba(activeTab)) {
-      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Insumos, Cardápio e Encomendas.");
+      toast.error("Acesso Restrito: Colaboradores possuem acesso apenas a Insumos, Cardápio e Vendas.");
       setActiveTab("encomendas");
     }
   }, [activeTab, profile, podeAcessarAba]);
@@ -2139,7 +2139,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
               {podeAcessarAba("encomendas") && (
                 <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                  <Package className="w-4 h-4" /> Encomendas
+                  <Package className="w-4 h-4" /> Vendas
                 </TabsTrigger>
               )}
               {podeAcessarAba("produtos") && (
@@ -2313,7 +2313,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
               }`}
             >
               <Package className={`w-6 h-6 mb-1 shrink-0 ${activeTab === "encomendas" ? "stroke-[2.5]" : "stroke-[1.75]"}`} />
-              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Encomendas</span>
+              <span className="text-[11px] leading-tight font-extrabold truncate w-full">Vendas</span>
             </button>
           )}
 

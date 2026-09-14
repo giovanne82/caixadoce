@@ -174,6 +174,15 @@ function renderizarBadgeOrigem(ordOrOrigem?: Encomenda | string) {
   const enc: Partial<Encomenda> | undefined = typeof ordOrOrigem === "string" ? { origem: ordOrOrigem } : ordOrOrigem;
   const origem = obterOrigemEncomenda(enc);
 
+  if (origem === "pdv") {
+    return (
+      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white border-none text-[10px] font-bold flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
+        <Store className="w-3 h-3 text-white shrink-0" />
+        <span>PDV / Balcão</span>
+      </Badge>
+    );
+  }
+
   if (origem === "ifood") {
     return (
       <Badge className="bg-red-600 hover:bg-red-700 text-white border-none text-[10px] font-black uppercase flex items-center gap-1 shrink-0 px-2 py-0.5 shadow-xs">
@@ -212,6 +221,15 @@ function renderizarBadgeOrigem(ordOrOrigem?: Encomenda | string) {
 function renderizarBadgeOrigemMobile(ordOrOrigem?: Encomenda | string) {
   const enc: Partial<Encomenda> | undefined = typeof ordOrOrigem === "string" ? { origem: ordOrOrigem } : ordOrOrigem;
   const origem = obterOrigemEncomenda(enc);
+
+  if (origem === "pdv") {
+    return (
+      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white border-none text-[9px] font-bold flex items-center gap-0.5 shrink-0 px-1.5 py-0 shadow-xs">
+        <Store className="w-2.5 h-2.5 text-white shrink-0" />
+        <span>PDV / Balcão</span>
+      </Badge>
+    );
+  }
 
   if (origem === "ifood") {
     return (
@@ -798,10 +816,14 @@ export function OrdersView({
   const [buscaTagInsumo, setBuscaTagInsumo] = useState("");
   const [dropdownInsumosAberto, setDropdownInsumosAberto] = useState(false);
 
-  // Filtros da Lista
+  // Filtros da Lista & Período (Data / Mês)
   const [filtroPagamento, setFiltroPagamento] = useState<string>("todos");
   const [filtroOrigem, setFiltroOrigem] = useState<string>("todas");
+  const [filtroPeriodo, setFiltroPeriodo] = useState<"todos" | "hoje" | "data_especifica" | "mes_atual" | "mes_especifico">("todos");
+  const [dataFiltroEspecifica, setDataFiltroEspecifica] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [mesFiltroEspecifico, setMesFiltroEspecifico] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [busca, setBusca] = useState<string>("");
+  const [modalRelatorioVendasOpen, setModalRelatorioVendasOpen] = useState(false);
 
   // Formulário de Encomenda
   const [clienteId, setClienteId] = useState<string | undefined>(undefined);
@@ -1953,7 +1975,7 @@ export function OrdersView({
     setDrawerOpen(true);
   };
 
-  // Função de validação unificada de filtros (Pagamento, Origem e Busca)
+  // Função de validação unificada de filtros (Pagamento, Origem, Período e Busca)
   const atendeFiltrosGerais = useCallback((e: Encomenda) => {
     const totalmentePaga = isEncomendaTotalmentePaga(e);
 
@@ -1969,6 +1991,20 @@ export function OrdersView({
       matchOrigem = obterOrigemEncomenda(e) === filtroOrigem;
     }
 
+    let matchPeriodo = true;
+    const dataVenda = e.dataEntrega || (e.createdAt ? e.createdAt.split("T")[0] : "");
+    if (filtroPeriodo === "hoje") {
+      const hojeStr = new Date().toISOString().split("T")[0];
+      matchPeriodo = dataVenda === hojeStr;
+    } else if (filtroPeriodo === "data_especifica") {
+      matchPeriodo = dataVenda === dataFiltroEspecifica;
+    } else if (filtroPeriodo === "mes_atual") {
+      const mesAtualStr = new Date().toISOString().slice(0, 7);
+      matchPeriodo = dataVenda.startsWith(mesAtualStr);
+    } else if (filtroPeriodo === "mes_especifico") {
+      matchPeriodo = dataVenda.startsWith(mesFiltroEspecifico);
+    }
+
     const matchBusca =
       !busca ||
       e.clienteNome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -1978,8 +2014,177 @@ export function OrdersView({
       (e.codigo_pedido_ifood && e.codigo_pedido_ifood.toLowerCase().includes(busca.toLowerCase())) ||
       (e.id && e.id.toLowerCase().includes(busca.toLowerCase()));
 
-    return matchPagamento && matchOrigem && matchBusca;
-  }, [filtroPagamento, filtroOrigem, busca]);
+    return matchPagamento && matchOrigem && matchPeriodo && matchBusca;
+  }, [filtroPagamento, filtroOrigem, filtroPeriodo, dataFiltroEspecifica, mesFiltroEspecifico, busca]);
+
+  // Métricas Consolidadas para o Relatório Geral de Vendas do Período
+  const relatorioVendasConsolidado = useMemo(() => {
+    const vendasPeriodo = encomendas.filter(atendeFiltrosGerais);
+
+    let totalFaturado = 0;
+    let totalQuitado = 0;
+    let totalPendente = 0;
+
+    const porOrigem: Record<OrigemEncomendaTipo, { qtd: number; total: number }> = {
+      pdv: { qtd: 0, total: 0 },
+      cardapio: { qtd: 0, total: 0 },
+      ifood: { qtd: 0, total: 0 },
+      "99food": { qtd: 0, total: 0 },
+      manual: { qtd: 0, total: 0 },
+    };
+
+    const porMetodoPagamento: Record<string, { qtd: number; total: number }> = {};
+
+    for (const v of vendasPeriodo) {
+      const valTotal = Number(v.valorTotal) || 0;
+      const valPago = calcularTotalPagoEncomenda(v);
+      const orig = obterOrigemEncomenda(v);
+
+      totalFaturado += valTotal;
+      totalQuitado += valPago;
+      totalPendente += Math.max(0, valTotal - valPago);
+
+      if (!porOrigem[orig]) {
+        porOrigem[orig] = { qtd: 0, total: 0 };
+      }
+      porOrigem[orig].qtd += 1;
+      porOrigem[orig].total += valTotal;
+
+      const metStr = String((v as any).metodo_pagamento || (v as any).metodoPagamento || (v as any).forma_pagamento || "Outro").trim();
+      const metKey = metStr || "Outro";
+      if (!porMetodoPagamento[metKey]) {
+        porMetodoPagamento[metKey] = { qtd: 0, total: 0 };
+      }
+      porMetodoPagamento[metKey].qtd += 1;
+      porMetodoPagamento[metKey].total += valTotal;
+    }
+
+    return {
+      vendasPeriodo,
+      qtdTotal: vendasPeriodo.length,
+      totalFaturado,
+      totalQuitado,
+      totalPendente,
+      porOrigem,
+      porMetodoPagamento,
+    };
+  }, [encomendas, atendeFiltrosGerais]);
+
+  const handleImprimirRelatorioVendas = () => {
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (!printWindow) {
+      toast.error("Permita pop-ups no navegador para imprimir o relatório.");
+      return;
+    }
+
+    const estNome = estabelecimentoNome || profile?.establishmentName || "Minha Confeitaria";
+    const { qtdTotal, totalFaturado, totalQuitado, totalPendente, porOrigem, porMetodoPagamento, vendasPeriodo } = relatorioVendasConsolidado;
+
+    const labelPeriodo =
+      filtroPeriodo === "hoje"
+        ? `Hoje (${new Date().toLocaleDateString("pt-BR")})`
+        : filtroPeriodo === "data_especifica"
+        ? `Data Específica (${dataFiltroEspecifica.split("-").reverse().join("/")})`
+        : filtroPeriodo === "mes_atual"
+        ? `Mês Atual (${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })})`
+        : filtroPeriodo === "mes_especifico"
+        ? `Mês (${mesFiltroEspecifico})`
+        : "Todos os Períodos";
+
+    const origensRowsHtml = Object.entries(porOrigem)
+      .map(([k, v]) => {
+        if (v.qtd === 0) return "";
+        const nomeOrig =
+          k === "pdv" ? "PDV / Balcão" : k === "cardapio" ? "Meu Cardápio" : k === "ifood" ? "iFood" : k === "99food" ? "99Food" : "Manual";
+        return `<div class="row"><span>${nomeOrig} (${v.qtd}x):</span><span><strong>${formatarMoeda(v.total)}</strong></span></div>`;
+      })
+      .join("");
+
+    const metodosRowsHtml = Object.entries(porMetodoPagamento)
+      .map(([k, v]) => {
+        if (v.qtd === 0) return "";
+        return `<div class="row"><span>${k} (${v.qtd}x):</span><span><strong>${formatarMoeda(v.total)}</strong></span></div>`;
+      })
+      .join("");
+
+    const vendasListaHtml = vendasPeriodo
+      .slice(0, 100)
+      .map((v, i) => {
+        const orig = obterOrigemEncomenda(v);
+        const origLabel = orig === "pdv" ? "PDV" : orig === "cardapio" ? "Cardápio" : orig === "ifood" ? "iFood" : orig === "99food" ? "99Food" : "Manual";
+        return `
+          <div style="font-size: 11px; padding: 4px 0; border-bottom: 1px dashed #e2e8f0; display: flex; justify-content: space-between;">
+            <div>
+              <strong>#${i + 1} ${v.clienteNome}</strong> (${origLabel})<br/>
+              <span style="color: #64748b; font-size: 10px;">${v.itens.slice(0, 40)}${v.itens.length > 40 ? "..." : ""}</span>
+            </div>
+            <div style="text-align: right;">
+              <strong>${formatarMoeda(v.valorTotal)}</strong><br/>
+              <span style="font-size: 10px; color: ${isEncomendaTotalmentePaga(v) ? '#059669' : '#dc2626'};">${isEncomendaTotalmentePaga(v) ? 'Pago' : 'Pendente'}</span>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Relatório Geral de Vendas — ${estNome}</title>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: monospace, sans-serif; font-size: 12px; margin: 0; padding: 12px; color: #000; }
+          .header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 4px; text-transform: uppercase; }
+          .sub { text-align: center; font-size: 11px; color: #475569; margin-bottom: 12px; }
+          .divider { border-top: 1px dashed #000; margin: 8px 0; }
+          .divider-solid { border-top: 2px solid #000; margin: 8px 0; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 12px; }
+          .highlight { font-size: 14px; font-weight: bold; background: #f1f5f9; padding: 6px; margin: 6px 0; border-radius: 4px; }
+          @media print { .no-print { display: none !important; } }
+          .btn-print { background: #7c3aed; color: #fff; border: none; padding: 8px 16px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir Relatório</button>
+        </div>
+        <div class="header">${estNome}</div>
+        <div class="sub">RELATÓRIO GERAL DE VENDAS<br/>Período: ${labelPeriodo}</div>
+        
+        <div class="divider-solid"></div>
+        
+        <div class="row"><span>Total de Vendas:</span><span><strong>${qtdTotal} pedidos</strong></span></div>
+        <div class="row highlight"><span>FATURAMENTO TOTAL:</span><span>${formatarMoeda(totalFaturado)}</span></div>
+        <div class="row"><span>Total Quitado / Recebido:</span><span><strong style="color: #059669;">${formatarMoeda(totalQuitado)}</strong></span></div>
+        <div class="row"><span>Saldo a Receber / Pendente:</span><span><strong style="color: #dc2626;">${formatarMoeda(totalPendente)}</strong></span></div>
+        
+        <div class="divider"></div>
+        <div style="font-weight: bold; margin-bottom: 4px;">VENDAS POR ORIGEM</div>
+        ${origensRowsHtml}
+
+        <div class="divider"></div>
+        <div style="font-weight: bold; margin-bottom: 4px;">FORMAS DE PAGAMENTO</div>
+        ${metodosRowsHtml}
+
+        <div class="divider-solid"></div>
+        <div style="font-weight: bold; margin-bottom: 6px;">LISTAGEM DE VENDAS (${qtdTotal})</div>
+        ${vendasListaHtml}
+
+        <div class="divider-solid"></div>
+        <div style="text-align: center; font-size: 10px; margin-top: 12px; color: #64748b;">
+          Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — CaixaDoce
+        </div>
+        <script>
+          window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   const encomendasDoDiaDrawer = useMemo(() => {
     if (!selectedDrawerDate) return [];
@@ -2232,15 +2437,15 @@ export function OrdersView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            Minhas Encomendas <Package className="w-6 h-6 text-primary" />
+            Minhas Vendas <Package className="w-6 h-6 text-primary" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Gerencie datas de entrega, produtos pedidos e envie resumo no WhatsApp com 1 clique.
+            Gerencie vendas, pedidos do PDV, entregas e relatórios consolidados por período.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Seletor Seção: Pedidos vs Clientes */}
+          {/* Seletor Seção: Vendas vs Clientes */}
           <div className="flex items-center bg-muted/80 p-1 rounded-xl border border-border/60">
             <Button
               variant="default"
@@ -2248,7 +2453,7 @@ export function OrdersView({
               onClick={() => setAbaSubView("pedidos")}
               className="h-8 text-xs font-bold rounded-lg px-3"
             >
-              <Package className="w-3.5 h-3.5 mr-1.5" /> Pedidos
+              <Package className="w-3.5 h-3.5 mr-1.5" /> Vendas
             </Button>
             <Button
               variant="ghost"
@@ -2283,11 +2488,11 @@ export function OrdersView({
             size="sm"
             className="font-bold shadow-md text-xs"
           >
-            <Plus className="w-4 h-4 mr-1.5" /> Nova Encomenda
+            <Plus className="w-4 h-4 mr-1.5" /> Nova Venda
           </Button>
         </div>
       </div>
-      {/* Barra de Controle de Visualização */}
+      {/* Barra de Controle de Visualização & Filtros */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-xs">
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/50 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Button
@@ -2296,7 +2501,7 @@ export function OrdersView({
             onClick={() => setViewMode("lista")}
             className="h-7 text-xs font-semibold shrink-0"
           >
-            Pedidos ({encomendasAtivas.length})
+            Vendas ({encomendasAtivas.length})
           </Button>
           <Button
             variant={viewMode === "concluidos" ? "default" : "ghost"}
@@ -2305,7 +2510,7 @@ export function OrdersView({
             className="h-7 text-xs font-semibold shrink-0 flex items-center gap-1.5"
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            Pedidos Concluídos ({encomendasConcluidas.length})
+            Vendas Concluídas ({encomendasConcluidas.length})
           </Button>
           <Button
             variant={viewMode === "semana" ? "default" : "ghost"}
@@ -2368,12 +2573,45 @@ export function OrdersView({
             />
           </div>
 
+          {/* Filtro de Período (Data Específica / Mês) */}
+          <Select value={filtroPeriodo} onValueChange={(val: any) => setFiltroPeriodo(val)}>
+            <SelectTrigger className="h-8 text-xs w-40 font-semibold">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os Períodos</SelectItem>
+              <SelectItem value="hoje">Vendas de Hoje</SelectItem>
+              <SelectItem value="data_especifica">Data Específica</SelectItem>
+              <SelectItem value="mes_atual">Mês Atual</SelectItem>
+              <SelectItem value="mes_especifico">Selecionar Mês</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {filtroPeriodo === "data_especifica" && (
+            <Input
+              type="date"
+              value={dataFiltroEspecifica}
+              onChange={(e) => setDataFiltroEspecifica(e.target.value)}
+              className="h-8 text-xs font-mono font-bold w-36"
+            />
+          )}
+
+          {filtroPeriodo === "mes_especifico" && (
+            <Input
+              type="month"
+              value={mesFiltroEspecifico}
+              onChange={(e) => setMesFiltroEspecifico(e.target.value)}
+              className="h-8 text-xs font-mono font-bold w-36"
+            />
+          )}
+
           <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-            <SelectTrigger className="h-8 text-xs w-44 font-semibold">
+            <SelectTrigger className="h-8 text-xs w-40 font-semibold">
               <SelectValue placeholder="Origem" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas as Origens</SelectItem>
+              <SelectItem value="pdv">Balcão / PDV</SelectItem>
               <SelectItem value="manual">Inserida Manualmente</SelectItem>
               <SelectItem value="cardapio">Meu Cardápio</SelectItem>
               <SelectItem value="ifood">iFood</SelectItem>
@@ -2391,6 +2629,15 @@ export function OrdersView({
               <SelectItem value="pago">Pago (Quitado)</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button
+            size="sm"
+            onClick={() => setModalRelatorioVendasOpen(true)}
+            className="h-8 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xs flex items-center gap-1.5"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Relatório Geral</span>
+          </Button>
         </div>
       </div>
 
@@ -5291,6 +5538,138 @@ export function OrdersView({
               className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               <Check className="w-4 h-4 mr-1" /> Confirmar Pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: RELATÓRIO GERAL DE VENDAS (RESUMO POR PERÍODO / DATA / MÊS) */}
+      <Dialog open={modalRelatorioVendasOpen} onOpenChange={setModalRelatorioVendasOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold flex items-center gap-2 text-purple-700 dark:text-purple-300">
+              <FileText className="w-5 h-5 text-purple-600" /> Relatório Geral de Vendas
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Visão consolidada de faturamento, fatias de mercado por origem e formas de pagamento para o período selecionado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Banner de Período Ativo */}
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
+              <span className="font-bold text-purple-900 dark:text-purple-200">
+                📌 Período Selecionado:{" "}
+                <span className="font-extrabold underline">
+                  {filtroPeriodo === "hoje"
+                    ? `Hoje (${new Date().toLocaleDateString("pt-BR")})`
+                    : filtroPeriodo === "data_especifica"
+                    ? `Data (${dataFiltroEspecifica.split("-").reverse().join("/")})`
+                    : filtroPeriodo === "mes_atual"
+                    ? `Mês Atual (${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })})`
+                    : filtroPeriodo === "mes_especifico"
+                    ? `Mês (${mesFiltroEspecifico})`
+                    : "Todos os Períodos"}
+                </span>
+              </span>
+              <Badge variant="outline" className="font-mono text-purple-700 dark:text-purple-300 border-purple-300">
+                {relatorioVendasConsolidado.qtdTotal} vendas
+              </Badge>
+            </div>
+
+            {/* Cards de Métricas Financeiras */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card className="bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-900/40 p-3 shadow-2xs">
+                <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 block">Faturamento Total</span>
+                <span className="text-lg font-mono font-extrabold text-purple-950 dark:text-purple-100">
+                  {formatarMoeda(relatorioVendasConsolidado.totalFaturado)}
+                </span>
+              </Card>
+              <Card className="bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 p-3 shadow-2xs">
+                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 block">Total Quitado / Recebido</span>
+                <span className="text-lg font-mono font-extrabold text-emerald-950 dark:text-emerald-100">
+                  {formatarMoeda(relatorioVendasConsolidado.totalQuitado)}
+                </span>
+              </Card>
+              <Card className="bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 p-3 shadow-2xs">
+                <span className="text-[11px] font-bold text-rose-700 dark:text-rose-300 block">Saldo Pendente</span>
+                <span className="text-lg font-mono font-extrabold text-rose-950 dark:text-rose-100">
+                  {formatarMoeda(relatorioVendasConsolidado.totalPendente)}
+                </span>
+              </Card>
+            </div>
+
+            {/* Vendas por Origem */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Store className="w-4 h-4 text-primary" /> Vendas por Origem / Canal
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {Object.entries(relatorioVendasConsolidado.porOrigem).map(([k, v]) => {
+                  const nomeOrig =
+                    k === "pdv" ? "Balcão / PDV" : k === "cardapio" ? "Meu Cardápio" : k === "ifood" ? "iFood" : k === "99food" ? "99Food" : "Inserida Manualmente";
+                  return (
+                    <div key={k} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/60">
+                      <span className="font-semibold">{nomeOrig} ({v.qtd}x)</span>
+                      <span className="font-mono font-bold">{formatarMoeda(v.total)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Formas de Pagamento Utilizadas */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-primary" /> Distribuição por Forma de Pagamento
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {Object.entries(relatorioVendasConsolidado.porMetodoPagamento).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/60">
+                    <span className="font-semibold">{k} ({v.qtd}x)</span>
+                    <span className="font-mono font-bold">{formatarMoeda(v.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Resumo da Lista de Vendas */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                Vendas no Período ({relatorioVendasConsolidado.vendasPeriodo.length})
+              </h4>
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 border border-border rounded-xl p-2 bg-background">
+                {relatorioVendasConsolidado.vendasPeriodo.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic text-center py-4">Nenhuma venda encontrada para o período selecionado.</p>
+                ) : (
+                  relatorioVendasConsolidado.vendasPeriodo.map((v, i) => (
+                    <div key={v.id || i} className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
+                      <div>
+                        <span className="font-bold">{v.clienteNome}</span>
+                        <span className="text-[10px] text-muted-foreground block truncate max-w-[220px]">{v.itens}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono font-bold block">{formatarMoeda(v.valorTotal)}</span>
+                        {renderizarBadgeOrigemMobile(v)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setModalRelatorioVendasOpen(false)} className="text-xs">
+              Fechar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleImprimirRelatorioVendas}
+              className="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimir Relatório Geral
             </Button>
           </DialogFooter>
         </DialogContent>
