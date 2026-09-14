@@ -1697,11 +1697,15 @@ export default {
       // =========================================================================
       // ENDPOINT DE WEBHOOK MERCADO PAGO (/api/webhooks/mercadopago, /api/webhook-mp, etc.)
       // =========================================================================
+      const pathToCheck = request.headers.get("x-matched-path") || request.headers.get("x-invoke-path") || url.pathname;
       if (
+        pathToCheck.includes("mercadopago") ||
+        pathToCheck.includes("webhook-mp") ||
         url.pathname === "/api/webhooks/mercadopago" ||
         url.pathname === "/api/webhook-mp" ||
         url.pathname === "/api/mercadopago/webhook" ||
-        url.pathname === "/api/webhook/mercadopago"
+        url.pathname === "/api/webhook/mercadopago" ||
+        url.pathname === "/api/mercadopago"
       ) {
         const corsHeaders = {
           "Access-Control-Allow-Origin": "*",
