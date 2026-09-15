@@ -240,6 +240,7 @@ export function PdvView() {
   const [fechamentoSelecionado, setFechamentoSelecionado] = useState<FechamentoCaixaRegistro | null>(null);
   const [historicoFechamentos, setHistoricoFechamentos] = useState<FechamentoCaixaRegistro[]>([]);
   const [carregandoHistoricoFechamentos, setCarregandoHistoricoFechamentos] = useState(false);
+  const [tamanhoImpressora, setTamanhoImpressora] = useState<"80mm" | "58mm">("80mm");
 
   // =========================================================================
   // HISTÓRICO DE ÚLTIMAS VENDAS (SINCRONIZADO)
@@ -1045,13 +1046,26 @@ export function PdvView() {
         metodo: String(v.metodo_pagamento || "Dinheiro").toUpperCase(),
       }));
 
-    const movsDoTurno = movimentacoesHoje.map((m) => ({
-      id: String(m.id || Math.random()),
-      tipo: (m.categoria === "sangria" || String(m.descricao).toLowerCase().includes("sangria") ? "sangria" : "reforco") as "sangria" | "reforco",
-      valor: Number(m.valor || 0),
-      motivo: String(m.descricao || (m.categoria === "sangria" ? "Sangria" : "Reforço")),
-      hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
-    }));
+    const movsDoTurno = movimentacoesHoje
+      .filter((m) => {
+        const cat = String(m.categoria || "").toLowerCase();
+        const desc = String(m.descricao || "").toLowerCase();
+        const isSangria = cat === "sangria" || desc.includes("sangria");
+        const isReforco = cat === "reforco" || desc.includes("reforço") || desc.includes("reforco");
+        return isSangria || isReforco;
+      })
+      .map((m) => {
+        const cat = String(m.categoria || "").toLowerCase();
+        const desc = String(m.descricao || "").toLowerCase();
+        const isSangria = cat === "sangria" || desc.includes("sangria");
+        return {
+          id: String(m.id || Math.random()),
+          tipo: (isSangria ? "sangria" : "reforco") as "sangria" | "reforco",
+          valor: Number(m.valor || 0),
+          motivo: String(m.descricao || (isSangria ? "Sangria" : "Reforço")),
+          hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+        };
+      });
 
     const novoRegistroFechamento: FechamentoCaixaRegistro = {
       id: `fechamento_${Date.now()}`,
@@ -1269,13 +1283,26 @@ export function PdvView() {
             metodo: String(v.metodo_pagamento || "Dinheiro").toUpperCase(),
           }));
 
-        const movsDoTurno = movimentacoesHoje.map((m) => ({
-          id: String(m.id || Math.random()),
-          tipo: (m.categoria === "sangria" || String(m.descricao).toLowerCase().includes("sangria") ? "sangria" : "reforco") as "sangria" | "reforco",
-          valor: Number(m.valor || 0),
-          motivo: String(m.descricao || (m.categoria === "sangria" ? "Sangria" : "Reforço")),
-          hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
-        }));
+        const movsDoTurno = movimentacoesHoje
+          .filter((m) => {
+            const cat = String(m.categoria || "").toLowerCase();
+            const desc = String(m.descricao || "").toLowerCase();
+            const isSangria = cat === "sangria" || desc.includes("sangria");
+            const isReforco = cat === "reforco" || desc.includes("reforço") || desc.includes("reforco");
+            return isSangria || isReforco;
+          })
+          .map((m) => {
+            const cat = String(m.categoria || "").toLowerCase();
+            const desc = String(m.descricao || "").toLowerCase();
+            const isSangria = cat === "sangria" || desc.includes("sangria");
+            return {
+              id: String(m.id || Math.random()),
+              tipo: (isSangria ? "sangria" : "reforco") as "sangria" | "reforco",
+              valor: Number(m.valor || 0),
+              motivo: String(m.descricao || (isSangria ? "Sangria" : "Reforço")),
+              hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+            };
+          });
 
         const turnoAtualRegistro: FechamentoCaixaRegistro = {
           id: `caixa_ativo_${hoje}`,
@@ -1312,8 +1339,8 @@ export function PdvView() {
     setModalHistoricoFechamentosOpen(true);
   };
 
-  const handleImprimirRelatorioFechamento = (fechamento: FechamentoCaixaRegistro) => {
-    const win = window.open("", "_blank", "width=450,height=800");
+  const handleImprimirRelatorioFechamento = (fechamento: FechamentoCaixaRegistro, tamanho: "80mm" | "58mm" = "80mm") => {
+    const win = window.open("", "_blank", "width=480,height=800");
     if (!win) {
       toast.error("Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-ups está ativo.");
       return;
@@ -1323,6 +1350,13 @@ export function PdvView() {
       ? new Date(fechamento.data + "T00:00:00").toLocaleDateString("pt-BR")
       : new Date().toLocaleDateString("pt-BR");
 
+    const is58 = tamanho === "58mm";
+    const movsManuais = (fechamento.movimentacoesList || []).filter((m) => {
+      const t = String(m.tipo || "").toLowerCase();
+      const mot = String(m.motivo || "").toLowerCase();
+      return t === "sangria" || t === "reforco" || mot.includes("sangria") || mot.includes("reforço") || mot.includes("reforco");
+    });
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -1331,7 +1365,7 @@ export function PdvView() {
           <meta charset="utf-8">
           <style>
             @page {
-              size: 80mm auto;
+              size: ${is58 ? "58mm" : "80mm"} auto;
               margin: 0;
             }
             @media print {
@@ -1344,16 +1378,17 @@ export function PdvView() {
               }
               .no-print { display: none !important; }
               .receipt-container {
-                max-width: 78mm !important;
-                padding: 2mm 3mm !important;
+                max-width: ${is58 ? "56mm" : "78mm"} !important;
+                padding: ${is58 ? "1mm 2mm" : "2mm 3mm"} !important;
                 border: none !important;
                 box-shadow: none !important;
               }
             }
             body {
               font-family: 'Courier New', Courier, monospace, monospace;
-              font-size: 11px;
-              line-height: 1.3;
+              font-size: ${is58 ? "12px" : "14px"};
+              line-height: 1.35;
+              font-weight: 700;
               color: #000;
               background-color: #f1f5f9;
               margin: 0;
@@ -1363,7 +1398,7 @@ export function PdvView() {
             }
             .receipt-container {
               width: 100%;
-              max-width: 78mm;
+              max-width: ${is58 ? "56mm" : "78mm"};
               background: #fff;
               padding: 10px 8px;
               box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -1371,7 +1406,7 @@ export function PdvView() {
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
+            .font-bold { font-weight: 900; }
             .uppercase { text-transform: uppercase; }
             .divider {
               border-top: 1px dashed #000;
@@ -1382,21 +1417,21 @@ export function PdvView() {
               margin: 6px 0;
             }
             .header-title {
-              font-size: 15px;
+              font-size: ${is58 ? "16px" : "19px"};
               font-weight: 900;
               letter-spacing: 0.5px;
             }
             .header-subtitle {
-              font-size: 12px;
-              font-weight: bold;
+              font-size: ${is58 ? "13px" : "15px"};
+              font-weight: 900;
               margin-top: 2px;
             }
             .row {
               display: flex;
               justify-content: space-between;
               align-items: baseline;
-              font-size: 11px;
-              margin: 2px 0;
+              font-size: ${is58 ? "12px" : "14px"};
+              margin: 3px 0;
             }
             .row-label {
               flex: 1;
@@ -1406,12 +1441,12 @@ export function PdvView() {
               padding-right: 4px;
             }
             .row-value {
-              font-weight: bold;
+              font-weight: 900;
               white-space: nowrap;
             }
             .section-header {
-              font-size: 11px;
-              font-weight: bold;
+              font-size: ${is58 ? "12px" : "14px"};
+              font-weight: 900;
               text-transform: uppercase;
               text-align: center;
               margin: 6px 0 3px 0;
@@ -1420,38 +1455,38 @@ export function PdvView() {
             table {
               width: 100%;
               border-collapse: collapse;
-              font-size: 10px;
+              font-size: ${is58 ? "11px" : "13px"};
               margin: 4px 0;
             }
             th {
-              border-bottom: 1px solid #000;
+              border-bottom: 1.5px solid #000;
               padding: 3px 2px;
               text-align: left;
-              font-weight: bold;
+              font-weight: 900;
             }
             td {
-              padding: 2px 2px;
+              padding: 3px 2px;
               word-break: break-word;
             }
             .total-box {
-              border: 1.5px solid #000;
-              padding: 6px;
+              border: 2px solid #000;
+              padding: 8px 4px;
               text-align: center;
               margin: 8px 0;
               background: #fff;
             }
             .total-box-label {
-              font-size: 10px;
-              font-weight: bold;
+              font-size: ${is58 ? "11px" : "13px"};
+              font-weight: 900;
               text-transform: uppercase;
             }
             .total-box-value {
-              font-size: 18px;
+              font-size: ${is58 ? "20px" : "24px"};
               font-weight: 900;
-              margin-top: 2px;
+              margin-top: 3px;
             }
             .footer-notes {
-              font-size: 9px;
+              font-size: ${is58 ? "9px" : "11px"};
               text-align: center;
               margin-top: 8px;
             }
@@ -1478,22 +1513,22 @@ export function PdvView() {
 
             <div class="row"><span class="row-label">Dinheiro:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDinheiro)}</span></div>
             <div class="row"><span class="row-label">PIX:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasPix)}</span></div>
-            <div class="row"><span class="row-label">Cartao Credito:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasCredito)}</span></div>
-            <div class="row"><span class="row-label">Cartao Debito:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDebito)}</span></div>
+            <div class="row"><span class="row-label">${is58 ? "C. Credito:" : "Cartao Credito:"}</span><span class="row-value">${formatarMoeda(fechamento.totalVendasCredito)}</span></div>
+            <div class="row"><span class="row-label">${is58 ? "C. Debito:" : "Cartao Debito:"}</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDebito)}</span></div>
             <div class="divider"></div>
-            <div class="row font-bold"><span class="row-label uppercase">Total Vendas:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasGeral)}</span></div>
+            <div class="row font-bold"><span class="row-label uppercase">${is58 ? "Total Vendas:" : "Total Geral Vendas:"}</span><span class="row-value">${formatarMoeda(fechamento.totalVendasGeral)}</span></div>
 
             <div class="double-divider"></div>
             <div class="section-header">Gaveta de Dinheiro</div>
             <div class="divider"></div>
 
-            <div class="row"><span class="row-label">Fundo Inicial (+):</span><span class="row-value">${formatarMoeda(fechamento.valorAbertura)}</span></div>
-            <div class="row"><span class="row-label">Vendas Dinheiro (+):</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDinheiro)}</span></div>
+            <div class="row"><span class="row-label">${is58 ? "Fundo (+):" : "Fundo Inicial (+):"}</span><span class="row-value">${formatarMoeda(fechamento.valorAbertura)}</span></div>
+            <div class="row"><span class="row-label">${is58 ? "Vendas Dinh (+):" : "Vendas Dinheiro (+):"}</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDinheiro)}</span></div>
             <div class="row"><span class="row-label">Reforcos (+):</span><span class="row-value">${formatarMoeda(fechamento.totalReforcos)}</span></div>
             <div class="row"><span class="row-label">Sangrias (-):</span><span class="row-value">-${formatarMoeda(fechamento.totalSangrias)}</span></div>
 
             <div class="total-box">
-              <div class="total-box-label">Dinheiro Esperado na Gaveta</div>
+              <div class="total-box-label">${is58 ? "Dinheiro em Gaveta" : "Total Dinheiro na Gaveta"}</div>
               <div class="total-box-value">${formatarMoeda(fechamento.saldoDinheiroGaveta)}</div>
             </div>
 
@@ -1506,9 +1541,9 @@ export function PdvView() {
                 <table>
                   <thead>
                     <tr>
-                      <th style="width: 18%;">Hora</th>
-                      <th style="width: 25%;">Cod</th>
-                      <th style="width: 22%;">Pag</th>
+                      <th style="width: 20%;">Hora</th>
+                      <th style="width: 25%;">${is58 ? "Cod" : "Codigo"}</th>
+                      <th style="width: 20%;">${is58 ? "Pag" : "Meio"}</th>
                       <th class="text-right" style="width: 35%;">Valor</th>
                     </tr>
                   </thead>
@@ -1519,7 +1554,7 @@ export function PdvView() {
                       <tr>
                         <td>${v.hora}</td>
                         <td>${v.codigo}</td>
-                        <td>${v.metodo.slice(0, 7)}</td>
+                        <td>${v.metodo.slice(0, is58 ? 5 : 8)}</td>
                         <td class="text-right font-bold">${formatarMoeda(v.valor)}</td>
                       </tr>
                     `
@@ -1532,7 +1567,7 @@ export function PdvView() {
             }
 
             ${
-              fechamento.movimentacoesList && fechamento.movimentacoesList.length > 0
+              movsManuais.length > 0
                 ? `
                 <div class="double-divider"></div>
                 <div class="section-header">Sangrias e Reforcos</div>
@@ -1540,20 +1575,20 @@ export function PdvView() {
                 <table>
                   <thead>
                     <tr>
-                      <th style="width: 18%;">Hora</th>
+                      <th style="width: 20%;">Hora</th>
                       <th style="width: 22%;">Tipo</th>
-                      <th style="width: 25%;">Motivo</th>
+                      <th style="width: 23%;">Motivo</th>
                       <th class="text-right" style="width: 35%;">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${fechamento.movimentacoesList
+                    ${movsManuais
                       .map(
                         (m) => `
                       <tr>
                         <td>${m.hora}</td>
                         <td class="font-bold">${m.tipo.toUpperCase().slice(0, 4)}</td>
-                        <td>${m.motivo.slice(0, 10)}</td>
+                        <td>${m.motivo.slice(0, is58 ? 8 : 12)}</td>
                         <td class="text-right font-bold">${m.tipo === "sangria" ? "-" : "+"}${formatarMoeda(m.valor)}</td>
                       </tr>
                     `
@@ -4053,43 +4088,53 @@ export function PdvView() {
                   </div>
                 )}
 
-                {/* Relação de Sangrias e Reforços */}
-                {fechamentoSelecionado.movimentacoesList && fechamentoSelecionado.movimentacoesList.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Registro de Sangrias e Reforços
-                    </h4>
-                    <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 divide-y divide-slate-850">
-                      {fechamentoSelecionado.movimentacoesList.map((m) => (
-                        <div key={m.id} className="p-2 flex items-center justify-between text-[11px]">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-slate-400 text-[10px]">{m.hora}</span>
-                            <Badge
-                              className={`text-[9px] uppercase font-bold ${
-                                m.tipo === "sangria"
-                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
-                                  : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                {/* Relação de Sangrias e Reforços (Filtrada para ocultar eventos de sistema) */}
+                {(() => {
+                  const movsManuaisUI = (fechamentoSelecionado.movimentacoesList || []).filter((m) => {
+                    const t = String(m.tipo || "").toLowerCase();
+                    const mot = String(m.motivo || "").toLowerCase();
+                    return t === "sangria" || t === "reforco" || mot.includes("sangria") || mot.includes("reforço") || mot.includes("reforco");
+                  });
+
+                  if (movsManuaisUI.length === 0) return null;
+
+                  return (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Registro de Sangrias e Reforços ({movsManuaisUI.length})
+                      </h4>
+                      <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 divide-y divide-slate-850">
+                        {movsManuaisUI.map((m) => (
+                          <div key={m.id} className="p-2 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-slate-400 text-[10px]">{m.hora}</span>
+                              <Badge
+                                className={`text-[9px] uppercase font-bold ${
+                                  m.tipo === "sangria"
+                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                }`}
+                              >
+                                {m.tipo}
+                              </Badge>
+                              <span className="text-slate-300 truncate max-w-[180px] sm:max-w-xs">{m.motivo}</span>
+                            </div>
+                            <span
+                              className={`font-mono font-bold ${
+                                m.tipo === "sangria" ? "text-rose-400" : "text-emerald-400"
                               }`}
                             >
-                              {m.tipo}
-                            </Badge>
-                            <span className="text-slate-300 truncate max-w-[180px] sm:max-w-xs">{m.motivo}</span>
+                              {m.tipo === "sangria" ? "-" : "+"}{formatarMoeda(m.valor)}
+                            </span>
                           </div>
-                          <span
-                            className={`font-mono font-bold ${
-                              m.tipo === "sangria" ? "text-rose-400" : "text-emerald-400"
-                            }`}
-                          >
-                            {m.tipo === "sangria" ? "-" : "+"}{formatarMoeda(m.valor)}
-                          </span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
-              <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+              <DialogFooter className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
                 <Button
                   type="button"
                   variant="ghost"
@@ -4100,15 +4145,42 @@ export function PdvView() {
                   Voltar
                 </Button>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => handleImprimirRelatorioFechamento(fechamentoSelecionado)}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-5 h-9 shadow-md flex items-center gap-1.5"
-                >
-                  <Printer className="w-4 h-4" />
-                  Imprimir Relatório
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setTamanhoImpressora("80mm")}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                        tamanhoImpressora === "80mm"
+                          ? "bg-amber-500 text-slate-950 shadow-xs"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      80mm (Padrão)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTamanhoImpressora("58mm")}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                        tamanhoImpressora === "58mm"
+                          ? "bg-amber-500 text-slate-950 shadow-xs"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      58mm (Portátil)
+                    </button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleImprimirRelatorioFechamento(fechamentoSelecionado, tamanhoImpressora)}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 h-9 shadow-md flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir ({tamanhoImpressora})
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}
