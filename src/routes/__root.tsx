@@ -76,6 +76,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+const gaMeasurementId =
+  (import.meta as any).env?.VITE_GA_MEASUREMENT_ID ||
+  (import.meta as any).env?.VITE_GA_ID;
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -124,6 +128,24 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="pt-BR">
       <head>
         <meta name="google-site-verification" content="9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" />
+        {gaMeasurementId && (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${gaMeasurementId}', { page_path: window.location.pathname });
+                `,
+              }}
+            />
+          </>
+        )}
         <HeadContent />
       </head>
       <body className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 selection:bg-purple-500 selection:text-white">
@@ -136,6 +158,19 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!gaMeasurementId) return;
+    const unsubscribe = router.subscribe("onResolved", (event) => {
+      if (typeof window !== "undefined" && (window as any).gtag) {
+        (window as any).gtag("config", gaMeasurementId, {
+          page_path: event.toLocation.pathname,
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>
