@@ -109,6 +109,7 @@ import {
 
 interface ConfiguracoesTabProps {
   onIrParaPlano?: () => void;
+  initialSection?: SectionKey | string | null;
 }
 
 function DigitalSignatureCanvas({
@@ -293,8 +294,16 @@ export type SectionKey =
   | "seguranca"
   | "contato";
 
-export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
-  const [activeSection, setActiveSection] = useState<SectionKey>(null);
+export function ConfiguracoesTab({ onIrParaPlano, initialSection }: ConfiguracoesTabProps) {
+  const [activeSection, setActiveSection] = useState<SectionKey>(
+    (initialSection as SectionKey) || null
+  );
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection as SectionKey);
+    }
+  }, [initialSection]);
 
   const {
     user,
@@ -921,12 +930,23 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     return undefined;
   }, [activeCode, checarMpStatus, queryClient]);
 
-  // Rolagem automática para âncoras (ex: #identidade-visual)
+  // Rolagem e abertura automática para âncoras/parâmetros (ex: #identidade-visual ou secao=aparencia)
   useEffect(() => {
     let timer: any = null;
     if (typeof window !== "undefined") {
       const hash = window.location.hash;
-      if (hash === "#identidade-visual" || hash.includes("identidade-visual")) {
+      const search = window.location.search;
+      const params = new URLSearchParams(search);
+      const secaoParam = params.get("secao") || params.get("section");
+
+      if (
+        secaoParam === "aparencia" ||
+        secaoParam === "identidade-visual" ||
+        hash === "#identidade-visual" ||
+        hash.includes("identidade-visual") ||
+        hash === "#aparencia"
+      ) {
+        setActiveSection("aparencia");
         timer = setTimeout(() => {
           const el = document.getElementById("identidade-visual");
           if (el) {
@@ -2759,7 +2779,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
 
           {/* 3. SEÇÃO: APARÊNCIA DO CARDÁPIO */}
           {activeSection === "aparencia" && (
-            <Card className="border-border shadow-sm">
+            <Card className="border-border shadow-sm" id="identidade-visual">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>

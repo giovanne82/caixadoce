@@ -241,6 +241,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       }
     }
   }, []);
+
+  const [configSection, setConfigSection] = useState<string | null>(null);
   const [transacoes, setTransacoes] = useState<TransacaoFinanceira[]>([]);
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [datasBloqueadas, setDatasBloqueadas] = useState<DataBloqueada[]>([]);
@@ -2258,7 +2260,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                 onEditarProduto={editarProduto}
                 onExcluirProduto={excluirProduto}
                 onSalvarKit={salvarKit}
-                onIrParaConfiguracoes={() => {
+                onIrParaConfiguracoes={(section) => {
+                  setConfigSection(section || "aparencia");
                   setActiveTab("config");
                   setTimeout(() => {
                     const el = document.getElementById("identidade-visual");
@@ -2295,7 +2298,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           {/* 7. Configurações & Perfil (com sub-aba Equipe & Acessos) */}
           <TabsContent value="config">
-            <ConfiguracoesTab onIrParaPlano={() => setActiveTab("plano")} />
+            <ConfiguracoesTab
+              onIrParaPlano={() => setActiveTab("plano")}
+              initialSection={configSection as any}
+            />
           </TabsContent>
 
           {/* 8. Meu Plano (Stripe) — Último Item */}
