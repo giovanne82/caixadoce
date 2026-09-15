@@ -1142,7 +1142,7 @@ export function PdvView() {
   };
 
   const handleImprimirRelatorioFechamento = (fechamento: FechamentoCaixaRegistro) => {
-    const win = window.open("", "_blank", "width=800,height=900");
+    const win = window.open("", "_blank", "width=450,height=800");
     if (!win) {
       toast.error("Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-ups está ativo.");
       return;
@@ -1156,162 +1156,255 @@ export function PdvView() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Relatório de Fechamento de Caixa - ${dataFormatada}</title>
+          <title>Relatório Fechamento Caixa - ${dataFormatada}</title>
+          <meta charset="utf-8">
           <style>
-            @page { margin: 10mm; size: auto; }
-            body { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #1e293b; padding: 15px; margin: 0; }
-            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 15px; }
-            .header h1 { font-size: 18px; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; }
-            .header h2 { font-size: 14px; margin: 0; color: #475569; font-weight: 600; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
-            .info-item { font-size: 11px; }
-            .info-item strong { color: #0f172a; }
-            .section-title { font-size: 13px; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin: 15px 0 8px 0; color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 11px; }
-            th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
-            th { background: #f1f5f9; font-weight: 700; color: #334155; }
-            .text-right { text-align: right; }
-            .total-box { background: #0f172a; color: #ffffff; padding: 12px; border-radius: 6px; text-align: center; margin-top: 15px; }
-            .total-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
-            .total-box .value { font-size: 22px; font-weight: 900; margin-top: 4px; font-family: monospace; }
-            .footer { margin-top: 25px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 10px; }
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
             @media print {
-              body { padding: 0; }
-              .no-print { display: none; }
+              html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: #fff;
+                color: #000;
+              }
+              .no-print { display: none !important; }
+              .receipt-container {
+                max-width: 78mm !important;
+                padding: 2mm 3mm !important;
+                border: none !important;
+                box-shadow: none !important;
+              }
+            }
+            body {
+              font-family: 'Courier New', Courier, monospace, monospace;
+              font-size: 11px;
+              line-height: 1.3;
+              color: #000;
+              background-color: #f1f5f9;
+              margin: 0;
+              padding: 10px;
+              display: flex;
+              justify-content: center;
+            }
+            .receipt-container {
+              width: 100%;
+              max-width: 78mm;
+              background: #fff;
+              padding: 10px 8px;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+              box-sizing: border-box;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .uppercase { text-transform: uppercase; }
+            .divider {
+              border-top: 1px dashed #000;
+              margin: 6px 0;
+            }
+            .double-divider {
+              border-top: 2px solid #000;
+              margin: 6px 0;
+            }
+            .header-title {
+              font-size: 15px;
+              font-weight: 900;
+              letter-spacing: 0.5px;
+            }
+            .header-subtitle {
+              font-size: 12px;
+              font-weight: bold;
+              margin-top: 2px;
+            }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+              font-size: 11px;
+              margin: 2px 0;
+            }
+            .row-label {
+              flex: 1;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              padding-right: 4px;
+            }
+            .row-value {
+              font-weight: bold;
+              white-space: nowrap;
+            }
+            .section-header {
+              font-size: 11px;
+              font-weight: bold;
+              text-transform: uppercase;
+              text-align: center;
+              margin: 6px 0 3px 0;
+              letter-spacing: 0.5px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 10px;
+              margin: 4px 0;
+            }
+            th {
+              border-bottom: 1px solid #000;
+              padding: 3px 2px;
+              text-align: left;
+              font-weight: bold;
+            }
+            td {
+              padding: 2px 2px;
+              word-break: break-word;
+            }
+            .total-box {
+              border: 1.5px solid #000;
+              padding: 6px;
+              text-align: center;
+              margin: 8px 0;
+              background: #fff;
+            }
+            .total-box-label {
+              font-size: 10px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .total-box-value {
+              font-size: 18px;
+              font-weight: 900;
+              margin-top: 2px;
+            }
+            .footer-notes {
+              font-size: 9px;
+              text-align: center;
+              margin-top: 8px;
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${activeName || "CaixaDoce"}</h1>
-            <h2>Relatório de Fechamento de Caixa</h2>
-          </div>
+          <div class="receipt-container">
+            <div class="text-center">
+              <div class="header-title uppercase">${activeName || "CaixaDoce"}</div>
+              <div class="header-subtitle uppercase">Fechamento de Caixa</div>
+              <div class="divider"></div>
+            </div>
 
-          <div class="info-grid">
-            <div class="info-item"><strong>Data do Turno:</strong> ${dataFormatada}</div>
-            <div class="info-item"><strong>Status:</strong> ${fechamento.status === "aberto" ? "EM ABERTO" : "FECHADO"}</div>
-            <div class="info-item"><strong>Hora Abertura:</strong> ${fechamento.horaAbertura || "--:--"}</div>
-            <div class="info-item"><strong>Hora Fechamento:</strong> ${fechamento.horaFechamento || "--:--"}</div>
-            <div class="info-item"><strong>Operador:</strong> ${fechamento.operador || "Operador"}</div>
-            <div class="info-item"><strong>Código Estabelecimento:</strong> ${activeCode}</div>
-          </div>
+            <div class="row"><span class="row-label">Data Turno:</span><span class="row-value">${dataFormatada}</span></div>
+            <div class="row"><span class="row-label">Status:</span><span class="row-value uppercase">${fechamento.status === "aberto" ? "EM ABERTO" : "FECHADO"}</span></div>
+            <div class="row"><span class="row-label">Abertura:</span><span class="row-value">${fechamento.horaAbertura || "--:--"}</span></div>
+            <div class="row"><span class="row-label">Fechamento:</span><span class="row-value">${fechamento.horaFechamento || "--:--"}</span></div>
+            <div class="row"><span class="row-label">Operador:</span><span class="row-value">${fechamento.operador || "Operador"}</span></div>
+            <div class="row"><span class="row-label">Loja Cod:</span><span class="row-value">${activeCode}</span></div>
 
-          <div class="section-title">Resumo por Modalidade de Pagamento</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Modalidade</th>
-                <th class="text-right">Valor Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td>Dinheiro</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDinheiro)}</td></tr>
-              <tr><td>PIX</td><td class="text-right">${formatarMoeda(fechamento.totalVendasPix)}</td></tr>
-              <tr><td>Cartão de Crédito</td><td class="text-right">${formatarMoeda(fechamento.totalVendasCredito)}</td></tr>
-              <tr><td>Cartão de Débito</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDebito)}</td></tr>
-              <tr style="font-weight: 700; background: #f8fafc;">
-                <td>TOTAL GERAL DE VENDAS</td>
-                <td class="text-right">${formatarMoeda(fechamento.totalVendasGeral)}</td>
-              </tr>
-            </tbody>
-          </table>
+            <div class="double-divider"></div>
+            <div class="section-header">Vendas por Modalidade</div>
+            <div class="divider"></div>
 
-          <div class="section-title">Movimentações da Gaveta de Dinheiro</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th class="text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td>Fundo de Troco Inicial (+)</td><td class="text-right">${formatarMoeda(fechamento.valorAbertura)}</td></tr>
-              <tr><td>Vendas em Dinheiro (+)</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDinheiro)}</td></tr>
-              <tr><td>Reforços de Caixa (+)</td><td class="text-right">${formatarMoeda(fechamento.totalReforcos)}</td></tr>
-              <tr><td>Sangrias de Caixa (-)</td><td class="text-right">-${formatarMoeda(fechamento.totalSangrias)}</td></tr>
-            </tbody>
-          </table>
+            <div class="row"><span class="row-label">Dinheiro:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDinheiro)}</span></div>
+            <div class="row"><span class="row-label">PIX:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasPix)}</span></div>
+            <div class="row"><span class="row-label">Cartao Credito:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasCredito)}</span></div>
+            <div class="row"><span class="row-label">Cartao Debito:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDebito)}</span></div>
+            <div class="divider"></div>
+            <div class="row font-bold"><span class="row-label uppercase">Total Vendas:</span><span class="row-value">${formatarMoeda(fechamento.totalVendasGeral)}</span></div>
 
-          <div class="total-box">
-            <div class="label">Total Esperado em Dinheiro na Gaveta</div>
-            <div class="value">${formatarMoeda(fechamento.saldoDinheiroGaveta)}</div>
-          </div>
+            <div class="double-divider"></div>
+            <div class="section-header">Gaveta de Dinheiro</div>
+            <div class="divider"></div>
 
-          ${
-            fechamento.vendasList && fechamento.vendasList.length > 0
-              ? `
-              <div class="section-title">Vendas Realizadas no Período (${fechamento.vendasList.length})</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Horário</th>
-                    <th>Pedido</th>
-                    <th>Cliente</th>
-                    <th>Pagamento</th>
-                    <th class="text-right">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${fechamento.vendasList
-                    .map(
-                      (v) => `
+            <div class="row"><span class="row-label">Fundo Inicial (+):</span><span class="row-value">${formatarMoeda(fechamento.valorAbertura)}</span></div>
+            <div class="row"><span class="row-label">Vendas Dinheiro (+):</span><span class="row-value">${formatarMoeda(fechamento.totalVendasDinheiro)}</span></div>
+            <div class="row"><span class="row-label">Reforcos (+):</span><span class="row-value">${formatarMoeda(fechamento.totalReforcos)}</span></div>
+            <div class="row"><span class="row-label">Sangrias (-):</span><span class="row-value">-${formatarMoeda(fechamento.totalSangrias)}</span></div>
+
+            <div class="total-box">
+              <div class="total-box-label">Dinheiro Esperado na Gaveta</div>
+              <div class="total-box-value">${formatarMoeda(fechamento.saldoDinheiroGaveta)}</div>
+            </div>
+
+            ${
+              fechamento.vendasList && fechamento.vendasList.length > 0
+                ? `
+                <div class="double-divider"></div>
+                <div class="section-header">Vendas (${fechamento.vendasList.length})</div>
+                <div class="divider"></div>
+                <table>
+                  <thead>
                     <tr>
-                      <td>${v.hora}</td>
-                      <td>${v.codigo}</td>
-                      <td>${v.cliente}</td>
-                      <td>${v.metodo}</td>
-                      <td class="text-right">${formatarMoeda(v.valor)}</td>
+                      <th style="width: 18%;">Hora</th>
+                      <th style="width: 25%;">Cod</th>
+                      <th style="width: 22%;">Pag</th>
+                      <th class="text-right" style="width: 35%;">Valor</th>
                     </tr>
-                  `
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            `
-              : ""
-          }
+                  </thead>
+                  <tbody>
+                    ${fechamento.vendasList
+                      .map(
+                        (v) => `
+                      <tr>
+                        <td>${v.hora}</td>
+                        <td>${v.codigo}</td>
+                        <td>${v.metodo.slice(0, 7)}</td>
+                        <td class="text-right font-bold">${formatarMoeda(v.valor)}</td>
+                      </tr>
+                    `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+                : ""
+            }
 
-          ${
-            fechamento.movimentacoesList && fechamento.movimentacoesList.length > 0
-              ? `
-              <div class="section-title">Sangrias e Reforços do Período</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Horário</th>
-                    <th>Tipo</th>
-                    <th>Motivo / Descrição</th>
-                    <th class="text-right">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${fechamento.movimentacoesList
-                    .map(
-                      (m) => `
+            ${
+              fechamento.movimentacoesList && fechamento.movimentacoesList.length > 0
+                ? `
+                <div class="double-divider"></div>
+                <div class="section-header">Sangrias e Reforcos</div>
+                <div class="divider"></div>
+                <table>
+                  <thead>
                     <tr>
-                      <td>${m.hora}</td>
-                      <td style="font-weight: 700; color: ${m.tipo === "sangria" ? "#dc2626" : "#16a34a"};">${m.tipo.toUpperCase()}</td>
-                      <td>${m.motivo}</td>
-                      <td class="text-right">${formatarMoeda(m.valor)}</td>
+                      <th style="width: 18%;">Hora</th>
+                      <th style="width: 22%;">Tipo</th>
+                      <th style="width: 25%;">Motivo</th>
+                      <th class="text-right" style="width: 35%;">Valor</th>
                     </tr>
-                  `
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            `
-              : ""
-          }
+                  </thead>
+                  <tbody>
+                    ${fechamento.movimentacoesList
+                      .map(
+                        (m) => `
+                      <tr>
+                        <td>${m.hora}</td>
+                        <td class="font-bold">${m.tipo.toUpperCase().slice(0, 4)}</td>
+                        <td>${m.motivo.slice(0, 10)}</td>
+                        <td class="text-right font-bold">${m.tipo === "sangria" ? "-" : "+"}${formatarMoeda(m.valor)}</td>
+                      </tr>
+                    `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+                : ""
+            }
 
-          <div class="footer">
-            Gerado via CaixaDoce PDV em ${new Date().toLocaleString("pt-BR")}
+            <div class="double-divider"></div>
+            <div class="footer-notes">
+              CaixaDoce PDV - Impresso em ${new Date().toLocaleString("pt-BR")}
+            </div>
           </div>
 
           <script>
             window.onload = function() {
               setTimeout(function() {
                 window.print();
-              }, 500);
+              }, 400);
             };
           </script>
         </body>
