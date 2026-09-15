@@ -133,7 +133,7 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
           Para continuar gerenciando suas encomendas, cardápio, insumos, leitura por IA e financeiro, assine um dos nossos planos completos.
         </p>
         <p className="text-xs font-bold text-purple-700 dark:text-purple-300">
-          Escolha entre o Plano Mensal Completo (R$ 24,90/mês) ou Anual Completo para liberar o acesso ilimitado.
+          Escolha entre o Plano Mensal Completo (R$ 14,90/mês) ou Anual Completo para liberar o acesso ilimitado.
         </p>
       </div>
 
