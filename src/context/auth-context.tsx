@@ -285,10 +285,154 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       console.warn("[Auth] Erro ao restaurar sessão local:", e);
     }
 
+    // Função centralizada para carregar dados completos do estabelecimento no Supabase
+    const carregarOuCriarEstabelecimento = async (authUser: any, baseProf: UserProfile) => {
+      let data: any = null;
+
+      // 1. Busca por user_id
+      const { data: byUser } = await supabase
+        .from("estabelecimentos")
+        .select("*")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      if (byUser) {
+        data = byUser;
+      } else if (baseProf.establishmentCode) {
+        // 2. Busca por código da loja (case-insensitive)
+        const { data: byCode } = await supabase
+          .from("estabelecimentos")
+          .select("*")
+          .ilike("codigo", baseProf.establishmentCode)
+          .maybeSingle();
+
+        if (byCode) {
+          data = byCode;
+          if (!byCode.user_id && authUser.id) {
+            await supabase
+              .from("estabelecimentos")
+              .update({ user_id: authUser.id })
+              .eq("id", byCode.id);
+          }
+        }
+      }
+
+      if (data) {
+        // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCREVE CACHE LOCAL)
+        const statusBanco = data.status || data.status_assinatura || data.plano_status;
+        const planoIdBanco = data.plano || data.plano_id || "mensal";
+        const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
+        const expMs = expBanco ? new Date(expBanco).getTime() : 0;
+        const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
+
+        const targetCode = data.codigo || baseProf.establishmentCode;
+        if (targetCode) {
+          if (temDataExpiracao) {
+            if (expMs > Date.now()) {
+              salvarDadosPlanoEstabelecimento(targetCode, {
+                status: "ativo",
+                planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                dataExpiracao: expBanco,
+                diasRestantesTrial: 0,
+              });
+            } else {
+              salvarDadosPlanoEstabelecimento(targetCode, {
+                status: "expirado",
+                planoId: "basico",
+                dataExpiracao: expBanco,
+                diasRestantesTrial: 0,
+              });
+            }
+          } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
+            salvarDadosPlanoEstabelecimento(targetCode, {
+              status: "ativo",
+              planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+              diasRestantesTrial: 0,
+            });
+          } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
+            salvarDadosPlanoEstabelecimento(targetCode, {
+              status: "expirado",
+              planoId: "basico",
+              diasRestantesTrial: 0,
+            });
+          }
+        }
+
+        const merged: UserProfile = {
+          ...baseProf,
+          establishmentCode: data.codigo || baseProf.establishmentCode,
+          establishmentName: data.nome || baseProf.establishmentName,
+          slug: data.slug || baseProf.slug,
+          establishmentAddress: data.endereco || baseProf.establishmentAddress,
+          logradouro: data.logradouro || baseProf.logradouro,
+          numero: data.numero || baseProf.numero,
+          complemento: data.complemento || baseProf.complemento,
+          bairro: data.bairro || baseProf.bairro,
+          cidade: data.cidade || baseProf.cidade,
+          estado: data.estado || baseProf.estado,
+          cep: data.cep || baseProf.cep,
+          tipoDocumento: data.tipo_documento || baseProf.tipoDocumento,
+          numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
+          chavePix: data.chave_pix || baseProf.chavePix,
+          tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
+          contasPix: Array.isArray(data.pix_accounts) && data.pix_accounts.length > 0
+            ? data.pix_accounts
+            : (Array.isArray(data.pix_keys) && data.pix_keys.length > 0 ? data.pix_keys : baseProf.contasPix),
+          responsavel: data.responsavel || baseProf.responsavel,
+          telefone: data.telefone || baseProf.telefone,
+          whatsapp: data.whatsapp || baseProf.whatsapp,
+          logoUrl: data.logo_url || data.store_logo_url || baseProf.logoUrl,
+          store_logo_url: data.store_logo_url || data.logo_url || baseProf.store_logo_url,
+          tituloCardapio: data.titulo_cardapio || data.menu_title || baseProf.tituloCardapio,
+          menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
+          sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
+          menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
+          modo_venda: data.modo_venda || baseProf.modo_venda || "ambos",
+          signature_data_url: data.signature_data_url || (data as any)?.assinatura_data_url || baseProf.signature_data_url,
+          assinatura_data_url: (data as any)?.assinatura_data_url || data.signature_data_url || baseProf.assinatura_data_url,
+          horarios_funcionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
+          horariosFuncionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
+          ownerUserId: data.user_id || authUser.id,
+          userCreatedAt: data.created_at || authUser.created_at || baseProf.userCreatedAt,
+        };
+        setProfile(merged);
+        localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+      } else if (baseProf.establishmentCode) {
+        // Somente executa UPSERT se a loja realmente não existir no banco
+        const { data: insertedData } = await supabase
+          .from("estabelecimentos")
+          .upsert(
+            [
+              {
+                codigo: baseProf.establishmentCode,
+                nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
+                user_id: authUser.id,
+                created_at: authUser.created_at || new Date().toISOString(),
+              },
+            ],
+            { onConflict: "codigo" }
+          )
+          .select("*")
+          .maybeSingle();
+
+        if (insertedData) {
+          const d = insertedData;
+          const newProf: UserProfile = {
+            ...baseProf,
+            establishmentCode: d.codigo,
+            establishmentName: d.nome,
+            ownerUserId: authUser.id,
+          };
+          setProfile(newProf);
+          localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
+        }
+      }
+    };
+
     // Buscador assíncrono de sessão inicial com filtro estrito de tenant por user_id
     supabase.auth
       .getSession()
-      .then(({ data: { session }, error }) => {
+      .then(async ({ data: { session }, error }) => {
         if (error) {
           console.warn("[Auth] Erro ao recuperar getSession():", error.message);
         }
@@ -304,155 +448,20 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           setUser(u);
           localStorage.setItem("caixadoce_user", JSON.stringify(u));
 
+          let existingProfile: UserProfile | null = null;
+          try {
+            const raw = localStorage.getItem("caixadoce_profile");
+            if (raw) existingProfile = JSON.parse(raw);
+          } catch {}
+
           const baseProf = buildProfileForUser(session.user, u.email);
-          setProfile(baseProf);
-          localStorage.setItem("caixadoce_profile", JSON.stringify(baseProf));
+          const initialProf = existingProfile && existingProfile.establishmentCode === baseProf.establishmentCode
+            ? { ...baseProf, ...existingProfile }
+            : baseProf;
+          setProfile(initialProf);
 
-          // CHECAGEM PRÉVIA DE SEGURANÇA: Busca primeiro por user_id ou por codigo da loja para evitar 409 Conflict
-          const carregarOuCriarEstabelecimento = async () => {
-            let data: any = null;
-
-            // 1. Busca por user_id
-            const { data: byUser } = await supabase
-              .from("estabelecimentos")
-              .select("*")
-              .eq("user_id", u.id)
-              .maybeSingle();
-
-            if (byUser) {
-              data = byUser;
-            } else if (baseProf.establishmentCode) {
-              // 2. Busca por código da loja (case-insensitive)
-              const { data: byCode } = await supabase
-                .from("estabelecimentos")
-                .select("*")
-                .ilike("codigo", baseProf.establishmentCode)
-                .maybeSingle();
-
-              if (byCode) {
-                data = byCode;
-                if (!byCode.user_id && u.id) {
-                  await supabase
-                    .from("estabelecimentos")
-                    .update({ user_id: u.id })
-                    .eq("id", byCode.id);
-                }
-              }
-            }
-
-            if (data) {
-              // SINCRONIZAÇÃO ESTRITA DE PLANO E ASSINATURA DO BANCO (SOBRESCREVE CACHE LOCAL)
-              const statusBanco = data.status || data.status_assinatura || data.plano_status;
-              const planoIdBanco = data.plano || data.plano_id || "mensal";
-              const expBanco = data.plano_exp || data.plano_expira_em || data.data_expiracao;
-              const expMs = expBanco ? new Date(expBanco).getTime() : 0;
-              const temDataExpiracao = Boolean(expBanco) && !isNaN(expMs);
-
-              const targetCode = data.codigo || baseProf.establishmentCode;
-              if (targetCode) {
-                if (temDataExpiracao) {
-                  if (expMs > Date.now()) {
-                    salvarDadosPlanoEstabelecimento(targetCode, {
-                      status: "ativo",
-                      planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-                      dataExpiracao: expBanco,
-                      diasRestantesTrial: 0,
-                    });
-                  } else {
-                    salvarDadosPlanoEstabelecimento(targetCode, {
-                      status: "expirado",
-                      planoId: "basico",
-                      dataExpiracao: expBanco,
-                      diasRestantesTrial: 0,
-                    });
-                  }
-                } else if (statusBanco === "ativo" && (data.mercadopago_pagamento_id || data.mercadopago_assinatura_id || data.stripe_subscription_id)) {
-                  salvarDadosPlanoEstabelecimento(targetCode, {
-                    status: "ativo",
-                    planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-                    diasRestantesTrial: 0,
-                  });
-                } else if (statusBanco === "expirado" || statusBanco === "cancelado" || statusBanco === "basic" || statusBanco === "basico") {
-                  salvarDadosPlanoEstabelecimento(targetCode, {
-                    status: "expirado",
-                    planoId: "basico",
-                    diasRestantesTrial: 0,
-                  });
-                }
-              }
-
-              const merged: UserProfile = {
-                ...baseProf,
-                establishmentCode: data.codigo || baseProf.establishmentCode,
-                establishmentName: data.nome || baseProf.establishmentName,
-                slug: data.slug || baseProf.slug,
-                establishmentAddress: data.endereco || baseProf.establishmentAddress,
-                logradouro: data.logradouro || baseProf.logradouro,
-                numero: data.numero || baseProf.numero,
-                complemento: data.complemento || baseProf.complemento,
-                bairro: data.bairro || baseProf.bairro,
-                cidade: data.cidade || baseProf.cidade,
-                estado: data.estado || baseProf.estado,
-                cep: data.cep || baseProf.cep,
-                tipoDocumento: data.tipo_documento || baseProf.tipoDocumento,
-                numeroDocumento: data.numero_documento || baseProf.numeroDocumento,
-                chavePix: data.chave_pix || baseProf.chavePix,
-                tipoChavePix: data.tipo_chave_pix || baseProf.tipoChavePix,
-                contasPix: Array.isArray(data.pix_accounts) && data.pix_accounts.length > 0
-                  ? data.pix_accounts
-                  : (Array.isArray(data.pix_keys) && data.pix_keys.length > 0 ? data.pix_keys : baseProf.contasPix),
-                responsavel: data.responsavel || baseProf.responsavel,
-                telefone: data.telefone || baseProf.telefone,
-                whatsapp: data.whatsapp || baseProf.whatsapp,
-                logoUrl: data.logo_url || data.store_logo_url || baseProf.logoUrl,
-                store_logo_url: data.store_logo_url || data.logo_url || baseProf.store_logo_url,
-                tituloCardapio: data.titulo_cardapio || data.menu_title || baseProf.tituloCardapio,
-                menu_title: data.menu_title || data.titulo_cardapio || baseProf.menu_title,
-                sloganCardapio: data.slogan_cardapio || data.menu_slogan || baseProf.sloganCardapio,
-                menu_slogan: data.menu_slogan || data.slogan_cardapio || baseProf.menu_slogan,
-                modo_venda: data.modo_venda || baseProf.modo_venda || "ambos",
-                signature_data_url: data.signature_data_url || (data as any)?.assinatura_data_url || baseProf.signature_data_url,
-                assinatura_data_url: (data as any)?.assinatura_data_url || data.signature_data_url || baseProf.assinatura_data_url,
-                horarios_funcionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
-                horariosFuncionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
-                ownerUserId: data.user_id || u.id,
-                userCreatedAt: data.created_at || session.user.created_at || baseProf.userCreatedAt,
-              };
-              setProfile(merged);
-              localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
-            } else if (baseProf.establishmentCode) {
-              // Somente executa UPSERT se a loja realmente não existir no banco
-              const { data: insertedData } = await supabase
-                .from("estabelecimentos")
-                .upsert(
-                  [
-                    {
-                      codigo: baseProf.establishmentCode,
-                      nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
-                      user_id: u.id,
-                      created_at: session.user.created_at || new Date().toISOString(),
-                    },
-                  ],
-                  { onConflict: "codigo" }
-                )
-                .select("*")
-                .maybeSingle();
-
-              if (insertedData) {
-                const d = insertedData;
-                const newProf: UserProfile = {
-                  ...baseProf,
-                  establishmentCode: d.codigo,
-                  establishmentName: d.nome,
-                  ownerUserId: u.id,
-                };
-                setProfile(newProf);
-                localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
-              }
-            }
-          };
-
-          carregarOuCriarEstabelecimento();
+          // Garante que a checagem no Supabase seja AWAITADA antes do authLoading virar false
+          await carregarOuCriarEstabelecimento(session.user, baseProf);
         }
       })
       .finally(() => {
@@ -476,13 +485,19 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         setUser(u);
         localStorage.setItem("caixadoce_user", JSON.stringify(u));
 
-        // Monta ou atualiza o perfil garantindo o vinculo correto com a loja Master
-        setProfile((prev) => {
-          if (prev && prev.establishmentCode && prev.role !== "operador") return prev;
-          const prof = buildProfileForUser(session.user, u.email);
-          localStorage.setItem("caixadoce_profile", JSON.stringify(prof));
-          return prof;
-        });
+        let existingProfile: UserProfile | null = null;
+        try {
+          const raw = localStorage.getItem("caixadoce_profile");
+          if (raw) existingProfile = JSON.parse(raw);
+        } catch {}
+
+        const baseProf = buildProfileForUser(session.user, u.email);
+        const initialProf = existingProfile && existingProfile.establishmentCode === baseProf.establishmentCode
+          ? { ...baseProf, ...existingProfile }
+          : baseProf;
+
+        setProfile(initialProf);
+        await carregarOuCriarEstabelecimento(session.user, baseProf);
 
         // Limpeza de hash fragmentos de OAuth/Auth Callbacks SOMENTE APÓS O SUPABASE PROCESSAR E VALIDAR A SESSÃO
         if (typeof window !== "undefined" && window.location.hash) {
