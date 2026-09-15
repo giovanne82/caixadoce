@@ -78,7 +78,8 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 const gaMeasurementId =
   (import.meta as any).env?.VITE_GA_MEASUREMENT_ID ||
-  (import.meta as any).env?.VITE_GA_ID;
+  (import.meta as any).env?.VITE_GA_ID ||
+  "G-8CJLCHZX88";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
