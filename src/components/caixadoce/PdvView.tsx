@@ -713,7 +713,7 @@ export function PdvView() {
   };
 
   // =========================================================================
-  // GESTÃO DE CAIXA: CARREGAMENTO, ABERTURA, SANGRIA, REFORÇO E FECHAMENTO
+  // GESTÃO DE CAIXA: CARREGAMENTO NUVEM (SUPABASE) E SINCRONIZAÇÃO REALTIME
   // =========================================================================
   const carregarDadosCaixaETurnos = async () => {
     if (!activeCode) return;
@@ -740,28 +740,156 @@ export function PdvView() {
       if (vendasData) {
         setVendasRecentes(vendasData);
       }
+
+      // 3. Consulta estado atual do Caixa na nuvem (última abertura ou fechamento no Supabase)
+      const { data: eventosCaixa } = await supabase
+        .from("transacoes_financeiras")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .in("categoria", ["abertura_caixa", "fechamento_caixa"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (eventosCaixa && eventosCaixa.length > 0) {
+        const ultimoEvento = eventosCaixa[0];
+        if (ultimoEvento.categoria === "abertura_caixa") {
+          const horaFmt = ultimoEvento.created_at
+            ? new Date(ultimoEvento.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+            : "08:00";
+          const caixaAbertoCloud: CaixaTurno = {
+            data: ultimoEvento.data || hoje,
+            status: "aberto",
+            horaAbertura: horaFmt,
+            valorAbertura: Number(ultimoEvento.valor) || 0,
+            operador: ultimoEvento.cliente_ou_fornecedor || profile?.responsavel || "Operador",
+          };
+          setCaixaAtual(caixaAbertoCloud);
+          try {
+            localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(caixaAbertoCloud));
+          } catch {}
+        } else {
+          // Último evento registrado é fechamento_caixa
+          const horaFmt = ultimoEvento.created_at
+            ? new Date(ultimoEvento.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+            : "--:--";
+          const caixaFechadoCloud: CaixaTurno = {
+            data: ultimoEvento.data || hoje,
+            status: "fechado",
+            horaAbertura: "--:--",
+            horaFechamento: horaFmt,
+            valorAbertura: 0,
+            operador: ultimoEvento.cliente_ou_fornecedor || profile?.responsavel || "Operador",
+          };
+          setCaixaAtual(caixaFechadoCloud);
+          try {
+            localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(caixaFechadoCloud));
+          } catch {}
+        }
+      } else {
+        // Fallback local caso ainda não existam eventos no Supabase
+        const storedCaixa = localStorage.getItem(`caixadoce_caixa_${activeCode}_${hoje}`);
+        if (storedCaixa) {
+          try {
+            setCaixaAtual(JSON.parse(storedCaixa));
+          } catch {
+            setCaixaAtual(null);
+          }
+        } else {
+          setCaixaAtual(null);
+        }
+      }
+
+      // 4. Carrega histórico de fechamentos da nuvem
+      const { data: histRows } = await supabase
+        .from("transacoes_financeiras")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("categoria", "fechamento_caixa")
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      if (histRows && histRows.length > 0) {
+        const registrosCloud: FechamentoCaixaRegistro[] = [];
+        for (const row of histRows) {
+          if (row.observacao && row.observacao.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(row.observacao);
+              registrosCloud.push(parsed);
+              continue;
+            } catch {}
+          }
+          const horaFechamento = row.created_at
+            ? new Date(row.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+            : "--:--";
+          registrosCloud.push({
+            id: row.id,
+            data: row.data || hoje,
+            horaAbertura: "--:--",
+            horaFechamento: horaFechamento,
+            operador: row.cliente_ou_fornecedor || "Operador",
+            valorAbertura: 0,
+            totalVendasGeral: Number(row.valor) || 0,
+            totalVendasDinheiro: Number(row.valor) || 0,
+            totalVendasPix: 0,
+            totalVendasCredito: 0,
+            totalVendasDebito: 0,
+            totalReforcos: 0,
+            totalSangrias: 0,
+            saldoDinheiroGaveta: Number(row.valor) || 0,
+            vendasList: [],
+            movimentacoesList: [],
+            status: "fechado",
+            created_at: row.created_at,
+          });
+        }
+        try {
+          localStorage.setItem(`caixadoce_historico_caixas_${activeCode}`, JSON.stringify(registrosCloud));
+        } catch {}
+        setHistoricoFechamentos(registrosCloud);
+      }
     } catch (e) {
-      console.warn("[PDV] Erro ao carregar dados do caixa e vendas:", e);
+      console.warn("[PDV Cloud] Erro ao carregar dados do caixa e vendas:", e);
     }
   };
 
-  // Verificação inicial de abertura de caixa ao abrir o PDV (Sem abertura automática de modal)
+  // Verificação inicial e assinatura Supabase Realtime (Sincronização entre múltiplos dispositivos)
   useEffect(() => {
     if (!activeCode) return;
 
-    const storedCaixa = localStorage.getItem(`caixadoce_caixa_${activeCode}_${hoje}`);
-    if (storedCaixa) {
-      try {
-        const parsed: CaixaTurno = JSON.parse(storedCaixa);
-        setCaixaAtual(parsed);
-      } catch {
-        setCaixaAtual(null);
-      }
-    } else {
-      setCaixaAtual(null);
-    }
-
     carregarDadosCaixaETurnos();
+
+    // Inscrição Realtime para atualizar status de caixa em tempo real entre todos os PCs da loja
+    const channel = supabase
+      .channel(`pdv_caixa_realtime_${activeCode}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "transacoes_financeiras",
+          filter: `estabelecimento_codigo=eq.${activeCode}`,
+        },
+        () => {
+          carregarDadosCaixaETurnos();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "encomendas",
+          filter: `estabelecimento_codigo=eq.${activeCode}`,
+        },
+        () => {
+          carregarDadosCaixaETurnos();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeCode, hoje]);
 
   // Abertura de Caixa
@@ -783,32 +911,30 @@ export function PdvView() {
       localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(novoCaixa));
     } catch {}
 
-    // Grava abertura na tabela transacoes_financeiras se houver valor inicial informado
-    if (valorNum > 0) {
-      try {
-        const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
-        const payloadFin = {
-          estabelecimento_codigo: activeCode,
-          user_id: finUserId,
-          descricao: `Abertura de Caixa (Fundo de Troco Inicial)`,
-          categoria: "abertura_caixa",
-          tipo: "receita",
-          valor: valorNum,
-          metodo_pagamento: "dinheiro",
-          status: "concluida",
-          cliente_ou_fornecedor: "Operador Caixa",
-          data: hoje,
-          origem: "PDV",
-        };
-        await supabase.from("transacoes_financeiras").insert([payloadFin]);
-      } catch (errFin) {
-        console.warn("[PDV Abertura Financeiro Error]", errFin);
-      }
+    // Grava SEMPRE abertura na tabela transacoes_financeiras para sincronizar o status com todos os PCs da loja em tempo real
+    try {
+      const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
+      const payloadFin = {
+        estabelecimento_codigo: activeCode,
+        user_id: finUserId,
+        descricao: `Abertura de Caixa (Fundo de Troco Inicial: ${formatarMoeda(valorNum)})`,
+        categoria: "abertura_caixa",
+        tipo: "receita",
+        valor: valorNum,
+        metodo_pagamento: "dinheiro",
+        status: "concluida",
+        cliente_ou_fornecedor: operadorNome,
+        data: hoje,
+        origem: "PDV",
+      };
+      await supabase.from("transacoes_financeiras").insert([payloadFin]);
+    } catch (errFin) {
+      console.warn("[PDV Abertura Financeiro Error]", errFin);
     }
 
     setModalAberturaCaixaOpen(false);
     toast.success(`🎉 Caixa aberto com sucesso! Fundo inicial: ${formatarMoeda(valorNum)}`);
-    carregarDadosCaixaETurnos();
+    await carregarDadosCaixaETurnos();
   };
 
   // Sangria e Reforço
@@ -963,7 +1089,7 @@ export function PdvView() {
       console.warn("[PDV] Erro ao salvar fechamento no histórico local:", e);
     }
 
-    // Registra fechamento na tabela transacoes_financeiras
+    // Registra fechamento na tabela transacoes_financeiras no Supabase contendo o relatório JSON para sincronização em nuvem
     try {
       const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
       const payloadFin = {
@@ -975,9 +1101,10 @@ export function PdvView() {
         valor: resumoFinanceiroCaixa.saldoDinheiroGaveta,
         metodo_pagamento: "dinheiro",
         status: "concluida",
-        cliente_ou_fornecedor: "Operador Caixa",
+        cliente_ou_fornecedor: caixaAtual?.operador || profile?.responsavel || "Operador Caixa",
         data: hoje,
         origem: "PDV",
+        observacao: JSON.stringify(novoRegistroFechamento),
       };
       await supabase.from("transacoes_financeiras").insert([payloadFin]);
     } catch (errFin) {
@@ -988,6 +1115,7 @@ export function PdvView() {
     setModalFechamentoCaixaOpen(false);
     setModalGestaoCaixaOpen(false);
     toast.success("🔒 Caixa fechado com sucesso! Para realizar novas vendas, abra um novo turno.");
+    await carregarDadosCaixaETurnos();
   };
 
   // Cálculo Dinâmico do Resumo Financeiro da Gaveta & Métodos
@@ -1070,15 +1198,58 @@ export function PdvView() {
     setCarregandoHistoricoFechamentos(true);
     try {
       const salvas: FechamentoCaixaRegistro[] = [];
-      const stored = localStorage.getItem(`caixadoce_historico_caixas_${activeCode}`);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            salvas.push(...parsed);
+      const { data: histRows } = await supabase
+        .from("transacoes_financeiras")
+        .select("*")
+        .eq("estabelecimento_codigo", activeCode)
+        .eq("categoria", "fechamento_caixa")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (histRows && histRows.length > 0) {
+        for (const row of histRows) {
+          if (row.observacao && row.observacao.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(row.observacao);
+              salvas.push(parsed);
+              continue;
+            } catch {}
           }
-        } catch (e) {
-          console.warn("[PDV] Erro ao carregar historico caixas de localStorage:", e);
+          const horaFechamento = row.created_at
+            ? new Date(row.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+            : "--:--";
+          salvas.push({
+            id: row.id,
+            data: row.data || hoje,
+            horaAbertura: "--:--",
+            horaFechamento: horaFechamento,
+            operador: row.cliente_ou_fornecedor || "Operador",
+            valorAbertura: 0,
+            totalVendasGeral: Number(row.valor) || 0,
+            totalVendasDinheiro: Number(row.valor) || 0,
+            totalVendasPix: 0,
+            totalVendasCredito: 0,
+            totalVendasDebito: 0,
+            totalReforcos: 0,
+            totalSangrias: 0,
+            saldoDinheiroGaveta: Number(row.valor) || 0,
+            vendasList: [],
+            movimentacoesList: [],
+            status: "fechado",
+            created_at: row.created_at,
+          });
+        }
+      } else {
+        const stored = localStorage.getItem(`caixadoce_historico_caixas_${activeCode}`);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              salvas.push(...parsed);
+            }
+          } catch (e) {
+            console.warn("[PDV] Erro ao carregar historico caixas de localStorage:", e);
+          }
         }
       }
 
