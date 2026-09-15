@@ -673,6 +673,18 @@ export function ProductsView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* CTA PRINCIPAL: Visualizar Cardápio */}
+          <a href={`/cardapio/${slugOuCodigo}`} target="_blank" rel="noopener noreferrer">
+            <Button
+              size="sm"
+              className="h-9 text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all transform border-0 px-4 rounded-xl flex items-center gap-1.5"
+            >
+              <ExternalLink className="w-4 h-4 shrink-0" />
+              <span>Visualizar Cardápio</span>
+            </Button>
+          </a>
+
+          {/* Botões Secundários de Apoio */}
           <Button
             variant="secondary"
             size="sm"
@@ -683,18 +695,18 @@ export function ProductsView({
                 navigate({ to: "/configuracoes", search: { secao: "aparencia" }, hash: "identidade-visual" } as any);
               }
             }}
-            className="h-8.5 font-bold text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 border-0 shadow-sm"
+            className="h-9 font-extrabold text-xs bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-xs rounded-xl backdrop-blur-xs transition-all"
           >
-            <Sparkles className="w-3.5 h-3.5 mr-1" /> Personalizar Visual
+            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-300" /> Personalizar Visual
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
             onClick={handleCopiarLink}
-            className="h-8.5 font-bold text-xs bg-white text-stone-900 hover:bg-white/90 shadow-sm"
+            className="h-9 font-extrabold text-xs bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-xs rounded-xl backdrop-blur-xs transition-all"
           >
-            {copiado ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+            {copiado ? <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5 mr-1.5 text-white/90" />}
             {copiado ? "Copiado!" : "Copiar Link"}
           </Button>
 
@@ -702,19 +714,10 @@ export function ProductsView({
             variant="secondary"
             size="sm"
             onClick={() => setModalQrOpen(true)}
-            className="h-8.5 font-bold text-xs bg-white text-gray-900 hover:bg-gray-50 border border-gray-200/80 shadow-sm"
+            className="h-9 font-extrabold text-xs bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-xs rounded-xl backdrop-blur-xs transition-all"
           >
-            <QrCode className="w-3.5 h-3.5 mr-1 text-purple-700" /> QR Code
+            <QrCode className="w-3.5 h-3.5 mr-1.5 text-purple-200" /> QR Code
           </Button>
-
-          <a href={`/cardapio/${slugOuCodigo}`} target="_blank" rel="noopener noreferrer">
-            <Button
-              size="sm"
-              className="h-8.5 text-xs bg-black/40 text-white hover:bg-black/60 border border-white/20"
-            >
-              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Visualizar Cardápio
-            </Button>
-          </a>
         </div>
       </div>
 
