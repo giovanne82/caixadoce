@@ -5438,9 +5438,9 @@ export function OrdersView({
 
       {/* MODAL DE DETALHES DA ENCOMENDA (SOMENTE LEITURA) */}
       <Dialog open={modalDetalhesOpen} onOpenChange={setModalDetalhesOpen}>
-        <DialogContent className="w-[95%] sm:max-w-2xl max-h-[85vh] p-4 sm:p-6 flex flex-col gap-0 rounded-2xl sm:rounded-3xl border border-border shadow-2xl bg-card overflow-hidden">
+        <DialogContent className="w-[96vw] max-w-4xl lg:max-w-5xl max-h-[90vh] p-4 sm:p-6 flex flex-col gap-0 rounded-2xl sm:rounded-3xl border border-border shadow-2xl bg-card overflow-hidden">
           <DialogHeader className="shrink-0 pb-3 border-b border-border/60 text-left">
-            <DialogTitle className="text-base font-extrabold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-8">
+            <DialogTitle className="text-base sm:text-lg font-extrabold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pr-8">
               <span className="flex items-center gap-2 text-foreground">
                 <Package className="w-5 h-5 text-primary" /> Detalhes do Pedido
               </span>
@@ -5511,281 +5511,289 @@ export function OrdersView({
           </DialogHeader>
 
           {encomendaDetalhes && (
-            <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-1 sm:pr-2">
-              {/* BLOCO 1: DADOS DO CLIENTE & DATA/ENTREGA */}
-              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Cliente</span>
-                    <span className="font-extrabold text-foreground text-sm flex items-center gap-1.5">
-                      <User className="w-4 h-4 text-primary" /> {encomendaDetalhes.clienteNome}
-                    </span>
-                    {encomendaDetalhes.clienteWhatsapp && (
-                      <span className="text-muted-foreground text-[11px] font-mono block mt-0.5">
-                        📱 {encomendaDetalhes.clienteWhatsapp}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data de Entrega / Retirada</span>
-                      <span className="font-bold text-foreground text-xs flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
-                        <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />
-                        {encomendaDetalhes.dataEntrega ? String(encomendaDetalhes.dataEntrega || "").split("-").reverse().join("/") : (encomendaDetalhes.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {encomendaDetalhes.horarioEntrega || (encomendaDetalhes.origem === "iFood" ? "Hora a confirmar" : "14:00")}
-                      </span>
-                      <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
-                        {encomendaDetalhes.tipoEntrega === "delivery"
-                          ? `🚚 Entrega: ${encomendaDetalhes.enderecoEntrega || "A combinar"}`
-                          : "🏬 Retirada no Balcão"}
-                      </span>
-                    </div>
-
-                    {encomendaDetalhes.createdAt && (
-                      <div className="pt-0.5 text-[10.5px] text-muted-foreground">
-                        <span className="font-medium">🕒 Pedido feito em:</span> {formatarDataHoraCriacao(encomendaDetalhes.createdAt)}
+            <div className="flex-1 overflow-y-auto py-4 pr-1 sm:pr-2">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* COLUNA ESQUERDA: CLIENTE, ITENS & RECEITA (7 cols em desktop) */}
+                <div className="lg:col-span-7 space-y-4">
+                  {/* BLOCO 1: DADOS DO CLIENTE & DATA/ENTREGA */}
+                  <div className="p-4 rounded-2xl bg-muted/40 border border-border/70 space-y-3 shadow-2xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Cliente</span>
+                        <span className="font-extrabold text-foreground text-sm flex items-center gap-1.5">
+                          <User className="w-4 h-4 text-primary" /> {encomendaDetalhes.clienteNome}
+                        </span>
+                        {encomendaDetalhes.clienteWhatsapp && (
+                          <span className="text-muted-foreground text-[11px] font-mono block mt-0.5">
+                            📱 {encomendaDetalhes.clienteWhatsapp}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground font-medium flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-primary shrink-0" /> Forma de Pagamento Escolhida:
-                  </span>
-                  <span className="font-bold text-foreground">
-                    {obterMetodoPagamentoFormatado(encomendaDetalhes)}
-                  </span>
-                </div>
-
-                {encomendaDetalhes.observacoes && (
-                  <div className="pt-2 border-t border-border/50 text-xs">
-                    <span className="font-bold text-foreground">📝 Observações:</span>{" "}
-                    <span className="text-muted-foreground italic">{encomendaDetalhes.observacoes}</span>
-                  </div>
-                )}
-
-                {(encomendaDetalhes.temTopoBolo || encomendaDetalhes.temVela) && (
-                  <div className="pt-2 border-t border-border/50 text-xs space-y-1">
-                    <span className="font-bold text-foreground block">✨ Personalização Especial:</span>
-                    <div className="flex flex-wrap gap-2 pt-0.5">
-                      {encomendaDetalhes.temTopoBolo && (
-                        <Badge variant="outline" className="text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30">
-                          🎂 Topo: {encomendaDetalhes.detalhesTopoBolo || "Sim"}
-                        </Badge>
-                      )}
-                      {encomendaDetalhes.temVela && (
-                        <Badge variant="outline" className="text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
-                          🕯️ Vela: {encomendaDetalhes.detalhesVela || "Sim"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* BLOCO 2: ITENS DO PEDIDO */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Cake className="w-4 h-4 text-purple-600" /> Itens Pedidos pelo Cliente
-                </h4>
-                {encomendaDetalhes.itensDetalhes && encomendaDetalhes.itensDetalhes.length > 0 ? (
-                  <div className="p-3 rounded-xl border border-border bg-card space-y-2">
-                    {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => {
-                      const opcaoNome =
-                        (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
-                          ? it.opcoes_selecionadas
-                              .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
-                              .join(", ")
-                          : null) ||
-                        it.opcaoNome ||
-                        it.opcao_selecionada?.nome;
-                      const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
-                      const qtd = it.quantidade || 1;
-                      return (
-                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs py-1.5 border-b last:border-b-0 border-border/50 gap-1">
-                          <div>
-                            <span className="font-semibold text-foreground">
-                              {qtd}x {it.nome}
-                            </span>
-                            {opcaoNome && (
-                              <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
-                                <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                  Sabores: {opcaoNome}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <span className="font-mono font-bold text-muted-foreground self-end sm:self-auto">
-                            {formatarMoeda(precoUnit * qtd)}
+                      <div className="space-y-1">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Data de Entrega / Retirada</span>
+                          <span className="font-bold text-foreground text-xs flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
+                            <CalendarDays className="w-4 h-4 text-purple-600 shrink-0" />
+                            {encomendaDetalhes.dataEntrega ? String(encomendaDetalhes.dataEntrega || "").split("-").reverse().join("/") : (encomendaDetalhes.origem === "iFood" ? "Data a confirmar" : "A confirmar")} às {encomendaDetalhes.horarioEntrega || (encomendaDetalhes.origem === "iFood" ? "Hora a confirmar" : "14:00")}
+                          </span>
+                          <span className="text-muted-foreground text-[11px] block mt-0.5 font-medium">
+                            {encomendaDetalhes.tipoEntrega === "delivery"
+                              ? `🚚 Entrega: ${encomendaDetalhes.enderecoEntrega || "A combinar"}`
+                              : "🏬 Retirada no Balcão"}
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground font-medium">
-                    {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
-                  </div>
-                )}
-              </div>
 
-              {/* BLOCO 2.5: RECEITA & INGREDIENTES CONSOLIDADOS DO PEDIDO */}
-              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
-                    <UtensilsCrossed className="w-4 h-4 text-purple-600" /> Receita Consolidada do Pedido
-                  </h4>
-                  <Badge className="bg-purple-600 text-white text-[10px] font-bold">
-                    Ficha Técnica &amp; Receita
-                  </Badge>
-                </div>
-
-                {receitaConsolidadaPedido.length > 0 ? (
-                  <div className="space-y-1 pt-1">
-                    {receitaConsolidadaPedido.map((ing, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-purple-200/50">
-                        <span className="font-semibold text-foreground flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
-                          {ing.insumoNome}
-                        </span>
-                        <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
-                          {ing.quantidadeTotal} {ing.unidadeMedida}
-                        </span>
+                        {encomendaDetalhes.createdAt && (
+                          <div className="pt-0.5 text-[10.5px] text-muted-foreground">
+                            <span className="font-medium">🕒 Pedido feito em:</span> {formatarDataHoraCriacao(encomendaDetalhes.createdAt)}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground italic px-1">
-                    Cadastre a receita dos produtos no Cardápio para ver os ingredientes consolidados aqui.
-                  </p>
-                )}
-              </div>
+                    </div>
 
-              {/* BLOCO 3: INSUMOS NECESSÁRIOS / NOTINHAS VINCULADAS */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Receipt className="w-4 h-4 text-emerald-600" /> Insumos &amp; Compras da Encomenda
-                </h4>
-                {encomendaDetalhes.insumosNecessarios && encomendaDetalhes.insumosNecessarios.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-border bg-card">
-                    {encomendaDetalhes.insumosNecessarios.map((ins, idx) => (
-                      <Badge key={idx} variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
-                        {ins.comprado ? "✓ " : "• "} {ins.quantidade ? `${ins.quantidade} ` : ""}{ins.nome}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic px-1">Nenhum insumo ou notinha vinculado ainda.</p>
-                )}
-              </div>
+                    <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-primary shrink-0" /> Forma de Pagamento Escolhida:
+                      </span>
+                      <span className="font-bold text-foreground">
+                        {obterMetodoPagamentoFormatado(encomendaDetalhes)}
+                      </span>
+                    </div>
 
-              {/* BLOCO 4: FINANCEIRO & HISTÓRICO DE PAGAMENTOS */}
-              <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground">
-                    {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "Valor Total Orçado:" : "Valor Total do Pedido:"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {renderizarBadgePagamento(encomendaDetalhes)}
-                    <span className="font-mono font-extrabold text-base text-foreground">
-                      {formatarMoeda(encomendaDetalhes.valorTotal)}
-                    </span>
-                  </div>
-                </div>
+                    {encomendaDetalhes.observacoes && (
+                      <div className="pt-2 border-t border-border/50 text-xs">
+                        <span className="font-bold text-foreground">📝 Observações:</span>{" "}
+                        <span className="text-muted-foreground italic">{encomendaDetalhes.observacoes}</span>
+                      </div>
+                    )}
 
-                {encomendaDetalhes.taxaEntrega !== undefined && Number(encomendaDetalhes.taxaEntrega) > 0 && (
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-purple-500/10 text-muted-foreground">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Truck className="w-3.5 h-3.5 text-primary shrink-0" /> Taxa de Entrega Inclusa:
-                    </span>
-                    <span className="font-mono font-bold text-foreground">
-                      {formatarMoeda(encomendaDetalhes.taxaEntrega)}
-                    </span>
+                    {(encomendaDetalhes.temTopoBolo || encomendaDetalhes.temVela) && (
+                      <div className="pt-2 border-t border-border/50 text-xs space-y-1">
+                        <span className="font-bold text-foreground block">✨ Personalização Especial:</span>
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          {encomendaDetalhes.temTopoBolo && (
+                            <Badge variant="outline" className="text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30">
+                              🎂 Topo: {encomendaDetalhes.detalhesTopoBolo || "Sim"}
+                            </Badge>
+                          )}
+                          {encomendaDetalhes.temVela && (
+                            <Badge variant="outline" className="text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                              🕯️ Vela: {encomendaDetalhes.detalhesVela || "Sim"}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {/* HISTÓRICO DE PAGAMENTOS */}
-                <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block">
-                      Pagamentos Registrados:
-                    </span>
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                      Total Quitado: {formatarMoeda(calcularTotalPagoEncomenda(encomendaDetalhes))}
-                    </span>
-                  </div>
-                  {encomendaDetalhes.historicoPagamentos && encomendaDetalhes.historicoPagamentos.length > 0 ? (
-                    <div className="space-y-1">
-                      {encomendaDetalhes.historicoPagamentos.map((pag, idx) => {
-                        const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
-                        const isEntrada = pag.isEntrada || idx === 0;
-                        const dataPrev = pag.data ? String(pag.data || "").split("-").reverse().join("/") : "-";
-                        const dataEf = pag.dataEfetiva || pag.data_pagamento;
-                        const dataEfFmt = dataEf ? String(dataEf || "").split("-").reverse().join("/") : dataPrev;
-
-                        return (
-                          <div key={pag.id || idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-[11px] font-semibold text-foreground">
-                                  📅 {dataPrev}
+                  {/* BLOCO 2: ITENS DO PEDIDO */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Cake className="w-4 h-4 text-purple-600" /> Itens Pedidos pelo Cliente
+                    </h4>
+                    {encomendaDetalhes.itensDetalhes && encomendaDetalhes.itensDetalhes.length > 0 ? (
+                      <div className="p-3.5 rounded-2xl border border-border bg-card space-y-2 shadow-2xs">
+                        {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => {
+                          const opcaoNome =
+                            (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
+                              ? it.opcoes_selecionadas
+                                  .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                                  .join(", ")
+                              : null) ||
+                            it.opcaoNome ||
+                            it.opcao_selecionada?.nome;
+                          const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
+                          const qtd = it.quantidade || 1;
+                          return (
+                            <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs py-1.5 border-b last:border-b-0 border-border/50 gap-1">
+                              <div>
+                                <span className="font-semibold text-foreground">
+                                  {qtd}x {it.nome}
                                 </span>
-                                {isEntrada && (
-                                  <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold px-1.5 py-0">
-                                    Entrada / Sinal
-                                  </Badge>
-                                )}
-                                {pag.formaPagamento && (
-                                  <Badge variant="outline" className="text-[9px] uppercase font-mono text-muted-foreground px-1.5 py-0">
-                                    {pag.formaPagamento}
-                                  </Badge>
+                                {opcaoNome && (
+                                  <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
+                                    <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                      Sabores: {opcaoNome}
+                                    </span>
+                                  </div>
                                 )}
                               </div>
-                              {pag.observacao && <span className="text-[10px] text-muted-foreground block">({pag.observacao})</span>}
-                            </div>
-
-                            <div className="text-right flex items-center gap-2">
-                              <span className={`font-mono font-bold text-xs ${isPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-                                {formatarMoeda(pag.valor)}
+                              <span className="font-mono font-bold text-muted-foreground self-end sm:self-auto">
+                                {formatarMoeda(precoUnit * qtd)}
                               </span>
-                              {isPaid ? (
-                                <Badge className="bg-emerald-600 text-white font-extrabold text-[9px] px-1.5 py-0">
-                                  ✓ Pago {dataEfFmt ? `em ${dataEfFmt}` : ""}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold text-[9px] px-1.5 py-0">
-                                  ⌛ Pendente (Previsto para {dataPrev})
-                                </Badge>
-                              )}
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-2xl border border-border bg-card text-xs text-muted-foreground font-medium">
+                        {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BLOCO 2.5: RECEITA & INGREDIENTES CONSOLIDADOS */}
+                  <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-2 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-extrabold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                        <UtensilsCrossed className="w-4 h-4 text-purple-600" /> Receita Consolidada do Pedido
+                      </h4>
+                      <Badge className="bg-purple-600 text-white text-[10px] font-bold">
+                        Ficha Técnica &amp; Receita
+                      </Badge>
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">Nenhum pagamento registrado até o momento.</p>
-                  )}
+
+                    {receitaConsolidadaPedido.length > 0 ? (
+                      <div className="space-y-1 pt-1">
+                        {receitaConsolidadaPedido.map((ing, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-b-0 border-purple-200/50">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                              {ing.insumoNome}
+                            </span>
+                            <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
+                              {ing.quantidadeTotal} {ing.unidadeMedida}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground italic px-1">
+                        Cadastre a receita dos produtos no Cardápio para ver os ingredientes consolidados aqui.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-2 border-t border-purple-500/20 font-bold">
-                  <span>Saldo Devedor Restante:</span>
-                  <span className={Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)) > 0 ? "text-rose-600 font-mono" : "text-emerald-600 font-mono"}>
-                    {formatarMoeda(Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)))}
-                  </span>
+                {/* COLUNA DIREITA: FINANCEIRO & INSUMOS (5 cols em desktop) */}
+                <div className="lg:col-span-5 space-y-4">
+                  {/* BLOCO 4: FINANCEIRO & HISTÓRICO DE PAGAMENTOS */}
+                  <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-foreground">
+                        {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "Valor Total Orçado:" : "Valor Total do Pedido:"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {renderizarBadgePagamento(encomendaDetalhes)}
+                        <span className="font-mono font-extrabold text-base text-foreground">
+                          {formatarMoeda(encomendaDetalhes.valorTotal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {encomendaDetalhes.taxaEntrega !== undefined && Number(encomendaDetalhes.taxaEntrega) > 0 && (
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-purple-500/10 text-muted-foreground">
+                        <span className="flex items-center gap-1 font-medium">
+                          <Truck className="w-3.5 h-3.5 text-primary shrink-0" /> Taxa de Entrega Inclusa:
+                        </span>
+                        <span className="font-mono font-bold text-foreground">
+                          {formatarMoeda(encomendaDetalhes.taxaEntrega)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* HISTÓRICO DE PAGAMENTOS */}
+                    <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block">
+                          Pagamentos Registrados:
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                          Total Quitado: {formatarMoeda(calcularTotalPagoEncomenda(encomendaDetalhes))}
+                        </span>
+                      </div>
+                      {encomendaDetalhes.historicoPagamentos && encomendaDetalhes.historicoPagamentos.length > 0 ? (
+                        <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5">
+                          {encomendaDetalhes.historicoPagamentos.map((pag, idx) => {
+                            const isPaid = pag.pago === true || pag.is_paid === true || pag.status === "pago";
+                            const isEntrada = pag.isEntrada || idx === 0;
+                            const dataPrev = pag.data ? String(pag.data || "").split("-").reverse().join("/") : "-";
+                            const dataEf = pag.dataEfetiva || pag.data_pagamento;
+                            const dataEfFmt = dataEf ? String(dataEf || "").split("-").reverse().join("/") : dataPrev;
+
+                            return (
+                              <div key={pag.id || idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-background border border-border/60">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono text-[11px] font-semibold text-foreground">
+                                      📅 {dataPrev}
+                                    </span>
+                                    {isEntrada && (
+                                      <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold px-1.5 py-0">
+                                        Entrada / Sinal
+                                      </Badge>
+                                    )}
+                                    {pag.formaPagamento && (
+                                      <Badge variant="outline" className="text-[9px] uppercase font-mono text-muted-foreground px-1.5 py-0">
+                                        {pag.formaPagamento}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {pag.observacao && <span className="text-[10px] text-muted-foreground block">({pag.observacao})</span>}
+                                </div>
+
+                                <div className="text-right flex items-center gap-2">
+                                  <span className={`font-mono font-bold text-xs ${isPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                                    {formatarMoeda(pag.valor)}
+                                  </span>
+                                  {isPaid ? (
+                                    <Badge className="bg-emerald-600 text-white font-extrabold text-[9px] px-1.5 py-0">
+                                      ✓ Pago {dataEfFmt ? `em ${dataEfFmt}` : ""}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold text-[9px] px-1.5 py-0">
+                                      ⌛ Pendente
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">Nenhum pagamento registrado até o momento.</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-purple-500/20 font-bold">
+                      <span>Saldo Devedor Restante:</span>
+                      <span className={Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)) > 0 ? "text-rose-600 font-mono text-sm" : "text-emerald-600 font-mono text-sm"}>
+                        {formatarMoeda(Math.max(0, encomendaDetalhes.valorTotal - calcularTotalPagoEncomenda(encomendaDetalhes)))}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* BLOCO 3: INSUMOS NECESSÁRIOS / NOTINHAS VINCULADAS */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Receipt className="w-4 h-4 text-emerald-600" /> Insumos &amp; Compras da Encomenda
+                    </h4>
+                    {encomendaDetalhes.insumosNecessarios && encomendaDetalhes.insumosNecessarios.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 p-3 rounded-2xl border border-border bg-card shadow-2xs">
+                        {encomendaDetalhes.insumosNecessarios.map((ins, idx) => (
+                          <Badge key={idx} variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                            {ins.comprado ? "✓ " : "• "} {ins.quantidade ? `${ins.quantidade} ` : ""}{ins.nome}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic px-1">Nenhum insumo ou notinha vinculado ainda.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          <DialogFooter className="pt-3 border-t border-border/60 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 w-full">
+          <DialogFooter className="pt-3 border-t border-border/60 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setModalDetalhesOpen(false)}
-                className="flex-1 sm:flex-initial text-xs h-8 px-3 rounded-xl border-border hover:bg-muted font-semibold"
+                className="text-xs h-9 px-4 rounded-xl border-border hover:bg-muted font-semibold"
               >
                 Fechar
               </Button>
@@ -5801,15 +5809,15 @@ export function OrdersView({
                       handleAbrirEdicao(target);
                     }
                   }}
-                  className="flex-1 sm:flex-initial text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/40 h-8 px-3 rounded-xl"
+                  className="text-xs font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/40 h-9 px-4 rounded-xl"
                 >
-                  <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar Pedido
+                  <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Editar Pedido
                 </Button>
               )}
             </div>
 
             {encomendaDetalhes && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -5818,9 +5826,9 @@ export function OrdersView({
                     handleGerarOrcamentoPDF(encomendaDetalhes);
                   }}
                   title="Gerar e baixar o Orçamento em PDF A4 completo"
-                  className="text-xs font-bold border-purple-300 text-purple-800 dark:text-purple-300 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
+                  className="text-xs font-bold border-purple-300 text-purple-800 dark:text-purple-300 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 h-9 px-3.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
                 >
-                  <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   <span>📄 Orçamento em PDF</span>
                 </Button>
                 <Button
@@ -5837,9 +5845,9 @@ export function OrdersView({
                     }
                   }}
                   title="Imprimir comanda para impressoras térmicas (80mm/58mm)"
-                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
+                  className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-9 px-3.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
                 >
-                  <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <Printer className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                   <span>🖨️ Impressão Térmica</span>
                 </Button>
                 <Button
@@ -5849,9 +5857,9 @@ export function OrdersView({
                     setModalDetalhesOpen(false);
                     handleEnviarResumoWhatsApp(encomendaDetalhes);
                   }}
-                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-4 rounded-xl shadow-xs flex items-center justify-center gap-1.5"
+                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-9 px-4 rounded-xl shadow-xs flex items-center justify-center gap-1.5"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-4 h-4" />
                   <span>{(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") ? "WhatsApp Orçamento" : "WhatsApp Resumo"}</span>
                 </Button>
               </div>
