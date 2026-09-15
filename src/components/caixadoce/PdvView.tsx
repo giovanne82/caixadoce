@@ -128,6 +128,40 @@ export interface CaixaTurno {
   horaFechamento?: string;
 }
 
+export interface FechamentoCaixaRegistro {
+  id: string;
+  data: string;
+  horaAbertura: string;
+  horaFechamento: string;
+  operador: string;
+  valorAbertura: number;
+  totalVendasGeral: number;
+  totalVendasDinheiro: number;
+  totalVendasPix: number;
+  totalVendasCredito: number;
+  totalVendasDebito: number;
+  totalReforcos: number;
+  totalSangrias: number;
+  saldoDinheiroGaveta: number;
+  vendasList: Array<{
+    id: string;
+    codigo: string;
+    hora: string;
+    cliente: string;
+    valor: number;
+    metodo: string;
+  }>;
+  movimentacoesList: Array<{
+    id: string;
+    tipo: "sangria" | "reforco";
+    valor: number;
+    motivo: string;
+    hora: string;
+  }>;
+  status: "aberto" | "fechado";
+  created_at?: string;
+}
+
 export function PdvView() {
   const { user, profile, isMounted, authLoading } = useAuth();
   const navigate = useNavigate();
@@ -197,6 +231,15 @@ export function PdvView() {
   const [motivoMovimentacaoInput, setMotivoMovimentacaoInput] = useState("");
   const [salvandoMovimentacao, setSalvandoMovimentacao] = useState(false);
   const [movimentacoesHoje, setMovimentacoesHoje] = useState<any[]>([]);
+
+  // =========================================================================
+  // HISTÓRICO DE FECHAMENTOS DE CAIXA
+  // =========================================================================
+  const [modalHistoricoFechamentosOpen, setModalHistoricoFechamentosOpen] = useState(false);
+  const [modalDetalhesFechamentoOpen, setModalDetalhesFechamentoOpen] = useState(false);
+  const [fechamentoSelecionado, setFechamentoSelecionado] = useState<FechamentoCaixaRegistro | null>(null);
+  const [historicoFechamentos, setHistoricoFechamentos] = useState<FechamentoCaixaRegistro[]>([]);
+  const [carregandoHistoricoFechamentos, setCarregandoHistoricoFechamentos] = useState(false);
 
   // =========================================================================
   // HISTÓRICO DE ÚLTIMAS VENDAS (SINCRONIZADO)
@@ -861,6 +904,65 @@ export function PdvView() {
       localStorage.setItem(`caixadoce_caixa_${activeCode}_${hoje}`, JSON.stringify(caixaFechado));
     } catch {}
 
+    // Constrói o registro completo do fechamento do turno para o histórico e impressão
+    const vendasDoTurno = vendasRecentes
+      .filter((v) => {
+        const dataVenda = v.created_at ? v.created_at.split("T")[0] : v.data_entrega;
+        return !dataVenda || dataVenda === hoje;
+      })
+      .map((v) => ({
+        id: String(v.id || Math.random()),
+        codigo: String(v.codigo_identificador || v.order_number || v.id || "#").slice(0, 8),
+        hora: v.created_at ? new Date(v.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+        cliente: String(v.cliente_nome || v.nome_cliente || "Cliente Balcão"),
+        valor: Number(v.valor_total || v.total_amount || 0),
+        metodo: String(v.metodo_pagamento || "Dinheiro").toUpperCase(),
+      }));
+
+    const movsDoTurno = movimentacoesHoje.map((m) => ({
+      id: String(m.id || Math.random()),
+      tipo: (m.categoria === "sangria" || String(m.descricao).toLowerCase().includes("sangria") ? "sangria" : "reforco") as "sangria" | "reforco",
+      valor: Number(m.valor || 0),
+      motivo: String(m.descricao || (m.categoria === "sangria" ? "Sangria" : "Reforço")),
+      hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+    }));
+
+    const novoRegistroFechamento: FechamentoCaixaRegistro = {
+      id: `fechamento_${Date.now()}`,
+      data: hoje,
+      horaAbertura: caixaAtual?.horaAbertura || "08:00",
+      horaFechamento: horaAgora,
+      operador: caixaAtual?.operador || profile?.responsavel || "Operador",
+      valorAbertura: resumoFinanceiroCaixa.valorAbertura,
+      totalVendasGeral: resumoFinanceiroCaixa.totalVendasGeral,
+      totalVendasDinheiro: resumoFinanceiroCaixa.totalVendasDinheiro,
+      totalVendasPix: resumoFinanceiroCaixa.totalVendasPix,
+      totalVendasCredito: resumoFinanceiroCaixa.totalVendasCredito,
+      totalVendasDebito: resumoFinanceiroCaixa.totalVendasDebito,
+      totalReforcos: resumoFinanceiroCaixa.totalReforcos,
+      totalSangrias: resumoFinanceiroCaixa.totalSangrias,
+      saldoDinheiroGaveta: resumoFinanceiroCaixa.saldoDinheiroGaveta,
+      vendasList: vendasDoTurno,
+      movimentacoesList: movsDoTurno,
+      status: "fechado",
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      const storedHist = localStorage.getItem(`caixadoce_historico_caixas_${activeCode}`);
+      let listaAnterior: FechamentoCaixaRegistro[] = [];
+      if (storedHist) {
+        try {
+          listaAnterior = JSON.parse(storedHist);
+        } catch {}
+      }
+      const novaLista = [novoRegistroFechamento, ...listaAnterior.filter((f) => f.id !== novoRegistroFechamento.id)];
+      localStorage.setItem(`caixadoce_historico_caixas_${activeCode}`, JSON.stringify(novaLista));
+      setHistoricoFechamentos(novaLista);
+    } catch (e) {
+      console.warn("[PDV] Erro ao salvar fechamento no histórico local:", e);
+    }
+
     // Registra fechamento na tabela transacoes_financeiras
     try {
       const finUserId = getValidUuid(user?.id, profile?.ownerUserId);
@@ -959,6 +1061,266 @@ export function PdvView() {
       saldoDinheiroGaveta,
     };
   }, [caixaAtual, vendasRecentes, movimentacoesHoje, hoje]);
+
+  // =========================================================================
+  // GESTÃO DE HISTÓRICO DE FECHAMENTOS E IMPRESSÃO DE RELATÓRIO
+  // =========================================================================
+  const carregarHistoricoFechamentos = async () => {
+    if (!activeCode) return;
+    setCarregandoHistoricoFechamentos(true);
+    try {
+      const salvas: FechamentoCaixaRegistro[] = [];
+      const stored = localStorage.getItem(`caixadoce_historico_caixas_${activeCode}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            salvas.push(...parsed);
+          }
+        } catch (e) {
+          console.warn("[PDV] Erro ao carregar historico caixas de localStorage:", e);
+        }
+      }
+
+      // Se houver um caixa atualmente aberto, incluir como item em aberto no topo
+      if (caixaAtual && caixaAtual.status === "aberto") {
+        const vendasDoTurno = vendasRecentes
+          .filter((v) => {
+            const dataVenda = v.created_at ? v.created_at.split("T")[0] : v.data_entrega;
+            return !dataVenda || dataVenda === hoje;
+          })
+          .map((v) => ({
+            id: String(v.id || Math.random()),
+            codigo: String(v.codigo_identificador || v.order_number || v.id || "#").slice(0, 8),
+            hora: v.created_at ? new Date(v.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+            cliente: String(v.cliente_nome || v.nome_cliente || "Cliente Balcão"),
+            valor: Number(v.valor_total || v.total_amount || 0),
+            metodo: String(v.metodo_pagamento || "Dinheiro").toUpperCase(),
+          }));
+
+        const movsDoTurno = movimentacoesHoje.map((m) => ({
+          id: String(m.id || Math.random()),
+          tipo: (m.categoria === "sangria" || String(m.descricao).toLowerCase().includes("sangria") ? "sangria" : "reforco") as "sangria" | "reforco",
+          valor: Number(m.valor || 0),
+          motivo: String(m.descricao || (m.categoria === "sangria" ? "Sangria" : "Reforço")),
+          hora: m.created_at ? new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--",
+        }));
+
+        const turnoAtualRegistro: FechamentoCaixaRegistro = {
+          id: `caixa_ativo_${hoje}`,
+          data: hoje,
+          horaAbertura: caixaAtual.horaAbertura || "08:00",
+          horaFechamento: "Em Aberto",
+          operador: caixaAtual.operador || profile?.responsavel || "Operador",
+          valorAbertura: resumoFinanceiroCaixa.valorAbertura,
+          totalVendasGeral: resumoFinanceiroCaixa.totalVendasGeral,
+          totalVendasDinheiro: resumoFinanceiroCaixa.totalVendasDinheiro,
+          totalVendasPix: resumoFinanceiroCaixa.totalVendasPix,
+          totalVendasCredito: resumoFinanceiroCaixa.totalVendasCredito,
+          totalVendasDebito: resumoFinanceiroCaixa.totalVendasDebito,
+          totalReforcos: resumoFinanceiroCaixa.totalReforcos,
+          totalSangrias: resumoFinanceiroCaixa.totalSangrias,
+          saldoDinheiroGaveta: resumoFinanceiroCaixa.saldoDinheiroGaveta,
+          vendasList: vendasDoTurno,
+          movimentacoesList: movsDoTurno,
+          status: "aberto",
+        };
+
+        const semDuplicado = salvas.filter((f) => f.id !== turnoAtualRegistro.id && f.data !== hoje);
+        setHistoricoFechamentos([turnoAtualRegistro, ...semDuplicado]);
+      } else {
+        setHistoricoFechamentos(salvas);
+      }
+    } finally {
+      setCarregandoHistoricoFechamentos(false);
+    }
+  };
+
+  const handleAbrirHistoricoFechamentos = () => {
+    carregarHistoricoFechamentos();
+    setModalHistoricoFechamentosOpen(true);
+  };
+
+  const handleImprimirRelatorioFechamento = (fechamento: FechamentoCaixaRegistro) => {
+    const win = window.open("", "_blank", "width=800,height=900");
+    if (!win) {
+      toast.error("Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-ups está ativo.");
+      return;
+    }
+
+    const dataFormatada = fechamento.data
+      ? new Date(fechamento.data + "T00:00:00").toLocaleDateString("pt-BR")
+      : new Date().toLocaleDateString("pt-BR");
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório de Fechamento de Caixa - ${dataFormatada}</title>
+          <style>
+            @page { margin: 10mm; size: auto; }
+            body { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #1e293b; padding: 15px; margin: 0; }
+            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 15px; }
+            .header h1 { font-size: 18px; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; }
+            .header h2 { font-size: 14px; margin: 0; color: #475569; font-weight: 600; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
+            .info-item { font-size: 11px; }
+            .info-item strong { color: #0f172a; }
+            .section-title { font-size: 13px; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin: 15px 0 8px 0; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 11px; }
+            th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
+            th { background: #f1f5f9; font-weight: 700; color: #334155; }
+            .text-right { text-align: right; }
+            .total-box { background: #0f172a; color: #ffffff; padding: 12px; border-radius: 6px; text-align: center; margin-top: 15px; }
+            .total-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+            .total-box .value { font-size: 22px; font-weight: 900; margin-top: 4px; font-family: monospace; }
+            .footer { margin-top: 25px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 10px; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${activeName || "CaixaDoce"}</h1>
+            <h2>Relatório de Fechamento de Caixa</h2>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item"><strong>Data do Turno:</strong> ${dataFormatada}</div>
+            <div class="info-item"><strong>Status:</strong> ${fechamento.status === "aberto" ? "EM ABERTO" : "FECHADO"}</div>
+            <div class="info-item"><strong>Hora Abertura:</strong> ${fechamento.horaAbertura || "--:--"}</div>
+            <div class="info-item"><strong>Hora Fechamento:</strong> ${fechamento.horaFechamento || "--:--"}</div>
+            <div class="info-item"><strong>Operador:</strong> ${fechamento.operador || "Operador"}</div>
+            <div class="info-item"><strong>Código Estabelecimento:</strong> ${activeCode}</div>
+          </div>
+
+          <div class="section-title">Resumo por Modalidade de Pagamento</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Modalidade</th>
+                <th class="text-right">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Dinheiro</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDinheiro)}</td></tr>
+              <tr><td>PIX</td><td class="text-right">${formatarMoeda(fechamento.totalVendasPix)}</td></tr>
+              <tr><td>Cartão de Crédito</td><td class="text-right">${formatarMoeda(fechamento.totalVendasCredito)}</td></tr>
+              <tr><td>Cartão de Débito</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDebito)}</td></tr>
+              <tr style="font-weight: 700; background: #f8fafc;">
+                <td>TOTAL GERAL DE VENDAS</td>
+                <td class="text-right">${formatarMoeda(fechamento.totalVendasGeral)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">Movimentações da Gaveta de Dinheiro</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Fundo de Troco Inicial (+)</td><td class="text-right">${formatarMoeda(fechamento.valorAbertura)}</td></tr>
+              <tr><td>Vendas em Dinheiro (+)</td><td class="text-right">${formatarMoeda(fechamento.totalVendasDinheiro)}</td></tr>
+              <tr><td>Reforços de Caixa (+)</td><td class="text-right">${formatarMoeda(fechamento.totalReforcos)}</td></tr>
+              <tr><td>Sangrias de Caixa (-)</td><td class="text-right">-${formatarMoeda(fechamento.totalSangrias)}</td></tr>
+            </tbody>
+          </table>
+
+          <div class="total-box">
+            <div class="label">Total Esperado em Dinheiro na Gaveta</div>
+            <div class="value">${formatarMoeda(fechamento.saldoDinheiroGaveta)}</div>
+          </div>
+
+          ${
+            fechamento.vendasList && fechamento.vendasList.length > 0
+              ? `
+              <div class="section-title">Vendas Realizadas no Período (${fechamento.vendasList.length})</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Pedido</th>
+                    <th>Cliente</th>
+                    <th>Pagamento</th>
+                    <th class="text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${fechamento.vendasList
+                    .map(
+                      (v) => `
+                    <tr>
+                      <td>${v.hora}</td>
+                      <td>${v.codigo}</td>
+                      <td>${v.cliente}</td>
+                      <td>${v.metodo}</td>
+                      <td class="text-right">${formatarMoeda(v.valor)}</td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            `
+              : ""
+          }
+
+          ${
+            fechamento.movimentacoesList && fechamento.movimentacoesList.length > 0
+              ? `
+              <div class="section-title">Sangrias e Reforços do Período</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Tipo</th>
+                    <th>Motivo / Descrição</th>
+                    <th class="text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${fechamento.movimentacoesList
+                    .map(
+                      (m) => `
+                    <tr>
+                      <td>${m.hora}</td>
+                      <td style="font-weight: 700; color: ${m.tipo === "sangria" ? "#dc2626" : "#16a34a"};">${m.tipo.toUpperCase()}</td>
+                      <td>${m.motivo}</td>
+                      <td class="text-right">${formatarMoeda(m.valor)}</td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            `
+              : ""
+          }
+
+          <div class="footer">
+            Gerado via CaixaDoce PDV em ${new Date().toLocaleString("pt-BR")}
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    win.document.write(htmlContent);
+    win.document.close();
+  };
 
   // =========================================================================
   // HISTÓRICO DE ÚLTIMAS VENDAS: RE-BUSCA, EDIÇÃO, DELEÇÃO E ESTORNO
@@ -1446,6 +1808,18 @@ export function PdvView() {
                 <span>Abrir Caixa</span>
               </Button>
             )}
+
+            {/* Botão de Histórico de Fechamentos de Caixa */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAbrirHistoricoFechamentos}
+              className="h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-xl bg-slate-800/90 border-slate-700 text-amber-300 hover:text-amber-200 hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
+              title="Visualizar Histórico de Fechamentos e Imprimir Relatórios"
+            >
+              <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Fechamentos</span>
+            </Button>
 
             {/* Botão de Últimas Vendas */}
             <Button
@@ -2956,6 +3330,20 @@ export function PdvView() {
 
             <Button
               type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setModalGestaoCaixaOpen(false);
+                handleAbrirHistoricoFechamentos();
+              }}
+              className="text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 font-bold"
+            >
+              <FileText className="w-3.5 h-3.5 mr-1 text-amber-400" />
+              Ver Histórico
+            </Button>
+
+            <Button
+              type="button"
               size="sm"
               onClick={() => setModalGestaoCaixaOpen(false)}
               className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
@@ -3112,6 +3500,354 @@ export function PdvView() {
               Confirmar Fechamento
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE HISTÓRICO DE FECHAMENTOS DE CAIXA */}
+      {/* ========================================================================= */}
+      <Dialog open={modalHistoricoFechamentosOpen} onOpenChange={setModalHistoricoFechamentosOpen}>
+        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-800 text-white p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-3 border-b border-slate-800">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-amber-400 shrink-0" />
+                Histórico de Fechamentos de Caixa
+              </DialogTitle>
+              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] uppercase font-bold">
+                Relatórios de Turno
+              </Badge>
+            </div>
+            <DialogDescription className="text-xs text-slate-400">
+              Consulte os caixas anteriores, horários de abertura/fechamento, faturamento e imprima relatórios.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-3 text-xs">
+            {carregandoHistoricoFechamentos ? (
+              <div className="text-center py-8 space-y-2 text-slate-400">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-400" />
+                <p>Carregando histórico de fechamentos...</p>
+              </div>
+            ) : historicoFechamentos.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 space-y-2 bg-slate-950/60 rounded-xl border border-slate-800 p-6">
+                <AlertCircle className="w-8 h-8 text-slate-500 mx-auto" />
+                <p className="font-semibold text-slate-300">Nenhum fechamento registrado ainda.</p>
+                <p className="text-[11px] text-slate-400">Ao encerrar um caixa no PDV, o relatório completo do turno será salvo automaticamente aqui.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {historicoFechamentos.map((f) => {
+                  const dataFmt = f.data
+                    ? new Date(f.data + "T00:00:00").toLocaleDateString("pt-BR")
+                    : "Data N/I";
+                  const isAberto = f.status === "aberto";
+
+                  return (
+                    <div
+                      key={f.id}
+                      className={`p-3.5 rounded-xl border transition-all ${
+                        isAberto
+                          ? "bg-slate-950 border-amber-500/40 hover:border-amber-500/70"
+                          : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              className={`text-[10px] uppercase font-bold ${
+                                isAberto
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                  : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                              }`}
+                            >
+                              {isAberto ? "Turno Em Aberto" : "Caixa Fechado"}
+                            </Badge>
+                            <span className="font-bold text-white text-sm flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                              {dataFmt}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-400 text-[11px]">
+                            <span>
+                              Abertura: <strong className="text-slate-200 font-mono">{f.horaAbertura}</strong>
+                            </span>
+                            <span>
+                              Fechamento:{" "}
+                              <strong className={`font-mono ${isAberto ? "text-amber-300" : "text-slate-200"}`}>
+                                {f.horaFechamento}
+                              </strong>
+                            </span>
+                            <span>
+                              Operador: <strong className="text-slate-200">{f.operador}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-850">
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total Período</span>
+                            <span className="font-mono font-bold text-emerald-400 text-sm">
+                              {formatarMoeda(f.totalVendasGeral)}
+                            </span>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setFechamentoSelecionado(f);
+                              setModalDetalhesFechamentoOpen(true);
+                            }}
+                            className="h-8 text-xs font-bold bg-slate-900 border-slate-700 hover:bg-slate-800 text-amber-300 hover:text-amber-200 gap-1 rounded-lg"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Relatório
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-800 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalHistoricoFechamentosOpen(false)}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE RELATÓRIO DETALHADO E PRONTO PARA IMPRESSÃO */}
+      {/* ========================================================================= */}
+      <Dialog open={modalDetalhesFechamentoOpen} onOpenChange={setModalDetalhesFechamentoOpen}>
+        <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-800 text-white p-5 max-h-[90vh] overflow-y-auto">
+          {fechamentoSelecionado && (
+            <>
+              <DialogHeader className="pb-3 border-b border-slate-800">
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-amber-400 shrink-0" />
+                    Relatório Detalhado de Fechamento
+                  </DialogTitle>
+                  <Badge
+                    className={`text-[10px] uppercase font-bold ${
+                      fechamentoSelecionado.status === "aberto"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    }`}
+                  >
+                    {fechamentoSelecionado.status === "aberto" ? "Turno em Aberto" : "Caixa Fechado"}
+                  </Badge>
+                </div>
+                <DialogDescription className="text-xs text-slate-400">
+                  Turno de {fechamentoSelecionado.data ? new Date(fechamentoSelecionado.data + "T00:00:00").toLocaleDateString("pt-BR") : "Hoje"} - Operador: {fechamentoSelecionado.operador}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-3 space-y-4 text-xs">
+                {/* Cabeçalho de Horários */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Hora de Abertura</span>
+                    <span className="font-mono font-bold text-white text-xs">{fechamentoSelecionado.horaAbertura}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Hora de Fechamento</span>
+                    <span className="font-mono font-bold text-amber-300 text-xs">{fechamentoSelecionado.horaFechamento}</span>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-slate-400 block">Operador Responsável</span>
+                    <span className="font-bold text-slate-200 text-xs truncate block">{fechamentoSelecionado.operador}</span>
+                  </div>
+                </div>
+
+                {/* Totais por Modalidade */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Vendas por Modalidade de Pagamento
+                  </h4>
+                  <div className="space-y-1.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <Wallet className="w-3.5 h-3.5 text-emerald-400" /> Dinheiro
+                      </span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {formatarMoeda(fechamentoSelecionado.totalVendasDinheiro)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <QrCode className="w-3.5 h-3.5 text-purple-400" /> PIX
+                      </span>
+                      <span className="font-mono font-bold text-purple-300">
+                        {formatarMoeda(fechamentoSelecionado.totalVendasPix)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <CreditCard className="w-3.5 h-3.5 text-sky-400" /> Cartão de Crédito
+                      </span>
+                      <span className="font-mono font-bold text-sky-300">
+                        {formatarMoeda(fechamentoSelecionado.totalVendasCredito)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-850">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <CreditCard className="w-3.5 h-3.5 text-indigo-400" /> Cartão de Débito
+                      </span>
+                      <span className="font-mono font-bold text-indigo-300">
+                        {formatarMoeda(fechamentoSelecionado.totalVendasDebito)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 font-bold text-xs">
+                      <span className="text-white uppercase tracking-wider">Total Geral de Vendas:</span>
+                      <span className="font-mono text-emerald-400 text-sm">
+                        {formatarMoeda(fechamentoSelecionado.totalVendasGeral)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fundo e Movimentações da Gaveta */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Fundo & Movimentações de Gaveta
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Fundo Inicial</span>
+                      <span className="font-mono font-bold text-white text-xs">
+                        {formatarMoeda(fechamentoSelecionado.valorAbertura)}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Reforços (+)</span>
+                      <span className="font-mono font-bold text-emerald-400 text-xs">
+                        +{formatarMoeda(fechamentoSelecionado.totalReforcos)}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Sangrias (-)</span>
+                      <span className="font-mono font-bold text-rose-400 text-xs">
+                        -{formatarMoeda(fechamentoSelecionado.totalSangrias)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Saldo Final Esperado em Dinheiro na Gaveta */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-emerald-500/40 text-center space-y-1 shadow-lg">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300 block">
+                    Saldo Final Esperado em Dinheiro na Gaveta
+                  </span>
+                  <p className="text-2xl sm:text-3xl font-mono font-black text-white">
+                    {formatarMoeda(fechamentoSelecionado.saldoDinheiroGaveta)}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Fundo ({formatarMoeda(fechamentoSelecionado.valorAbertura)}) + Vendas Dinheiro ({formatarMoeda(fechamentoSelecionado.totalVendasDinheiro)}) + Reforços ({formatarMoeda(fechamentoSelecionado.totalReforcos)}) - Sangrias ({formatarMoeda(fechamentoSelecionado.totalSangrias)})
+                  </p>
+                </div>
+
+                {/* Relação de Vendas do Período */}
+                {fechamentoSelecionado.vendasList && fechamentoSelecionado.vendasList.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Relação de Vendas ({fechamentoSelecionado.vendasList.length})</span>
+                    </h4>
+                    <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 divide-y divide-slate-850">
+                      {fechamentoSelecionado.vendasList.map((v) => (
+                        <div key={v.id} className="p-2 flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-slate-400 text-[10px]">{v.hora}</span>
+                            <span className="font-bold text-slate-200">{v.codigo}</span>
+                            <span className="text-slate-400 hidden sm:inline">• {v.cliente}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-slate-800 text-slate-300 text-[9px] border-0">
+                              {v.metodo}
+                            </Badge>
+                            <span className="font-mono font-bold text-emerald-400">
+                              {formatarMoeda(v.valor)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Relação de Sangrias e Reforços */}
+                {fechamentoSelecionado.movimentacoesList && fechamentoSelecionado.movimentacoesList.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Registro de Sangrias e Reforços
+                    </h4>
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 divide-y divide-slate-850">
+                      {fechamentoSelecionado.movimentacoesList.map((m) => (
+                        <div key={m.id} className="p-2 flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-slate-400 text-[10px]">{m.hora}</span>
+                            <Badge
+                              className={`text-[9px] uppercase font-bold ${
+                                m.tipo === "sangria"
+                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                                  : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                              }`}
+                            >
+                              {m.tipo}
+                            </Badge>
+                            <span className="text-slate-300 truncate max-w-[180px] sm:max-w-xs">{m.motivo}</span>
+                          </div>
+                          <span
+                            className={`font-mono font-bold ${
+                              m.tipo === "sangria" ? "text-rose-400" : "text-emerald-400"
+                            }`}
+                          >
+                            {m.tipo === "sangria" ? "-" : "+"}{formatarMoeda(m.valor)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setModalDetalhesFechamentoOpen(false)}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Voltar
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleImprimirRelatorioFechamento(fechamentoSelecionado)}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-5 h-9 shadow-md flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  Imprimir Relatório
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
