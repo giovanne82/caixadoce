@@ -1107,6 +1107,372 @@ export function OrdersView({
     }
   };
 
+  // Gerador de Orçamento Completo em PDF A4 (com assinatura, rodapé e integração WhatsApp)
+  const handleGerarOrcamentoPDF = (ord: Encomenda) => {
+    // Abre a janela de documento A4 formatada com suporte a Impressão/PDF e WhatsApp
+    const printWindow = window.open("", "_blank", "width=850,height=950");
+    if (!printWindow) {
+      toast.error("Permita pop-ups no navegador para visualizar o orçamento em PDF.");
+      return;
+    }
+
+    const estNome = profile?.establishmentName || estabelecimentoNome || "CaixaDoce Confeitaria";
+    const estEnd = profile?.establishmentAddress || (
+      [profile?.logradouro, profile?.numero, profile?.bairro, profile?.cidade && profile?.estado ? `${profile.cidade}/${profile.estado}` : "", profile?.cep ? `CEP: ${profile.cep}` : ""]
+        .filter(Boolean).join(", ")
+    ) || "";
+    const estTel = profile?.whatsapp || profile?.telefone || "";
+    const numPedido = ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(-6).toUpperCase();
+    const isOrc = ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento";
+    const tituloDoc = isOrc ? "ORÇAMENTO DE ENCOMENDA" : "COMPROVANTE DE PEDIDO / ORÇAMENTO";
+
+    const totalPago = calcularTotalPagoEncomenda(ord);
+    const saldoRestante = Math.max(0, ord.valorTotal - totalPago);
+    const formaPagto = obterMetodoPagamentoFormatado(ord);
+    const dataEntregaFmt = ord.dataEntrega ? ord.dataEntrega.split("-").reverse().join("/") : "A combinar";
+    const horaEntregaFmt = ord.horarioEntrega || "14:00";
+
+    const itemsRowsHtml = ord.itensDetalhes && ord.itensDetalhes.length > 0
+      ? ord.itensDetalhes.map((it: any) => {
+          const opcaoNome =
+            (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
+              ? it.opcoes_selecionadas
+                  .map((o: any) => (o.quantidade && o.quantidade > 0 ? `${o.quantidade}x ${o.nome}` : o.nome))
+                  .join(", ")
+              : null) ||
+            it.opcaoNome ||
+            it.opcao_selecionada?.nome;
+          const qtd = it.quantidade || 1;
+          const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
+          const subtotal = it.subtotal ?? (precoUnit * qtd);
+
+          return `
+            <tr>
+              <td style="text-align: center; font-weight: bold;">${qtd}x</td>
+              <td>
+                <div style="font-weight: bold; color: #1e293b;">${it.nome}</div>
+                ${opcaoNome ? `<div style="font-size: 11px; color: #7c3aed; margin-top: 2px;">• Sabores: ${opcaoNome}</div>` : ""}
+              </td>
+              <td style="text-align: right; font-family: monospace;">${precoUnit > 0 ? formatarMoeda(precoUnit) : "-"}</td>
+              <td style="text-align: right; font-weight: bold; font-family: monospace;">${subtotal > 0 ? formatarMoeda(subtotal) : "-"}</td>
+            </tr>
+          `;
+        }).join("")
+      : `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">1x</td>
+          <td>${ord.itens || "Itens do orçamento"}</td>
+          <td style="text-align: right; font-family: monospace;">${formatarMoeda(ord.valorTotal)}</td>
+          <td style="text-align: right; font-weight: bold; font-family: monospace;">${formatarMoeda(ord.valorTotal)}</td>
+        </tr>
+      `;
+
+    const htmlA4Content = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Orçamento #${numPedido} - ${ord.clienteNome}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 12mm;
+          }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1e293b;
+            background: #f8fafc;
+            padding: 20px;
+            font-size: 13px;
+            line-height: 1.5;
+          }
+          .no-print {
+            max-width: 210mm;
+            margin: 0 auto 16px auto;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+          }
+          .no-print button {
+            padding: 10px 18px;
+            font-weight: bold;
+            font-size: 13px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .btn-pdf { background: #7c3aed; color: #fff; }
+          .btn-close { background: #e2e8f0; color: #334155; }
+          
+          .a4-container {
+            width: 210mm;
+            min-height: 270mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 24px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+          }
+          @media print {
+            .no-print { display: none !important; }
+            body { background: #fff; padding: 0; }
+            .a4-container {
+              box-shadow: none;
+              border: none;
+              width: 100%;
+              padding: 0;
+              margin: 0;
+            }
+          }
+          .header-banner {
+            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            color: #ffffff;
+            padding: 18px 24px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+          .header-banner h1 { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+          .header-banner p { font-size: 12px; opacity: 0.9; }
+          .header-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            text-align: right;
+            font-size: 12px;
+            font-weight: bold;
+          }
+          .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+          }
+          .info-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 16px;
+          }
+          .info-card h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 4px;
+          }
+          .info-card p { font-size: 12.5px; margin-bottom: 4px; }
+          .info-card strong { color: #0f172a; }
+
+          table.items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+          }
+          table.items-table th {
+            background: #f1f5f9;
+            color: #475569;
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 800;
+            border-bottom: 2px solid #cbd5e1;
+          }
+          table.items-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 12.5px;
+          }
+          table.items-table tr:nth-child(even) { background: #fafafa; }
+
+          .obs-box {
+            background: #fcf5ff;
+            border: 1px solid #f0abfc;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 12px;
+          }
+          .obs-box strong { color: #86198f; }
+
+          .totals-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+          }
+          .totals-card {
+            width: 280px;
+            background: #f5f3ff;
+            border: 1px solid #ddd6fe;
+            border-radius: 10px;
+            padding: 16px;
+          }
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12.5px;
+          }
+          .totals-row.final {
+            font-size: 16px;
+            font-weight: 900;
+            color: #5b21b6;
+            border-top: 1px solid #c4b5fd;
+            padding-top: 8px;
+            margin-top: 6px;
+          }
+
+          .signatures-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 60px;
+            padding-top: 20px;
+          }
+          .sig-box {
+            text-align: center;
+          }
+          .sig-line {
+            border-top: 1px solid #94a3b8;
+            margin-bottom: 6px;
+          }
+          .sig-name { font-weight: bold; font-size: 12px; color: #334155; }
+          .sig-role { font-size: 10.5px; color: #64748b; }
+
+          .doc-footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 600;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <button class="btn-pdf" onclick="window.print()">📄 Salvar como PDF / Imprimir</button>
+          <button class="btn-close" onclick="window.close()">Fechar</button>
+        </div>
+
+        <div class="a4-container">
+          <div class="header-banner">
+            <div>
+              <h1>${estNome}</h1>
+              <p>${tituloDoc}</p>
+            </div>
+            <div class="header-badge">
+              <div>PEDIDO #${numPedido}</div>
+              <div style="font-weight: normal; font-size: 11px;">Data: ${new Date().toLocaleDateString("pt-BR")}</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="info-card">
+              <h3>DADOS DO ESTABELECIMENTO</h3>
+              <p><strong>Loja:</strong> ${estNome}</p>
+              ${estEnd ? `<p><strong>Endereço:</strong> ${estEnd}</p>` : ""}
+              ${estTel ? `<p><strong>Contato / WhatsApp:</strong> ${estTel}</p>` : ""}
+            </div>
+
+            <div class="info-card">
+              <h3>DADOS DO CLIENTE &amp; ENTREGA</h3>
+              <p><strong>Cliente:</strong> ${ord.clienteNome}</p>
+              ${ord.clienteWhatsapp ? `<p><strong>WhatsApp:</strong> ${ord.clienteWhatsapp}</p>` : ""}
+              <p><strong>Data de Entrega:</strong> ${dataEntregaFmt} às ${horaEntregaFmt}</p>
+              <p><strong>Modalidade:</strong> ${ord.tipoEntrega === "delivery" ? "🚚 Delivery / Entrega" : "🏬 Retirada no Balcão"}</p>
+              ${ord.tipoEntrega === "delivery" && ord.enderecoEntrega ? `<p><strong>Endereço de Entrega:</strong> ${ord.enderecoEntrega}</p>` : ""}
+            </div>
+          </div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">Qtd</th>
+                <th>Descrição do Item</th>
+                <th style="width: 110px; text-align: right;">Valor Unit.</th>
+                <th style="width: 110px; text-align: right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRowsHtml}
+            </tbody>
+          </table>
+
+          ${(ord.temTopoBolo || ord.temVela || ord.observacoes) ? `
+            <div class="obs-box">
+              ${(ord.temTopoBolo || ord.temVela) ? `
+                <p style="margin-bottom: 4px;"><strong>✨ Personalização Especial:</strong> ${ord.temTopoBolo ? `🎂 Topo (${ord.detalhesTopoBolo || "Sim"}) ` : ""} ${ord.temVela ? `🕯️ Vela (${ord.detalhesVela || "Sim"})` : ""}</p>
+              ` : ""}
+              ${ord.observacoes ? `<p><strong>📝 Observações:</strong> ${ord.observacoes}</p>` : ""}
+            </div>
+          ` : ""}
+
+          <div class="totals-section">
+            <div class="totals-card">
+              ${ord.taxaEntrega && Number(ord.taxaEntrega) > 0 ? `
+                <div class="totals-row">
+                  <span>Taxa de Entrega:</span>
+                  <span style="font-family: monospace;">${formatarMoeda(Number(ord.taxaEntrega))}</span>
+                </div>
+              ` : ""}
+              <div class="totals-row final">
+                <span>TOTAL:</span>
+                <span style="font-family: monospace;">${formatarMoeda(ord.valorTotal)}</span>
+              </div>
+              <div class="totals-row" style="margin-top: 8px;">
+                <span>Forma de Pagto:</span>
+                <strong>${formaPagto}</strong>
+              </div>
+              <div class="totals-row">
+                <span>Total Quitado:</span>
+                <span style="font-family: monospace;">${formatarMoeda(totalPago)}</span>
+              </div>
+              <div class="totals-row" style="font-weight: bold; margin-top: 4px; color: ${saldoRestante > 0 ? '#e11d48' : '#16a34a'};">
+                <span>${saldoRestante > 0 ? "Saldo Restante:" : "Situação:"}</span>
+                <span style="font-family: monospace;">${saldoRestante > 0 ? formatarMoeda(saldoRestante) : "PAGO INTEGRALMENTE"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="signatures-grid">
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-name">${estNome}</div>
+              <div class="sig-role">Assinatura do Responsável</div>
+            </div>
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-name">${ord.clienteNome}</div>
+              <div class="sig-role">Assinatura do Cliente</div>
+            </div>
+          </div>
+
+          <div class="doc-footer">
+            Agradecemos imensamente pela preferência! — CaixaDoce Gestão Inteligente
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlA4Content);
+    printWindow.document.close();
+  };
+
   // Gerador de Impressão de Comanda / Cupom Térmico (80mm / 58mm)
   const handleGerarPdfOrcamento = (ord: Encomenda) => {
     const printWindow = window.open("", "_blank", "width=420,height=700");
@@ -5449,18 +5815,32 @@ export function OrdersView({
                   variant="outline"
                   size="sm"
                   onClick={() => {
+                    handleGerarOrcamentoPDF(encomendaDetalhes);
+                  }}
+                  title="Gerar e baixar o Orçamento em PDF A4 completo"
+                  className="text-xs font-bold border-purple-300 text-purple-800 dark:text-purple-300 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span>📄 Orçamento em PDF</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
                     try {
                       handleGerarPdfOrcamento(encomendaDetalhes);
-                      toast.success("Comanda aberta para impressão!");
+                      toast.success("Comanda de impressão aberta!");
                     } catch (err) {
                       console.error("Erro ao imprimir:", err);
                       toast.error("Erro ao abrir comanda.");
                     }
                   }}
+                  title="Imprimir comanda para impressoras térmicas (80mm/58mm)"
                   className="text-xs font-bold border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 h-8 px-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5"
                 >
                   <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>🖨️ Imprimir Pedido (80mm)</span>
+                  <span>🖨️ Impressão Térmica</span>
                 </Button>
                 <Button
                   type="button"
