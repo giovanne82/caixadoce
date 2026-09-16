@@ -135,8 +135,8 @@ export interface InfoPlanoEstabelecimento {
 export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?: string): InfoPlanoEstabelecimento {
   const code = (codigo || "DEFAULT").toUpperCase();
 
-  // Conta de Teste/Master (CD-1001) - Plano Mensal Completo PRO Vitalício sem expirar
-  if (code === "CD-1001") {
+  // Conta de Teste/Master (CD-1001 e CD-4606 - Avaliação Google Play Console) - Plano Completo PRO Vitalício sem expirar
+  if (code === "CD-1001" || code === "CD-4606") {
     return {
       planoId: "ilimitado",
       status: "ativo",

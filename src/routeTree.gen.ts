@@ -18,6 +18,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PdvRouteImport } from './routes/pdv'
 import { Route as PedidoConfirmadoRouteImport } from './routes/pedido-confirmado'
+import { Route as PoliticaDePrivacidadeRouteImport } from './routes/politica-de-privacidade'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
@@ -72,6 +73,11 @@ const PedidoConfirmadoRoute = PedidoConfirmadoRouteImport.update({
   path: '/pedido-confirmado',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PoliticaDePrivacidadeRoute = PoliticaDePrivacidadeRouteImport.update({
+  id: '/politica-de-privacidade',
+  path: '/politica-de-privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/pdv': typeof PdvRoute
   '/pedido-confirmado': typeof PedidoConfirmadoRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
+    | '/politica-de-privacidade'
     | '/privacidade'
     | '/termos'
     | '/admin/afiliados'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
+    | '/politica-de-privacidade'
     | '/privacidade'
     | '/termos'
     | '/admin/afiliados'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pdv'
     | '/pedido-confirmado'
+    | '/politica-de-privacidade'
     | '/privacidade'
     | '/termos'
     | '/admin/afiliados'
@@ -241,6 +253,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PdvRoute: typeof PdvRoute
   PedidoConfirmadoRoute: typeof PedidoConfirmadoRoute
+  PoliticaDePrivacidadeRoute: typeof PoliticaDePrivacidadeRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
   AdminAfiliadosRoute: typeof AdminAfiliadosRoute
@@ -316,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PedidoConfirmadoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/politica-de-privacidade': {
+      id: '/politica-de-privacidade'
+      path: '/politica-de-privacidade'
+      fullPath: '/politica-de-privacidade'
+      preLoaderRoute: typeof PoliticaDePrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacidade': {
       id: '/privacidade'
       path: '/privacidade'
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PdvRoute: PdvRoute,
   PedidoConfirmadoRoute: PedidoConfirmadoRoute,
+  PoliticaDePrivacidadeRoute: PoliticaDePrivacidadeRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
   AdminAfiliadosRoute: AdminAfiliadosRoute,
