@@ -351,12 +351,24 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
               if (targetCode) {
                 if (temDataExpiracao) {
                   if (expMs > Date.now()) {
-                    salvarDadosPlanoEstabelecimento(targetCode, {
-                      status: "ativo",
-                      planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-                      dataExpiracao: expBanco,
-                      diasRestantesTrial: 0,
-                    });
+                    if (statusBanco === "trial") {
+                      const agoraMs = Date.now();
+                      const diffMs = expMs - agoraMs;
+                      const diasRestantes = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                      salvarDadosPlanoEstabelecimento(targetCode, {
+                        status: "trial",
+                        planoId: "mensal",
+                        dataExpiracao: expBanco,
+                        diasRestantesTrial: diasRestantes,
+                      });
+                    } else {
+                      salvarDadosPlanoEstabelecimento(targetCode, {
+                        status: "ativo",
+                        planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                        dataExpiracao: expBanco,
+                        diasRestantesTrial: 0,
+                      });
+                    }
                   } else {
                     salvarDadosPlanoEstabelecimento(targetCode, {
                       status: "expirado",
@@ -421,6 +433,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
               localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
             } else if (baseProf.establishmentCode) {
               // Somente executa UPSERT se a loja realmente não existir no banco
+              const dataCadastro = session.user.created_at || new Date().toISOString();
+              const expDateTrial = new Date(new Date(dataCadastro).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
               const { data: insertedData } = await supabase
                 .from("estabelecimentos")
                 .upsert(
@@ -429,7 +443,10 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                       codigo: baseProf.establishmentCode,
                       nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
                       user_id: u.id,
-                      created_at: session.user.created_at || new Date().toISOString(),
+                      created_at: dataCadastro,
+                      plano_status: "trial",
+                      status_assinatura: "trial",
+                      plano_expira_em: expDateTrial,
                     },
                   ],
                   { onConflict: "codigo" }
@@ -444,7 +461,15 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                   establishmentCode: d.codigo,
                   establishmentName: d.nome,
                   ownerUserId: u.id,
+                  userCreatedAt: dataCadastro,
                 };
+                salvarDadosPlanoEstabelecimento(d.codigo, {
+                  status: "trial",
+                  planoId: "mensal",
+                  dataInicio: dataCadastro,
+                  dataExpiracao: expDateTrial,
+                  diasRestantesTrial: 14,
+                });
                 setProfile(newProf);
                 localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
               }

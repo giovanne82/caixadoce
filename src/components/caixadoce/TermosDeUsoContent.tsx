@@ -25,7 +25,7 @@ export function TermosDeUsoContent() {
           <CheckCircle className="w-4 h-4 text-purple-600" /> 2. Período de Teste Grátis (Trial) e Assinaturas
         </h4>
         <p>
-          Novos usuários cadastrados recebem 7 dias de teste grátis (Trial) com acesso ilimitado às funcionalidades PRO sem necessidade de cadastro de cartão de crédito. Após o término do período de teste, o usuário poderá optar por assinar o Plano Mensal Completo ou utilizar o Plano Básico Gratuito (com acesso restrito).
+          Novos usuários cadastrados recebem 14 dias de teste grátis (Trial) com acesso ilimitado às funcionalidades PRO sem necessidade de cadastro de cartão de crédito. Após o término do período de teste, o usuário poderá optar por assinar o Plano Mensal Completo ou utilizar o Plano Básico Gratuito (com acesso restrito).
         </p>
       </section>
 

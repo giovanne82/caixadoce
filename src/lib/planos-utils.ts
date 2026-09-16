@@ -169,6 +169,15 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
       const expMs = new Date(planoSalvo.dataExpiracao).getTime();
       if (!isNaN(expMs)) {
         if (expMs > Date.now()) {
+          if (planoSalvo.status === "trial") {
+            const diasRestantes = Math.max(1, Math.ceil((expMs - Date.now()) / (1000 * 60 * 60 * 24)));
+            return {
+              ...planoSalvo,
+              planoId: "mensal",
+              status: "trial",
+              diasRestantesTrial: diasRestantes,
+            };
+          }
           const planoIdReal = planoSalvo.planoId && planoSalvo.planoId !== "basico" ? planoSalvo.planoId : "mensal";
           return {
             ...planoSalvo,
@@ -197,10 +206,10 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     }
   }
 
-  // 2. Validação Segura do Trial (7 Dias Padrão + trialDiasAdicionais de Cupons Beta)
+  // 2. Validação Segura do Trial (14 Dias Padrão + trialDiasAdicionais de Cupons Beta)
   const dataCriacaoStr = userCreatedAt || planoSalvo?.dataInicio;
   const diasAdicionais = Number(planoSalvo?.trialDiasAdicionais) || 0;
-  const diasTotaisTrial = 7 + diasAdicionais;
+  const diasTotaisTrial = 14 + diasAdicionais;
 
   if (dataCriacaoStr) {
     const inicioMs = new Date(dataCriacaoStr).getTime();
@@ -258,7 +267,7 @@ export function verificarAcessoModulo(
   // 1. O plano gratuito permite EXCLUSIVAMENTE Insumos ('insumos' / 'despesas')
   if (modulo === "despesas" || modulo === "insumos") return true;
 
-  // 2. No período de teste de 7 dias (trial), todos os módulos ficam liberados
+  // 2. No período de teste de 14 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
 
   // 3. Se possuir uma assinatura ativa do plano Pro / Mensal / Anual / Ilimitado

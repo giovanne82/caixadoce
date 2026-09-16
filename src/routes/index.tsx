@@ -130,7 +130,7 @@ function UpgradeBanner({ onIrParaPlano }: { onIrParaPlano: () => void }) {
       <div className="space-y-2">
         <h3 className="text-xl font-extrabold text-foreground">Recurso Exclusivo do Plano Pro</h3>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Seu período de testes de 7 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
+          Seu período de testes de 14 dias grátis expirou ou você está no <strong>Plano Básico Gratuito</strong> (que possui acesso exclusivo à Lista de Compras).
         </p>
         <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
           Assine o Plano Mensal Completo (R$ 24,90/mês) ou Anual (R$ 154,90/ano) para desbloquear todos os módulos.
@@ -302,12 +302,24 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         let alterou = false;
         if (temDataExpiracao) {
           if (expMs > Date.now()) {
-            alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
-              status: "ativo",
-              planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
-              dataExpiracao: expBanco,
-              diasRestantesTrial: 0,
-            }));
+            if (statusBanco === "trial") {
+              const agoraMs = Date.now();
+              const diffMs = expMs - agoraMs;
+              const diasRestantes = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+              alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
+                status: "trial",
+                planoId: "mensal",
+                dataExpiracao: expBanco,
+                diasRestantesTrial: diasRestantes,
+              }));
+            } else {
+              alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
+                status: "ativo",
+                planoId: (planoIdBanco !== "basico" ? planoIdBanco : "mensal") as any,
+                dataExpiracao: expBanco,
+                diasRestantesTrial: 0,
+              }));
+            }
           } else {
             alterou = Boolean(salvarDadosPlanoEstabelecimento(cleanCode, {
               status: "expirado",
@@ -436,7 +448,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
   // Interceptação de Navegação e Hard Block (Paywall apenas se trial expirado e SEM plano PRO pago ativo)
   useEffect(() => {
     if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "despesas") {
-      toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
+      toast.error("Seu período de teste de 14 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
       setActiveTab("plano");
     }
   }, [isPlanoPagoAtivo, isTrialExpirado, activeTab]);
@@ -2030,7 +2042,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
                     </div>
                   ) : infoPlano.status === "trial" ? (
                     <span className="text-[9px] sm:text-xs font-bold text-[#6D28D9] bg-purple-100/80 px-1.5 py-0.5 rounded-md border border-purple-200 shrink-0">
-                      {infoPlano.diasRestantesTrial || 7}d teste
+                      {infoPlano.diasRestantesTrial || 14}d teste
                     </span>
                   ) : null}
                 </div>
@@ -2091,7 +2103,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
       {/* Conteúdo Principal / Tabs */}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6">
-        {/* Banner Sutil de Trial de 7 Dias Ativo (EXIBIDO APENAS SE NÃO FOR PRO PAGO ATIVO) */}
+        {/* Banner Sutil de Trial de 14 Dias Ativo (EXIBIDO APENAS SE NÃO FOR PRO PAGO ATIVO) */}
         {!isPlanoPagoAtivo && infoPlano.status === "trial" && (infoPlano.diasRestantesTrial ?? 0) > 0 && (
           <div className="mb-6 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
             <div className="flex items-center gap-2 font-bold">
@@ -2120,7 +2132,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             <div className="flex items-center gap-2 font-bold">
               <Lock className="w-5 h-5 text-rose-600 shrink-0" />
               <span>
-                🚨 Seu período de teste gratuito de 7 dias expirou. Faça uma assinatura para desbloquear o acesso completo a todos os módulos do sistema.
+                🚨 Seu período de teste gratuito de 14 dias expirou. Faça uma assinatura para desbloquear o acesso completo a todos os módulos do sistema.
               </span>
             </div>
             <Button

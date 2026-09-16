@@ -73,11 +73,11 @@ export function LandingPageContent() {
         <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-amber-100/40 rounded-full blur-3xl"></div>
       </div>
 
-      {/* BANNER PROMOCIONAL FIXO NO TOPO - 7 DIAS GRÁTIS */}
+      {/* BANNER PROMOCIONAL FIXO NO TOPO - 14 DIAS GRÁTIS */}
       <div className="bg-gradient-to-r from-purple-900 via-pink-800 to-amber-700 text-white text-xs font-bold py-2.5 px-4 text-center flex flex-wrap items-center justify-center gap-2 shadow-md relative z-50">
         <Crown className="w-4 h-4 text-amber-300 animate-bounce shrink-0" />
         <span>
-          <strong>7 dias grátis para testar:</strong> Teste grátis por 7 dias sem compromisso e sem precisar de cartão!
+          <strong>14 dias grátis para testar:</strong> Teste grátis por 14 dias sem compromisso e sem precisar de cartão!
         </span>
         <Button
           onClick={irParaLogin}
@@ -189,14 +189,14 @@ export function LandingPageContent() {
               <div className="space-y-1">
                 <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                   <Badge className="bg-amber-400 text-slate-950 font-black text-[11px] px-3 py-0.5 rounded-full shadow-xs uppercase tracking-wider flex items-center gap-1">
-                    <Crown className="w-3.5 h-3.5 text-slate-950" /> 7 DIAS GRÁTIS PARA TESTAR
+                    <Crown className="w-3.5 h-3.5 text-slate-950" /> 14 DIAS GRÁTIS PARA TESTAR
                   </Badge>
                   <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                     ✓ Sem Cartão de Crédito
                   </span>
                 </div>
                 <h3 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
-                  Teste grátis por 7 dias sem compromisso
+                  Teste grátis por 14 dias sem compromisso
                 </h3>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
                   Acesso completo e imediato: Cardápio Digital, Pix Mercado Pago, Gestão de Encomendas e Ficha Técnica.
@@ -971,7 +971,7 @@ export function LandingPageContent() {
             </h2>
           </div>
 
-          {/* BANNER DESTACADO DE DESTAQUE — 7 DIAS GRÁTIS */}
+          {/* BANNER DESTACADO DE DESTAQUE — 14 DIAS GRÁTIS */}
           <div className="max-w-4xl mx-auto p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-900 via-pink-900 to-amber-800 border-2 border-amber-400/80 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shrink-0 shadow-md">
@@ -979,10 +979,10 @@ export function LandingPageContent() {
               </div>
               <div className="space-y-0.5">
                 <div className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5 justify-center sm:justify-start">
-                  <span>7 dias grátis para testar</span>
+                  <span>14 dias grátis para testar</span>
                   <span className="bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-[9px] px-2 py-0.2 rounded-full font-bold">Sem Cartão</span>
                 </div>
-                <div className="text-sm font-extrabold text-white">Teste grátis por 7 dias sem compromisso</div>
+                <div className="text-sm font-extrabold text-white">Teste grátis por 14 dias sem compromisso</div>
                 <div className="text-xs text-purple-200">Acesso completo liberado em menos de 1 minuto!</div>
               </div>
             </div>
@@ -1200,8 +1200,8 @@ export function LandingPageContent() {
                 a: "Quando você altera o preço de um insumo (como o leite condensado ou chocolate) ou escaneia uma notinha com novo valor, o sistema recalcula instantaneamente o custo e a margem de lucro de todas as receitas que utilizam aquele ingrediente.",
               },
               {
-                q: "Como funciona o teste grátis de 7 dias?",
-                a: "Você cria sua conta gratuitamente e tem 7 dias completos para usar todas as funcionalidades Pro, incluindo a vitrine online, PDV de balcão, baixa automática de Pix, calendário de encomendas e precificação por IA, sem precisar cadastrar cartão de crédito.",
+                q: "Como funciona o teste grátis de 14 dias?",
+                a: "Você cria sua conta gratuitamente e tem 14 dias completos para usar todas as funcionalidades Pro, incluindo a vitrine online, PDV de balcão, baixa automática de Pix, calendário de encomendas e precificação por IA, sem precisar cadastrar cartão de crédito.",
               },
               {
                 q: "Como o sistema me ajuda a não perder prazos de entrega?",

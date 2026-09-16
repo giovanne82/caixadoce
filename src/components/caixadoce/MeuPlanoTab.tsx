@@ -441,7 +441,7 @@ export function MeuPlanoTab() {
             Meu Plano &amp; Assinatura <Crown className="w-6 h-6 text-[#8E7CC3]" />
           </h2>
           <p className="text-sm text-muted-foreground">
-            Aproveite 7 dias grátis de acesso ilimitado ou assine o Plano Mensal/Anual Completo via Mercado Pago.
+            Aproveite 14 dias grátis de acesso ilimitado ou assine o Plano Mensal/Anual Completo via Mercado Pago.
           </p>
         </div>
       </div>
