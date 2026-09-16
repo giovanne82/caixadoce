@@ -1538,6 +1538,12 @@ export function LandingPageContent() {
             <a href="#precos" className="hover:text-purple-700 transition-colors">
               Planos
             </a>
+            <Link to="/privacidade" className="hover:text-purple-700 transition-colors font-bold text-emerald-700">
+              Privacidade
+            </Link>
+            <Link to="/termos" className="hover:text-purple-700 transition-colors font-bold text-purple-700">
+              Termos de Uso
+            </Link>
             <Link to="/login" search={{} as any} className="hover:text-purple-700 transition-colors">
               Login
             </Link>
