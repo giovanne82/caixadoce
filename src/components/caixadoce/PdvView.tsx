@@ -69,6 +69,7 @@ import {
   FileText,
   X,
   Scale,
+  Calculator,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -242,6 +243,10 @@ export function PdvView() {
   const [carregandoHistoricoFechamentos, setCarregandoHistoricoFechamentos] = useState(false);
   const [tamanhoImpressora, setTamanhoImpressora] = useState<"80mm" | "58mm">("80mm");
 
+  // Modal de Preço Flexível / Sob Orçamento no PDV
+  const [produtoPrecoManualModal, setProdutoPrecoManualModal] = useState<ProdutoCardapio | null>(null);
+  const [precoManualInput, setPrecoManualInput] = useState<string>("");
+
   // =========================================================================
   // HISTÓRICO DE ÚLTIMAS VENDAS (SINCRONIZADO)
   // =========================================================================
@@ -399,6 +404,13 @@ export function PdvView() {
   // ADIÇÃO ÁGIL AO CARRINHO DO PDV & VENDA POR PESO
   // ==========================================
   const handleClicarProduto = (produto: ProdutoCardapio) => {
+    // 0. Se for produto sob orçamento (sem preço ou R$ 0,00), abre modal para definir o valor unitário
+    if (!produto.preco || produto.preco <= 0) {
+      setProdutoPrecoManualModal(produto);
+      setPrecoManualInput("");
+      return;
+    }
+
     // 1. Se for produto vendido por peso (R$/kg), abre modal de pesagem/balança
     if (produto.vende_por_peso || produto.unidade_venda === "kg") {
       setProdutoPesoModal(produto);
@@ -502,6 +514,33 @@ export function PdvView() {
       `${produtoPesoModal.nome} (${g >= 1000 ? `${(g / 1000).toFixed(3)} kg` : `${g}g`}) adicionado!`,
       { duration: 1500 }
     );
+  };
+
+  const handleConfirmarPrecoManual = () => {
+    if (!produtoPrecoManualModal) return;
+    const v = converterMoedaInputParaNumero(precoManualInput);
+    if (v <= 0) {
+      toast.error("Informe um valor unitário válido em reais.");
+      return;
+    }
+
+    const prodComPreco: ProdutoCardapio = {
+      ...produtoPrecoManualModal,
+      preco: v,
+    };
+
+    setPdvCart((prev) => [
+      ...prev,
+      {
+        produto: prodComPreco,
+        quantidade: 1,
+        precoUnitario: v,
+      },
+    ]);
+
+    toast.success(`${produtoPrecoManualModal.nome} adicionado com valor ${formatarMoeda(v)}!`);
+    setProdutoPrecoManualModal(null);
+    setPrecoManualInput("");
   };
 
   const handleConfirmarOpcoesModal = () => {
@@ -2291,12 +2330,18 @@ export function PdvView() {
 
                     {/* Preço e Botão Adicionar */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
-                      <span className="font-mono text-xs sm:text-sm font-black text-emerald-400">
-                        {formatarMoeda(prod.preco)}
-                        {(prod.vende_por_peso || prod.unidade_venda === "kg") && (
-                          <span className="text-[10px] font-medium text-slate-400">/kg</span>
-                        )}
-                      </span>
+                      {(!prod.preco || prod.preco <= 0) ? (
+                        <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                          Sob Orçamento
+                        </Badge>
+                      ) : (
+                        <span className="font-mono text-xs sm:text-sm font-black text-emerald-400">
+                          {formatarMoeda(prod.preco)}
+                          {(prod.vende_por_peso || prod.unidade_venda === "kg") && (
+                            <span className="text-[10px] font-medium text-slate-400">/kg</span>
+                          )}
+                        </span>
+                      )}
                       <div className="w-6 h-6 rounded-lg bg-purple-600/20 text-purple-300 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
                         <Plus className="w-3.5 h-3.5 stroke-[3]" />
                       </div>
@@ -2767,6 +2812,76 @@ export function PdvView() {
                 Adicionar ao Pedido
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3.2 MODAL DE PREÇO FLEXÍVEL / SOB ORÇAMENTO NO PDV */}
+      {/* ========================================================================= */}
+      {produtoPrecoManualModal && (
+        <Dialog open={!!produtoPrecoManualModal} onOpenChange={() => setProdutoPrecoManualModal(null)}>
+          <DialogContent className="sm:max-w-md bg-slate-900 border border-slate-800 text-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-white text-base">
+                <Calculator className="w-5 h-5 text-amber-400 shrink-0" />
+                Definir Preço do Produto
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                O produto <strong className="text-amber-300">{produtoPrecoManualModal.nome}</strong> foi cadastrado como "Preço sob Consulta". Informe o valor unitário para este pedido.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleConfirmarPrecoManual();
+              }}
+              className="space-y-4 py-2"
+            >
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-amber-400 shrink-0" />
+                  Produto sob Orçamento / Flexível
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  Digite o valor combinado com o cliente. Ele será aplicado apenas a este item no pedido atual.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="preco-manual-pdv" className="text-xs font-bold text-slate-200">
+                  Preço Unitário (R$) *
+                </Label>
+                <Input
+                  id="preco-manual-pdv"
+                  placeholder="R$ 0,00"
+                  value={precoManualInput}
+                  onChange={(e) => setPrecoManualInput(aplicarMascaraMoedaInput(e.target.value))}
+                  className="h-10 text-base font-black bg-slate-950 border-slate-700 text-amber-400 font-mono"
+                  autoFocus
+                />
+              </div>
+
+              <DialogFooter className="pt-2 flex items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setProdutoPrecoManualModal(null)}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 h-9 shadow-md"
+                >
+                  Confirmar e Adicionar
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       )}

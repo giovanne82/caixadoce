@@ -563,8 +563,8 @@ export function ProductsView({
     e.preventDefault();
     const precoNum = converterMoedaInputParaNumero(precoFormatado);
 
-    if (!nome || precoNum <= 0) {
-      toast.error("Informe o nome e um preço válido para o produto.");
+    if (!nome.trim()) {
+      toast.error("Informe o nome do produto.");
       return;
     }
 
@@ -802,6 +802,13 @@ export function ProductsView({
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            onClick={handleAbrirCriacao}
+            className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
+          >
+            <Plus className="w-4 h-4 mr-1.5" /> Novo Produto
+          </Button>
+
+          <Button
             onClick={() => {
               setKitEditing(null);
               setModalKitOpen(true);
@@ -809,13 +816,6 @@ export function ProductsView({
             className="font-bold shadow-md bg-purple-600 hover:bg-purple-700 text-white text-xs h-9"
           >
             <Box className="w-4 h-4 mr-1.5" /> + Montar Kit
-          </Button>
-
-          <Button
-            onClick={handleAbrirCriacao}
-            className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
-          >
-            <Plus className="w-4 h-4 mr-1.5" /> Novo Produto
           </Button>
         </div>
       </div>
@@ -1006,9 +1006,15 @@ export function ProductsView({
                     <span className="text-[10px] text-muted-foreground block font-medium">
                       {prod.vende_por_peso ? "Preço do Quilo" : "Preço de Venda"}
                     </span>
-                    <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
-                      {formatarMoeda(prod.preco)} {prod.vende_por_peso ? <span className="text-xs font-semibold text-muted-foreground">/kg</span> : ""}
-                    </span>
+                    {(!prod.preco || prod.preco <= 0) ? (
+                      <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs font-black mt-0.5">
+                        Sob Orçamento
+                      </Badge>
+                    ) : (
+                      <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
+                        {formatarMoeda(prod.preco)} {prod.vende_por_peso ? <span className="text-xs font-semibold text-muted-foreground">/kg</span> : ""}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -1238,7 +1244,7 @@ export function ProductsView({
 
               <div className="space-y-1">
                 <Label htmlFor="prod-preco" className="text-xs font-semibold">
-                  {vendePorPeso ? "Preço do Quilo (R$/kg) *" : "Preço de Venda (R$) *"}
+                  {vendePorPeso ? "Preço do Quilo (R$/kg)" : "Preço de Venda (R$)"}
                 </Label>
                 <Input
                   id="prod-preco"
@@ -1246,8 +1252,12 @@ export function ProductsView({
                   value={precoFormatado}
                   onChange={(e) => setPrecoFormatado(aplicarMascaraMoedaInput(e.target.value))}
                   className="h-8 text-xs font-black text-foreground"
-                  required
                 />
+                {(converterMoedaInputParaNumero(precoFormatado) <= 0 || !precoFormatado) && (
+                  <p className="text-[10.5px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1 mt-1">
+                    💡 Este produto será tratado como "Preço sob Consulta / Orçamento"
+                  </p>
+                )}
               </div>
             </div>
 

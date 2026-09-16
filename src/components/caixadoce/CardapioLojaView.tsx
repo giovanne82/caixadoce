@@ -428,7 +428,7 @@ export function ProductImageCarousel({
           className="w-full h-full object-cover"
         />
         <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm">
-          Base: {formatarMoeda(preco)}{vendePorPeso ? "/kg" : ""}
+          {(!preco || preco <= 0) ? "Preço sob Consulta / Orçamento" : `Base: ${formatarMoeda(preco)}${vendePorPeso ? "/kg" : ""}`}
         </div>
       </div>
     );
@@ -503,7 +503,7 @@ export function ProductImageCarousel({
 
       {/* Preço Base no Canto Inferior Direito */}
       <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm z-10">
-        Base: {formatarMoeda(preco)}{vendePorPeso ? "/kg" : ""}
+        {(!preco || preco <= 0) ? "Preço sob Consulta / Orçamento" : `Base: ${formatarMoeda(preco)}${vendePorPeso ? "/kg" : ""}`}
       </div>
     </div>
   );
@@ -796,6 +796,15 @@ export function CardapioLojaView() {
       return acc + item.quantidade;
     }, 0);
   }, [carrinho]);
+
+  const temItemSemPreco = useMemo(() => {
+    return carrinho.some((item) => !item.produto.preco || item.produto.preco <= 0);
+  }, [carrinho]);
+
+  const efetoPurchaseIntent = useMemo(() => {
+    if (temItemSemPreco || lojaInfo?.modo_venda === "apenas_orcamento") return "orcamento";
+    return purchaseIntent;
+  }, [temItemSemPreco, lojaInfo?.modo_venda, purchaseIntent]);
 
   const enderecoEntrega = useMemo(() => {
     const partes = [];
@@ -3417,12 +3426,18 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         <CardTitle className="text-xs sm:text-base font-extrabold text-foreground leading-tight line-clamp-2">
                           {prod.nome}
                         </CardTitle>
-                        <span
-                          style={{ color: corTemaDestaque }}
-                          className="text-xs sm:text-lg font-black font-mono shrink-0"
-                        >
-                          {formatarMoeda(prod.preco)}
-                        </span>
+                        {(!prod.preco || prod.preco <= 0) ? (
+                          <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 text-[10px] sm:text-xs font-black shrink-0">
+                            Sob Orçamento
+                          </Badge>
+                        ) : (
+                          <span
+                            style={{ color: corTemaDestaque }}
+                            className="text-xs sm:text-lg font-black font-mono shrink-0"
+                          >
+                            {formatarMoeda(prod.preco)}
+                          </span>
+                        )}
                       </div>
                       <CardDescription className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-3 mt-0.5 sm:mt-1.5">
                         {prod.descricao}
@@ -3473,7 +3488,15 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       style={{ backgroundColor: corTemaDestaque }}
                       className="font-bold text-[11px] sm:text-xs text-white shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center hover:opacity-90 transition-opacity"
                     >
-                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> {prod.opcoes && prod.opcoes.length > 0 ? "Escolher" : "Pedir"}
+                      {(!prod.preco || prod.preco <= 0) ? (
+                        <>
+                          <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Solicitar Orçamento
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> {prod.opcoes && prod.opcoes.length > 0 ? "Escolher" : "Pedir"}
+                        </>
+                      )}
                     </Button>
                   </CardFooter>
                 </Card>
@@ -3904,8 +3927,16 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     </div>
                   )}
 
+                  {/* AVISO SE HOUVER ITENS SOB CONSULTA */}
+                  {temItemSemPreco && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Este pedido contém item(ns) sob consulta e será enviado como <strong>Solicitação de Orçamento</strong>.</span>
+                    </div>
+                  )}
+
                   {/* SELEÇÃO DE FORMA DE PAGAMENTO (APENAS NO MODO PEDIDO DIRETO) */}
-                  {purchaseIntent === "pedido" && (
+                  {efetoPurchaseIntent === "pedido" && (
                     <>
                       <div className="space-y-2 pt-2 border-t border-border/60">
                         <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
@@ -4016,7 +4047,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
           {carrinho.length > 0 && (
             <SheetFooter className="pt-4 border-t border-border/60 flex flex-col gap-2 sm:flex-col">
-              {purchaseIntent === "orcamento" ? (
+              {efetoPurchaseIntent === "orcamento" ? (
                 <Button
                   type="button"
                   disabled={salvandoPedido || salvandoOrcamento}
@@ -4617,16 +4648,22 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
                 <div className="text-right">
                   <p className="text-[11px] font-medium text-muted-foreground">Total deste item</p>
-                  <p
-                    style={{ color: corTemaDestaque }}
-                    className="text-base sm:text-lg font-black font-mono"
-                  >
-                    {formatarMoeda(
-                      produtoModal.permite_multiplas_opcoes
-                        ? totalPrecoMultiOpcoes
-                        : (produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0)) * quantidadeModal
-                    )}
-                  </p>
+                  {(!produtoModal.preco || produtoModal.preco <= 0) && totalPrecoMultiOpcoes <= 0 ? (
+                    <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 text-xs font-black">
+                      Sob Consulta
+                    </Badge>
+                  ) : (
+                    <p
+                      style={{ color: corTemaDestaque }}
+                      className="text-base sm:text-lg font-black font-mono"
+                    >
+                      {formatarMoeda(
+                        produtoModal.permite_multiplas_opcoes
+                          ? totalPrecoMultiOpcoes
+                          : (produtoModal.preco + (opcaoSelecionadaModal?.preco_adicional || 0)) * quantidadeModal
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -4648,12 +4685,18 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     ? totalQtdMultiOpcoes === 0
                     : temOpcoes && !opcaoSelecionadaModal;
 
+                  const isSobOrcamento = (!produtoModal.preco || produtoModal.preco <= 0);
+
                   const labelBotao = isMulti
                     ? totalQtdMultiOpcoes === 0
                       ? "Selecione as Quantidades"
+                      : isSobOrcamento
+                      ? "Adicionar à Solicitação de Orçamento"
                       : "Adicionar ao Pedido"
                     : temOpcoes && !opcaoSelecionadaModal
                     ? "Selecione uma Opção"
+                    : isSobOrcamento
+                    ? "Adicionar à Solicitação de Orçamento"
                     : "Adicionar ao Pedido";
 
                   return (
