@@ -1,15 +1,12 @@
 import { DeliveryIntegrationAdapter, DeliveryPlatform, NormalizedDeliveryOrder } from "./types";
 import { IFoodAdapter } from "./ifoodAdapter";
-import { NineNineFoodAdapter } from "./nineNineFoodAdapter";
 import { getSupabaseBackendClient } from "@/lib/ifood-service";
 
 export * from "./types";
 export * from "./ifoodAdapter";
-export * from "./nineNineFoodAdapter";
 
-// Instâncias Singleton dos Adapters
+// Instância Singleton do Adapter do iFood
 const ifoodAdapterInstance = new IFoodAdapter();
-const nineNineFoodAdapterInstance = new NineNineFoodAdapter();
 
 /**
  * Factory para obter o adapter correto por plataforma
@@ -18,8 +15,6 @@ export function getDeliveryAdapter(platform: DeliveryPlatform): DeliveryIntegrat
   switch (platform) {
     case "ifood":
       return ifoodAdapterInstance;
-    case "99food":
-      return nineNineFoodAdapterInstance;
     default:
       throw new Error(`Plataforma de delivery não suportada: ${platform}`);
   }
@@ -46,7 +41,7 @@ export async function saveNormalizedOrderToEncomendas(
     const supabase = getSupabaseBackendClient();
 
     // 1. Evita duplicidade pelo ID do pedido da plataforma
-    const idColumn = order.platform === "ifood" ? "codigo_pedido_ifood" : "codigo_pedido_99food";
+    const idColumn = "codigo_pedido_ifood";
     const { data: existing } = await supabase
       .from("encomendas")
       .select("id, estabelecimento_codigo")

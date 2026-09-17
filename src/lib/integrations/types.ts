@@ -1,4 +1,4 @@
-export type DeliveryPlatform = "ifood" | "99food";
+export type DeliveryPlatform = "ifood";
 
 export type DeliveryOrderStatus =
   | "placed"
@@ -73,7 +73,7 @@ export interface DeliveryOrderActionResult {
 }
 
 /**
- * Interface base para o padrão Adapter de Plataformas de Delivery (iFood, 99Food, etc.)
+ * Interface base para o padrão Adapter de Plataformas de Delivery (iFood)
  */
 export interface DeliveryIntegrationAdapter {
   readonly platform: DeliveryPlatform;

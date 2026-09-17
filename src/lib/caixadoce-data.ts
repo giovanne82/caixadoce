@@ -1173,7 +1173,7 @@ export function isEncomendaTotalmentePaga(encomenda: Partial<Encomenda>): boolea
   return (encomenda.statusPagamento as string) === "pago" || encomenda.statusPagamento === "pago_integral";
 }
 
-export type OrigemEncomendaTipo = "manual" | "cardapio" | "ifood" | "99food";
+export type OrigemEncomendaTipo = "manual" | "cardapio" | "ifood";
 
 export function obterOrigemEncomenda(encomenda?: Partial<Encomenda> | null): OrigemEncomendaTipo {
   if (!encomenda) return "manual";
@@ -1181,7 +1181,6 @@ export function obterOrigemEncomenda(encomenda?: Partial<Encomenda> | null): Ori
 
   const origemStr = String(encomenda.origem || "").trim().toLowerCase();
   if (origemStr === "ifood") return "ifood";
-  if (origemStr === "99food" || origemStr === "99_food" || origemStr === "99") return "99food";
   if (origemStr === "cardapio" || origemStr === "catalogo" || origemStr === "site" || origemStr === "cardapio_digital") return "cardapio";
   if (origemStr === "manual" || origemStr === "painel" || origemStr === "balcao" || origemStr === "pdv") return "manual";
 
@@ -1189,14 +1188,7 @@ export function obterOrigemEncomenda(encomenda?: Partial<Encomenda> | null): Ori
     return "ifood";
   }
 
-  if (encomenda.codigo_pedido_99food || (encomenda as any).codigoPedido99Food || (encomenda as any).is_99food) {
-    return "99food";
-  }
-
   const origemPag = String(encomenda.origem_pagamento || "").trim().toLowerCase();
-  if (origemPag === "99food" || (encomenda as any).origem_pedido === "99food") {
-    return "99food";
-  }
   if (origemPag === "mercadopago" || (encomenda as any).is_orcamento || (encomenda as any).origem_pedido === "cardapio" || (encomenda as any).forma_pagamento === "Orçamento") {
     return "cardapio";
   }
@@ -1225,7 +1217,6 @@ export interface Encomenda {
   origem_pagamento?: string;
   origem?: string;
   codigo_pedido_ifood?: string;
-  codigo_pedido_99food?: string;
   dados_brutos?: any;
   raw_payload?: any;
   payload?: any;

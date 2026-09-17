@@ -1752,8 +1752,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
     },
     {
       id: "integracoes",
-      title: "Integrações Delivery",
-      description: "Conecte sua loja ao iFood, 99Food e outros",
+      title: "Integração iFood",
+      description: "Conecte sua loja ao iFood para receber pedidos automáticos",
       icon: ShoppingBag,
       colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
       badge: "Homologação",
@@ -3541,8 +3541,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
             </div>
           )}
 
-          {/* 7. SEÇÃO: INTEGRAÇÕES DELIVERY (IFOOD & 99FOOD) */}
-          {(activeSection === "integracoes" || activeSection === "ifood" || activeSection === "99food") && (
+          {/* 7. SEÇÃO: INTEGRAÇÃO DELIVERY (IFOOD) */}
+          {(activeSection === "integracoes" || activeSection === "ifood") && (
             <div className="space-y-6">
               <Card className="border-border shadow-sm">
                 <CardHeader>
@@ -3550,10 +3550,10 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                     <div>
                       <CardTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
                         <ShoppingBag className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-                        <span>Integrações com Plataformas de Delivery</span>
+                        <span>Integração com iFood</span>
                       </CardTitle>
                       <CardDescription className="text-xs mt-1">
-                        Conecte sua confeitaria aos principais aplicativos de entrega para receber pedidos automaticamente no painel do CaixaDoce
+                        Conecte sua confeitaria ao iFood para receber e sincronizar pedidos automaticamente no painel do CaixaDoce
                       </CardDescription>
                     </div>
                     <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
@@ -3577,38 +3577,7 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Receba e sincronize pedidos do iFood diretamente nas suas encomendas em tempo real.
-                          </p>
-                        </div>
-                      </div>
-
-                      <Button
-                        type="button"
-                        disabled={true}
-                        variant="outline"
-                        className="text-xs font-bold shrink-0 opacity-70 cursor-not-allowed border-dashed"
-                      >
-                        <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Conectar (Em Breve)
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* CARD 99FOOD */}
-                  <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-3 shadow-2xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
-                          <Store className="w-5 h-5" />
-                        </div>
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-extrabold text-foreground">99Food Delivery</h4>
-                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                              Em Homologação
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            Integração de pedidos e entregadores do 99Food com cálculo e impressão automática de cupom.
+                            Receba e sincronize pedidos do iFood diretamente nas suas encomendas em tempo real com impressão de cupom e baixa automática.
                           </p>
                         </div>
                       </div>
