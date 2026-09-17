@@ -458,10 +458,12 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
   const lastFetchMapRef = useRef<Record<string, number>>({});
 
   const shouldFetch = useCallback((key: string, force = false): boolean => {
-    if (force) return true;
     const now = Date.now();
     const last = lastFetchMapRef.current[key] || 0;
-    if (now - last < 8000) {
+    // Sem force: exige intervalo mínimo de 12 segundos entre fetches automáticos
+    // Com force (ex: evento realtime): exige intervalo mínimo de 3 segundos para evitar loops em rajada
+    const minInterval = force ? 3000 : 12000;
+    if (now - last < minInterval) {
       return false;
     }
     lastFetchMapRef.current[key] = now;
@@ -505,10 +507,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     []
   );
 
-  // 1. Carrega Transações Financeiras do Supabase ou LocalStorage
   // 1. Carrega Transações Financeiras do Supabase (Fonte Única da Verdade)
   const fetchTransacoes = useCallback(async (force = false) => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
     if (!shouldFetch(`transacoes_${activeCode}`, force)) return;
 
     try {
@@ -550,32 +551,13 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         try {
           localStorage.setItem(`caixadoce_transacoes_${activeCode}`, JSON.stringify(mapeadas));
         } catch {}
-
-        // Purga silenciosa de lançamentos automáticos de assinatura gravados incorretamente no Supabase
-        const idsAssinatura = data
-          .filter((d: any) => {
-            const cat = String(d.categoria || "").toLowerCase();
-            const desc = String(d.descricao || "").toLowerCase();
-            return cat.includes("assinatura") || desc.includes("assinatura") || desc.includes("caixadoce");
-          })
-          .map((d: any) => d.id);
-
-        if (idsAssinatura.length > 0) {
-          supabase
-            .from("transacoes_financeiras")
-            .delete()
-            .in("id", idsAssinatura)
-            .then(() => {
-              console.log(`[Limpeza Transações Assinatura] 🧹 Purga de ${idsAssinatura.length} lançamentos efetuada.`);
-            });
-        }
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
   // 2. Carrega Encomendas e Datas Bloqueadas do Supabase (Fonte Única da Verdade)
   const fetchEncomendasECalendario = useCallback(async (force = false) => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
     if (!shouldFetch(`encomendas_${activeCode}`, force)) return;
 
     try {
@@ -701,11 +683,11 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
   // 3. Carrega e Sincroniza Despesas (Notinhas) exclusivamente na tabela "despesas"
   const fetchDespesas = useCallback(async (force = false) => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
     if (!shouldFetch(`despesas_${activeCode}`, force)) return;
 
     try {
@@ -744,11 +726,11 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     } catch (err) {
       console.error("Erro ao carregar despesas:", err);
     }
-  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
   // 4. Carrega Clientes (Customers) do Supabase (Fonte Única da Verdade)
   const fetchClientes = useCallback(async (force = false) => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
     if (!shouldFetch(`clientes_${activeCode}`, force)) return;
 
     try {
@@ -770,11 +752,11 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
   // 5. Carrega Produtos do Cardápio e Kits do Supabase (Fonte Única da Verdade)
   const fetchProdutos = useCallback(async (force = false) => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
     if (!shouldFetch(`produtos_${activeCode}`, force)) return;
 
     try {
@@ -831,11 +813,11 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(mapeados));
       } catch {}
     } catch {}
-  }, [activeCode, profile, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
   // 6. Carrega Listas de Compras (ListasCompras) do Supabase (Fonte Única da Verdade)
   const fetchListasCompras = useCallback(async (force = false) => {
-    if (!profile || !activeCode || authLoading) return;
+    if (!activeCode) return;
     if (!shouldFetch(`listas_${activeCode}`, force)) return;
 
     try {
@@ -860,8 +842,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         } catch {}
       }
     } catch {}
-  }, [activeCode, profile, authLoading, safeFetchSupabase, shouldFetch]);
+  }, [activeCode, safeFetchSupabase, shouldFetch]);
 
+  // Execução do fetch inicial apenas no mount e alteração do código ativo
   useEffect(() => {
     if (!activeCode) return;
     fetchTransacoes();
@@ -872,39 +855,56 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     fetchListasCompras();
   }, [activeCode, fetchTransacoes, fetchEncomendasECalendario, fetchDespesas, fetchClientes, fetchProdutos, fetchListasCompras]);
 
-  // Listener Global em Tempo Real do Supabase para todas as tabelas (Sincronização Multidispositivo PC <-> Celular)
+  // Listener Global em Tempo Real do Supabase com filtro estrito de tenant (Sincronização Multidispositivo PC <-> Celular)
   useEffect(() => {
-    if (!profile || !activeCode) return;
+    if (!activeCode) return;
+    const cleanCode = activeCode.toUpperCase().trim();
     const channel = supabase
-      .channel(`global_realtime_sync_${activeCode}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "despesas" }, () => fetchDespesas(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => fetchDespesas(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "encomendas" }, () => fetchEncomendasECalendario(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "produtos" }, () => fetchProdutos(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "transacoes_financeiras" }, () => fetchTransacoes(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => fetchClientes(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "listas_compras" }, () => fetchListasCompras(true))
+      .channel(`global_realtime_sync_${cleanCode}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "despesas", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchDespesas(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "encomendas", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchEncomendasECalendario(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "produtos", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchProdutos(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "transacoes_financeiras", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchTransacoes(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customers", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchClientes(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "listas_compras", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchListasCompras(true)
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile, activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
+  }, [activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
 
-  // Revalidação imediata de encomendas ao selecionar a aba 'encomendas'
-  useEffect(() => {
-    if (activeTab === "encomendas" && activeCode) {
-      fetchEncomendasECalendario(true);
-    }
-  }, [activeTab, activeCode, fetchEncomendasECalendario]);
-
-  // Revalidação ao retomar foco na janela / mudar visibilidade da página
+  // Revalidação ao retomar foco na janela / mudar visibilidade da página (respeita cooldown sem loop)
   useEffect(() => {
     if (!activeCode) return;
     const handleFocus = () => {
       if (document.visibilityState === "visible") {
-        fetchEncomendasECalendario(true);
-        fetchTransacoes(true);
+        fetchEncomendasECalendario();
+        fetchTransacoes();
       }
     };
     window.addEventListener("focus", handleFocus);

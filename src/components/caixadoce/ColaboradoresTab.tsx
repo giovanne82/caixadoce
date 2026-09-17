@@ -111,11 +111,17 @@ export function ColaboradoresTab() {
   }, [activeCode]);
 
   useEffect(() => {
+    if (!activeCode) return;
     fetchColaboradores();
 
+    const cleanCode = activeCode.toUpperCase().trim();
     const channel = supabase
-      .channel(`realtime_colaboradores_${activeCode}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "colaboradores" }, () => fetchColaboradores())
+      .channel(`realtime_colaboradores_${cleanCode}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "colaboradores", filter: `estabelecimento_codigo=eq.${cleanCode}` },
+        () => fetchColaboradores()
+      )
       .subscribe();
 
     return () => {
