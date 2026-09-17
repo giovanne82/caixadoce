@@ -26,8 +26,8 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = 10485760,
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/heic'];
 
--- 3. Habilita RLS em storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- 3. Políticas de Segurança (RLS) para o bucket 'orcamentos-anexos'
+-- Nota: RLS já vem habilitado por padrão em storage.objects no Supabase
 
 -- 4. Política de INSERT (Upload): Permite que qualquer cliente (anônimo ou logado) envie fotos de inspiração
 DROP POLICY IF EXISTS "Permitir upload publico em orcamentos-anexos" ON storage.objects;
