@@ -1047,7 +1047,7 @@ export function LandingPageContent() {
               </Button>
             </Card>
 
-            {/* PLANO MENSAL PRO (R$ 24,90 / MÊS) */}
+            {/* PLANO MENSAL PRO (R$ 10,90 / MÊS) */}
             <Card className="bg-white border-2 border-purple-600 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-purple-600/15">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-purple-600 text-white font-black text-[11px] px-3.5 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
                 <Sparkles className="w-3 h-3 text-amber-300" /> FLEXIBILIDADE MENSAL
@@ -1065,11 +1065,11 @@ export function LandingPageContent() {
                 <div className="space-y-1">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-purple-700">
-                      R$ 24,90
+                      R$ 10,90
                     </span>
                     <span className="text-xs text-slate-600 font-semibold">/ mês</span>
                   </div>
-                  <p className="text-[11px] text-emerald-700 font-bold">Por R$ 19,90 com cupom de parceiro</p>
+                  <p className="text-[11px] text-purple-700 font-semibold">Acesso ilimitado completo • Cancele quando quiser</p>
                 </div>
 
                 <div className="pt-4 border-t border-purple-100 space-y-2.5 text-xs text-slate-700">
@@ -1108,10 +1108,10 @@ export function LandingPageContent() {
               </Button>
             </Card>
 
-            {/* PLANO ANUAL PRO (R$ 154,90 / ANO - DESTAQUE DE ECONOMIA) */}
+            {/* PLANO ANUAL PRO (R$ 109,90 / ANO - DESTAQUE DE ECONOMIA) */}
             <Card className="bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative space-y-6 shadow-xl shadow-emerald-500/15 transform lg:-translate-y-2 ring-2 ring-emerald-500/20">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-[11px] px-4 py-0.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
-                <Crown className="w-3.5 h-3.5 text-amber-300" /> MELHOR VALOR • 35% OFF
+                <Crown className="w-3.5 h-3.5 text-amber-300" /> MELHOR VALOR • MAIOR ECONOMIA
               </div>
 
               <div className="space-y-4 pt-1">
@@ -1124,14 +1124,14 @@ export function LandingPageContent() {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 238,80/ano</div>
+                  <div className="text-xs text-slate-400 line-through font-mono">De R$ 130,80/ano</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-emerald-600">
-                      R$ 154,90
+                      R$ 109,90
                     </span>
                     <span className="text-xs text-slate-600 font-semibold">/ ano</span>
                   </div>
-                  <p className="text-[11px] text-emerald-700 font-bold font-mono">Equivale a apenas R$ 12,91/mês</p>
+                  <p className="text-[11px] text-emerald-700 font-bold font-mono">Equivale a apenas R$ 9,16/mês</p>
                 </div>
 
                 <div className="pt-4 border-t border-emerald-100 space-y-2.5 text-xs text-slate-700">
@@ -1157,7 +1157,7 @@ export function LandingPageContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Economia real de R$ 83,90 no ano</span>
+                    <span>Economia real de R$ 20,90 no ano</span>
                   </div>
                 </div>
               </div>
@@ -1166,7 +1166,7 @@ export function LandingPageContent() {
                 onClick={irParaLogin}
                 className="w-full h-11 text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
               >
-                Assinar Anual (35% OFF)
+                Assinar Anual (Maior Economia)
               </Button>
             </Card>
           </div>

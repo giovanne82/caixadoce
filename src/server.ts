@@ -604,7 +604,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   amount?: number;
   cupomUtilizado?: string;
 }) {
-  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 24.90, cupomUtilizado } = params;
+  const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 10.90, cupomUtilizado } = params;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
   const supabaseKey =
@@ -833,7 +833,7 @@ async function processarComissaoAfiliadoNoSupabase(params: {
   cupomUtilizado?: string | null;
   paymentId?: string | number;
 }) {
-  const { establishmentCode, amount = 24.90, cupomUtilizado, paymentId } = params;
+  const { establishmentCode, amount = 10.90, cupomUtilizado, paymentId } = params;
   const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
 
   const code = (establishmentCode || "").toUpperCase().trim();
@@ -2204,13 +2204,14 @@ export default {
                   console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de +${dias} dias grátis ativado!`);
                 } else {
                   const perc = val > 0 ? val : 20;
+                  const valComDesc = parseFloat((10.90 * ((100 - perc) / 100)).toFixed(2));
                   cupomEncontrado = {
                     tipoDesconto: "percentual",
                     percentualDesconto: perc,
                     diasGratis: 0,
-                    descricao: `Cupom ${item.codigo} (De R$ 24,90 por R$ 19,90/mês)`,
+                    descricao: `Cupom ${item.codigo} (R$ ${valComDesc.toFixed(2).replace(".", ",")}/mês)`,
                   };
-                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de R$ 19,90/mês ativado!`);
+                  console.log(`[Validate Promo Live DB] Cupom '${item.codigo}' de R$ ${valComDesc}/mês ativado!`);
                 }
               }
             }
@@ -2234,11 +2235,12 @@ export default {
                 const afilRows = await resAfil.json();
                 if (Array.isArray(afilRows) && afilRows.length > 0) {
                   const item = afilRows[0];
+                  const valComDesc = parseFloat((10.90 * 0.8).toFixed(2));
                   cupomEncontrado = {
                     tipoDesconto: "percentual",
                     percentualDesconto: 20,
                     diasGratis: 0,
-                    descricao: `Cupom de Parceria (${item.nome}) - De R$ 24,90 por R$ 19,90/mês`,
+                    descricao: `Cupom de Parceria (${item.nome}) - R$ ${valComDesc.toFixed(2).replace(".", ",")}/mês`,
                     afiliado_id: item.id,
                   } as any;
                   console.log(`[Validate Promo Live DB] Cupom Afiliado '${item.cupom_exclusivo}' de ${item.nome} ativado!`);
@@ -2271,6 +2273,9 @@ export default {
 
           if (cupomEncontrado) {
             const isDias = cupomEncontrado.tipoDesconto === "dias_gratis";
+            const valCalculado = isDias
+              ? 0
+              : parseFloat((10.90 * ((100 - (cupomEncontrado.percentualDesconto || 0)) / 100)).toFixed(2));
             return new Response(
               JSON.stringify({
                 valido: true,
@@ -2280,11 +2285,11 @@ export default {
                 diasGratis: cupomEncontrado.diasGratis,
                 afiliado_id: (cupomEncontrado as any).afiliado_id || null,
                 descricao: cupomEncontrado.descricao,
-                valorOriginal: 24.90,
-                valorComDesconto: isDias ? 0 : 19.90,
+                valorOriginal: 10.90,
+                valorComDesconto: valCalculado,
                 mensagem: isDias
                   ? `🎉 Cupom "${cupomDigitado}" ativado com sucesso! Você ganhou +${cupomEncontrado.diasGratis} dias grátis de acesso PRO!`
-                  : `🎉 Cupom "${cupomDigitado}" aplicado com sucesso! De R$ 24,90 por R$ 19,90/mês.`,
+                  : `🎉 Cupom "${cupomDigitado}" aplicado com sucesso! Desconto aplicado na sua assinatura.`,
               }),
               { status: 200, headers: { "content-type": "application/json" } }
             );
@@ -3269,11 +3274,15 @@ export default {
           if (planTarget === "mensal" && (body.planId || body.plano_id || body.cupom)) {
             const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(codeTarget, supabaseUrl, supabaseKey);
             if (!checkAntiFraude.elegivel) {
-              transaction_amount = 24.90;
-            } else if (cupomEnviadoTarget || transaction_amount <= 19.90) {
-              transaction_amount = 19.90;
-            } else {
-              transaction_amount = 24.90;
+              transaction_amount = 10.90;
+            } else if (cupomEnviadoTarget && transaction_amount > 0 && transaction_amount <= 10.90) {
+              // Mantém o valor com desconto do cupom
+            } else if (transaction_amount <= 0 || transaction_amount > 10.90) {
+              transaction_amount = 10.90;
+            }
+          } else if (planTarget === "anual") {
+            if (transaction_amount <= 0 || transaction_amount > 109.90) {
+              transaction_amount = 109.90;
             }
           }
 
@@ -3494,26 +3503,25 @@ export default {
 
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
 
-          let transaction_amount = 24.90;
+          let transaction_amount = 10.90;
 
           if (planId === "anual") {
             transaction_amount = Number(
               formData.transaction_amount ||
               payload.transaction_amount ||
               payload.valor ||
-              154.90
+              109.90
             );
           } else {
             // RE-CHECAGEM ANTI-FRAUDE E PRECIFICAÇÃO ESTRITA NO MOMENTO DA COBRANÇA DO PLANO MENSAL
             const checkAntiFraude = await verificarElegibilidadeCupomEAntiFraude(establishmentCode, supabaseUrl, supabaseKey);
 
             if (!checkAntiFraude.elegivel) {
-              console.warn(`[Anti-Fraude Process-Payment] Estabelecimento '${establishmentCode}' inelegível para desconto. Forçando valor cheio R$ 24,90.`);
-              transaction_amount = 24.90;
-            } else if (cupomEnviado || (formData.transaction_amount && Number(formData.transaction_amount) <= 19.90) || (payload.valor && Number(payload.valor) <= 19.90)) {
-              transaction_amount = 19.90;
+              console.warn(`[Anti-Fraude Process-Payment] Estabelecimento '${establishmentCode}' inelegível para desconto. Forçando valor cheio R$ 10,90.`);
+              transaction_amount = 10.90;
             } else {
-              transaction_amount = 24.90;
+              const rawAmt = Number(formData.transaction_amount || payload.transaction_amount || payload.valor || 10.90);
+              transaction_amount = rawAmt > 0 && rawAmt <= 10.90 ? rawAmt : 10.90;
             }
           }
 
@@ -3551,7 +3559,7 @@ export default {
               plano_id: planId,
               plan_type: planId,
               cupom_afiliado: cupomEnviado || null,
-              cupom_utilizado: cupomEnviado || (transaction_amount <= 19.90 ? "CUPOM_DESCONTO" : null),
+              cupom_utilizado: cupomEnviado || (transaction_amount < 10.90 ? "CUPOM_DESCONTO" : null),
               cupom: cupomEnviado || null,
             },
           };
@@ -3597,8 +3605,8 @@ export default {
                 planId,
                 paymentId: mpData.id,
                 paymentMethod: "cartao_credito",
-                amount,
-                cupomUtilizado: cupomEnviado || (amount <= 19.90 ? "CUPOM_DESCONTO" : undefined),
+                amount: transaction_amount,
+                cupomUtilizado: cupomEnviado || (transaction_amount < 10.90 ? "CUPOM_DESCONTO" : undefined),
               });
               console.log(`[Supabase] Estabelecimento ${establishmentCode} ativado com sucesso após pagamento por cartão aprovado.`);
             } catch (dbErr) {
@@ -3667,7 +3675,7 @@ export default {
 
           if (status === "approved" || status === "authorized") {
             const planId = paymentData.metadata?.plan_id || paymentData.metadata?.plano_id || "mensal";
-            const amount = Number(paymentData.transaction_amount || (planId === "anual" ? 154.90 : 19.90));
+            const amount = Number(paymentData.transaction_amount || (planId === "anual" ? 109.90 : 10.90));
             const methodId = (paymentData.payment_method_id || paymentData.payment_type_id || "pix").toLowerCase();
             const tipoPag = methodId.includes("pix") || methodId.includes("ticket") || methodId.includes("bank") ? "pix" : "cartao_credito";
 
