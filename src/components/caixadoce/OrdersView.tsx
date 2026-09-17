@@ -87,6 +87,7 @@ import {
   Copy,
   Loader2,
   Printer,
+  ExternalLink,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -4935,6 +4936,112 @@ export function OrdersView({
                   </div>
                 )}
               </div>
+
+              {/* BLOCO ESPECIAL: DETALHES DE PERSONALIZAÇÃO (ASSISTENTE DE ORÇAMENTO) */}
+              {(encomendaDetalhes.detalhes_personalizacao || (encomendaDetalhes as any).detalhesPersonalizacao) && (() => {
+                const det = (encomendaDetalhes.detalhes_personalizacao || (encomendaDetalhes as any).detalhesPersonalizacao)!;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-amber-500/10 border border-purple-500/30 space-y-3 shadow-xs">
+                    <div className="flex items-center justify-between gap-2 border-b border-purple-500/20 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🎨</span>
+                        <span className="text-xs font-black text-purple-900 dark:text-purple-200 uppercase tracking-wide">
+                          Ficha de Personalização (Assistente)
+                        </span>
+                      </div>
+                      <Badge className="bg-purple-600 text-white text-[10px] font-black uppercase">
+                        {det.tipo_pedido === "bolo" ? "🎂 Bolo Exclusivo" : det.tipo_pedido === "doces" ? "🍬 Doces Personalizados" : "✨ Bolo & Doces"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      {det.rendimento_quantidade && (
+                        <div className="p-2 rounded-xl bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Rendimento / Quantidade</span>
+                          <span className="font-extrabold text-foreground">{det.rendimento_quantidade}</span>
+                        </div>
+                      )}
+
+                      {det.sabores_recheios && (
+                        <div className="p-2 rounded-xl bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Sabores &amp; Recheios</span>
+                          <span className="font-bold text-purple-700 dark:text-purple-300">{det.sabores_recheios}</span>
+                        </div>
+                      )}
+
+                      {det.tema_festa && (
+                        <div className="p-2 rounded-xl bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Tema da Festa</span>
+                          <span className="font-bold text-foreground">{det.tema_festa}</span>
+                        </div>
+                      )}
+
+                      {det.paleta_cores && (
+                        <div className="p-2 rounded-xl bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase block">Paleta de Cores</span>
+                          <span className="font-bold text-foreground">{det.paleta_cores}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {det.decoracao_desejada && (
+                      <div className="p-2.5 rounded-xl bg-background/70 border border-border/50 text-xs">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase block">Estilo de Decoração</span>
+                        <span className="font-medium text-foreground">{det.decoracao_desejada}</span>
+                      </div>
+                    )}
+
+                    {/* Extras selecionados */}
+                    {det.extras && (det.extras.topo_bolo || det.extras.velas || det.extras.embalagem_presente) && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        <span className="text-[11px] font-bold text-muted-foreground mr-1">Extras:</span>
+                        {det.extras.topo_bolo && (
+                          <Badge variant="outline" className="text-[10.5px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30">
+                            🎂 Topo de Bolo
+                          </Badge>
+                        )}
+                        {det.extras.velas && (
+                          <Badge variant="outline" className="text-[10.5px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                            🕯️ Velas
+                          </Badge>
+                        )}
+                        {det.extras.embalagem_presente && (
+                          <Badge variant="outline" className="text-[10.5px] font-bold bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30">
+                            🎁 Embalagem para Presente
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Foto de Inspiração / Referência */}
+                    {det.foto_inspiracao_url && (
+                      <div className="p-3 rounded-2xl bg-background/80 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <img
+                          src={det.foto_inspiracao_url}
+                          alt="Foto de Referência enviada pelo cliente"
+                          className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl border border-border shadow-xs shrink-0"
+                        />
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <span className="text-xs font-black text-foreground flex items-center gap-1.5">
+                            📸 Foto de Inspiração / Referência
+                          </span>
+                          <p className="text-[11px] text-muted-foreground">
+                            O cliente anexou uma foto de inspiração ao solicitar o orçamento.
+                          </p>
+                          <a
+                            href={det.foto_inspiracao_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 dark:text-purple-300 underline hover:opacity-80"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" /> Ver foto em tamanho original
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* BLOCO 2: ITENS DO PEDIDO */}
               <div className="space-y-2">

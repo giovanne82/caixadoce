@@ -656,6 +656,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             tipoEntrega: tipoEntregaFinal,
             taxaEntrega: d.taxa_entrega !== undefined && d.taxa_entrega !== null ? Number(d.taxa_entrega) : undefined,
             is_orcamento: Boolean(d.is_orcamento),
+            detalhes_personalizacao: d.detalhes_personalizacao || d.detalhesPersonalizacao || undefined,
+            detalhesPersonalizacao: d.detalhes_personalizacao || d.detalhesPersonalizacao || undefined,
             createdAt: d.created_at,
           };
         });
@@ -1248,6 +1250,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       endereco_entrega: item.enderecoEntrega || "",
       taxa_entrega: item.taxaEntrega || 0,
       is_orcamento: Boolean(item.is_orcamento),
+      detalhes_personalizacao: item.detalhes_personalizacao || item.detalhesPersonalizacao || undefined,
       observacoes: item.observacoes || "",
       tem_topo_bolo: temTopo,
       detalhes_topo_bolo: detTopo,
@@ -1355,6 +1358,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
     if (dados.taxaEntrega !== undefined) payloadUpdate.taxa_entrega = Number(dados.taxaEntrega) || 0;
     if (dados.is_orcamento !== undefined) payloadUpdate.is_orcamento = Boolean(dados.is_orcamento);
+    if (dados.detalhes_personalizacao !== undefined || (dados as any).detalhesPersonalizacao !== undefined) {
+      payloadUpdate.detalhes_personalizacao = dados.detalhes_personalizacao || (dados as any).detalhesPersonalizacao;
+    }
 
     let { error } = await supabase
       .from("encomendas")

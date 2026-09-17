@@ -1243,7 +1243,27 @@ export interface Encomenda {
   detalhesVela?: string;
   is_orcamento?: boolean;
   taxaEntrega?: number;
+  detalhes_personalizacao?: DetalhesPersonalizacaoOrcamento;
+  detalhesPersonalizacao?: DetalhesPersonalizacaoOrcamento;
   createdAt?: string;
+}
+
+export interface DetalhesPersonalizacaoOrcamento {
+  tipo_pedido: "bolo" | "doces" | "ambos";
+  rendimento_quantidade: string;
+  sabores_recheios: string;
+  tema_festa?: string;
+  paleta_cores?: string;
+  decoracao_desejada?: string;
+  extras?: {
+    topo_bolo?: boolean;
+    velas?: boolean;
+    embalagem_presente?: boolean;
+    outros?: string;
+  };
+  observacoes?: string;
+  foto_inspiracao_url?: string;
+  foto_inspiracao_nome?: string;
 }
 
 export interface DataBloqueada {

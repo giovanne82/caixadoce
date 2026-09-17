@@ -112,6 +112,7 @@ import {
   type HorariosFuncionamento,
   type StatusLojaHorario,
 } from "@/lib/horarios-service";
+import { AssistenteOrcamentoPersonalizadoModal } from "@/components/caixadoce/AssistenteOrcamentoPersonalizadoModal";
 import { toast } from "sonner";
 
 // ==========================================
@@ -557,6 +558,7 @@ export function CardapioLojaView() {
   // Modo de Compra / Intenção do Cliente ('pedido' | 'orcamento')
   const [purchaseIntent, setPurchaseIntent] = useState<"pedido" | "orcamento">("pedido");
   const [modalBoasVindasOpen, setModalBoasVindasOpen] = useState<boolean>(false);
+  const [modalOrcamentoPersonalizadoOpen, setModalOrcamentoPersonalizadoOpen] = useState<boolean>(false);
   const intencaoInicialDefinidaRef = useRef<boolean>(false);
 
   // Horários de Funcionamento da Loja & Modal de Horários
@@ -3196,6 +3198,34 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
       {/* Conteúdo Principal do Cardápio */}
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* BANNER / CHAMADA: ASSISTENTE DE ORÇAMENTO PERSONALIZADO */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-500/15 via-pink-500/10 to-amber-500/15 border border-purple-500/25 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 backdrop-blur-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl shrink-0">🎂</span>
+              <h3 className="text-sm sm:text-base font-black text-foreground">
+                Quer um Bolo ou Doces Exclusivos?
+              </h3>
+              <Badge className="bg-purple-600 text-white font-extrabold text-[10px] uppercase">
+                Personalizado
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Escolha sabores, tema, cores, envie uma foto de inspiração ou referência e receba um orçamento sob medida!
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => setModalOrcamentoPersonalizadoOpen(true)}
+            style={{ backgroundColor: corTemaDestaque }}
+            className="w-full sm:w-auto shrink-0 font-black text-white text-xs rounded-2xl shadow-md px-4 py-2.5 hover:opacity-90 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Criar Pedido Personalizado</span>
+          </Button>
+        </div>
+
         {/* 1. SELETOR DE MODALIDADE HÍBRIDA (Apenas no Modo Híbrido) */}
         {modeloNegocio === "hibrido" && (
           <div className="p-1.5 rounded-2xl bg-muted/60 border border-border flex items-center justify-center gap-1 max-w-md mx-auto shadow-xs">
@@ -4940,6 +4970,17 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Assistente de Orçamento Personalizado */}
+      <AssistenteOrcamentoPersonalizadoModal
+        open={modalOrcamentoPersonalizadoOpen}
+        onOpenChange={setModalOrcamentoPersonalizadoOpen}
+        estabelecimentoCodigo={code}
+        lojaNome={lojaInfo?.nome || "Confeitaria Artesanal"}
+        lojaWhatsapp={lojaInfo?.whatsapp}
+        storeUserId={lojaInfo?.user_id}
+        corTema={corTemaDestaque}
+      />
     </div>
   );
 }
