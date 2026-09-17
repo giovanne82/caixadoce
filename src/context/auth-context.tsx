@@ -1103,6 +1103,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         }
       }
 
+      let persistedSuccess = false;
+      let rowsAffected = 0;
       let saveError: any = null;
 
       // Garantia extrema: Remove completamente 'codigo', 'user_id', 'id' e 'estabelecimentoId' do payload de update
@@ -1111,9 +1113,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       delete (updatePayload as any).id;
       delete (updatePayload as any).estabelecimentoId;
 
-      console.log("ACTIVE CODE PARA UPDATE:", activeStoreCode);
-      console.log("TARGET ID PARA UPDATE:", targetId);
-      console.log("PAYLOAD ENVIADO (UPDATE por id):", updatePayload);
+      console.log("[updateEstablishmentDetails] ACTIVE CODE PARA UPDATE:", activeStoreCode);
+      console.log("[updateEstablishmentDetails] TARGET ID PARA UPDATE:", targetId);
+      console.log("[updateEstablishmentDetails] ASSINATURA DIGITAL PRESENTE:", Boolean(updatePayload.signature_data_url));
 
       if (targetId) {
         // Se a loja já existe no banco, faz UPDATE direcionado exclusivamente pelo id da chave primária
@@ -1125,88 +1127,80 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
         console.log("RESPOSTA SUPABASE UPDATE:", { data, error });
 
-        saveError = error;
-
-        // Se o Supabase retornou 0 linhas atualizadas, tenta o update por codigo
-        if (!error && (!data || data.length === 0)) {
-          console.warn("[Supabase] 0 linhas atualizadas por ID. Tentando UPDATE por codigo:", currentCode);
+        if (!error && Array.isArray(data) && data.length > 0) {
+          persistedSuccess = true;
+          rowsAffected = data.length;
+        } else if (!error && (!data || data.length === 0)) {
+          console.warn("[Supabase] 0 linhas atualizadas por ID. Tentando UPDATE por codigo:", activeStoreCode);
           const resCodigo = await supabase
             .from("estabelecimentos")
             .update(updatePayload)
-            .eq("codigo", currentCode)
+            .ilike("codigo", activeStoreCode)
             .select();
 
           console.log("RESPOSTA SUPABASE UPDATE POR CODIGO:", resCodigo);
-          if (resCodigo.error) saveError = resCodigo.error;
+          if (!resCodigo.error && Array.isArray(resCodigo.data) && resCodigo.data.length > 0) {
+            persistedSuccess = true;
+            rowsAffected = resCodigo.data.length;
+          }
         }
-      } else {
-        // Se o registro ainda não existir no banco, cria a nova linha via INSERT com os identificadores
-        const insertPayload = {
-          ...updatePayload,
-          codigo: currentCode,
-          user_id: isUuid ? user.id : null,
-        };
-        const insertRes = await supabase
+        saveError = error;
+      } else if (activeStoreCode) {
+        const resCodigo = await supabase
           .from("estabelecimentos")
-          .upsert([insertPayload], { onConflict: "codigo" })
+          .update(updatePayload)
+          .ilike("codigo", activeStoreCode)
           .select();
 
-        console.log("RESPOSTA SUPABASE UPSERT:", insertRes);
-        saveError = insertRes.error;
+        console.log("RESPOSTA SUPABASE UPDATE POR CODIGO (Sem targetId):", resCodigo);
+        if (!resCodigo.error && Array.isArray(resCodigo.data) && resCodigo.data.length > 0) {
+          persistedSuccess = true;
+          rowsAffected = resCodigo.data.length;
+        }
+        saveError = resCodigo.error;
       }
 
-      // 2. Tratamento para colunas opcionais que possam não existir na tabela no Supabase (ex: PGRST204)
-      if (saveError) {
-        console.error(
-          "[Supabase UPDATE estabelecimentos Error]:",
-          `Code: ${saveError.code}`,
-          `Message: ${saveError.message}`,
-          `Details: ${saveError.details}`,
-          `Hint: ${saveError.hint}`,
-          saveError
-        );
+      // 2. Se o Client SDK retornou 0 linhas atualizadas (ex: bloqueio RLS ou falha de sessão), aciona o backend Service Role
+      if (!persistedSuccess || rowsAffected === 0) {
+        console.warn(`[updateEstablishmentDetails] 0 linhas atualizadas via Client SDK. Acionando Backend Service Role (/api/estabelecimento/update) para ${activeStoreCode}...`);
+        try {
+          const srvRes = await fetch("/api/estabelecimento/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              establishmentCode: activeStoreCode,
+              updatePayload,
+              userId: user?.id || null,
+            }),
+          });
 
-        const msg = saveError.message || "";
-        const isColumnError = msg.includes("column") || msg.includes("does not exist") || saveError.code === "PGRST204";
-
-        if (isColumnError) {
-          console.warn("[Supabase] Removendo colunas estendidas não mapeadas e tentando fallback...");
-          const fallbackUpdatePayload = { ...updatePayload };
-          delete fallbackUpdatePayload.logo_url;
-          delete fallbackUpdatePayload.store_logo_url;
-          delete fallbackUpdatePayload.banner_url;
-          delete (fallbackUpdatePayload as any).bannerUrl;
-          delete fallbackUpdatePayload.titulo_cardapio;
-          delete fallbackUpdatePayload.menu_title;
-          delete fallbackUpdatePayload.slogan_cardapio;
-          delete fallbackUpdatePayload.menu_slogan;
-          delete fallbackUpdatePayload.pix_accounts;
-          delete fallbackUpdatePayload.pix_keys;
-          delete fallbackUpdatePayload.cnpj;
-          delete fallbackUpdatePayload.signature_data_url;
-          delete (fallbackUpdatePayload as any).assinatura_data_url;
-          delete fallbackUpdatePayload.horarios_funcionamento;
-          delete (fallbackUpdatePayload as any).horariosFuncionamento;
-          delete (fallbackUpdatePayload as any).codigo;
-          delete (fallbackUpdatePayload as any).user_id;
-
-          if (targetId) {
-            const fbRes = await supabase.from("estabelecimentos").update(fallbackUpdatePayload).eq("id", targetId).select();
-            console.log("RESPOSTA SUPABASE FALLBACK UPDATE:", fbRes);
-            if (fbRes.error) {
-              console.warn("[Supabase Fallback Update Error]:", fbRes.error.message);
+          if (srvRes.ok) {
+            const srvData = await srvRes.json();
+            if (srvData.success && srvData.count > 0) {
+              console.log("[updateEstablishmentDetails] Backend Service Role salvou com sucesso:", srvData);
+              persistedSuccess = true;
+              rowsAffected = srvData.count;
+              saveError = null;
+            } else {
+              console.error("[updateEstablishmentDetails] Backend Service Role retornou 0 linhas afetadas:", srvData);
             }
           } else {
-            const fallbackInsertPayload = {
-              ...fallbackUpdatePayload,
-              codigo: currentCode,
-              user_id: isUuid ? user.id : null,
-            };
-            await supabase.from("estabelecimentos").upsert([fallbackInsertPayload], { onConflict: "codigo" }).select();
+            const srvErr = await srvRes.text();
+            console.error("[updateEstablishmentDetails] Erro na chamada ao Backend Service Role:", srvErr);
           }
-        } else {
-          console.warn("[Supabase estabelecimentos update warning]:", saveError.message);
+        } catch (srvErr) {
+          console.error("[updateEstablishmentDetails] Falha ao comunicar com /api/estabelecimento/update:", srvErr);
         }
+      }
+
+      // 3. Validação estrita: Se NENHUMA linha foi afetada no banco de dados, ABORTA com ERRO (Sem falso positivo)
+      if (!persistedSuccess || rowsAffected === 0) {
+        const msg = saveError?.message || `Não foi possível salvar os dados do estabelecimento (${activeStoreCode}). 0 linhas afetadas no banco de dados.`;
+        console.error("[updateEstablishmentDetails] FALHA:", msg);
+        toast.error("Erro ao salvar: nenhuma alteração foi persistida no banco de dados.");
+        throw new Error(msg);
       }
 
       // Sincronização na tabela auxiliar public.pix_accounts se existir

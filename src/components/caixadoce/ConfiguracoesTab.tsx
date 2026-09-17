@@ -1634,8 +1634,8 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
         social_facebook: facebookEst,
         usar_mercadopago: usarMercadopago,
         chave_pix_manual: chavePixManual,
-        signature_data_url: signatureDataUrl || undefined,
-        assinatura_data_url: signatureDataUrl || undefined,
+        signature_data_url: signatureDataUrl !== undefined ? signatureDataUrl : null,
+        assinatura_data_url: signatureDataUrl !== undefined ? signatureDataUrl : null,
       });
 
       // Garante sincronização imediata dos campos locais sem reversão
@@ -1643,11 +1643,9 @@ export function ConfiguracoesTab({ onIrParaPlano }: ConfiguracoesTabProps) {
       if (responsavelEst) setResponsavelEst(responsavelEst);
       if (telEst) setTelEst(telEst);
       if (chavePixFinal) setChavePix(chavePixFinal);
-
-      toast.success("Dados do estabelecimento e personalização salvos com sucesso!");
     } catch (err: any) {
       console.error("[Configurações] Erro ao salvar estabelecimento:", err);
-      toast.error(err?.message || "Erro ao salvar os dados do estabelecimento. Verifique sua conexão ou rode a migration no Supabase.");
+      toast.error(err?.message || "Erro ao salvar os dados do estabelecimento. Verifique sua conexão ou tente novamente.");
     } finally {
       setSalvandoEst(false);
     }

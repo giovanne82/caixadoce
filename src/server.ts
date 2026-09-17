@@ -538,6 +538,63 @@ async function seedNineNineFoodColumnsInSupabase() {
 }
 seedNineNineFoodColumnsInSupabase();
 
+// Injeção de RLS e Colunas na Tabela estabelecimentos do Supabase
+async function seedEstabelecimentosRlsAndColumns() {
+  const { supabaseUrl, supabaseKey } = getSupabaseCredentials();
+  try {
+    const alterSql = `
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS signature_data_url TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS store_logo_url TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS banner_url TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS theme_color TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS horarios_funcionamento JSONB;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS social_media JSONB;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS chave_pix_manual TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS usar_mercadopago BOOLEAN DEFAULT false;
+
+      ALTER TABLE public.estabelecimentos ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS "estabelecimentos_select_policy" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "estabelecimentos_update_policy" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "estabelecimentos_insert_policy" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "estabelecimentos_upsert_policy" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "Permitir leitura total em estabelecimentos" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "Permitir leitura publica de estabelecimentos" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "Permitir insercao e edicao pelo usuario dono" ON public.estabelecimentos;
+      DROP POLICY IF EXISTS "allow_all_estabelecimentos" ON public.estabelecimentos;
+
+      CREATE POLICY "estabelecimentos_select_policy" ON public.estabelecimentos
+          FOR SELECT USING (true);
+
+      CREATE POLICY "estabelecimentos_update_policy" ON public.estabelecimentos
+          FOR UPDATE USING (
+              auth.uid() = user_id OR user_id IS NULL OR auth.role() = 'authenticated'
+          ) WITH CHECK (
+              auth.uid() = user_id OR user_id IS NULL OR auth.role() = 'authenticated'
+          );
+
+      CREATE POLICY "estabelecimentos_insert_policy" ON public.estabelecimentos
+          FOR INSERT WITH CHECK (
+              auth.uid() = user_id OR user_id IS NULL OR auth.role() = 'authenticated'
+          );
+
+      GRANT ALL ON TABLE public.estabelecimentos TO anon, authenticated, service_role;
+    `;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: alterSql }),
+    }).catch(() => {});
+  } catch (err) {
+    console.log("[Seed Estabelecimentos RLS Log]", err);
+  }
+}
+seedEstabelecimentosRlsAndColumns();
+
 const processedPaymentsSet = new Set<string>();
 
 // Helper de Segurança Anti-Fraude: Verifica se o estabelecimento já utilizou qualquer cupom no passado ou já foi assinante
@@ -2918,6 +2975,138 @@ export default {
           console.log("[API Marcar Pago Exception]", err?.message, err?.details);
           return new Response(
             JSON.stringify({ sucesso: false, error: err?.message, details: err?.details }),
+            { status: 500, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+
+      // =========================================================================
+      // ATUALIZAÇÃO SEGURA DO ESTABELECIMENTO VIA SERVICE ROLE (/api/estabelecimento/update)
+      // =========================================================================
+      if (
+        (url.pathname === "/api/estabelecimento/update" ||
+          url.pathname === "/api/establishment/update") &&
+        (request.method === "POST" || request.method === "PATCH")
+      ) {
+        try {
+          const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
+          const body = await request.json();
+          const targetCode = String(
+            body.establishmentCode ||
+            body.estabelecimentoCodigo ||
+            body.codigo ||
+            body.activeCode ||
+            ""
+          ).trim().toUpperCase();
+
+          if (!targetCode) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Código do estabelecimento é obrigatório." }),
+              { status: 400, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const rawPayload = body.updatePayload || body.payload || body;
+          const updatePayload: Record<string, any> = { ...rawPayload };
+
+          // Remove campos de controle se passados no payload interno
+          delete updatePayload.establishmentCode;
+          delete updatePayload.estabelecimentoCodigo;
+          delete updatePayload.updatePayload;
+          delete updatePayload.payload;
+          delete updatePayload.activeCode;
+          delete updatePayload.id;
+
+          // Se 'signature_data_url' ou 'assinatura_data_url' foi enviada, padroniza
+          if (updatePayload.signature_data_url !== undefined || updatePayload.assinatura_data_url !== undefined) {
+            updatePayload.signature_data_url = updatePayload.signature_data_url || updatePayload.assinatura_data_url || null;
+            delete updatePayload.assinatura_data_url;
+          }
+
+          updatePayload.updated_at = new Date().toISOString();
+
+          // Se fornecido userId e o estabelecimento não tiver user_id vinculado, vincula
+          if (body.userId && typeof body.userId === "string" && body.userId.length > 10) {
+            updatePayload.user_id = body.userId;
+          }
+
+          console.log(`[API Estabelecimento Update] Atualizando ${targetCode} via Service Role. Payload keys:`, Object.keys(updatePayload));
+          if (updatePayload.signature_data_url) {
+            console.log(`[API Estabelecimento Update] Assinatura base64 presente (${updatePayload.signature_data_url.length} chars)`);
+          }
+
+          // 1. Tenta UPDATE via REST PATCH no Supabase com Service Role
+          const patchRes = await fetch(
+            `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(targetCode)}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: supabaseKey,
+                authorization: `Bearer ${supabaseKey}`,
+                "content-type": "application/json",
+                prefer: "return=representation",
+              },
+              body: JSON.stringify(updatePayload),
+            }
+          );
+
+          if (!patchRes.ok) {
+            const errText = await patchRes.text();
+            console.error(`[API Estabelecimento Update Error] HTTP ${patchRes.status}:`, errText);
+            return new Response(
+              JSON.stringify({ success: false, error: `Erro no Supabase: ${errText}` }),
+              { status: patchRes.status, headers: { "content-type": "application/json" } }
+            );
+          }
+
+          const updatedRows = await patchRes.json();
+          const rowCount = Array.isArray(updatedRows) ? updatedRows.length : 0;
+
+          if (rowCount === 0) {
+            console.warn(`[API Estabelecimento Update] 0 linhas atualizadas para o código '${targetCode}'. Tentando UPSERT...`);
+            const insertPayload = {
+              ...updatePayload,
+              codigo: targetCode,
+            };
+            const upsertRes = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos`, {
+              method: "POST",
+              headers: {
+                apikey: supabaseKey,
+                authorization: `Bearer ${supabaseKey}`,
+                "content-type": "application/json",
+                prefer: "return=representation,resolution=merge-duplicates",
+              },
+              body: JSON.stringify([insertPayload]),
+            });
+
+            if (upsertRes.ok) {
+              const upsertData = await upsertRes.json();
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  count: Array.isArray(upsertData) ? upsertData.length : 1,
+                  data: Array.isArray(upsertData) ? upsertData[0] : upsertData,
+                }),
+                { status: 200, headers: { "content-type": "application/json" } }
+              );
+            }
+          }
+
+          console.log(`[API Estabelecimento Update Success] ${rowCount} linha(s) atualizada(s) para ${targetCode}`);
+
+          return new Response(
+            JSON.stringify({
+              success: rowCount > 0,
+              count: rowCount,
+              data: rowCount > 0 ? updatedRows[0] : null,
+              message: rowCount > 0 ? "Estabelecimento atualizado com sucesso." : "Nenhum estabelecimento encontrado com este código.",
+            }),
+            { status: rowCount > 0 ? 200 : 404, headers: { "content-type": "application/json" } }
+          );
+        } catch (err: any) {
+          console.error("[API Estabelecimento Update Exception]", err);
+          return new Response(
+            JSON.stringify({ success: false, error: err?.message || "Erro interno no servidor." }),
             { status: 500, headers: { "content-type": "application/json" } }
           );
         }
