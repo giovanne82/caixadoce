@@ -1,6 +1,27 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import legacy from "@vitejs/plugin-legacy";
 
 export default defineConfig({
+  plugins: [
+    ...(legacy({
+      targets: [
+        "defaults",
+        "not IE 11",
+        "chrome >= 64",
+        "edge >= 79",
+        "safari >= 12",
+        "firefox >= 67",
+        "samsung >= 10",
+      ],
+      additionalLegacyPolyfills: ["regenerator-runtime/runtime"],
+      renderModernChunks: true,
+    }) as any[]).map((p) => ({
+      ...p,
+      applyToEnvironment(env: any) {
+        return env.name === "client";
+      },
+    })),
+  ],
   tanstackStart: {
     server: { entry: "server" },
   },
