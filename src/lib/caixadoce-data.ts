@@ -66,7 +66,116 @@ export interface Estabelecimento {
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
   signature_data_url?: string;
   assinatura_data_url?: string;
+  custom_budget_settings?: CustomBudgetSettings;
 }
+
+export type CategoriaOrcamentoKey = "bolos" | "doces" | "salgados";
+
+export interface CustomBudgetCategoryConfig {
+  ativo: boolean;
+  titulo: string;
+  descricao: string;
+  tiposOpcoes: string[];
+  saboresRecheios: string[];
+  formatosDecoracoes: string[];
+}
+
+export interface CustomBudgetSettings {
+  bolos: CustomBudgetCategoryConfig;
+  doces: CustomBudgetCategoryConfig;
+  salgados: CustomBudgetCategoryConfig;
+}
+
+export const DEFAULT_CUSTOM_BUDGET_SETTINGS: CustomBudgetSettings = {
+  bolos: {
+    ativo: true,
+    titulo: "Bolos Personalizados",
+    descricao: "Monte seu bolo sob medida escolhendo tamanho, formato, recheios e estilos de decoração",
+    tiposOpcoes: [
+      "Bolo Decorado 1 Andar",
+      "Bolo de Andares (2+ Andares)",
+      "Naked Cake",
+      "Bolo Quadrado / Retangular",
+      "Heart Cake (Coração)"
+    ],
+    saboresRecheios: [
+      "Ninho com Nutella",
+      "Brigadeiro Gourmet",
+      "Doce de Leite com Nozes",
+      "Red Velvet",
+      "Morango com Natas",
+      "Prestígio",
+      "Abacaxi com Coco",
+      "Maracujá Trufado"
+    ],
+    formatosDecoracoes: [
+      "Chantininho Texturizado",
+      "Buttercream Flutuante",
+      "Pasta Americana",
+      "Drip Cake de Chocolate",
+      "Topo de Bolo Temático",
+      "Flores Naturais",
+      "Glitter Comestível"
+    ]
+  },
+  doces: {
+    ativo: true,
+    titulo: "Doces Personalizados",
+    descricao: "Escolha tipos de doces gourmet, sabores especiais e forminhas finas para sua festa",
+    tiposOpcoes: [
+      "Brigadeiros Gourmet",
+      "Doces Finos de Casamento",
+      "Bombons Trufados",
+      "Copinhos de Chocolate",
+      "Macarons",
+      "Trufas Decoradas",
+      "Mini Cupcakes"
+    ],
+    saboresRecheios: [
+      "Ao Leite 50%",
+      "Meio Amargo",
+      "Pistache Real",
+      "Churros com Doce de Leite",
+      "Limão Siciliano",
+      "Ninho com Nutella",
+      "Maracujá",
+      "Frutas Vermelhas"
+    ],
+    formatosDecoracoes: [
+      "Forminha Simples de Papel",
+      "Forminha de Tecido em Flor",
+      "Forminha Fina Transparente",
+      "Caixinha Presentável"
+    ]
+  },
+  salgados: {
+    ativo: true,
+    titulo: "Salgados Personalizados",
+    descricao: "Selecione os tipos de salgados assados, fritos e folhados para seu evento",
+    tiposOpcoes: [
+      "Salgados Fritos na Hora",
+      "Salgados Assados Especiais",
+      "Mini Salgados de Festa",
+      "Salgados Folhados",
+      "Empadas & Quiches Mini"
+    ],
+    saboresRecheios: [
+      "Coxinha de Frango com Catupiry",
+      "Quibe Tradicional com Queijo",
+      "Bolinha de Queijo",
+      "Risóle de Carne Moída",
+      "Empada de Frango Cremoso",
+      "Esfiha Aberta de Carne",
+      "Croquete de Carne Assado",
+      "Enroladinho de Presunto e Queijo"
+    ],
+    formatosDecoracoes: [
+      "Cento Misto Variado",
+      "Cento de Sabor Único",
+      "Bandeja Pronta para Servir"
+    ]
+  }
+};
 
 import {
   ESTABELECIMENTO_PADRAO,

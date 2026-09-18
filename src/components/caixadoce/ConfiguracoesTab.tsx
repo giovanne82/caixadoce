@@ -85,6 +85,10 @@ import { toast } from "sonner";
 import {
   formatarCpfCnpj,
   formatarCep,
+  DEFAULT_CUSTOM_BUDGET_SETTINGS,
+  type CustomBudgetSettings,
+  type CategoriaOrcamentoKey,
+  type CustomBudgetCategoryConfig,
 } from "@/lib/caixadoce-data";
 import { type ContaPix } from "@/lib/pix-utils";
 import { obterPlanoEfetivoEstabelecimento } from "@/lib/planos-utils";
@@ -292,7 +296,8 @@ export type SectionKey =
   | "equipe"
   | "planos"
   | "seguranca"
-  | "contato";
+  | "contato"
+  | "assistente_orcamento";
 
 export function ConfiguracoesTab({ onIrParaPlano, initialSection }: ConfiguracoesTabProps) {
   const [activeSection, setActiveSection] = useState<SectionKey>(
@@ -335,6 +340,90 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
     profile?.signature_data_url || (profile as any)?.assinatura_data_url || null
   );
   const [salvandoEst, setSalvandoEst] = useState(false);
+
+  // Assistente de Orçamento State & Handlers
+  const [customBudgetSettings, setCustomBudgetSettings] = useState<CustomBudgetSettings>(() => {
+    return profile?.custom_budget_settings || DEFAULT_CUSTOM_BUDGET_SETTINGS;
+  });
+  const [activeBudgetCategory, setActiveBudgetCategory] = useState<CategoriaOrcamentoKey>("bolos");
+  const [salvandoAssistenteOrcamento, setSalvandoAssistenteOrcamento] = useState(false);
+  const [tagInputs, setTagInputs] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    if (profile?.custom_budget_settings) {
+      setCustomBudgetSettings(profile.custom_budget_settings);
+    }
+  }, [profile?.custom_budget_settings]);
+
+  const handleAddTag = (
+    category: CategoriaOrcamentoKey,
+    field: "tiposOpcoes" | "saboresRecheios" | "formatosDecoracoes"
+  ) => {
+    const inputKey = `${category}_${field}`;
+    const val = tagInputs[inputKey]?.trim();
+    if (!val) return;
+
+    setCustomBudgetSettings((prev) => {
+      const catConfig = prev[category] || DEFAULT_CUSTOM_BUDGET_SETTINGS[category];
+      const currentList = catConfig[field] || [];
+      if (currentList.includes(val)) return prev;
+      return {
+        ...prev,
+        [category]: {
+          ...catConfig,
+          [field]: [...currentList, val],
+        },
+      };
+    });
+
+    setTagInputs((prev) => ({ ...prev, [inputKey]: "" }));
+  };
+
+  const handleRemoveTag = (
+    category: CategoriaOrcamentoKey,
+    field: "tiposOpcoes" | "saboresRecheios" | "formatosDecoracoes",
+    index: number
+  ) => {
+    setCustomBudgetSettings((prev) => {
+      const catConfig = prev[category] || DEFAULT_CUSTOM_BUDGET_SETTINGS[category];
+      const currentList = catConfig[field] || [];
+      return {
+        ...prev,
+        [category]: {
+          ...catConfig,
+          [field]: currentList.filter((_, i) => i !== index),
+        },
+      };
+    });
+  };
+
+  const handleSalvarAssistenteOrcamento = async () => {
+    const establishmentId = profile?.establishmentId;
+    if (!establishmentId) {
+      toast.error("ID do estabelecimento não encontrado.");
+      return;
+    }
+    try {
+      setSalvandoAssistenteOrcamento(true);
+      const { error } = await supabase
+        .from("estabelecimentos")
+        .update({ custom_budget_settings: customBudgetSettings })
+        .eq("id", establishmentId);
+
+      if (error) throw error;
+
+      if (updateEstablishmentDetails) {
+        await updateEstablishmentDetails({ custom_budget_settings: customBudgetSettings } as any);
+      }
+
+      toast.success("Configurações do Assistente de Orçamento salvas com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao salvar assistente de orçamento:", err);
+      toast.error(err?.message || "Erro ao salvar as configurações.");
+    } finally {
+      setSalvandoAssistenteOrcamento(false);
+    }
+  };
 
   const queryClient = useQueryClient();
 
@@ -1720,6 +1809,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
     planos: "Planos & Parcerias",
     seguranca: "Segurança",
     contato: "Fale Conosco",
+    assistente_orcamento: "Assistente de Orçamento",
   };
 
   const MENU_ITEMS = [
@@ -1753,6 +1843,14 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
       description: "Logo, Capa, Cores, Título e Slogan",
       icon: Sparkles,
       colorClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    },
+    {
+      id: "assistente_orcamento",
+      title: "Assistente de Orçamento",
+      description: "Tags, opções e sugestões personalizadas para Bolos, Doces e Salgados",
+      icon: Sparkles,
+      colorClass: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20",
+      badge: "Cardápio",
     },
     {
       id: "redes",
@@ -2775,6 +2873,317 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* SEÇÃO: ASSISTENTE DE ORÇAMENTO PERSONALIZADO */}
+          {activeSection === "assistente_orcamento" && (
+            <Card className="border-border shadow-sm">
+              <CardHeader className="border-b border-border/60 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg font-black text-foreground flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-fuchsia-600" />
+                      <span>Configurações do Assistente de Orçamento</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Configure as sugestões, tags de sabores, formatos e opções personalizadas exibidas no assistente do cardápio público
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={handleSalvarAssistenteOrcamento}
+                    disabled={salvandoAssistenteOrcamento}
+                    className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs shrink-0 cursor-pointer"
+                  >
+                    {salvandoAssistenteOrcamento ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-1.5" />
+                    )}
+                    Salvar Alterações
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
+                {/* Abas Seletores de Categoria */}
+                <div className="grid grid-cols-3 gap-2 p-1.5 bg-muted/60 rounded-2xl border border-border/80">
+                  {(
+                    [
+                      { key: "bolos", label: "🎂 Bolos", subtitle: "Personalizados" },
+                      { key: "doces", label: "🧁 Doces", subtitle: "Gourmet & Finos" },
+                      { key: "salgados", label: "🥟 Salgados", subtitle: "Festa & Eventos" },
+                    ] as const
+                  ).map((cat) => {
+                    const isSelected = activeBudgetCategory === cat.key;
+                    return (
+                      <button
+                        key={cat.key}
+                        type="button"
+                        onClick={() => setActiveBudgetCategory(cat.key)}
+                        className={`py-3 px-2 rounded-xl text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-background text-foreground font-black shadow-sm ring-2 ring-fuchsia-500/40"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50 font-medium"
+                        }`}
+                      >
+                        <p className="text-xs sm:text-sm font-bold">{cat.label}</p>
+                        <p className="text-[10px] text-muted-foreground hidden sm:block">{cat.subtitle}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Conteúdo da Categoria Ativa */}
+                {(() => {
+                  const catConfig =
+                    customBudgetSettings[activeBudgetCategory] ||
+                    DEFAULT_CUSTOM_BUDGET_SETTINGS[activeBudgetCategory];
+
+                  const updateCat = (key: keyof CustomBudgetCategoryConfig, value: any) => {
+                    setCustomBudgetSettings((prev) => ({
+                      ...prev,
+                      [activeBudgetCategory]: {
+                        ...catConfig,
+                        [key]: value,
+                      },
+                    }));
+                  };
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Ativar Categoria & Título */}
+                      <div className="p-4 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-extrabold text-foreground">
+                              Ativar assistente para esta categoria
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Exibir este seletor no assistente de orçamento do cardápio público
+                            </p>
+                          </div>
+                          <Switch
+                            checked={catConfig.ativo}
+                            onCheckedChange={(checked) => updateCat("ativo", checked)}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-bold">Título da Categoria</Label>
+                            <Input
+                              value={catConfig.titulo}
+                              onChange={(e) => updateCat("titulo", e.target.value)}
+                              placeholder="Ex: Bolos Personalizados"
+                              className="text-xs rounded-xl"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-bold">Descrição Informativa</Label>
+                            <Input
+                              value={catConfig.descricao}
+                              onChange={(e) => updateCat("descricao", e.target.value)}
+                              placeholder="Descrição curta para o cliente..."
+                              className="text-xs rounded-xl"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tag Editor 1: Tipos & Opções */}
+                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                            <span>🏷️ Tipos, Formatos ou Modalidades</span>
+                            <Badge variant="outline" className="text-[10px] font-normal">
+                              {catConfig.tiposOpcoes?.length || 0} tags
+                            </Badge>
+                          </Label>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Input
+                            value={tagInputs[`${activeBudgetCategory}_tiposOpcoes`] || ""}
+                            onChange={(e) =>
+                              setTagInputs((prev) => ({
+                                ...prev,
+                                [`${activeBudgetCategory}_tiposOpcoes`]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddTag(activeBudgetCategory, "tiposOpcoes");
+                              }
+                            }}
+                            placeholder="Adicionar novo tipo ou formato..."
+                            className="text-xs rounded-xl flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => handleAddTag(activeBudgetCategory, "tiposOpcoes")}
+                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4 mr-1" /> Adicionar
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {catConfig.tiposOpcoes?.map((tag, idx) => (
+                            <Badge
+                              key={`${tag}-${idx}`}
+                              variant="secondary"
+                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-fuchsia-500/10 text-fuchsia-900 dark:text-fuchsia-200 border border-fuchsia-500/20"
+                            >
+                              <span>{tag}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTag(activeBudgetCategory, "tiposOpcoes", idx)}
+                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Tag Editor 2: Sabores & Recheios */}
+                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                            <span>🍓 Sabores &amp; Recheios Sugeridos</span>
+                            <Badge variant="outline" className="text-[10px] font-normal">
+                              {catConfig.saboresRecheios?.length || 0} tags
+                            </Badge>
+                          </Label>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Input
+                            value={tagInputs[`${activeBudgetCategory}_saboresRecheios`] || ""}
+                            onChange={(e) =>
+                              setTagInputs((prev) => ({
+                                ...prev,
+                                [`${activeBudgetCategory}_saboresRecheios`]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddTag(activeBudgetCategory, "saboresRecheios");
+                              }
+                            }}
+                            placeholder="Adicionar novo sabor ou recheio..."
+                            className="text-xs rounded-xl flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => handleAddTag(activeBudgetCategory, "saboresRecheios")}
+                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4 mr-1" /> Adicionar
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {catConfig.saboresRecheios?.map((tag, idx) => (
+                            <Badge
+                              key={`${tag}-${idx}`}
+                              variant="secondary"
+                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20"
+                            >
+                              <span>{tag}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTag(activeBudgetCategory, "saboresRecheios", idx)}
+                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Tag Editor 3: Estilos / Coberturas / Forminhas */}
+                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                            <span>✨ Estilos de Decoração, Cobertura ou Forminhas</span>
+                            <Badge variant="outline" className="text-[10px] font-normal">
+                              {catConfig.formatosDecoracoes?.length || 0} tags
+                            </Badge>
+                          </Label>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Input
+                            value={tagInputs[`${activeBudgetCategory}_formatosDecoracoes`] || ""}
+                            onChange={(e) =>
+                              setTagInputs((prev) => ({
+                                ...prev,
+                                [`${activeBudgetCategory}_formatosDecoracoes`]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddTag(activeBudgetCategory, "formatosDecoracoes");
+                              }
+                            }}
+                            placeholder="Adicionar novo estilo de decoração ou acabamento..."
+                            className="text-xs rounded-xl flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => handleAddTag(activeBudgetCategory, "formatosDecoracoes")}
+                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4 mr-1" /> Adicionar
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {catConfig.formatosDecoracoes?.map((tag, idx) => (
+                            <Badge
+                              key={`${tag}-${idx}`}
+                              variant="secondary"
+                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-purple-500/10 text-purple-900 dark:text-purple-200 border border-purple-500/20"
+                            >
+                              <span>{tag}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTag(activeBudgetCategory, "formatosDecoracoes", idx)}
+                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Botão de Salvar Rodapé */}
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          onClick={handleSalvarAssistenteOrcamento}
+                          disabled={salvandoAssistenteOrcamento}
+                          className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs h-10 px-6 rounded-xl shadow-xs cursor-pointer"
+                        >
+                          {salvandoAssistenteOrcamento ? (
+                            <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4 mr-1.5" />
+                          )}
+                          Salvar Configurações do Assistente
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           )}
 
           {/* 3. SEÇÃO: APARÊNCIA DO CARDÁPIO */}
