@@ -82,6 +82,9 @@ export type UpdateEstablishmentDetailsInput = {
 
 export type StaffProfile = {
   role: StaffRole;
+  establishmentId?: string;
+  establishment_id?: string;
+  estabelecimento_id?: string;
   establishmentCode: string;
   slug?: string;
   establishmentName: string;
@@ -360,6 +363,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
         const merged: UserProfile = {
           ...baseProf,
+          establishmentId: data.id || (baseProf as any)?.establishmentId,
+          establishment_id: data.id || (baseProf as any)?.establishment_id,
+          estabelecimento_id: data.id || (baseProf as any)?.estabelecimento_id,
           establishmentCode: data.codigo || baseProf.establishmentCode,
           establishmentName: data.nome || baseProf.establishmentName,
           slug: data.slug || baseProf.slug,
@@ -419,6 +425,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           const d = insertedData;
           const newProf: UserProfile = {
             ...baseProf,
+            establishmentId: d.id,
+            establishment_id: d.id,
+            estabelecimento_id: d.id,
             establishmentCode: d.codigo,
             establishmentName: d.nome,
             ownerUserId: authUser.id,

@@ -496,18 +496,56 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
   };
 
   const handleSalvarAssistenteOrcamento = async () => {
-    const establishmentId = profile?.establishmentId;
-    if (!establishmentId) {
-      toast.error("ID do estabelecimento não encontrado.");
-      return;
+    let targetId =
+      profile?.establishmentId ||
+      (profile as any)?.establishment_id ||
+      (profile as any)?.estabelecimento_id ||
+      (profile as any)?.id ||
+      estId;
+
+    if (!targetId && activeCode) {
+      const { data: estRow } = await supabase
+        .from("estabelecimentos")
+        .select("id")
+        .ilike("codigo", activeCode.toUpperCase().trim())
+        .maybeSingle();
+
+      if (estRow?.id) {
+        targetId = estRow.id;
+        setEstId(estRow.id);
+      }
     }
+
+    if (!targetId && user?.id) {
+      const { data: estRowUser } = await supabase
+        .from("estabelecimentos")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (estRowUser?.id) {
+        targetId = estRowUser.id;
+        setEstId(estRowUser.id);
+      }
+    }
+
     try {
       setSalvandoAssistenteOrcamento(true);
-      const { error } = await supabase
-        .from("estabelecimentos")
-        .update({ custom_budget_settings: customBudgetSettings })
-        .eq("id", establishmentId);
 
+      let query = supabase
+        .from("estabelecimentos")
+        .update({ custom_budget_settings: customBudgetSettings });
+
+      if (targetId) {
+        query = query.eq("id", targetId);
+      } else if (activeCode) {
+        query = query.ilike("codigo", activeCode.toUpperCase().trim());
+      } else {
+        toast.error("ID ou código do estabelecimento não encontrado.");
+        return;
+      }
+
+      const { error } = await query;
       if (error) throw error;
 
       if (updateEstablishmentDetails) {

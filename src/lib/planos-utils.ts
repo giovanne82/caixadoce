@@ -28,8 +28,8 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     id: "mensal",
     nome: "Plano Mensal Completo",
     badge: "🔥 ACESSO COMPLETO PRO",
-    precoMensal: 14.90,
-    faturamento: "R$ 14,90 / mês",
+    precoMensal: 10.90,
+    faturamento: "R$ 10,90 / mês",
     descricao: "Acesso total ilimitado a todas as ferramentas da plataforma sem fidelidade.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
@@ -47,9 +47,9 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     id: "anual",
     nome: "Plano Anual Completo",
     badge: "⭐ MELHOR CUSTO-BENEFÍCIO",
-    precoMensal: 10.82,
-    precoAnualTotal: 129.90,
-    faturamento: "R$ 129,90 / ano (R$ 10,82/mês)",
+    precoMensal: 9.15,
+    precoAnualTotal: 109.90,
+    faturamento: "R$ 109,90 / ano (R$ 9,15/mês)",
     descricao: "A escolha mais inteligente e econômica para transformar a sua confeitaria com todos os recursos.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
@@ -79,8 +79,8 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
   pro: {
     id: "mensal",
     nome: "Plano Mensal Completo",
-    precoMensal: 14.90,
-    faturamento: "R$ 14,90 / mês",
+    precoMensal: 10.90,
+    faturamento: "R$ 10,90 / mês",
     descricao: "Acesso total ilimitado.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
@@ -99,9 +99,9 @@ export const PLANOS_CONFIG: Record<string, PlanoConfig> = {
     id: "anual",
     nome: "Plano Anual Completo",
     badge: "MELHOR CUSTO-BENEFÍCIO",
-    precoMensal: 10.82,
-    precoAnualTotal: 129.90,
-    faturamento: "R$ 129,90 / ano (R$ 10,82/mês)",
+    precoMensal: 9.15,
+    precoAnualTotal: 109.90,
+    faturamento: "R$ 109,90 / ano (R$ 9,15/mês)",
     descricao: "A maior economia.",
     recursos: [
       "Escanear a Notinha com IA (Ilimitado)",
