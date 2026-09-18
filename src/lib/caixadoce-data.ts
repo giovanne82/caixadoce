@@ -2375,11 +2375,26 @@ export async function enviarAcaoIFood(
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || data.message || `Erro HTTP ${res.status}`);
+      const rawMsg = data.error || data.message || `Erro HTTP ${res.status}`;
+      if (res.status === 401 || rawMsg.toLowerCase().includes("401") || rawMsg.toLowerCase().includes("unauthorized")) {
+        throw new Error("Não é possível alterar este pedido pois a sessão do iFood expirou ou o ciclo de vida deste pedido expirou na plataforma.");
+      }
+      if (
+        res.status === 400 ||
+        res.status === 404 ||
+        res.status === 409 ||
+        res.status === 422 ||
+        rawMsg.toLowerCase().includes("expired") ||
+        rawMsg.toLowerCase().includes("lifecycle")
+      ) {
+        throw new Error("Não é possível alterar este pedido pois o ciclo de vida expirou no iFood.");
+      }
+      throw new Error(rawMsg);
     }
     return { success: true, message: data.message };
   } catch (err: any) {
-    return { success: false, error: err.message || "Falha ao comunicar com o iFood" };
+    const errorMsg = err.message || "Falha ao comunicar com o iFood";
+    return { success: false, error: errorMsg };
   }
 }
 

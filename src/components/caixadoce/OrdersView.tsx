@@ -610,7 +610,11 @@ export function OrdersView({
           setEncomendaDetalhes({ ...encomendaDetalhes, status: novoStatus });
         }
       } else {
-        toast.error(res.error || "Não foi possível executar a ação no iFood.");
+        const errorMsg = res.error || "Não é possível alterar este pedido pois o ciclo de vida expirou no iFood.";
+        toast.error(errorMsg, {
+          description: "Pedidos antigos ou fora da janela de tempo permitida não podem ser alterados no iFood.",
+          duration: 6000,
+        });
       }
     } catch (err: any) {
       toast.error(err.message || "Erro ao comunicar com o iFood.");

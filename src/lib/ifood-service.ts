@@ -237,10 +237,30 @@ export async function executarAcaoPedidoIFood(
 
   if (!res.ok && res.status !== 202 && res.status !== 200 && res.status !== 204) {
     const errBody = await res.text();
-    console.error(`[iFood Action Error] ${acao} falhou (HTTP ${res.status}): ${errBody}`);
+    console.warn(`[iFood Action Notice] ${acao} retornou status ${res.status}: ${errBody}`);
+
+    // Identificação de erro 401 (Autenticação) ou Pedido com Ciclo Expirado (400, 404, 409, 422)
+    let mensagemAmigavel = `iFood retornou erro ${res.status}: ${errBody || "Operação não autorizada."}`;
+
+    if (res.status === 401) {
+      mensagemAmigavel = "Não é possível alterar este pedido pois a sessão do iFood expirou ou o ciclo de vida deste pedido expirou na plataforma.";
+    } else if (
+      res.status === 400 ||
+      res.status === 404 ||
+      res.status === 409 ||
+      res.status === 422 ||
+      errBody.toLowerCase().includes("lifecycle") ||
+      errBody.toLowerCase().includes("expired") ||
+      errBody.toLowerCase().includes("cannot transition") ||
+      errBody.toLowerCase().includes("invalid status") ||
+      errBody.toLowerCase().includes("not found")
+    ) {
+      mensagemAmigavel = "Não é possível alterar este pedido pois o ciclo de vida expirou no iFood.";
+    }
+
     return {
       success: false,
-      error: `iFood retornou erro ${res.status}: ${errBody || "Operação não autorizada ou pedido não encontrado no iFood."}`,
+      error: mensagemAmigavel,
       status: res.status,
     };
   }

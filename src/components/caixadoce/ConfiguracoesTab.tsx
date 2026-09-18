@@ -4513,98 +4513,96 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                       )}
                     </div>
 
-                    {/* SE CONECTADO: PAINEL DE CONTROLE DO MÓDULO MERCHANT */}
-                    {ifoodConectado && (
-                      <div className="p-4 rounded-xl bg-muted/30 border border-border/80 space-y-4">
-                        {/* 1. STATUS OPERACIONAL DA LOJA NO IFOOD */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Status Operacional:</span>
-                              {merchantStatus ? (
-                                <Badge
-                                  className={`text-[11px] font-extrabold px-2.5 py-0.5 ${
-                                    merchantStatus.isAvailable
-                                      ? "bg-emerald-600 text-white"
-                                      : "bg-amber-600 text-white"
-                                  }`}
-                                >
-                                  {merchantStatus.isAvailable ? "● LOJA ABERTA NO IFOOD" : "■ LOJA FECHADA / PAUSADA"}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-[11px] font-medium text-muted-foreground">
-                                  {carregandoMerchantStatus ? "Consultando..." : "Status não carregado"}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-foreground font-medium">
-                              {merchantStatus?.title ? `${merchantStatus.title} — ${merchantStatus.subtitle || ""}` : "Pronta para receber operações e pedidos."}
-                            </p>
-                            {merchantStatus?.description && (
-                              <p className="text-[11px] text-muted-foreground italic">{merchantStatus.description}</p>
-                            )}
-                            {merchantStatus?.lastUpdated && (
-                              <p className="text-[10px] text-muted-foreground">Última checagem manual: {merchantStatus.lastUpdated}</p>
+                    {/* PAINEL DE CONTROLE DO MÓDULO MERCHANT (SEMPRE DESBLOQUEADO PARA TESTES E HOMOLOGAÇÃO) */}
+                    <div className="p-4 rounded-xl bg-muted/30 border border-border/80 space-y-4">
+                      {/* 1. STATUS OPERACIONAL DA LOJA NO IFOOD */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Status Operacional:</span>
+                            {merchantStatus ? (
+                              <Badge
+                                className={`text-[11px] font-extrabold px-2.5 py-0.5 ${
+                                  merchantStatus.isAvailable
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-amber-600 text-white"
+                                }`}
+                              >
+                                {merchantStatus.isAvailable ? "● LOJA ABERTA NO IFOOD" : "■ LOJA FECHADA / PAUSADA"}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/30">
+                                {carregandoMerchantStatus ? "Consultando..." : "● LOJA PRONTA PARA OPERAÇÃO"}
+                              </Badge>
                             )}
                           </div>
-
-                          {/* BOTÕES DE AÇÃO RÁPIDA: ABRIR E FECHAR LOJA */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Button
-                              type="button"
-                              onClick={handleAbrirLojaIFood}
-                              disabled={alterandoStatusLoja || merchantStatus?.isAvailable}
-                              className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs gap-1.5 disabled:opacity-50"
-                            >
-                              {alterandoStatusLoja ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-                              Abrir Loja
-                            </Button>
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setModalFecharLojaAberto(true)}
-                              disabled={alterandoStatusLoja}
-                              className="h-9 px-3.5 rounded-xl border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 font-bold text-xs shadow-xs gap-1.5"
-                            >
-                              <Pause className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
-                              Fechar / Pausar
-                            </Button>
-                          </div>
+                          <p className="text-xs text-foreground font-medium">
+                            {merchantStatus?.title ? `${merchantStatus.title} — ${merchantStatus.subtitle || ""}` : "Pronta para receber operações e pedidos em tempo real."}
+                          </p>
+                          {merchantStatus?.description && (
+                            <p className="text-[11px] text-muted-foreground italic">{merchantStatus.description}</p>
+                          )}
+                          {merchantStatus?.lastUpdated && (
+                            <p className="text-[10px] text-muted-foreground">Última checagem manual: {merchantStatus.lastUpdated}</p>
+                          )}
                         </div>
 
-                        {/* 2. SINCRONIZAÇÃO DE HORÁRIOS (SHIFTS) */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-purple-600" />
-                              <span className="text-xs font-bold text-foreground">Sincronização de Grade de Horários (Shifts)</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Envia os horários semanais definidos na aba "Horários" diretamente para a agenda do iFood.
-                            </p>
-                          </div>
+                        {/* BOTÕES DE AÇÃO RÁPIDA: ABRIR E FECHAR LOJA */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            onClick={handleAbrirLojaIFood}
+                            disabled={alterandoStatusLoja}
+                            className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs gap-1.5"
+                          >
+                            {alterandoStatusLoja ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                            Abrir Loja
+                          </Button>
 
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={handleSincronizarHorariosIFood}
-                            disabled={sincronizandoHorarios}
-                            className="h-9 px-4 rounded-xl border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 font-bold text-xs shadow-xs gap-1.5 shrink-0"
+                            onClick={() => setModalFecharLojaAberto(true)}
+                            disabled={alterandoStatusLoja}
+                            className="h-9 px-3.5 rounded-xl border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 font-bold text-xs shadow-xs gap-1.5"
                           >
-                            {sincronizandoHorarios ? (
-                              <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...
-                              </>
-                            ) : (
-                              <>
-                                <Clock className="w-3.5 h-3.5" /> Sincronizar Horários
-                              </>
-                            )}
+                            <Pause className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                            Fechar / Pausar
                           </Button>
                         </div>
                       </div>
-                    )}
+
+                      {/* 2. SINCRONIZAÇÃO DE HORÁRIOS (SHIFTS) */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-purple-600" />
+                            <span className="text-xs font-bold text-foreground">Sincronização de Grade de Horários (Shifts)</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Envia os horários semanais definidos na aba "Horários" diretamente para a agenda do iFood.
+                          </p>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSincronizarHorariosIFood}
+                          disabled={sincronizandoHorarios}
+                          className="h-9 px-4 rounded-xl border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 font-bold text-xs shadow-xs gap-1.5 shrink-0"
+                        >
+                          {sincronizandoHorarios ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="w-3.5 h-3.5" /> Sincronizar Horários
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
 
                     {/* SE NÃO CONECTADO: FLUXO DE CÓDIGO DE AUTORIZAÇÃO */}
                     {!ifoodConectado && userCodeGerado && (
@@ -4771,14 +4769,9 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                         </div>
                       </div>
 
-                      <Button
-                        type="button"
-                        disabled={true}
-                        variant="outline"
-                        className="text-xs font-bold shrink-0 opacity-70 cursor-not-allowed border-dashed"
-                      >
-                        <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Conectar (Em Breve)
-                      </Button>
+                      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold py-1 px-3">
+                        Pronto para Homologação
+                      </Badge>
                     </div>
                   </div>
                 </CardContent>
