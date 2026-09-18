@@ -64,6 +64,7 @@ import {
   AlertTriangle,
   HeartHandshake,
   History,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   formatarMoeda,
