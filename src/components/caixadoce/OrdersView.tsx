@@ -87,6 +87,9 @@ import {
   Copy,
   Loader2,
   Printer,
+  Image as ImageIcon,
+  Maximize2,
+  ExternalLink,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -975,6 +978,35 @@ export function OrdersView({
   const [modalDetalhesOpen, setModalDetalhesOpen] = useState(false);
   const [encomendaDetalhes, setEncomendaDetalhes] = useState<Encomenda | null>(null);
   const [receitaConsolidadaPedido, setReceitaConsolidadaPedido] = useState<InsumoConsolidado[]>([]);
+  const [fotoExpandidaModalUrl, setFotoExpandidaModalUrl] = useState<string | null>(null);
+
+  const extrairFotosReferenciaPedido = useCallback((ord: Encomenda | null): string[] => {
+    if (!ord) return [];
+    const fotos: string[] = [];
+    const rawOrd = ord as any;
+    if (rawOrd.foto_url && typeof rawOrd.foto_url === "string") fotos.push(rawOrd.foto_url);
+    if (rawOrd.fotoUrl && typeof rawOrd.fotoUrl === "string") fotos.push(rawOrd.fotoUrl);
+    if (rawOrd.foto_referencia && typeof rawOrd.foto_referencia === "string") fotos.push(rawOrd.foto_referencia);
+    if (rawOrd.imagem_referencia && typeof rawOrd.imagem_referencia === "string") fotos.push(rawOrd.imagem_referencia);
+
+    if (Array.isArray(ord.itensDetalhes)) {
+      for (const it of ord.itensDetalhes) {
+        if (it.fotoUrl && typeof it.fotoUrl === "string") fotos.push(it.fotoUrl);
+        if (it.foto_url && typeof it.foto_url === "string") fotos.push(it.foto_url);
+        if (it.referenceImage && typeof it.referenceImage === "string") fotos.push(it.referenceImage);
+        if (it.imagem_referencia && typeof it.imagem_referencia === "string") fotos.push(it.imagem_referencia);
+      }
+    }
+
+    const textoCombinado = `${ord.observacoes || ""} ${ord.itens || ""}`;
+    const urlRegex = /(https?:\/\/[^\s<"']+\.(?:png|jpg|jpeg|webp|gif)(?:\?[^\s<"']*)?|data:image\/[a-zA-Z]+;base64,[^\s<"']+)/gi;
+    let match;
+    while ((match = urlRegex.exec(textoCombinado)) !== null) {
+      if (match[0]) fotos.push(match[0]);
+    }
+
+    return Array.from(new Set(fotos.map((f) => f.trim()).filter(Boolean)));
+  }, []);
 
   const handleAbrirDetalhes = async (ord: Encomenda) => {
     setEncomendaDetalhes(ord);
@@ -5593,7 +5625,7 @@ export function OrdersView({
                       <Cake className="w-4 h-4 text-purple-600" /> Itens Pedidos pelo Cliente
                     </h4>
                     {encomendaDetalhes.itensDetalhes && encomendaDetalhes.itensDetalhes.length > 0 ? (
-                      <div className="p-3.5 rounded-2xl border border-border bg-card space-y-2 shadow-2xs">
+                      <div className="p-3.5 rounded-2xl border border-border bg-card space-y-3 shadow-2xs">
                         {encomendaDetalhes.itensDetalhes.map((it: any, idx: number) => {
                           const opcaoNome =
                             (Array.isArray(it.opcoes_selecionadas) && it.opcoes_selecionadas.length > 0
@@ -5605,23 +5637,106 @@ export function OrdersView({
                             it.opcao_selecionada?.nome;
                           const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
                           const qtd = it.quantidade || 1;
+
+                          const isCustomItem =
+                            it.categoria === "Orçamento Personalizado" ||
+                            (it.nome && (it.nome.includes("Sob Medida") || it.nome.includes("Orçamento") || it.nome.startsWith("📝"))) ||
+                            Boolean(it.descricao && (it.descricao.includes("•") || it.descricao.includes("Sabores/Recheios")));
+
+                          const fotoItem = it.fotoUrl || it.foto_url || it.referenceImage || it.imagem_referencia || "";
+
+                          // Linhas de descrição customizada (separadas por \n ou •)
+                          const descLinhas = typeof it.descricao === "string" ? it.descricao.split("\n").filter((l: string) => l.trim()) : [];
+
                           return (
-                            <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs py-1.5 border-b last:border-b-0 border-border/50 gap-1">
-                              <div>
-                                <span className="font-semibold text-foreground">
-                                  {qtd}x {it.nome}
+                            <div key={idx} className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-2.5">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+                                <div className="flex items-center gap-2">
+                                  {isCustomItem && <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />}
+                                  <span className="font-extrabold text-foreground text-sm">
+                                    {qtd}x {it.nome}
+                                  </span>
+                                  {isCustomItem && (
+                                    <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[9px] font-black">
+                                      SOB MEDIDA
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="font-mono font-bold text-muted-foreground self-end sm:self-auto">
+                                  {precoUnit > 0 ? formatarMoeda(precoUnit * qtd) : "Sob Consulta"}
                                 </span>
-                                {opcaoNome && (
-                                  <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 mt-0.5">
-                                    <span className="bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                                      Sabores: {opcaoNome}
-                                    </span>
-                                  </div>
-                                )}
                               </div>
-                              <span className="font-mono font-bold text-muted-foreground self-end sm:self-auto">
-                                {formatarMoeda(precoUnit * qtd)}
-                              </span>
+
+                              {/* Sabores / Opções selecionadas normais */}
+                              {opcaoNome && (
+                                <div className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                                  <span className="bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 inline-block">
+                                    Sabores / Opções: {opcaoNome}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Detalhes do Orçamento Personalizado */}
+                              {descLinhas.length > 0 && (
+                                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1 text-amber-950 dark:text-amber-200">
+                                  <p className="font-black text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1 pb-0.5">
+                                    <Sparkles className="w-3.5 h-3.5" /> Especificações da Personalização:
+                                  </p>
+                                  {descLinhas.map((linha: string, lIdx: number) => (
+                                    <p key={lIdx} className="font-medium leading-relaxed pl-1 text-[11.5px]">
+                                      {linha}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Foto de Referência do Item */}
+                              {fotoItem && (
+                                <div className="pt-1.5 flex items-start gap-3 p-2.5 rounded-xl bg-background border border-amber-500/20">
+                                  <div
+                                    onClick={() => setFotoExpandidaModalUrl(fotoItem)}
+                                    className="relative group cursor-pointer shrink-0"
+                                  >
+                                    <img
+                                      src={fotoItem}
+                                      alt="Foto de Referência"
+                                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl border border-border shadow-xs transition-transform group-hover:scale-105"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-xs font-bold">
+                                      <Maximize2 className="w-4 h-4" />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1 text-xs flex-1 min-w-0">
+                                    <span className="font-bold text-foreground flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                                      <ImageIcon className="w-3.5 h-3.5 text-amber-500" /> Imagem Anexa / Referência
+                                    </span>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                      Modelo enviado pelo cliente para esta opção.
+                                    </p>
+                                    <div className="flex items-center gap-2 pt-1">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setFotoExpandidaModalUrl(fotoItem)}
+                                        className="h-7 px-2.5 text-[11px] font-bold border-amber-500/40 hover:bg-amber-500/10 text-amber-900 dark:text-amber-200 rounded-lg cursor-pointer"
+                                      >
+                                        <Maximize2 className="w-3 h-3 mr-1" /> Ampliar
+                                      </Button>
+                                      {fotoItem.startsWith("http") && (
+                                        <a
+                                          href={fotoItem}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                                        >
+                                          <ExternalLink className="w-3 h-3" /> Abrir Link
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -5632,6 +5747,75 @@ export function OrdersView({
                       </div>
                     )}
                   </div>
+
+                  {/* BLOCO DEDICADO DE FOTO DE REFERÊNCIA / MODELO DO CLIENTE */}
+                  {(() => {
+                    const fotos = extrairFotosReferenciaPedido(encomendaDetalhes);
+                    if (fotos.length === 0) return null;
+
+                    return (
+                      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-extrabold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                            <ImageIcon className="w-4 h-4 text-amber-600" /> Foto de Referência / Modelo da Festa (Cliente)
+                          </h4>
+                          <Badge className="bg-amber-500 text-slate-950 text-[10px] font-black">
+                            {fotos.length} Arquivo(s)
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {fotos.map((urlFoto, fIdx) => (
+                            <div key={fIdx} className="flex items-start gap-3 p-2.5 rounded-xl bg-background border border-amber-500/20 shadow-2xs">
+                              <div
+                                onClick={() => setFotoExpandidaModalUrl(urlFoto)}
+                                className="relative group cursor-pointer shrink-0"
+                              >
+                                <img
+                                  src={urlFoto}
+                                  alt={`Referência ${fIdx + 1}`}
+                                  className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl border border-border transition-transform group-hover:scale-105 shadow-xs"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-xs font-bold gap-1">
+                                  <Maximize2 className="w-4 h-4" />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1 min-w-0 flex-1">
+                                <span className="text-xs font-extrabold text-foreground block truncate">
+                                  Modelo de Referência #{fIdx + 1}
+                                </span>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                  Imagem enviada pelo cliente durante a solicitação do orçamento.
+                                </p>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setFotoExpandidaModalUrl(urlFoto)}
+                                    className="h-7 px-2.5 text-[11px] font-bold border-amber-500/40 hover:bg-amber-500/10 text-amber-900 dark:text-amber-200 rounded-lg cursor-pointer"
+                                  >
+                                    <Maximize2 className="w-3 h-3 mr-1" /> Ampliar Foto
+                                  </Button>
+                                  {urlFoto.startsWith("http") && (
+                                    <a
+                                      href={urlFoto}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                                    >
+                                      <ExternalLink className="w-3 h-3" /> Link
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* BLOCO 2.5: RECEITA & INGREDIENTES CONSOLIDADOS */}
                   <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-2 shadow-2xs">
@@ -6060,6 +6244,53 @@ export function OrdersView({
               <Printer className="w-3.5 h-3.5" /> Imprimir Relatório Geral
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE ZOOM DE FOTO DE REFERÊNCIA / MODELO DO CLIENTE */}
+      <Dialog open={!!fotoExpandidaModalUrl} onOpenChange={() => setFotoExpandidaModalUrl(null)}>
+        <DialogContent className="max-w-3xl p-4 sm:p-6 rounded-3xl space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg font-black text-foreground flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-amber-500" /> Foto de Referência do Orçamento
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Visualização em alta resolução do modelo enviado pelo cliente para este pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          {fotoExpandidaModalUrl && (
+            <div className="flex flex-col items-center justify-center gap-3">
+              <div className="max-h-[65vh] overflow-auto rounded-2xl border border-border shadow-lg bg-black/5 p-1 flex items-center justify-center w-full">
+                <img
+                  src={fotoExpandidaModalUrl}
+                  alt="Foto de Referência em Alta Resolução"
+                  className="max-h-[60vh] w-auto max-w-full object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 w-full justify-end pt-2">
+                {fotoExpandidaModalUrl.startsWith("http") && (
+                  <a
+                    href={fotoExpandidaModalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-xs"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Abrir Link Original
+                  </a>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFotoExpandidaModalUrl(null)}
+                  className="h-9 px-4 font-bold text-xs rounded-xl"
+                >
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -1875,6 +1875,8 @@ export function CardapioLojaView() {
         })
         .join(", ");
 
+      const fotoRefGlobal = carrinho.find((i) => i.produto?.fotoUrl)?.produto?.fotoUrl || "";
+
       const itensDetalhesJson = carrinho.map((item) => {
         if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
           const subtotal = item.opcoesSelecionadas.reduce(
@@ -1896,6 +1898,9 @@ export function CardapioLojaView() {
             opcaoNome: descOpcoes,
             opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
             categoria: item.produto.categoria,
+            descricao: item.produto.descricao || "",
+            fotoUrl: item.produto.fotoUrl || (item.produto as any).foto_url || "",
+            foto_url: item.produto.fotoUrl || (item.produto as any).foto_url || "",
           };
         }
         const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
@@ -1910,6 +1915,9 @@ export function CardapioLojaView() {
           opcaoNome: item.opcaoSelecionada?.nome || null,
           opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
           categoria: item.produto.categoria,
+          descricao: item.produto.descricao || "",
+          fotoUrl: item.produto.fotoUrl || (item.produto as any).foto_url || "",
+          foto_url: item.produto.fotoUrl || (item.produto as any).foto_url || "",
         };
       });
 
@@ -2070,6 +2078,9 @@ export function CardapioLojaView() {
         status: "pendente",
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
+        foto_url: fotoRefGlobal,
+        foto_referencia: fotoRefGlobal,
+        imagem_referencia: fotoRefGlobal,
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
