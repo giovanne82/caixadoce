@@ -65,6 +65,9 @@ import {
   HeartHandshake,
   History,
   Image as ImageIcon,
+  Upload,
+  Trash2,
+  Link as LinkIcon,
 } from "lucide-react";
 import {
   formatarMoeda,
@@ -594,7 +597,11 @@ export function CardapioLojaView() {
   const [selectedFlavors, setSelectedFlavors] = useState<string[]>([]);
   const [selectedDecorations, setSelectedDecorations] = useState<string[]>([]);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const [referenceMode, setReferenceMode] = useState<"file" | "url">("file");
   const [referenceImage, setReferenceImage] = useState<string>("");
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referenceFilePreview, setReferenceFilePreview] = useState<string | null>(null);
+  const [uploadingReference, setUploadingReference] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
   const [deliveryDate, setDeliveryDate] = useState<string>("");
   const [deliveryTime, setDeliveryTime] = useState<string>("");
@@ -625,11 +632,38 @@ export function CardapioLojaView() {
     setSelectedFlavors([]);
     setSelectedDecorations([]);
     setSelectedExtras([]);
+    setReferenceMode("file");
     setReferenceImage("");
+    setReferenceFile(null);
+    if (referenceFilePreview) {
+      URL.revokeObjectURL(referenceFilePreview);
+    }
+    setReferenceFilePreview(null);
+    setUploadingReference(false);
     setNotes("");
     setDeliveryDate("");
     setDeliveryTime("");
     setCustomBudgetModalOpen(true);
+  };
+
+  const handleReferenceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Por favor, selecione um arquivo de imagem (JPG, PNG).");
+      return;
+    }
+    setReferenceFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setReferenceFilePreview(previewUrl);
+  };
+
+  const handleClearReferenceFile = () => {
+    setReferenceFile(null);
+    if (referenceFilePreview) {
+      URL.revokeObjectURL(referenceFilePreview);
+    }
+    setReferenceFilePreview(null);
   };
 
   const handleToggleChip = (
@@ -644,9 +678,43 @@ export function CardapioLojaView() {
     }
   };
 
-  const handleAdicionarCustomOrcamentoAoCarrinho = () => {
+  const handleAdicionarCustomOrcamentoAoCarrinho = async () => {
     const activeCat = customBudgetCategory || customBudgetSettings[0];
     if (!activeCat) return;
+
+    let finalFotoUrl = "";
+    if (referenceMode === "url" && referenceImage.trim()) {
+      finalFotoUrl = referenceImage.trim();
+    } else if (referenceMode === "file" && referenceFile) {
+      try {
+        setUploadingReference(true);
+        const fileExt = referenceFile.name.split(".").pop() || "jpg";
+        const filePath = `orcamentos/${code || "CD-1001"}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("public")
+          .upload(filePath, referenceFile, { upsert: true });
+
+        if (!uploadError && uploadData) {
+          const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            finalFotoUrl = publicUrlData.publicUrl;
+          }
+        }
+      } catch (errUpload) {
+        console.warn("[Upload Storage Fallback]", errUpload);
+      }
+
+      if (!finalFotoUrl) {
+        // Fallback Data URL em Base64 para a imagem nunca ser perdida
+        finalFotoUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(referenceFile);
+        });
+      }
+      setUploadingReference(false);
+    }
 
     const detLinhas: string[] = [];
     if (customQuantity) detLinhas.push(`• Quantidade/Tamanho: ${customQuantity}`);
@@ -666,7 +734,7 @@ export function CardapioLojaView() {
       descricao: detLinhas.join("\n"),
       preco: 0,
       categoria: "Orçamento Personalizado",
-      fotoUrl: referenceImage || "",
+      fotoUrl: finalFotoUrl,
     };
 
     const novoItem: ItemCarrinho = {
@@ -5414,16 +5482,106 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           {customBudgetStep === 3 && (
             <div className="space-y-4 py-1">
               {/* Imagem de Referência */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <ImageIcon className="w-4 h-4 text-purple-600" /> Foto de Referência / Modelo (Opcional)
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-purple-600" /> Foto de Referência / Modelo (Opcional)
+                  </span>
+                  {referenceMode === "file" && referenceFile && (
+                    <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-bold">
+                      Imagem selecionada
+                    </Badge>
+                  )}
                 </Label>
-                <Input
-                  value={referenceImage}
-                  onChange={(e) => setReferenceImage(e.target.value)}
-                  placeholder="Cole o link da imagem (Pinterest, Instagram, etc)..."
-                  className="text-xs rounded-xl"
-                />
+
+                {/* Seletor de Modo: Upload de Foto vs Colar Link */}
+                <div className="flex gap-2 p-1 bg-muted/60 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setReferenceMode("file")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      referenceMode === "file"
+                        ? "bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload de Foto</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReferenceMode("url")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      referenceMode === "url"
+                        ? "bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    <span>Colar Link</span>
+                  </button>
+                </div>
+
+                {/* Conteúdo por Modo */}
+                {referenceMode === "file" ? (
+                  <div>
+                    {referenceFilePreview ? (
+                      <div className="p-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-center gap-3">
+                        <img
+                          src={referenceFilePreview}
+                          alt="Pré-visualização"
+                          className="w-14 h-14 object-cover rounded-xl border border-border shrink-0 shadow-xs"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-foreground truncate">
+                            {referenceFile?.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {referenceFile ? `${(referenceFile.size / 1024).toFixed(1)} KB` : ""}
+                          </p>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                            <CheckCircle2 className="w-3 h-3" /> Imagem pronta para envio
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearReferenceFile}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2 rounded-xl text-xs shrink-0 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Remover
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-border hover:border-amber-500/60 transition-colors rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer bg-muted/20 hover:bg-muted/40 text-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Clique para selecionar uma foto</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Envie o modelo do bolo, doce ou salgado desejado (JPG, PNG)
+                          </p>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleReferenceFileChange}
+                        />
+                      </label>
+                    )}
+                  </div>
+                ) : (
+                  <Input
+                    value={referenceImage}
+                    onChange={(e) => setReferenceImage(e.target.value)}
+                    placeholder="Cole o link da imagem (Pinterest, Instagram, etc)..."
+                    className="text-xs rounded-xl"
+                  />
+                )}
               </div>
 
               {/* Data & Horário Desejado */}
@@ -5480,11 +5638,21 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               <DialogFooter className="pt-2">
                 <Button
                   type="button"
+                  disabled={uploadingReference}
                   onClick={handleAdicionarCustomOrcamentoAoCarrinho}
-                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-sm h-12 rounded-2xl shadow-md cursor-pointer"
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-sm h-12 rounded-2xl shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <Plus className="w-5 h-5 mr-1.5 text-slate-950" />
-                  Adicionar ao Carrinho de Orçamento
+                  {uploadingReference ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-1.5 animate-spin text-slate-950" />
+                      Enviando Imagem...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-5 h-5 mr-1.5 text-slate-950" />
+                      Adicionar ao Carrinho de Orçamento
+                    </>
+                  )}
                 </Button>
               </DialogFooter>
             </div>
