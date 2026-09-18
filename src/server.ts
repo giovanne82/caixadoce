@@ -2207,7 +2207,7 @@ export default {
               request.headers.get("x-estabelecimento-codigo") ||
               "";
 
-            const result = await consultarStatusLojaIFood(estCodigo);
+            const result = await consultarStatusLojaIFood(estCodigo, env);
             return new Response(JSON.stringify(result), {
               status: result.status || (result.success ? 200 : 400),
               headers: corsHeaders,
@@ -2235,10 +2235,15 @@ export default {
               );
             }
 
-            const result = await alterarStatusLojaIFood(estCodigo, statusAcao, {
-              motivo: bodyJson.motivo || bodyJson.reason,
-              duracaoMinutos: Number(bodyJson.duracaoMinutos || bodyJson.duration || 1440),
-            });
+            const result = await alterarStatusLojaIFood(
+              estCodigo,
+              statusAcao,
+              {
+                motivo: bodyJson.motivo || bodyJson.reason,
+                duracaoMinutos: Number(bodyJson.duracaoMinutos || bodyJson.duration || 1440),
+              },
+              env
+            );
 
             return new Response(JSON.stringify(result), {
               status: result.status || (result.success ? 200 : 400),
@@ -2277,7 +2282,7 @@ export default {
               request.headers.get("x-estabelecimento-codigo") ||
               "";
 
-            const result = await consultarHorariosLojaIFood(estCodigo);
+            const result = await consultarHorariosLojaIFood(estCodigo, env);
             return new Response(JSON.stringify(result), {
               status: result.status || (result.success ? 200 : 400),
               headers: corsHeaders,
@@ -2297,7 +2302,7 @@ export default {
               request.headers.get("x-estabelecimento-codigo") ||
               "";
 
-            const result = await sincronizarHorariosLojaIFood(estCodigo, bodyJson.shifts);
+            const result = await sincronizarHorariosLojaIFood(estCodigo, bodyJson.shifts, env);
             return new Response(JSON.stringify(result), {
               status: result.status || (result.success ? 200 : 400),
               headers: corsHeaders,

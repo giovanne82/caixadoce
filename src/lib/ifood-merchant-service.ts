@@ -1,4 +1,9 @@
-import { obterTokensIFoodEstabelecimento, renovarAccessTokenIFood, getSupabaseBackendClient } from "./ifood-service";
+import {
+  obterTokensIFoodEstabelecimento,
+  renovarAccessTokenIFood,
+  obterTokenAppIFood,
+  getSupabaseBackendClient,
+} from "./ifood-service";
 
 export interface IFoodMerchantStatusResponse {
   success: boolean;
@@ -23,64 +28,190 @@ export interface IFoodShiftItem {
 }
 
 /**
- * Consulta o status da loja (aberta/fechada/interrompida) na API do iFood
+ * Resolve credenciais ativas do iFood (token e merchantId) com múltiplas camadas de fallback
  */
-export async function consultarStatusLojaIFood(
-  estabelecimentoCodigo?: string
-): Promise<IFoodMerchantStatusResponse> {
-  const estData = await obterTokensIFoodEstabelecimento(estabelecimentoCodigo);
-  if ("error" in estData && estData.error) {
-    return {
-      success: false,
-      isAvailable: false,
-      state: "UNKNOWN",
-      error: estData.error,
-      status: 404,
-    };
+async function resolverCredenciaisIFood(
+  estabelecimentoCodigo?: string,
+  env?: any
+): Promise<{
+  estId: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  merchantId: string | null;
+  error?: string;
+}> {
+  const estData = await obterTokensIFoodEstabelecimento(estabelecimentoCodigo, undefined, env);
+  const estId = ("id" in estData ? estData.id : null) || "";
+  let accessToken = ("accessToken" in estData ? estData.accessToken : null) || null;
+  const refreshToken = ("refreshToken" in estData ? estData.refreshToken : null) || null;
+  let merchantId = ("merchantId" in estData ? estData.merchantId : null) || null;
+
+  const envObj = (env as Record<string, string>) || {};
+  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+  // 1. Se não tiver accessToken salvo, tenta renovar pelo refresh_token
+  if (!accessToken && refreshToken && estId) {
+    try {
+      accessToken = await renovarAccessTokenIFood(estId, refreshToken, env);
+    } catch (e) {
+      console.warn("[resolverCredenciaisIFood Refresh Warning]", e);
+    }
   }
 
-  let accessToken = estData.accessToken;
-  const merchantId = estData.merchantId;
-
-  if (!accessToken || !merchantId) {
-    return {
-      success: false,
-      isAvailable: false,
-      state: "UNKNOWN",
-      error: "Loja não possui token ou merchantId do iFood configurado.",
-      status: 401,
-    };
+  // 2. Se ainda não tiver accessToken, tenta obter via client_credentials da aplicação
+  if (!accessToken) {
+    try {
+      accessToken = await obterTokenAppIFood(env);
+      if (accessToken && estId) {
+        const supabase = getSupabaseBackendClient();
+        await supabase
+          .from("estabelecimentos")
+          .update({ ifood_access_token: accessToken, updated_at: new Date().toISOString() })
+          .eq("id", estId);
+      }
+    } catch (e) {
+      console.warn("[resolverCredenciaisIFood App Token Warning]", e);
+    }
   }
 
-  const ifoodUrl = `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/status`;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
+  // 3. Resolução do merchantId
+  if (!merchantId) {
+    merchantId =
+      envObj.IFOOD_MERCHANT_ID ||
+      procObj.IFOOD_MERCHANT_ID ||
+      envObj.VITE_IFOOD_MERCHANT_ID ||
+      procObj.VITE_IFOOD_MERCHANT_ID ||
+      null;
+  }
+
+  // 4. Descoberta automática do merchantId na API do iFood se tivermos accessToken
+  if (!merchantId && accessToken) {
+    try {
+      const mRes = await fetch("https://merchant-api.ifood.com.br/merchant/v1.0/merchants", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (mRes.ok) {
+        const mList = await mRes.json();
+        if (Array.isArray(mList) && mList.length > 0) {
+          merchantId = mList[0].id || mList[0].merchantId || null;
+          if (merchantId && estId) {
+            const supabase = getSupabaseBackendClient();
+            await supabase
+              .from("estabelecimentos")
+              .update({ ifood_merchant_id: merchantId, updated_at: new Date().toISOString() })
+              .eq("id", estId);
+          }
+        }
+      }
+    } catch (mErr) {
+      console.warn("[resolverCredenciaisIFood Merchant Discovery Warning]", mErr);
+    }
+  }
+
+  return {
+    estId,
+    accessToken,
+    refreshToken,
+    merchantId,
   };
+}
 
-  try {
-    let res = await fetch(ifoodUrl, { method: "GET", headers });
+/**
+ * Executa uma chamada à API do iFood com auto-refresh e fallback em caso de 401
+ */
+async function fetchComAutoRefresh(
+  url: string,
+  options: RequestInit,
+  authInfo: { estId: string; accessToken: string; refreshToken: string | null },
+  env?: any
+): Promise<Response> {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${authInfo.accessToken}`);
+  headers.set("Accept", "application/json");
 
-    // Auto-refresh caso 401
-    if (res.status === 401 && estData.refreshToken) {
+  let res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401) {
+    console.warn(`[iFood Auto-Refresh] Recebido 401 em ${url}. Tentando renovar credenciais...`);
+    let novoToken: string | null = null;
+
+    // Tentativa 1: Refresh Token
+    if (authInfo.refreshToken && authInfo.estId) {
       try {
-        accessToken = await renovarAccessTokenIFood(estData.id, estData.refreshToken);
-        headers.Authorization = `Bearer ${accessToken}`;
-        res = await fetch(ifoodUrl, { method: "GET", headers });
-      } catch (renewErr) {
-        console.error("[iFood Status Renew Error]", renewErr);
+        novoToken = await renovarAccessTokenIFood(authInfo.estId, authInfo.refreshToken, env);
+      } catch (rErr) {
+        console.warn("[iFood Auto-Refresh Refresh Token Fail]", rErr);
       }
     }
 
+    // Tentativa 2: Client Credentials App Token
+    if (!novoToken) {
+      try {
+        novoToken = await obterTokenAppIFood(env);
+        if (novoToken && authInfo.estId) {
+          const supabase = getSupabaseBackendClient();
+          await supabase
+            .from("estabelecimentos")
+            .update({ ifood_access_token: novoToken, updated_at: new Date().toISOString() })
+            .eq("id", authInfo.estId);
+        }
+      } catch (cErr) {
+        console.warn("[iFood Auto-Refresh App Token Fail]", cErr);
+      }
+    }
+
+    if (novoToken) {
+      headers.set("Authorization", `Bearer ${novoToken}`);
+      res = await fetch(url, { ...options, headers });
+    }
+  }
+
+  return res;
+}
+
+/**
+ * Consulta o status da loja (aberta/fechada/interrompida) na API do iFood
+ */
+export async function consultarStatusLojaIFood(
+  estabelecimentoCodigo?: string,
+  env?: any
+): Promise<IFoodMerchantStatusResponse> {
+  const auth = await resolverCredenciaisIFood(estabelecimentoCodigo, env);
+
+  if (!auth.accessToken || !auth.merchantId) {
+    return {
+      success: true,
+      isAvailable: false,
+      state: "UNKNOWN",
+      title: "Loja Não Conectada",
+      subtitle: "Aguardando autorização no iFood",
+      description: "Conecte sua loja ao iFood usando o botão 'Conectar Loja ao iFood' acima.",
+      merchantId: auth.merchantId || undefined,
+      status: 200,
+    };
+  }
+
+  const ifoodUrl = `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/status`;
+
+  try {
+    const res = await fetchComAutoRefresh(
+      ifoodUrl,
+      { method: "GET" },
+      { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+      env
+    );
+
     if (!res.ok) {
       const errTxt = await res.text();
+      console.warn(`[consultarStatusLojaIFood Warning] HTTP ${res.status}: ${errTxt}`);
       return {
         success: false,
         isAvailable: false,
         state: "UNKNOWN",
-        merchantId,
-        error: `iFood retornou HTTP ${res.status}: ${errTxt}`,
-        status: res.status,
+        merchantId: auth.merchantId,
+        error: `iFood retornou status ${res.status}: ${errTxt}`,
+        status: 200, // Retorna 200 para evitar quebra de UI no frontend
       };
     }
 
@@ -107,7 +238,7 @@ export async function consultarStatusLojaIFood(
       subtitle,
       description,
       reasons,
-      merchantId,
+      merchantId: auth.merchantId,
       raw: data,
       status: 200,
     };
@@ -117,9 +248,9 @@ export async function consultarStatusLojaIFood(
       success: false,
       isAvailable: false,
       state: "UNKNOWN",
-      merchantId,
+      merchantId: auth.merchantId,
       error: err.message || "Falha de conexão com a API do iFood.",
-      status: 500,
+      status: 200,
     };
   }
 }
@@ -130,39 +261,18 @@ export async function consultarStatusLojaIFood(
 export async function alterarStatusLojaIFood(
   estabelecimentoCodigo: string,
   statusAcao: "open" | "close",
-  options?: { motivo?: string; duracaoMinutos?: number }
+  options?: { motivo?: string; duracaoMinutos?: number },
+  env?: any
 ): Promise<{ success: boolean; message?: string; error?: string; status?: number }> {
-  const estData = await obterTokensIFoodEstabelecimento(estabelecimentoCodigo);
-  if ("error" in estData && estData.error) {
-    return { success: false, error: estData.error, status: 404 };
-  }
+  const auth = await resolverCredenciaisIFood(estabelecimentoCodigo, env);
 
-  let accessToken = estData.accessToken;
-  const merchantId = estData.merchantId;
-
-  if (!accessToken || !merchantId) {
+  if (!auth.accessToken || !auth.merchantId) {
     return {
       success: false,
-      error: "Loja sem credenciais ou merchantId do iFood conectados.",
-      status: 401,
+      error: "Loja sem credenciais ou merchantId do iFood configurados.",
+      status: 400,
     };
   }
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-
-  const executeWithAuth = async (fn: () => Promise<Response>) => {
-    let res = await fn();
-    if (res.status === 401 && estData.refreshToken) {
-      accessToken = await renovarAccessTokenIFood(estData.id, estData.refreshToken);
-      headers.Authorization = `Bearer ${accessToken}`;
-      res = await fn();
-    }
-    return res;
-  };
 
   try {
     if (statusAcao === "close") {
@@ -177,14 +287,17 @@ export async function alterarStatusLojaIFood(
         end: termino.toISOString(),
       };
 
-      console.log(`[iFood Merchant Close] Criando interrupção para loja ${merchantId}:`, interruptionPayload);
+      console.log(`[iFood Merchant Close] Criando interrupção para loja ${auth.merchantId}:`, interruptionPayload);
 
-      const res = await executeWithAuth(() =>
-        fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/interruptions`, {
+      const res = await fetchComAutoRefresh(
+        `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/interruptions`,
+        {
           method: "POST",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(interruptionPayload),
-        })
+        },
+        { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+        env
       );
 
       if (!res.ok && res.status !== 200 && res.status !== 201 && res.status !== 202 && res.status !== 204) {
@@ -198,14 +311,16 @@ export async function alterarStatusLojaIFood(
       }
 
       // Atualiza o Supabase
-      const supabase = getSupabaseBackendClient();
-      await supabase
-        .from("estabelecimentos")
-        .update({
-          ifood_status: "conectado_fechado",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", estData.id);
+      if (auth.estId) {
+        const supabase = getSupabaseBackendClient();
+        await supabase
+          .from("estabelecimentos")
+          .update({
+            ifood_status: "conectado_fechado",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", auth.estId);
+      }
 
       return {
         success: true,
@@ -214,13 +329,13 @@ export async function alterarStatusLojaIFood(
       };
     } else {
       // 2. Para abrir a loja: busca todas as interrupções ativas e as remove
-      console.log(`[iFood Merchant Open] Buscando interrupções ativas para a loja ${merchantId}...`);
+      console.log(`[iFood Merchant Open] Buscando interrupções ativas para a loja ${auth.merchantId}...`);
 
-      const listRes = await executeWithAuth(() =>
-        fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/interruptions`, {
-          method: "GET",
-          headers,
-        })
+      const listRes = await fetchComAutoRefresh(
+        `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/interruptions`,
+        { method: "GET" },
+        { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+        env
       );
 
       if (listRes.ok) {
@@ -230,11 +345,11 @@ export async function alterarStatusLojaIFood(
           for (const item of interruptions) {
             const intId = item.id || item.interruptionId;
             if (intId) {
-              await executeWithAuth(() =>
-                fetch(
-                  `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/interruptions/${encodeURIComponent(intId)}`,
-                  { method: "DELETE", headers }
-                )
+              await fetchComAutoRefresh(
+                `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/interruptions/${encodeURIComponent(intId)}`,
+                { method: "DELETE" },
+                { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+                env
               ).catch((delErr) => console.warn(`[iFood Delete Interruption ${intId} Log]`, delErr));
             }
           }
@@ -242,14 +357,16 @@ export async function alterarStatusLojaIFood(
       }
 
       // Atualiza o Supabase
-      const supabase = getSupabaseBackendClient();
-      await supabase
-        .from("estabelecimentos")
-        .update({
-          ifood_status: "conectado_aberto",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", estData.id);
+      if (auth.estId) {
+        const supabase = getSupabaseBackendClient();
+        await supabase
+          .from("estabelecimentos")
+          .update({
+            ifood_status: "conectado_aberto",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", auth.estId);
+      }
 
       return {
         success: true,
@@ -271,39 +388,22 @@ export async function alterarStatusLojaIFood(
  * Consulta a grade de horários de funcionamento (Shifts) no iFood
  */
 export async function consultarHorariosLojaIFood(
-  estabelecimentoCodigo?: string
+  estabelecimentoCodigo?: string,
+  env?: any
 ): Promise<{ success: boolean; shifts?: IFoodShiftItem[]; error?: string; status?: number }> {
-  const estData = await obterTokensIFoodEstabelecimento(estabelecimentoCodigo);
-  if ("error" in estData && estData.error) {
-    return { success: false, error: estData.error, status: 404 };
+  const auth = await resolverCredenciaisIFood(estabelecimentoCodigo, env);
+
+  if (!auth.accessToken || !auth.merchantId) {
+    return { success: false, error: "Credenciais do iFood ausentes.", status: 400 };
   }
-
-  let accessToken = estData.accessToken;
-  const merchantId = estData.merchantId;
-
-  if (!accessToken || !merchantId) {
-    return { success: false, error: "Credenciais do iFood ausentes.", status: 401 };
-  }
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
-  };
 
   try {
-    let res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/shifts`, {
-      method: "GET",
-      headers,
-    });
-
-    if (res.status === 401 && estData.refreshToken) {
-      accessToken = await renovarAccessTokenIFood(estData.id, estData.refreshToken);
-      headers.Authorization = `Bearer ${accessToken}`;
-      res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/shifts`, {
-        method: "GET",
-        headers,
-      });
-    }
+    const res = await fetchComAutoRefresh(
+      `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/shifts`,
+      { method: "GET" },
+      { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+      env
+    );
 
     if (!res.ok) {
       const errTxt = await res.text();
@@ -322,27 +422,15 @@ export async function consultarHorariosLojaIFood(
  */
 export async function sincronizarHorariosLojaIFood(
   estabelecimentoCodigo: string,
-  shiftsCustom?: IFoodShiftItem[]
+  shiftsCustom?: IFoodShiftItem[],
+  env?: any
 ): Promise<{ success: boolean; message?: string; error?: string; status?: number }> {
-  const estData = await obterTokensIFoodEstabelecimento(estabelecimentoCodigo);
-  if ("error" in estData && estData.error) {
-    return { success: false, error: estData.error, status: 404 };
+  const auth = await resolverCredenciaisIFood(estabelecimentoCodigo, env);
+
+  if (!auth.accessToken || !auth.merchantId) {
+    return { success: false, error: "Credenciais do iFood ausentes.", status: 400 };
   }
 
-  let accessToken = estData.accessToken;
-  const merchantId = estData.merchantId;
-
-  if (!accessToken || !merchantId) {
-    return { success: false, error: "Credenciais do iFood ausentes.", status: 401 };
-  }
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-
-  // Grade padrão diária (Segunda a Domingo, 08:00 às 22:00 -> duração 840 minutos) caso não fornecida
   const diasSemana: Array<IFoodShiftItem["dayOfWeek"]> = [
     "MONDAY",
     "TUESDAY",
@@ -364,23 +452,18 @@ export async function sincronizarHorariosLojaIFood(
   const payload = shiftsCustom && shiftsCustom.length > 0 ? shiftsCustom : defaultShifts;
 
   try {
-    console.log(`[iFood Merchant Shifts] Sincronizando ${payload.length} turnos para loja ${merchantId}...`);
+    console.log(`[iFood Merchant Shifts] Sincronizando ${payload.length} turnos para loja ${auth.merchantId}...`);
 
-    let res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/shifts`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(payload),
-    });
-
-    if (res.status === 401 && estData.refreshToken) {
-      accessToken = await renovarAccessTokenIFood(estData.id, estData.refreshToken);
-      headers.Authorization = `Bearer ${accessToken}`;
-      res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(merchantId)}/shifts`, {
+    const res = await fetchComAutoRefresh(
+      `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/shifts`,
+      {
         method: "PUT",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-    }
+      },
+      { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+      env
+    );
 
     if (!res.ok && res.status !== 200 && res.status !== 201 && res.status !== 204) {
       const errTxt = await res.text();

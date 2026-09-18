@@ -23,10 +23,76 @@ export function getSupabaseBackendClient() {
   });
 }
 
+let cachedAppToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Obtém o access_token da aplicação CaixaDoce via client_credentials
+ */
+export async function obterTokenAppIFood(env?: any): Promise<string> {
+  const now = Date.now();
+  if (cachedAppToken && cachedAppToken.expiresAt > now + 60000 && cachedAppToken.token) {
+    return cachedAppToken.token;
+  }
+
+  const envObj = (env as Record<string, string>) || {};
+  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
+  const ifoodClientId =
+    envObj.IFOOD_CLIENT_ID ||
+    procObj.IFOOD_CLIENT_ID ||
+    envObj.VITE_IFOOD_CLIENT_ID ||
+    procObj.VITE_IFOOD_CLIENT_ID ||
+    "";
+  const ifoodClientSecret =
+    envObj.IFOOD_CLIENT_SECRET ||
+    procObj.IFOOD_CLIENT_SECRET ||
+    envObj.VITE_IFOOD_CLIENT_SECRET ||
+    procObj.VITE_IFOOD_CLIENT_SECRET ||
+    "";
+
+  if (!ifoodClientId || !ifoodClientSecret) {
+    throw new Error("Credenciais IFOOD_CLIENT_ID ou IFOOD_CLIENT_SECRET não encontradas no ambiente.");
+  }
+
+  const bodyParams = new URLSearchParams({
+    grantType: "client_credentials",
+    clientId: ifoodClientId.trim(),
+    clientSecret: ifoodClientSecret.trim(),
+  });
+
+  const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: bodyParams.toString(),
+  });
+
+  if (!res.ok) {
+    const errTxt = await res.text();
+    throw new Error(`Falha ao obter token client_credentials do iFood (${res.status}): ${errTxt}`);
+  }
+
+  const data: any = await res.json();
+  const token = data.accessToken || data.access_token;
+  const expiresIn = Number(data.expiresIn || data.expires_in || 21599);
+
+  if (token) {
+    cachedAppToken = {
+      token,
+      expiresAt: now + expiresIn * 1000,
+    };
+    return token;
+  }
+
+  throw new Error("Resposta do iFood não continha accessToken.");
+}
+
 /**
  * Obtém as credenciais e tokens iFood de um estabelecimento no Supabase
  */
-export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: string, orderId?: string) {
+export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: string, orderId?: string, env?: any) {
   const supabase = getSupabaseBackendClient();
   let targetCode = (estabelecimentoCodigo || "").trim().toUpperCase();
 
@@ -55,14 +121,14 @@ export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: st
       .ilike("codigo", targetCode)
       .maybeSingle();
 
-    if (estTarget?.ifood_access_token) {
+    if (estTarget) {
       return {
         id: estTarget.id,
         codigo: estTarget.codigo,
-        accessToken: estTarget.ifood_access_token,
-        refreshToken: estTarget.ifood_refresh_token,
-        merchantId: estTarget.ifood_merchant_id,
-        status: estTarget.ifood_status,
+        accessToken: estTarget.ifood_access_token || null,
+        refreshToken: estTarget.ifood_refresh_token || null,
+        merchantId: estTarget.ifood_merchant_id || null,
+        status: estTarget.ifood_status || null,
       };
     }
   }
@@ -74,14 +140,14 @@ export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: st
     .ilike("codigo", "CD-5411")
     .maybeSingle();
 
-  if (estCd5411?.ifood_access_token) {
+  if (estCd5411) {
     return {
       id: estCd5411.id,
       codigo: estCd5411.codigo,
-      accessToken: estCd5411.ifood_access_token,
-      refreshToken: estCd5411.ifood_refresh_token,
-      merchantId: estCd5411.ifood_merchant_id,
-      status: estCd5411.ifood_status,
+      accessToken: estCd5411.ifood_access_token || null,
+      refreshToken: estCd5411.ifood_refresh_token || null,
+      merchantId: estCd5411.ifood_merchant_id || null,
+      status: estCd5411.ifood_status || null,
     };
   }
 
@@ -97,24 +163,35 @@ export async function obterTokensIFoodEstabelecimento(estabelecimentoCodigo?: st
     return {
       id: est.id,
       codigo: est.codigo,
-      accessToken: est.ifood_access_token,
-      refreshToken: est.ifood_refresh_token,
-      merchantId: est.ifood_merchant_id,
-      status: est.ifood_status,
+      accessToken: est.ifood_access_token || null,
+      refreshToken: est.ifood_refresh_token || null,
+      merchantId: est.ifood_merchant_id || null,
+      status: est.ifood_status || null,
     };
   }
 
-  return { error: `Nenhum token de autorização do iFood encontrado para a loja '${targetCode || "CD-5411"}'. Conecte sua loja ao iFood nas configurações.` };
+  return { error: `Nenhum registro de estabelecimento encontrado para '${targetCode || "CD-5411"}'.` };
 }
 
 /**
  * Renova o access_token do iFood usando o refresh_token
  */
-export async function renovarAccessTokenIFood(estabelecimentoId: string, refreshToken: string) {
+export async function renovarAccessTokenIFood(estabelecimentoId: string, refreshToken: string, env?: any) {
+  const envObj = (env as Record<string, string>) || {};
+  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+
   const ifoodClientId =
-    (typeof process !== "undefined" && (process.env?.IFOOD_CLIENT_ID || process.env?.VITE_IFOOD_CLIENT_ID)) || "";
+    envObj.IFOOD_CLIENT_ID ||
+    procObj.IFOOD_CLIENT_ID ||
+    envObj.VITE_IFOOD_CLIENT_ID ||
+    procObj.VITE_IFOOD_CLIENT_ID ||
+    "";
   const ifoodClientSecret =
-    (typeof process !== "undefined" && (process.env?.IFOOD_CLIENT_SECRET || process.env?.VITE_IFOOD_CLIENT_SECRET)) || "";
+    envObj.IFOOD_CLIENT_SECRET ||
+    procObj.IFOOD_CLIENT_SECRET ||
+    envObj.VITE_IFOOD_CLIENT_SECRET ||
+    procObj.VITE_IFOOD_CLIENT_SECRET ||
+    "";
 
   if (!refreshToken || !ifoodClientId) {
     throw new Error("Credenciais insuficientes para renovar o token iFood.");
@@ -122,9 +199,9 @@ export async function renovarAccessTokenIFood(estabelecimentoId: string, refresh
 
   const bodyParams = new URLSearchParams({
     grantType: "refresh_token",
-    clientId: ifoodClientId,
-    clientSecret: ifoodClientSecret,
-    refreshToken: refreshToken,
+    clientId: ifoodClientId.trim(),
+    clientSecret: ifoodClientSecret.trim(),
+    refreshToken: refreshToken.trim(),
   });
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
@@ -145,7 +222,7 @@ export async function renovarAccessTokenIFood(estabelecimentoId: string, refresh
   const novoAccessToken = data.accessToken || data.access_token;
   const novoRefreshToken = data.refreshToken || data.refresh_token || refreshToken;
 
-  if (novoAccessToken) {
+  if (novoAccessToken && estabelecimentoId) {
     const supabase = getSupabaseBackendClient();
     await supabase
       .from("estabelecimentos")
