@@ -42,6 +42,8 @@ export function isEmailAdmin(email?: string | null): boolean {
   return allowedSet.has(cleanEmail);
 }
 
+import { safeStorage } from "./safe-storage";
+
 /**
  * Extração resiliente de e-mail a partir de múltiplos caminhos de objetos Supabase e LocalStorage
  */
@@ -54,24 +56,22 @@ export function extractUserEmailFromAllSources(sessionObj?: any, userObj?: any, 
 
   // Tentar restaurar do localStorage do aplicativo e do Supabase
   try {
-    if (typeof window !== "undefined") {
-      const caixadoceUser = localStorage.getItem("caixadoce_user");
-      if (caixadoceUser) {
-        const parsed = JSON.parse(caixadoceUser);
-        if (parsed?.email) candidates.push(parsed.email);
-      }
+    const caixadoceUser = safeStorage.getItem("caixadoce_user");
+    if (caixadoceUser) {
+      const parsed = JSON.parse(caixadoceUser);
+      if (parsed?.email) candidates.push(parsed.email);
+    }
 
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("sb-") || key.includes("auth-token"))) {
-          const val = localStorage.getItem(key);
-          if (val) {
-            try {
-              const parsedSb = JSON.parse(val);
-              if (parsedSb?.user?.email) candidates.push(parsedSb.user.email);
-              if (parsedSb?.currentSession?.user?.email) candidates.push(parsedSb.currentSession.user.email);
-            } catch {}
-          }
+    for (let i = 0; i < safeStorage.length; i++) {
+      const key = safeStorage.key(i);
+      if (key && (key.startsWith("sb-") || key.includes("auth-token"))) {
+        const val = safeStorage.getItem(key);
+        if (val) {
+          try {
+            const parsedSb = JSON.parse(val);
+            if (parsedSb?.user?.email) candidates.push(parsedSb.user.email);
+            if (parsedSb?.currentSession?.user?.email) candidates.push(parsedSb.currentSession.user.email);
+          } catch {}
         }
       }
     }

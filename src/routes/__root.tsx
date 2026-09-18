@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -46,27 +47,32 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-bold tracking-tight text-foreground">
-          Ops! Algo deu errado ao carregar a página.
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Nossa equipe já foi notificada. Tente recarregar ou volte para a página principal.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 font-sans">
+      <div className="max-w-md w-full bg-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-border text-center space-y-6">
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-purple-100 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800/60 flex items-center justify-center text-purple-600 dark:text-purple-400">
+          <span className="text-3xl">🍰</span>
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">
+            Ops! Ocorreu um erro ao carregar a tela.
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Tente recarregar a página para restabelecer a conexão ou retorne para a página inicial.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-xs sm:text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 cursor-pointer shadow-sm"
           >
-            Tentar novamente
+            Recarregar Página
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-xl border border-input bg-background px-4 py-2.5 text-xs sm:text-sm font-medium text-foreground transition-all hover:bg-accent cursor-pointer"
           >
             Página Inicial
           </a>
@@ -86,11 +92,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "color-scheme", content: "light dark" },
+      { name: "supported-color-schemes", content: "light dark" },
+      { name: "theme-color", content: "#7C3AED" },
       { name: "google-site-verification", content: "9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" },
       { title: "Caixa Doce" },
       { name: "application-name", content: "Caixa Doce" },
       { name: "apple-mobile-web-app-title", content: "Caixa Doce" },
-      { name: "theme-color", content: "#7C3AED" },
       { name: "description", content: "Sistema inteligente para gestão de confeitaria e vendas online." },
       { name: "author", content: "Caixa Doce" },
       { property: "og:type", content: "website" },
@@ -128,6 +136,9 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
+        <meta name="color-scheme" content="light dark" />
+        <meta name="supported-color-schemes" content="light dark" />
+        <meta name="theme-color" content="#7C3AED" />
         <meta name="google-site-verification" content="9ZitsOhCj6JHbtCUMaIxy1KXNvSsBnUSjpvHVWG2xRg" />
         {gaMeasurementId && (
           <>
@@ -149,8 +160,10 @@ function RootShell({ children }: { children: ReactNode }) {
         )}
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 selection:bg-purple-500 selection:text-white">
-        {children}
+      <body className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0B14] font-sans antialiased text-slate-900 dark:text-slate-100 selection:bg-purple-500 selection:text-white">
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
         <Scripts />
       </body>
     </html>
@@ -174,11 +187,13 @@ function RootComponent() {
   }, [router]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Outlet />
-        <Toaster richColors position="top-right" closeButton />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Outlet />
+          <Toaster richColors position="top-right" closeButton />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

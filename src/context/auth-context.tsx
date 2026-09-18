@@ -12,6 +12,7 @@ import {
   obterPlanoEfetivoEstabelecimento,
 } from "@/lib/planos-utils";
 import { salvarDadosInstitucionaisCache, type DadosInstitucionais, type ContaPix } from "@/lib/pix-utils";
+import { safeStorage } from "@/lib/safe-storage";
 import { toast } from "sonner";
 
 export type User = {
@@ -237,7 +238,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     let abasPermitidas = authUser?.user_metadata?.abasPermitidas;
     if (isColab && !abasPermitidas && typeof window !== "undefined" && formattedCode) {
       try {
-        const rawColabs = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
+        const rawColabs = safeStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
         if (rawColabs) {
           const colabs = JSON.parse(rawColabs);
           const colabCleanName = emailStr.split("@")[0].toLowerCase();
@@ -279,8 +280,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     setIsMounted(true);
 
     try {
-      const savedUser = localStorage.getItem("caixadoce_user");
-      const savedProfile = localStorage.getItem("caixadoce_profile");
+      const savedUser = safeStorage.getItem("caixadoce_user");
+      const savedProfile = safeStorage.getItem("caixadoce_profile");
 
       if (savedUser) setUser(JSON.parse(savedUser));
       if (savedProfile) setProfile(JSON.parse(savedProfile));
@@ -402,7 +403,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           userCreatedAt: data.created_at || authUser.created_at || baseProf.userCreatedAt,
         };
         setProfile(merged);
-        localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+        safeStorage.setItem("caixadoce_profile", JSON.stringify(merged));
       } else if (baseProf.establishmentCode) {
         // Somente executa UPSERT se a loja realmente não existir no banco
         const { data: insertedData } = await supabase
@@ -433,7 +434,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             ownerUserId: authUser.id,
           };
           setProfile(newProf);
-          localStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
+          safeStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
         }
       }
     };
@@ -455,11 +456,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             created_at: session.user.created_at,
           };
           setUser(u);
-          localStorage.setItem("caixadoce_user", JSON.stringify(u));
+          safeStorage.setItem("caixadoce_user", JSON.stringify(u));
 
           let existingProfile: UserProfile | null = null;
           try {
-            const raw = localStorage.getItem("caixadoce_profile");
+            const raw = safeStorage.getItem("caixadoce_profile");
             if (raw) existingProfile = JSON.parse(raw);
           } catch {}
 
@@ -492,11 +493,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           provider: session.user.app_metadata?.provider === "google" ? "google" : "email",
         };
         setUser(u);
-        localStorage.setItem("caixadoce_user", JSON.stringify(u));
+        safeStorage.setItem("caixadoce_user", JSON.stringify(u));
 
         let existingProfile: UserProfile | null = null;
         try {
-          const raw = localStorage.getItem("caixadoce_profile");
+          const raw = safeStorage.getItem("caixadoce_profile");
           if (raw) existingProfile = JSON.parse(raw);
         } catch {}
 
@@ -528,8 +529,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
-        localStorage.removeItem("caixadoce_user");
-        localStorage.removeItem("caixadoce_profile");
+        safeStorage.removeItem("caixadoce_user");
+        safeStorage.removeItem("caixadoce_profile");
       }
       setAuthLoading(false);
     });
@@ -625,7 +626,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     // Fallback de cache local da loja se offline ou durante transição
     if (!colabEncontrado && typeof window !== "undefined") {
       try {
-        const rawLocal = localStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
+        const rawLocal = safeStorage.getItem(`caixadoce_colaboradores_${formattedCode}`);
         if (rawLocal) {
           const listLocal = JSON.parse(rawLocal);
           colabEncontrado = listLocal.find(
@@ -690,8 +691,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     setProfile(colabProfile);
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("caixadoce_user", JSON.stringify(colabUser));
-      localStorage.setItem("caixadoce_profile", JSON.stringify(colabProfile));
+      safeStorage.setItem("caixadoce_user", JSON.stringify(colabUser));
+      safeStorage.setItem("caixadoce_profile", JSON.stringify(colabProfile));
     }
 
     toast.success(`Acesso PDV liberado para ${colabName}!`);
@@ -741,8 +742,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       setUser(loggedUser);
       setProfile(loggedProfile);
       if (typeof window !== "undefined") {
-        localStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
-        localStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
+        safeStorage.setItem("caixadoce_user", JSON.stringify(loggedUser));
+        safeStorage.setItem("caixadoce_profile", JSON.stringify(loggedProfile));
       }
       toast.success("Bem-vindo ao CaixaDoce!");
     } else {
@@ -778,8 +779,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       setUser(newUser);
       setProfile(newProfile);
       if (typeof window !== "undefined") {
-        localStorage.setItem("caixadoce_user", JSON.stringify(newUser));
-        localStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
+        safeStorage.setItem("caixadoce_user", JSON.stringify(newUser));
+        safeStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
       }
       toast.success("Conta criada e login efetuado com sucesso!");
       return { requiresConfirmation: false };
@@ -826,7 +827,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           provider: "email",
         };
         setUser(verifiedUser);
-        localStorage.setItem("caixadoce_user", JSON.stringify(verifiedUser));
+        safeStorage.setItem("caixadoce_user", JSON.stringify(verifiedUser));
       }
       return { success: true };
     } catch (err: any) {
@@ -898,7 +899,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     const atualizados = [...estabelecimentos, novo];
     setEstabelecimentos(atualizados);
-    localStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(atualizados));
+    safeStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(atualizados));
 
     const newProfile: UserProfile = {
       role,
@@ -907,7 +908,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       establishmentAddress: endereco,
     };
     setProfile(newProfile);
-    localStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
+    safeStorage.setItem("caixadoce_profile", JSON.stringify(newProfile));
 
     toast.success(`Estabelecimento "${nome}" criado com sucesso! Código: ${code}`);
     return { code };
@@ -926,7 +927,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       whatsapp: details.whatsapp !== undefined ? details.whatsapp : profile.whatsapp,
     };
     setProfile(updatedProfile);
-    localStorage.setItem("caixadoce_profile", JSON.stringify(updatedProfile));
+    safeStorage.setItem("caixadoce_profile", JSON.stringify(updatedProfile));
 
     setEstabelecimentos((prev) =>
       prev.map((e) =>
@@ -1243,7 +1244,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         tipoChavePix: details.tipoChavePix !== undefined ? details.tipoChavePix : current.tipoChavePix,
         contasPix: details.contasPix !== undefined ? details.contasPix : current.contasPix,
       };
-      localStorage.setItem("caixadoce_profile", JSON.stringify(merged));
+      safeStorage.setItem("caixadoce_profile", JSON.stringify(merged));
       return merged;
     });
 
@@ -1258,7 +1259,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             }
           : e
       );
-      localStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(next));
+      safeStorage.setItem("caixadoce_estabelecimentos", JSON.stringify(next));
       return next;
     });
 
@@ -1294,12 +1295,12 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const selectProfile = (p: UserProfile) => {
     setProfile(p);
-    localStorage.setItem("caixadoce_profile", JSON.stringify(p));
+    safeStorage.setItem("caixadoce_profile", JSON.stringify(p));
   };
 
   const switchProfile = () => {
     setProfile(null);
-    localStorage.removeItem("caixadoce_profile");
+    safeStorage.removeItem("caixadoce_profile");
   };
 
   const logout = async () => {
@@ -1308,8 +1309,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     } catch {}
     setUser(null);
     setProfile(null);
-    localStorage.removeItem("caixadoce_user");
-    localStorage.removeItem("caixadoce_profile");
+    safeStorage.removeItem("caixadoce_user");
+    safeStorage.removeItem("caixadoce_profile");
     queryClient.clear();
     toast.info("Você saiu da conta.");
   };
@@ -1341,7 +1342,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     if (!user) return;
     const updated = { ...user, ...dados };
     setUser(updated);
-    localStorage.setItem("caixadoce_user", JSON.stringify(updated));
+    safeStorage.setItem("caixadoce_user", JSON.stringify(updated));
 
     try {
       await supabase.auth.updateUser({

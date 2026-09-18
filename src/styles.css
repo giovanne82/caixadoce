@@ -59,6 +59,7 @@
 }
 
 :root {
+  color-scheme: light dark;
   --radius: 0.75rem;
 
   /* Fundo da Aplicação: #F8FAFC (Clean Light Slate) */
@@ -137,4 +138,15 @@
   --input: rgba(139, 92, 246, 0.3);
   --ring: #8B5CF6;
   --gradient-brand: linear-gradient(135deg, #0B0B14, #1E1B38);
+}
+
+html, body {
+  background-color: var(--background, #F8FAFC);
+  color: var(--foreground, #0F172A);
+  min-height: 100%;
+}
+
+.dark html, .dark body, html.dark, body.dark {
+  background-color: var(--background, #0B0B14);
+  color: var(--foreground, #F1F5F9);
 }

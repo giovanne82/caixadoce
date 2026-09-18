@@ -9,6 +9,8 @@ export default defineConfig({
     nodeVersion: "22.x",
   },
   build: {
+    target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
+    cssTarget: ["chrome87", "firefox78", "safari14", "edge88"],
     rollupOptions: {
       output: {
         manualChunks(id: string) {
