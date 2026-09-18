@@ -40,3 +40,11 @@ dist-ssr
 .output
 .wrangler/
 .dev.vars
+
+# Android Build & Keys
+android/app/build/
+android/.gradle/
+android/local.properties
+scratch/
+*.jks
+*.aab
