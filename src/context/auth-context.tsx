@@ -173,17 +173,17 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function getAppBaseUrl(path: string = ""): string {
-  let origin =
-    (typeof process !== "undefined" && (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL)) ||
-    "https://www.caixadoce.com.br";
-  if (typeof window !== "undefined" && window.location.origin) {
-    origin = window.location.origin;
+  let origin = "";
+  if (typeof window !== "undefined" && window.location?.origin) {
+    origin = window.location.origin.replace(/\/+$/, "");
   } else if (typeof process !== "undefined" && process.env) {
     origin =
       process.env.VITE_SITE_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.SITE_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.caixadoce.com.br");
+  } else {
+    origin = "https://www.caixadoce.com.br";
   }
 
   if (!path) return origin;
@@ -851,12 +851,9 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
   const loginWithGoogle = async (customRedirectTo?: string) => {
     try {
       // Captura a URL/origem atual de forma dinâmica e resiliente (Preview Vercel, localhost ou Prod)
-      let origin = "https://www.caixadoce.com.br";
-      if (typeof window !== "undefined" && window.location?.origin) {
-        origin = window.location.origin.replace(/\/+$/, "");
-      } else {
-        origin = getAppBaseUrl();
-      }
+      const origin = typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin.replace(/\/+$/, "")
+        : getAppBaseUrl();
 
       // Constrói o destino final pós-login
       let targetPath = customRedirectTo || (typeof window !== "undefined" ? window.location.pathname : "/");

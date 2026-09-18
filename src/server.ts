@@ -1563,12 +1563,12 @@ export default {
     try {
       const url = new URL(request.url);
 
-      // Redirecionamento 301 Forçado de Produção (caixadoce-nine.vercel.app -> www.caixadoce.com.br)
+      // Redirecionamento 301 Forçado de Produção (Apenas para o antigo domínio caixadoce-nine.vercel.app)
       const host = request.headers.get("host") || url.hostname;
       if (
         request.method === "GET" &&
         !url.pathname.startsWith("/api/") &&
-        (host.includes("caixadoce-nine") || (host.includes("vercel.app") && !host.includes("localhost")))
+        host === "caixadoce-nine.vercel.app"
       ) {
         const targetUrl = `https://www.caixadoce.com.br${url.pathname}${url.search}${url.hash}`;
         return Response.redirect(targetUrl, 301);
