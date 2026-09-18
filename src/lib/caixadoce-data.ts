@@ -69,113 +69,216 @@ export interface Estabelecimento {
   custom_budget_settings?: CustomBudgetSettings;
 }
 
-export type CategoriaOrcamentoKey = "bolos" | "doces" | "salgados";
+export interface CustomBudgetCategoryCampos {
+  tamanhos: string[];
+  sabores: string[];
+  estilos: string[];
+  extras: string[];
+}
 
-export interface CustomBudgetCategoryConfig {
+export interface CustomBudgetCategoryItem {
+  id: string;
+  nome: string;
+  icone: string;
+  descricao?: string;
   ativo: boolean;
-  titulo: string;
-  descricao: string;
-  tiposOpcoes: string[];
-  saboresRecheios: string[];
-  formatosDecoracoes: string[];
+  campos: CustomBudgetCategoryCampos;
 }
 
-export interface CustomBudgetSettings {
-  bolos: CustomBudgetCategoryConfig;
-  doces: CustomBudgetCategoryConfig;
-  salgados: CustomBudgetCategoryConfig;
-}
+export type CustomBudgetSettings = CustomBudgetCategoryItem[];
 
-export const DEFAULT_CUSTOM_BUDGET_SETTINGS: CustomBudgetSettings = {
-  bolos: {
-    ativo: true,
-    titulo: "Bolos Personalizados",
+export const DEFAULT_CUSTOM_BUDGET_CATEGORIES: CustomBudgetCategoryItem[] = [
+  {
+    id: "cat-bolos",
+    nome: "Bolos Personalizados",
+    icone: "🎂",
     descricao: "Monte seu bolo sob medida escolhendo tamanho, formato, recheios e estilos de decoração",
-    tiposOpcoes: [
-      "Bolo Decorado 1 Andar",
-      "Bolo de Andares (2+ Andares)",
-      "Naked Cake",
-      "Bolo Quadrado / Retangular",
-      "Heart Cake (Coração)"
-    ],
-    saboresRecheios: [
-      "Ninho com Nutella",
-      "Brigadeiro Gourmet",
-      "Doce de Leite com Nozes",
-      "Red Velvet",
-      "Morango com Natas",
-      "Prestígio",
-      "Abacaxi com Coco",
-      "Maracujá Trufado"
-    ],
-    formatosDecoracoes: [
-      "Chantininho Texturizado",
-      "Buttercream Flutuante",
-      "Pasta Americana",
-      "Drip Cake de Chocolate",
-      "Topo de Bolo Temático",
-      "Flores Naturais",
-      "Glitter Comestível"
-    ]
-  },
-  doces: {
     ativo: true,
-    titulo: "Doces Personalizados",
+    campos: {
+      tamanhos: [
+        "Bolo Decorado 1 Andar",
+        "Bolo de Andares (2+ Andares)",
+        "Naked Cake",
+        "Bolo Quadrado / Retangular",
+        "Heart Cake (Coração)"
+      ],
+      sabores: [
+        "Ninho com Nutella",
+        "Brigadeiro Gourmet",
+        "Doce de Leite com Nozes",
+        "Red Velvet",
+        "Morango com Natas",
+        "Prestígio",
+        "Maracujá Trufado"
+      ],
+      estilos: [
+        "Chantininho Texturizado",
+        "Buttercream Flutuante",
+        "Pasta Americana",
+        "Drip Cake de Chocolate",
+        "Topo de Bolo Temático",
+        "Flores Naturais"
+      ],
+      extras: [
+        "Vela Espiral Elegante",
+        "Glitter Comestível",
+        "Topo Personalizado com Nome",
+        "Caixa de Transporte Especial"
+      ]
+    }
+  },
+  {
+    id: "cat-doces",
+    nome: "Doces de Festa & Gourmet",
+    icone: "🧁",
     descricao: "Escolha tipos de doces gourmet, sabores especiais e forminhas finas para sua festa",
-    tiposOpcoes: [
-      "Brigadeiros Gourmet",
-      "Doces Finos de Casamento",
-      "Bombons Trufados",
-      "Copinhos de Chocolate",
-      "Macarons",
-      "Trufas Decoradas",
-      "Mini Cupcakes"
-    ],
-    saboresRecheios: [
-      "Ao Leite 50%",
-      "Meio Amargo",
-      "Pistache Real",
-      "Churros com Doce de Leite",
-      "Limão Siciliano",
-      "Ninho com Nutella",
-      "Maracujá",
-      "Frutas Vermelhas"
-    ],
-    formatosDecoracoes: [
-      "Forminha Simples de Papel",
-      "Forminha de Tecido em Flor",
-      "Forminha Fina Transparente",
-      "Caixinha Presentável"
-    ]
-  },
-  salgados: {
     ativo: true,
-    titulo: "Salgados Personalizados",
+    campos: {
+      tamanhos: [
+        "Brigadeiros Gourmet",
+        "Doces Finos de Casamento",
+        "Bombons Trufados",
+        "Copinhos de Chocolate",
+        "Macarons",
+        "Mini Cupcakes"
+      ],
+      sabores: [
+        "Ao Leite 50%",
+        "Meio Amargo",
+        "Pistache Real",
+        "Churros com Doce de Leite",
+        "Limão Siciliano",
+        "Ninho com Nutella"
+      ],
+      estilos: [
+        "Forminha Simples de Papel",
+        "Forminha Fina de Tecido em Flor",
+        "Forminha Transparente Premium",
+        "Tapetinho de Renda"
+      ],
+      extras: [
+        "Caixinha Degustação",
+        "Embalagem Individual para Lembrancinha"
+      ]
+    }
+  },
+  {
+    id: "cat-salgados",
+    nome: "Salgados de Festa",
+    icone: "🥟",
     descricao: "Selecione os tipos de salgados assados, fritos e folhados para seu evento",
-    tiposOpcoes: [
-      "Salgados Fritos na Hora",
-      "Salgados Assados Especiais",
-      "Mini Salgados de Festa",
-      "Salgados Folhados",
-      "Empadas & Quiches Mini"
-    ],
-    saboresRecheios: [
-      "Coxinha de Frango com Catupiry",
-      "Quibe Tradicional com Queijo",
-      "Bolinha de Queijo",
-      "Risóle de Carne Moída",
-      "Empada de Frango Cremoso",
-      "Esfiha Aberta de Carne",
-      "Croquete de Carne Assado",
-      "Enroladinho de Presunto e Queijo"
-    ],
-    formatosDecoracoes: [
-      "Cento Misto Variado",
-      "Cento de Sabor Único",
-      "Bandeja Pronta para Servir"
-    ]
+    ativo: true,
+    campos: {
+      tamanhos: [
+        "Cento de Salgados Fritos",
+        "Cento de Salgados Assados",
+        "Mini Empadas Gourmet",
+        "Salgados Folhados"
+      ],
+      sabores: [
+        "Coxinha de Frango com Catupiry",
+        "Quibe Tradicional com Queijo",
+        "Bolinha de Queijo",
+        "Empada de Frango Cremoso",
+        "Esfiha Aberta de Carne",
+        "Enroladinho de Presunto e Queijo"
+      ],
+      estilos: [
+        "Servidos Quentes (Prontos para consumo)",
+        "Congelados (Para fritar/assar no evento)",
+        "Bandeja Pronta para Servir"
+      ],
+      extras: [
+        "Molho Especial da Casa",
+        "Kit Guardanapos e Pratinhos"
+      ]
+    }
   }
-};
+];
+
+export function normalizeCustomBudgetSettings(raw: any): CustomBudgetCategoryItem[] {
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map((item, idx) => ({
+      id: item.id || `cat-${idx + 1}`,
+      nome: item.nome || item.titulo || `Categoria ${idx + 1}`,
+      icone: item.icone || "✨",
+      descricao: item.descricao || "",
+      ativo: typeof item.ativo === "boolean" ? item.ativo : true,
+      campos: {
+        tamanhos: Array.isArray(item.campos?.tamanhos)
+          ? item.campos.tamanhos
+          : Array.isArray(item.tiposOpcoes)
+          ? item.tiposOpcoes
+          : [],
+        sabores: Array.isArray(item.campos?.sabores)
+          ? item.campos.sabores
+          : Array.isArray(item.saboresRecheios)
+          ? item.saboresRecheios
+          : [],
+        estilos: Array.isArray(item.campos?.estilos)
+          ? item.campos.estilos
+          : Array.isArray(item.formatosDecoracoes)
+          ? item.formatosDecoracoes
+          : [],
+        extras: Array.isArray(item.campos?.extras) ? item.campos.extras : [],
+      },
+    }));
+  }
+
+  if (raw && typeof raw === "object") {
+    const list: CustomBudgetCategoryItem[] = [];
+    if (raw.bolos) {
+      list.push({
+        id: "cat-bolos",
+        nome: raw.bolos.titulo || "Bolos Personalizados",
+        icone: "🎂",
+        descricao: raw.bolos.descricao || "",
+        ativo: raw.bolos.ativo ?? true,
+        campos: {
+          tamanhos: raw.bolos.tiposOpcoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[0].campos.tamanhos,
+          sabores: raw.bolos.saboresRecheios || DEFAULT_CUSTOM_BUDGET_CATEGORIES[0].campos.sabores,
+          estilos: raw.bolos.formatosDecoracoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[0].campos.estilos,
+          extras: DEFAULT_CUSTOM_BUDGET_CATEGORIES[0].campos.extras,
+        },
+      });
+    }
+    if (raw.doces) {
+      list.push({
+        id: "cat-doces",
+        nome: raw.doces.titulo || "Doces Personalizados",
+        icone: "🧁",
+        descricao: raw.doces.descricao || "",
+        ativo: raw.doces.ativo ?? true,
+        campos: {
+          tamanhos: raw.doces.tiposOpcoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[1].campos.tamanhos,
+          sabores: raw.doces.saboresRecheios || DEFAULT_CUSTOM_BUDGET_CATEGORIES[1].campos.sabores,
+          estilos: raw.doces.formatosDecoracoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[1].campos.estilos,
+          extras: DEFAULT_CUSTOM_BUDGET_CATEGORIES[1].campos.extras,
+        },
+      });
+    }
+    if (raw.salgados) {
+      list.push({
+        id: "cat-salgados",
+        nome: raw.salgados.titulo || "Salgados Personalizados",
+        icone: "🥟",
+        descricao: raw.salgados.descricao || "",
+        ativo: raw.salgados.ativo ?? true,
+        campos: {
+          tamanhos: raw.salgados.tiposOpcoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[2].campos.tamanhos,
+          sabores: raw.salgados.saboresRecheios || DEFAULT_CUSTOM_BUDGET_CATEGORIES[2].campos.sabores,
+          estilos: raw.salgados.formatosDecoracoes || DEFAULT_CUSTOM_BUDGET_CATEGORIES[2].campos.estilos,
+          extras: DEFAULT_CUSTOM_BUDGET_CATEGORIES[2].campos.extras,
+        },
+      });
+    }
+    if (list.length > 0) return list;
+  }
+
+  return DEFAULT_CUSTOM_BUDGET_CATEGORIES;
+}
+
+export const DEFAULT_CUSTOM_BUDGET_SETTINGS: CustomBudgetSettings = DEFAULT_CUSTOM_BUDGET_CATEGORIES;
 
 import {
   ESTABELECIMENTO_PADRAO,

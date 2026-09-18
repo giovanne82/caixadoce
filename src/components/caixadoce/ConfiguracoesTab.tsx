@@ -86,9 +86,11 @@ import {
   formatarCpfCnpj,
   formatarCep,
   DEFAULT_CUSTOM_BUDGET_SETTINGS,
+  DEFAULT_CUSTOM_BUDGET_CATEGORIES,
+  normalizeCustomBudgetSettings,
   type CustomBudgetSettings,
-  type CategoriaOrcamentoKey,
-  type CustomBudgetCategoryConfig,
+  type CustomBudgetCategoryItem,
+  type CustomBudgetCategoryCampos,
 } from "@/lib/caixadoce-data";
 import { type ContaPix } from "@/lib/pix-utils";
 import { obterPlanoEfetivoEstabelecimento } from "@/lib/planos-utils";
@@ -341,60 +343,156 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
   );
   const [salvandoEst, setSalvandoEst] = useState(false);
 
-  // Assistente de Orçamento State & Handlers
-  const [customBudgetSettings, setCustomBudgetSettings] = useState<CustomBudgetSettings>(() => {
-    return profile?.custom_budget_settings || DEFAULT_CUSTOM_BUDGET_SETTINGS;
+  // Assistente de Orçamento State & Handlers (Dynamic Categories Builder)
+  const [customBudgetSettings, setCustomBudgetSettings] = useState<CustomBudgetCategoryItem[]>(() => {
+    return normalizeCustomBudgetSettings(profile?.custom_budget_settings);
   });
-  const [activeBudgetCategory, setActiveBudgetCategory] = useState<CategoriaOrcamentoKey>("bolos");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
+    const norm = normalizeCustomBudgetSettings(profile?.custom_budget_settings);
+    return norm[0]?.id || "cat-bolos";
+  });
   const [salvandoAssistenteOrcamento, setSalvandoAssistenteOrcamento] = useState(false);
   const [tagInputs, setTagInputs] = useState<{ [key: string]: string }>({});
 
+  // Modal para Criar / Editar Categoria
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [catNomeInput, setCatNomeInput] = useState("");
+  const [catIconeInput, setCatIconeInput] = useState("🎂");
+  const [catDescricaoInput, setCatDescricaoInput] = useState("");
+
   useEffect(() => {
     if (profile?.custom_budget_settings) {
-      setCustomBudgetSettings(profile.custom_budget_settings);
+      const norm = normalizeCustomBudgetSettings(profile.custom_budget_settings);
+      setCustomBudgetSettings(norm);
+      if (!norm.some((c) => c.id === selectedCategoryId)) {
+        setSelectedCategoryId(norm[0]?.id || "cat-bolos");
+      }
     }
   }, [profile?.custom_budget_settings]);
 
-  const handleAddTag = (
-    category: CategoriaOrcamentoKey,
-    field: "tiposOpcoes" | "saboresRecheios" | "formatosDecoracoes"
+  const handleOpenCategoryModal = (catToEdit?: CustomBudgetCategoryItem) => {
+    if (catToEdit) {
+      setEditingCatId(catToEdit.id);
+      setCatNomeInput(catToEdit.nome);
+      setCatIconeInput(catToEdit.icone || "✨");
+      setCatDescricaoInput(catToEdit.descricao || "");
+    } else {
+      setEditingCatId(null);
+      setCatNomeInput("");
+      setCatIconeInput("🎉");
+      setCatDescricaoInput("");
+    }
+    setCatModalOpen(true);
+  };
+
+  const handleSaveCategoryModal = () => {
+    const nome = catNomeInput.trim();
+    if (!nome) {
+      toast.error("Informe o nome da categoria.");
+      return;
+    }
+
+    if (editingCatId) {
+      setCustomBudgetSettings((prev) =>
+        prev.map((c) =>
+          c.id === editingCatId
+            ? {
+                ...c,
+                nome,
+                icone: catIconeInput.trim() || "✨",
+                descricao: catDescricaoInput.trim(),
+              }
+            : c
+        )
+      );
+      toast.success("Categoria atualizada com sucesso!");
+    } else {
+      const newId = `cat-${Date.now()}`;
+      const newCat: CustomBudgetCategoryItem = {
+        id: newId,
+        nome,
+        icone: catIconeInput.trim() || "🎉",
+        descricao: catDescricaoInput.trim(),
+        ativo: true,
+        campos: {
+          tamanhos: [],
+          sabores: [],
+          estilos: [],
+          extras: [],
+        },
+      };
+      setCustomBudgetSettings((prev) => [...prev, newCat]);
+      setSelectedCategoryId(newId);
+      toast.success("Nova categoria criada!");
+    }
+
+    setCatModalOpen(false);
+  };
+
+  const handleDeleteCategory = (catId: string) => {
+    if (customBudgetSettings.length <= 1) {
+      toast.error("Você precisa ter pelo menos 1 categoria no assistente.");
+      return;
+    }
+    const filtered = customBudgetSettings.filter((c) => c.id !== catId);
+    setCustomBudgetSettings(filtered);
+    if (selectedCategoryId === catId) {
+      setSelectedCategoryId(filtered[0]?.id || "");
+    }
+    toast.success("Categoria removida.");
+  };
+
+  const handleToggleCategoryActive = (catId: string, ativo: boolean) => {
+    setCustomBudgetSettings((prev) =>
+      prev.map((c) => (c.id === catId ? { ...c, ativo } : c))
+    );
+  };
+
+  const handleAddTagCategory = (
+    catId: string,
+    field: keyof CustomBudgetCategoryCampos
   ) => {
-    const inputKey = `${category}_${field}`;
+    const inputKey = `${catId}_${field}`;
     const val = tagInputs[inputKey]?.trim();
     if (!val) return;
 
-    setCustomBudgetSettings((prev) => {
-      const catConfig = prev[category] || DEFAULT_CUSTOM_BUDGET_SETTINGS[category];
-      const currentList = catConfig[field] || [];
-      if (currentList.includes(val)) return prev;
-      return {
-        ...prev,
-        [category]: {
-          ...catConfig,
-          [field]: [...currentList, val],
-        },
-      };
-    });
+    setCustomBudgetSettings((prev) =>
+      prev.map((c) => {
+        if (c.id !== catId) return c;
+        const currentList = c.campos[field] || [];
+        if (currentList.includes(val)) return c;
+        return {
+          ...c,
+          campos: {
+            ...c.campos,
+            [field]: [...currentList, val],
+          },
+        };
+      })
+    );
 
     setTagInputs((prev) => ({ ...prev, [inputKey]: "" }));
   };
 
-  const handleRemoveTag = (
-    category: CategoriaOrcamentoKey,
-    field: "tiposOpcoes" | "saboresRecheios" | "formatosDecoracoes",
+  const handleRemoveTagCategory = (
+    catId: string,
+    field: keyof CustomBudgetCategoryCampos,
     index: number
   ) => {
-    setCustomBudgetSettings((prev) => {
-      const catConfig = prev[category] || DEFAULT_CUSTOM_BUDGET_SETTINGS[category];
-      const currentList = catConfig[field] || [];
-      return {
-        ...prev,
-        [category]: {
-          ...catConfig,
-          [field]: currentList.filter((_, i) => i !== index),
-        },
-      };
-    });
+    setCustomBudgetSettings((prev) =>
+      prev.map((c) => {
+        if (c.id !== catId) return c;
+        const currentList = c.campos[field] || [];
+        return {
+          ...c,
+          campos: {
+            ...c.campos,
+            [field]: currentList.filter((_, i) => i !== index),
+          },
+        };
+      })
+    );
   };
 
   const handleSalvarAssistenteOrcamento = async () => {
@@ -416,7 +514,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
         await updateEstablishmentDetails({ custom_budget_settings: customBudgetSettings } as any);
       }
 
-      toast.success("Configurações do Assistente de Orçamento salvas com sucesso!");
+      toast.success("Configurações do Assistente salvas com sucesso!");
     } catch (err: any) {
       console.error("Erro ao salvar assistente de orçamento:", err);
       toast.error(err?.message || "Erro ao salvar as configurações.");
@@ -2883,284 +2981,355 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                   <div>
                     <CardTitle className="text-lg font-black text-foreground flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-fuchsia-600" />
-                      <span>Configurações do Assistente de Orçamento</span>
+                      <span>Construtor do Assistente de Orçamento</span>
                     </CardTitle>
                     <CardDescription className="text-xs mt-1">
-                      Configure as sugestões, tags de sabores, formatos e opções personalizadas exibidas no assistente do cardápio público
+                      Crie e personalize quantas categorias desejar (Bolos, Kitis, Doces, Salgados, etc.) e configure as opções de tamanhos, sabores, estilos e extras de cada uma.
                     </CardDescription>
                   </div>
-                  <Button
-                    onClick={handleSalvarAssistenteOrcamento}
-                    disabled={salvandoAssistenteOrcamento}
-                    className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs shrink-0 cursor-pointer"
-                  >
-                    {salvandoAssistenteOrcamento ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-1.5" />
-                    )}
-                    Salvar Alterações
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => handleOpenCategoryModal()}
+                      variant="outline"
+                      className="border-fuchsia-300 dark:border-fuchsia-800 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-950/40 font-bold text-xs h-9 px-3 rounded-xl cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Nova Categoria
+                    </Button>
+                    <Button
+                      onClick={handleSalvarAssistenteOrcamento}
+                      disabled={salvandoAssistenteOrcamento}
+                      className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs shrink-0 cursor-pointer"
+                    >
+                      {salvandoAssistenteOrcamento ? (
+                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-1.5" />
+                      )}
+                      Salvar Alterações
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
+
               <CardContent className="space-y-6 pt-6">
-                {/* Abas Seletores de Categoria */}
-                <div className="grid grid-cols-3 gap-2 p-1.5 bg-muted/60 rounded-2xl border border-border/80">
-                  {(
-                    [
-                      { key: "bolos", label: "🎂 Bolos", subtitle: "Personalizados" },
-                      { key: "doces", label: "🧁 Doces", subtitle: "Gourmet & Finos" },
-                      { key: "salgados", label: "🥟 Salgados", subtitle: "Festa & Eventos" },
-                    ] as const
-                  ).map((cat) => {
-                    const isSelected = activeBudgetCategory === cat.key;
-                    return (
-                      <button
-                        key={cat.key}
-                        type="button"
-                        onClick={() => setActiveBudgetCategory(cat.key)}
-                        className={`py-3 px-2 rounded-xl text-center transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-background text-foreground font-black shadow-sm ring-2 ring-fuchsia-500/40"
-                            : "text-muted-foreground hover:text-foreground hover:bg-background/50 font-medium"
-                        }`}
-                      >
-                        <p className="text-xs sm:text-sm font-bold">{cat.label}</p>
-                        <p className="text-[10px] text-muted-foreground hidden sm:block">{cat.subtitle}</p>
-                      </button>
-                    );
-                  })}
+                {/* Carrossel / Lista de Categorias Customizadas */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-black text-foreground uppercase tracking-wider">
+                      Categorias Cadastradas ({customBudgetSettings.length})
+                    </Label>
+                  </div>
+                  <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-2xl border border-border/80">
+                    {customBudgetSettings.map((cat) => {
+                      const isSelected = selectedCategoryId === cat.id;
+                      return (
+                        <div
+                          key={cat.id}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all border ${
+                            isSelected
+                              ? "bg-background text-foreground font-bold shadow-sm ring-2 ring-fuchsia-500/40 border-fuchsia-400"
+                              : "bg-background/60 text-muted-foreground hover:bg-background border-border"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCategoryId(cat.id)}
+                            className="flex items-center gap-1.5 cursor-pointer text-left"
+                          >
+                            <span className="text-base">{cat.icone || "✨"}</span>
+                            <span className="text-xs font-bold">{cat.nome}</span>
+                            {!cat.ativo && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                Inativo
+                              </Badge>
+                            )}
+                          </button>
+                          <div className="flex items-center gap-1 border-l border-border/60 pl-1.5 ml-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCategoryModal(cat)}
+                              className="p-1 hover:text-fuchsia-600 transition-colors cursor-pointer rounded-md hover:bg-muted"
+                              title="Editar Nome/Ícone"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="p-1 hover:text-rose-600 transition-colors cursor-pointer rounded-md hover:bg-muted"
+                              title="Excluir Categoria"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Conteúdo da Categoria Ativa */}
+                {/* Conteúdo da Categoria Selecionada */}
                 {(() => {
-                  const catConfig =
-                    customBudgetSettings[activeBudgetCategory] ||
-                    DEFAULT_CUSTOM_BUDGET_SETTINGS[activeBudgetCategory];
-
-                  const updateCat = (key: keyof CustomBudgetCategoryConfig, value: any) => {
-                    setCustomBudgetSettings((prev) => ({
-                      ...prev,
-                      [activeBudgetCategory]: {
-                        ...catConfig,
-                        [key]: value,
-                      },
-                    }));
-                  };
+                  const activeCat = customBudgetSettings.find((c) => c.id === selectedCategoryId) || customBudgetSettings[0];
+                  if (!activeCat) return null;
 
                   return (
-                    <div className="space-y-6">
-                      {/* Ativar Categoria & Título */}
-                      <div className="p-4 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label className="text-sm font-extrabold text-foreground">
-                              Ativar assistente para esta categoria
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              Exibir este seletor no assistente de orçamento do cardápio público
-                            </p>
+                    <div className="space-y-6 pt-2">
+                      {/* Ativar/Desativar Categoria Selecionada */}
+                      <div className="p-4 rounded-2xl bg-fuchsia-50/50 dark:bg-fuchsia-950/20 border border-fuchsia-200 dark:border-fuchsia-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{activeCat.icone}</span>
+                            <h3 className="text-sm font-black text-foreground">{activeCat.nome}</h3>
                           </div>
+                          {activeCat.descricao && (
+                            <p className="text-xs text-muted-foreground">{activeCat.descricao}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 self-end sm:self-center">
+                          <Label className="text-xs font-bold text-muted-foreground">
+                            {activeCat.ativo ? "Exibindo no Cardápio" : "Oculto no Cardápio"}
+                          </Label>
                           <Switch
-                            checked={catConfig.ativo}
-                            onCheckedChange={(checked) => updateCat("ativo", checked)}
+                            checked={activeCat.ativo}
+                            onCheckedChange={(checked) => handleToggleCategoryActive(activeCat.id, checked)}
                           />
                         </div>
+                      </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-bold">Título da Categoria</Label>
-                            <Input
-                              value={catConfig.titulo}
-                              onChange={(e) => updateCat("titulo", e.target.value)}
-                              placeholder="Ex: Bolos Personalizados"
-                              className="text-xs rounded-xl"
-                            />
+                      {/* 4 EDITORES DE TAGS DA CATEGORIA SELECIONADA */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* 1. Tamanhos & Formatos */}
+                        <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                              <span>📏 Tamanhos, Formatos ou Quantidades</span>
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {activeCat.campos.tamanhos?.length || 0} tags
+                              </Badge>
+                            </Label>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-bold">Descrição Informativa</Label>
+                          <div className="flex gap-2">
                             <Input
-                              value={catConfig.descricao}
-                              onChange={(e) => updateCat("descricao", e.target.value)}
-                              placeholder="Descrição curta para o cliente..."
-                              className="text-xs rounded-xl"
+                              value={tagInputs[`${activeCat.id}_tamanhos`] || ""}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [`${activeCat.id}_tamanhos`]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddTagCategory(activeCat.id, "tamanhos");
+                                }
+                              }}
+                              placeholder="Ex: P (10 fatias), Kit P, 100 un..."
+                              className="text-xs rounded-xl flex-1"
                             />
+                            <Button
+                              type="button"
+                              onClick={() => handleAddTagCategory(activeCat.id, "tamanhos")}
+                              className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4 mr-1" /> Add
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 pt-1 min-h-[40px]">
+                            {activeCat.campos.tamanhos?.map((tag, idx) => (
+                              <Badge
+                                key={`${tag}-${idx}`}
+                                variant="secondary"
+                                className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-fuchsia-500/10 text-fuchsia-900 dark:text-fuchsia-200 border border-fuchsia-500/20"
+                              >
+                                <span>{tag}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTagCategory(activeCat.id, "tamanhos", idx)}
+                                  className="hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
                           </div>
                         </div>
-                      </div>
 
-                      {/* Tag Editor 1: Tipos & Opções */}
-                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
-                            <span>🏷️ Tipos, Formatos ou Modalidades</span>
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {catConfig.tiposOpcoes?.length || 0} tags
-                            </Badge>
-                          </Label>
-                        </div>
+                        {/* 2. Sabores & Recheios */}
+                        <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                              <span>🍓 Sabores &amp; Recheios Disponíveis</span>
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {activeCat.campos.sabores?.length || 0} tags
+                              </Badge>
+                            </Label>
+                          </div>
 
-                        <div className="flex gap-2">
-                          <Input
-                            value={tagInputs[`${activeBudgetCategory}_tiposOpcoes`] || ""}
-                            onChange={(e) =>
-                              setTagInputs((prev) => ({
-                                ...prev,
-                                [`${activeBudgetCategory}_tiposOpcoes`]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddTag(activeBudgetCategory, "tiposOpcoes");
+                          <div className="flex gap-2">
+                            <Input
+                              value={tagInputs[`${activeCat.id}_sabores`] || ""}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [`${activeCat.id}_sabores`]: e.target.value,
+                                }))
                               }
-                            }}
-                            placeholder="Adicionar novo tipo ou formato..."
-                            className="text-xs rounded-xl flex-1"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => handleAddTag(activeBudgetCategory, "tiposOpcoes")}
-                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
-                          >
-                            <Plus className="w-4 h-4 mr-1" /> Adicionar
-                          </Button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {catConfig.tiposOpcoes?.map((tag, idx) => (
-                            <Badge
-                              key={`${tag}-${idx}`}
-                              variant="secondary"
-                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-fuchsia-500/10 text-fuchsia-900 dark:text-fuchsia-200 border border-fuchsia-500/20"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddTagCategory(activeCat.id, "sabores");
+                                }
+                              }}
+                              placeholder="Ex: Ninho com Nutella, Brigadeiro..."
+                              className="text-xs rounded-xl flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => handleAddTagCategory(activeCat.id, "sabores")}
+                              className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
                             >
-                              <span>{tag}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveTag(activeBudgetCategory, "tiposOpcoes", idx)}
-                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              <Plus className="w-4 h-4 mr-1" /> Add
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 pt-1 min-h-[40px]">
+                            {activeCat.campos.sabores?.map((tag, idx) => (
+                              <Badge
+                                key={`${tag}-${idx}`}
+                                variant="secondary"
+                                className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20"
                               >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Tag Editor 2: Sabores & Recheios */}
-                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
-                            <span>🍓 Sabores &amp; Recheios Sugeridos</span>
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {catConfig.saboresRecheios?.length || 0} tags
-                            </Badge>
-                          </Label>
+                                <span>{tag}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTagCategory(activeCat.id, "sabores", idx)}
+                                  className="hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="flex gap-2">
-                          <Input
-                            value={tagInputs[`${activeBudgetCategory}_saboresRecheios`] || ""}
-                            onChange={(e) =>
-                              setTagInputs((prev) => ({
-                                ...prev,
-                                [`${activeBudgetCategory}_saboresRecheios`]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddTag(activeBudgetCategory, "saboresRecheios");
+                        {/* 3. Estilos & Decoração */}
+                        <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                              <span>🎨 Estilos, Temas &amp; Coberturas</span>
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {activeCat.campos.estilos?.length || 0} tags
+                              </Badge>
+                            </Label>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Input
+                              value={tagInputs[`${activeCat.id}_estilos`] || ""}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [`${activeCat.id}_estilos`]: e.target.value,
+                                }))
                               }
-                            }}
-                            placeholder="Adicionar novo sabor ou recheio..."
-                            className="text-xs rounded-xl flex-1"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => handleAddTag(activeBudgetCategory, "saboresRecheios")}
-                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
-                          >
-                            <Plus className="w-4 h-4 mr-1" /> Adicionar
-                          </Button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {catConfig.saboresRecheios?.map((tag, idx) => (
-                            <Badge
-                              key={`${tag}-${idx}`}
-                              variant="secondary"
-                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddTagCategory(activeCat.id, "estilos");
+                                }
+                              }}
+                              placeholder="Ex: Chantininho, Bento Cake, Floork..."
+                              className="text-xs rounded-xl flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => handleAddTagCategory(activeCat.id, "estilos")}
+                              className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
                             >
-                              <span>{tag}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveTag(activeBudgetCategory, "saboresRecheios", idx)}
-                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              <Plus className="w-4 h-4 mr-1" /> Add
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 pt-1 min-h-[40px]">
+                            {activeCat.campos.estilos?.map((tag, idx) => (
+                              <Badge
+                                key={`${tag}-${idx}`}
+                                variant="secondary"
+                                className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-purple-500/10 text-purple-900 dark:text-purple-200 border border-purple-500/20"
                               >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Tag Editor 3: Estilos / Coberturas / Forminhas */}
-                      <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
-                            <span>✨ Estilos de Decoração, Cobertura ou Forminhas</span>
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {catConfig.formatosDecoracoes?.length || 0} tags
-                            </Badge>
-                          </Label>
+                                <span>{tag}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTagCategory(activeCat.id, "estilos", idx)}
+                                  className="hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="flex gap-2">
-                          <Input
-                            value={tagInputs[`${activeBudgetCategory}_formatosDecoracoes`] || ""}
-                            onChange={(e) =>
-                              setTagInputs((prev) => ({
-                                ...prev,
-                                [`${activeBudgetCategory}_formatosDecoracoes`]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddTag(activeBudgetCategory, "formatosDecoracoes");
+                        {/* 4. Extras & Adicionais */}
+                        <div className="p-4 rounded-2xl bg-background border border-border/80 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-black text-foreground flex items-center gap-1.5">
+                              <span>🎁 Extras &amp; Adicionais Especial</span>
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {activeCat.campos.extras?.length || 0} tags
+                              </Badge>
+                            </Label>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Input
+                              value={tagInputs[`${activeCat.id}_extras`] || ""}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [`${activeCat.id}_extras`]: e.target.value,
+                                }))
                               }
-                            }}
-                            placeholder="Adicionar novo estilo de decoração ou acabamento..."
-                            className="text-xs rounded-xl flex-1"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => handleAddTag(activeBudgetCategory, "formatosDecoracoes")}
-                            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
-                          >
-                            <Plus className="w-4 h-4 mr-1" /> Adicionar
-                          </Button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {catConfig.formatosDecoracoes?.map((tag, idx) => (
-                            <Badge
-                              key={`${tag}-${idx}`}
-                              variant="secondary"
-                              className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-purple-500/10 text-purple-900 dark:text-purple-200 border border-purple-500/20"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddTagCategory(activeCat.id, "extras");
+                                }
+                              }}
+                              placeholder="Ex: Topper Personalizado, Velinha, Caixa Presente..."
+                              className="text-xs rounded-xl flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => handleAddTagCategory(activeCat.id, "extras")}
+                              className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
                             >
-                              <span>{tag}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveTag(activeBudgetCategory, "formatosDecoracoes", idx)}
-                                className="hover:text-rose-600 transition-colors cursor-pointer"
+                              <Plus className="w-4 h-4 mr-1" /> Add
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 pt-1 min-h-[40px]">
+                            {activeCat.campos.extras?.map((tag, idx) => (
+                              <Badge
+                                key={`${tag}-${idx}`}
+                                variant="secondary"
+                                className="px-2.5 py-1 text-xs rounded-xl flex items-center gap-1.5 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 border border-emerald-500/20"
                               >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          ))}
+                                <span>{tag}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTagCategory(activeCat.id, "extras", idx)}
+                                  className="hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
@@ -3183,6 +3352,72 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                   );
                 })()}
               </CardContent>
+
+              {/* Modal Criar / Editar Categoria */}
+              <Dialog open={catModalOpen} onOpenChange={setCatModalOpen}>
+                <DialogContent className="max-w-md rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-base font-black flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-fuchsia-600" />
+                      <span>{editingCatId ? "Editar Categoria" : "Nova Categoria de Orçamento"}</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                      Insira o nome, emoji e uma descrição opcional para esta categoria.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 py-2">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="space-y-1.5 col-span-1">
+                        <Label className="text-xs font-bold">Ícone/Emoji</Label>
+                        <Input
+                          value={catIconeInput}
+                          onChange={(e) => setCatIconeInput(e.target.value)}
+                          placeholder="🎂"
+                          className="text-center text-lg h-10 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-1.5 col-span-3">
+                        <Label className="text-xs font-bold">Nome da Categoria</Label>
+                        <Input
+                          value={catNomeInput}
+                          onChange={(e) => setCatNomeInput(e.target.value)}
+                          placeholder="Ex: Kits Festas, Tortas Finas..."
+                          className="text-xs h-10 rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold">Descrição (Opcional)</Label>
+                      <Input
+                        value={catDescricaoInput}
+                        onChange={(e) => setCatDescricaoInput(e.target.value)}
+                        placeholder="Ex: Escolha o tamanho e recheio da sua torta especial"
+                        className="text-xs rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter className="gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCatModalOpen(false)}
+                      className="rounded-xl text-xs font-bold"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSaveCategoryModal}
+                      className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs rounded-xl"
+                    >
+                      Salvar Categoria
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </Card>
           )}
 

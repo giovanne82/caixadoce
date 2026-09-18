@@ -78,7 +78,7 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao, type KitProduto, DEFAULT_CUSTOM_BUDGET_SETTINGS, type CustomBudgetSettings, type CategoriaOrcamentoKey } from "@/lib/caixadoce-data";
+import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao, type KitProduto, DEFAULT_CUSTOM_BUDGET_SETTINGS, DEFAULT_CUSTOM_BUDGET_CATEGORIES, normalizeCustomBudgetSettings, type CustomBudgetSettings, type CustomBudgetCategoryItem } from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
@@ -587,11 +587,12 @@ export function CardapioLojaView() {
   // Custom Budget Assistant Wizard & Continuity Modal States
   const [customBudgetModalOpen, setCustomBudgetModalOpen] = useState(false);
   const [customBudgetStep, setCustomBudgetStep] = useState<1 | 2 | 3>(1);
-  const [customBudgetCategory, setCustomBudgetCategory] = useState<CategoriaOrcamentoKey>("bolos");
-  const [customQuantity, setCustomQuantity] = useState<string>("1 Bolo (aprox. 1.5kg)");
+  const [customBudgetCategory, setCustomBudgetCategory] = useState<CustomBudgetCategoryItem | null>(null);
+  const [customQuantity, setCustomQuantity] = useState<string>("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedFlavors, setSelectedFlavors] = useState<string[]>([]);
   const [selectedDecorations, setSelectedDecorations] = useState<string[]>([]);
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
   const [referenceImage, setReferenceImage] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [deliveryDate, setDeliveryDate] = useState<string>("");
@@ -600,24 +601,29 @@ export function CardapioLojaView() {
   // Continuity Modal State (3 options after custom item added)
   const [continuityModalOpen, setContinuityModalOpen] = useState(false);
 
-  const customBudgetSettings: CustomBudgetSettings = useMemo(() => {
-    return (lojaInfo as any)?.custom_budget_settings || DEFAULT_CUSTOM_BUDGET_SETTINGS;
+  const customBudgetSettings = useMemo(() => {
+    return normalizeCustomBudgetSettings((lojaInfo as any)?.custom_budget_settings);
   }, [(lojaInfo as any)?.custom_budget_settings]);
 
-  const handleOpenCustomBudgetWizard = (initialCat?: CategoriaOrcamentoKey) => {
-    const cat = initialCat || "bolos";
-    setCustomBudgetCategory(cat);
-    setCustomBudgetStep(initialCat ? 2 : 1);
-    setCustomQuantity(
-      cat === "bolos"
-        ? "1 Bolo (aprox. 1.5kg)"
-        : cat === "doces"
-        ? "50 Doces Gourmet"
-        : "100 Salgados de Festa"
-    );
+  const handleOpenCustomBudgetWizard = (catToSelect?: CustomBudgetCategoryItem | string) => {
+    let cat: CustomBudgetCategoryItem | undefined;
+    if (typeof catToSelect === "object" && catToSelect !== null) {
+      cat = catToSelect;
+    } else if (typeof catToSelect === "string") {
+      cat = customBudgetSettings.find(
+        (c) => c.id === catToSelect || c.nome.toLowerCase().includes(catToSelect.toLowerCase())
+      );
+    }
+    if (!cat) {
+      cat = customBudgetSettings.find((c) => c.ativo) || customBudgetSettings[0];
+    }
+    setCustomBudgetCategory(cat || null);
+    setCustomBudgetStep(catToSelect ? 2 : 1);
+    setCustomQuantity("");
     setSelectedTypes([]);
     setSelectedFlavors([]);
     setSelectedDecorations([]);
+    setSelectedExtras([]);
     setReferenceImage("");
     setNotes("");
     setDeliveryDate("");
@@ -638,24 +644,24 @@ export function CardapioLojaView() {
   };
 
   const handleAdicionarCustomOrcamentoAoCarrinho = () => {
-    const catConfig =
-      customBudgetSettings[customBudgetCategory] ||
-      DEFAULT_CUSTOM_BUDGET_SETTINGS[customBudgetCategory];
+    const activeCat = customBudgetCategory || customBudgetSettings[0];
+    if (!activeCat) return;
 
     const detLinhas: string[] = [];
     if (customQuantity) detLinhas.push(`• Quantidade/Tamanho: ${customQuantity}`);
-    if (selectedTypes.length > 0) detLinhas.push(`• Tipos/Opções: ${selectedTypes.join(", ")}`);
+    if (selectedTypes.length > 0) detLinhas.push(`• Formatos/Tamanhos: ${selectedTypes.join(", ")}`);
     if (selectedFlavors.length > 0) detLinhas.push(`• Sabores/Recheios: ${selectedFlavors.join(", ")}`);
     if (selectedDecorations.length > 0)
-      detLinhas.push(`• Estilo/Formato/Decoração: ${selectedDecorations.join(", ")}`);
+      detLinhas.push(`• Estilos/Decoração: ${selectedDecorations.join(", ")}`);
+    if (selectedExtras.length > 0) detLinhas.push(`• Extras/Adicionais: ${selectedExtras.join(", ")}`);
     if (deliveryDate)
       detLinhas.push(`• Data Desejada: ${deliveryDate}${deliveryTime ? ` às ${deliveryTime}` : ""}`);
     if (notes) detLinhas.push(`• Observações: ${notes}`);
 
     const produtoCustomizado: ProdutoCardapio = {
-      id: `custom-${customBudgetCategory}-${Date.now()}`,
+      id: `custom-${activeCat.id}-${Date.now()}`,
       estabelecimentoCodigo: code || "",
-      nome: `📝 ${catConfig.titulo || "Sob Medida"}`,
+      nome: `📝 ${activeCat.nome || "Sob Medida"}`,
       descricao: detLinhas.join("\n"),
       preco: 0,
       categoria: "Orçamento Personalizado",
@@ -3332,42 +3338,29 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           </div>
 
           {/* Quick Category Buttons */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => handleOpenCustomBudgetWizard("bolos")}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group"
-            >
-              <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">🎂</span>
-              <div>
-                <p className="text-xs font-black text-white">Bolos Decorados</p>
-                <p className="text-[10px] text-stone-300 hidden sm:block">Andares, recheios &amp; cobertura</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleOpenCustomBudgetWizard("doces")}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group"
-            >
-              <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">🧁</span>
-              <div>
-                <p className="text-xs font-black text-white">Doces de Festa</p>
-                <p className="text-[10px] text-stone-300 hidden sm:block">Gourmet, finos &amp; forminhas</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleOpenCustomBudgetWizard("salgados")}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group"
-            >
-              <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">🥟</span>
-              <div>
-                <p className="text-xs font-black text-white">Salgados de Festa</p>
-                <p className="text-[10px] text-stone-300 hidden sm:block">Fritos, assados &amp; empadas</p>
-              </div>
-            </button>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {customBudgetSettings
+              .filter((c) => c.ativo)
+              .map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => handleOpenCustomBudgetWizard(cat)}
+                  className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group flex-1 min-w-[130px]"
+                >
+                  <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">
+                    {cat.icone || "✨"}
+                  </span>
+                  <div>
+                    <p className="text-xs font-black text-white">{cat.nome}</p>
+                    {cat.descricao && (
+                      <p className="text-[10px] text-stone-300 hidden sm:block truncate max-w-[130px]">
+                        {cat.descricao}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              ))}
           </div>
         </div>
         {/* 1. SELETOR DE MODALIDADE HÍBRIDA (Apenas no Modo Híbrido) */}
@@ -5185,70 +5178,50 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             </div>
           </DialogHeader>
 
-          {/* ETAPA 1: ESCOLHA DA CATEGORIA (Bolo, Doces, Salgados) */}
+          {/* ETAPA 1: ESCOLHA DA CATEGORIA DINÂMICA */}
           {customBudgetStep === 1 && (
             <div className="space-y-4 py-2">
               <p className="text-xs font-bold text-foreground">
-                Selecione o que você deseja personalizar para o seu evento:
+                Selecione a categoria do item que deseja personalizar para o seu evento:
               </p>
               <div className="grid grid-cols-1 gap-3">
-                {(
-                  [
-                    {
-                      cat: "bolos" as const,
-                      emoji: "🎂",
-                      title: "Bolo Decorado Personalizado",
-                      desc: "Escolha o tamanho, formato, andares, recheios e estilo de decoração visual",
-                      badge: "Bolos & Tortas",
-                      color: "from-pink-500/10 via-purple-500/5 to-transparent border-purple-500/20",
-                    },
-                    {
-                      cat: "doces" as const,
-                      emoji: "🧁",
-                      title: "Doces de Festa & Finos",
-                      desc: "Brigadeiros gourmet, doces finos, bombons, macarons e forminhas decorativas",
-                      badge: "Doces & Gourmet",
-                      color: "from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20",
-                    },
-                    {
-                      cat: "salgados" as const,
-                      emoji: "🥟",
-                      title: "Salgados de Festa",
-                      desc: "Coxinha, empadas, salgados fritos, assados e mini salgados para recepção",
-                      badge: "Salgados & Lanches",
-                      color: "from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20",
-                    },
-                  ]
-                ).map((item) => {
-                  const cfg = customBudgetSettings[item.cat] || DEFAULT_CUSTOM_BUDGET_SETTINGS[item.cat];
-                  if (!cfg.ativo) return null;
+                {customBudgetSettings
+                  .filter((c) => c.ativo)
+                  .map((cat) => {
+                    const tagCount =
+                      (cat.campos.tamanhos?.length || 0) +
+                      (cat.campos.sabores?.length || 0) +
+                      (cat.campos.estilos?.length || 0) +
+                      (cat.campos.extras?.length || 0);
 
-                  return (
-                    <button
-                      key={item.cat}
-                      type="button"
-                      onClick={() => handleOpenCustomBudgetWizard(item.cat)}
-                      className={`p-4 rounded-2xl bg-gradient-to-r ${item.color} border hover:border-amber-500/50 text-left transition-all hover:scale-[1.01] shadow-xs cursor-pointer group flex items-start gap-3.5`}
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-background border border-border flex items-center justify-center text-2xl shrink-0 shadow-xs group-hover:scale-110 transition-transform">
-                        {item.emoji}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-black text-foreground group-hover:text-amber-600 transition-colors">
-                            {cfg.titulo || item.title}
-                          </h4>
-                          <Badge variant="secondary" className="text-[10px] font-bold">
-                            {item.badge}
-                          </Badge>
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleOpenCustomBudgetWizard(cat)}
+                        className="p-4 rounded-2xl bg-gradient-to-r from-fuchsia-500/10 via-amber-500/5 to-transparent border border-fuchsia-500/20 hover:border-amber-500/50 text-left transition-all hover:scale-[1.01] shadow-xs cursor-pointer group flex items-start gap-3.5"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-background border border-border flex items-center justify-center text-2xl shrink-0 shadow-xs group-hover:scale-110 transition-transform">
+                          {cat.icone || "✨"}
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {cfg.descricao || item.desc}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-black text-foreground group-hover:text-amber-600 transition-colors">
+                              {cat.nome}
+                            </h4>
+                            <Badge variant="secondary" className="text-[10px] font-bold">
+                              {tagCount} sugestões
+                            </Badge>
+                          </div>
+                          {cat.descricao && (
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {cat.descricao}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -5257,24 +5230,19 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           {customBudgetStep === 2 && (
             <div className="space-y-5 py-1">
               {(() => {
-                const catConfig =
-                  customBudgetSettings[customBudgetCategory] ||
-                  DEFAULT_CUSTOM_BUDGET_SETTINGS[customBudgetCategory];
+                const activeCat = customBudgetCategory || customBudgetSettings[0];
+                if (!activeCat) return null;
 
                 return (
                   <div className="space-y-5">
                     {/* Header Categoria */}
                     <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex items-center gap-3">
-                      <span className="text-3xl">
-                        {customBudgetCategory === "bolos"
-                          ? "🎂"
-                          : customBudgetCategory === "doces"
-                          ? "🧁"
-                          : "🥟"}
-                      </span>
+                      <span className="text-3xl">{activeCat.icone || "✨"}</span>
                       <div>
-                        <h4 className="text-sm font-black text-foreground">{catConfig.titulo}</h4>
-                        <p className="text-xs text-muted-foreground">{catConfig.descricao}</p>
+                        <h4 className="text-sm font-black text-foreground">{activeCat.nome}</h4>
+                        {activeCat.descricao && (
+                          <p className="text-xs text-muted-foreground">{activeCat.descricao}</p>
+                        )}
                       </div>
                     </div>
 
@@ -5286,19 +5254,19 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       <Input
                         value={customQuantity}
                         onChange={(e) => setCustomQuantity(e.target.value)}
-                        placeholder="Ex: 1 Bolo (1.5kg), 50 unidades, etc..."
+                        placeholder="Ex: 1 Bolo (1.5kg), 50 unidades, 1 kit..."
                         className="text-xs rounded-xl"
                       />
                       <p className="text-[10px] text-muted-foreground">
-                        Informe o número de fatias, quilos ou unidades aproximadas para a festa.
+                        Informe o número de fatias, quilos ou unidades aproximadas para o pedido.
                       </p>
                     </div>
 
-                    {/* Tag Chips 1: Tipos & Formatos */}
-                    {catConfig.tiposOpcoes && catConfig.tiposOpcoes.length > 0 && (
+                    {/* Tag Chips 1: Tamanhos & Formatos */}
+                    {activeCat.campos.tamanhos && activeCat.campos.tamanhos.length > 0 && (
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <span>🏷️ Opção / Formato (Clique para selecionar)</span>
+                          <span>📏 Tamanho / Formato (Clique para selecionar)</span>
                           {selectedTypes.length > 0 && (
                             <Badge className="bg-amber-500 text-slate-950 text-[10px]">
                               {selectedTypes.length} selecionado(s)
@@ -5306,7 +5274,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           )}
                         </Label>
                         <div className="flex flex-wrap gap-1.5">
-                          {catConfig.tiposOpcoes.map((t) => {
+                          {activeCat.campos.tamanhos.map((t) => {
                             const isSelected = selectedTypes.includes(t);
                             return (
                               <button
@@ -5328,7 +5296,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     )}
 
                     {/* Tag Chips 2: Sabores & Recheios */}
-                    {catConfig.saboresRecheios && catConfig.saboresRecheios.length > 0 && (
+                    {activeCat.campos.sabores && activeCat.campos.sabores.length > 0 && (
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                           <span>🍓 Sabores &amp; Recheios (Clique para selecionar)</span>
@@ -5339,7 +5307,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           )}
                         </Label>
                         <div className="flex flex-wrap gap-1.5">
-                          {catConfig.saboresRecheios.map((s) => {
+                          {activeCat.campos.sabores.map((s) => {
                             const isSelected = selectedFlavors.includes(s);
                             return (
                               <button
@@ -5361,10 +5329,10 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     )}
 
                     {/* Tag Chips 3: Decoração & Estilo */}
-                    {catConfig.formatosDecoracoes && catConfig.formatosDecoracoes.length > 0 && (
+                    {activeCat.campos.estilos && activeCat.campos.estilos.length > 0 && (
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <span>✨ Estilo de Decoração / Acabamento</span>
+                          <span>✨ Estilo &amp; Decoração (Clique para selecionar)</span>
                           {selectedDecorations.length > 0 && (
                             <Badge className="bg-amber-500 text-slate-950 text-[10px]">
                               {selectedDecorations.length} selecionado(s)
@@ -5372,7 +5340,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                           )}
                         </Label>
                         <div className="flex flex-wrap gap-1.5">
-                          {catConfig.formatosDecoracoes.map((d) => {
+                          {activeCat.campos.estilos.map((d) => {
                             const isSelected = selectedDecorations.includes(d);
                             return (
                               <button
@@ -5386,6 +5354,39 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                                 }`}
                               >
                                 {isSelected ? "✓ " : ""}{d}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tag Chips 4: Extras & Adicionais */}
+                    {activeCat.campos.extras && activeCat.campos.extras.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <span>🎁 Extras &amp; Adicionais (Clique para selecionar)</span>
+                          {selectedExtras.length > 0 && (
+                            <Badge className="bg-amber-500 text-slate-950 text-[10px]">
+                              {selectedExtras.length} selecionado(s)
+                            </Badge>
+                          )}
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeCat.campos.extras.map((x) => {
+                            const isSelected = selectedExtras.includes(x);
+                            return (
+                              <button
+                                key={x}
+                                type="button"
+                                onClick={() => handleToggleChip(selectedExtras, setSelectedExtras, x)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? "bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-xs scale-[1.02]"
+                                    : "bg-muted/50 hover:bg-muted text-foreground border-border/80"
+                                }`}
+                              >
+                                {isSelected ? "✓ " : ""}{x}
                               </button>
                             );
                           })}
