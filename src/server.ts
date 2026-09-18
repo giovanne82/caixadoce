@@ -2182,6 +2182,137 @@ export default {
       }
 
       // =========================================================================
+      // ENDPOINTS DO MÓDULO MERCHANT IFOOD (/api/ifood/merchant/status e /api/ifood/merchant/shifts)
+      // =========================================================================
+      if (url.pathname === "/api/ifood/merchant/status") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        try {
+          const { consultarStatusLojaIFood, alterarStatusLojaIFood } = await import("./lib/ifood-merchant-service");
+
+          if (request.method === "GET") {
+            const estCodigo =
+              url.searchParams.get("estabelecimento_codigo") ||
+              url.searchParams.get("codigo") ||
+              request.headers.get("x-estabelecimento-codigo") ||
+              "";
+
+            const result = await consultarStatusLojaIFood(estCodigo);
+            return new Response(JSON.stringify(result), {
+              status: result.status || (result.success ? 200 : 400),
+              headers: corsHeaders,
+            });
+          }
+
+          if (request.method === "POST") {
+            let bodyJson: any = {};
+            try {
+              bodyJson = await request.json();
+            } catch {}
+
+            const estCodigo =
+              bodyJson.estabelecimento_codigo ||
+              bodyJson.codigo ||
+              url.searchParams.get("estabelecimento_codigo") ||
+              request.headers.get("x-estabelecimento-codigo") ||
+              "";
+
+            const statusAcao = (bodyJson.status || bodyJson.action || "").toLowerCase() as "open" | "close";
+            if (statusAcao !== "open" && statusAcao !== "close") {
+              return new Response(
+                JSON.stringify({ success: false, error: "Status inválido. Use 'open' ou 'close'." }),
+                { status: 400, headers: corsHeaders }
+              );
+            }
+
+            const result = await alterarStatusLojaIFood(estCodigo, statusAcao, {
+              motivo: bodyJson.motivo || bodyJson.reason,
+              duracaoMinutos: Number(bodyJson.duracaoMinutos || bodyJson.duration || 1440),
+            });
+
+            return new Response(JSON.stringify(result), {
+              status: result.status || (result.success ? 200 : 400),
+              headers: corsHeaders,
+            });
+          }
+        } catch (mErr: any) {
+          console.error("[iFood Merchant Status Server Exception]", mErr);
+          return new Response(
+            JSON.stringify({ success: false, error: mErr.message || "Erro no servidor" }),
+            { status: 500, headers: corsHeaders }
+          );
+        }
+      }
+
+      if (url.pathname === "/api/ifood/merchant/shifts") {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        };
+
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 200, headers: corsHeaders });
+        }
+
+        try {
+          const { consultarHorariosLojaIFood, sincronizarHorariosLojaIFood } = await import("./lib/ifood-merchant-service");
+
+          if (request.method === "GET") {
+            const estCodigo =
+              url.searchParams.get("estabelecimento_codigo") ||
+              url.searchParams.get("codigo") ||
+              request.headers.get("x-estabelecimento-codigo") ||
+              "";
+
+            const result = await consultarHorariosLojaIFood(estCodigo);
+            return new Response(JSON.stringify(result), {
+              status: result.status || (result.success ? 200 : 400),
+              headers: corsHeaders,
+            });
+          }
+
+          if (request.method === "POST" || request.method === "PUT") {
+            let bodyJson: any = {};
+            try {
+              bodyJson = await request.json();
+            } catch {}
+
+            const estCodigo =
+              bodyJson.estabelecimento_codigo ||
+              bodyJson.codigo ||
+              url.searchParams.get("estabelecimento_codigo") ||
+              request.headers.get("x-estabelecimento-codigo") ||
+              "";
+
+            const result = await sincronizarHorariosLojaIFood(estCodigo, bodyJson.shifts);
+            return new Response(JSON.stringify(result), {
+              status: result.status || (result.success ? 200 : 400),
+              headers: corsHeaders,
+            });
+          }
+        } catch (sErr: any) {
+          console.error("[iFood Merchant Shifts Server Exception]", sErr);
+          return new Response(
+            JSON.stringify({ success: false, error: sErr.message || "Erro no servidor" }),
+            { status: 500, headers: corsHeaders }
+          );
+        }
+      }
+
+      // =========================================================================
       // ENDPOINT DE WEBHOOK IFOOD (/api/ifood/webhook)
       // =========================================================================
       if (url.pathname === "/api/ifood/webhook") {

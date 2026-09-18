@@ -73,6 +73,9 @@ import {
   AlertTriangle,
   Pause,
   Play,
+  RefreshCw,
+  Power,
+  AlertCircle,
 } from "lucide-react";
 import { ColaboradoresTab } from "./ColaboradoresTab";
 import {
@@ -953,11 +956,181 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
       setUserCodeGerado(null);
       setUrlVerificacao(null);
       setAuthCodeInput("");
+      setMerchantStatus(null);
       toast.success("Loja desconectada do iFood.");
     } catch (err: any) {
       toast.error(`Erro ao desconectar: ${err.message || "Falha no servidor"}`);
     } finally {
       setDesconectandoIfood(false);
+    }
+  };
+
+  // Estados do Módulo Merchant do iFood
+  const [merchantStatus, setMerchantStatus] = useState<{
+    available: boolean;
+    state: "OK" | "CLOSED" | "WARNING" | "UNKNOWN";
+    title?: string;
+    subtitle?: string;
+    description?: string;
+    reasons?: string[];
+    merchantId?: string;
+    lastUpdated?: string;
+  } | null>(null);
+  const [carregandoMerchantStatus, setCarregandoMerchantStatus] = useState(false);
+  const [alterandoStatusLoja, setAlterandoStatusLoja] = useState(false);
+  const [sincronizandoHorarios, setSincronizandoHorarios] = useState(false);
+  const [modalFecharLojaAberto, setModalFecharLojaAberto] = useState(false);
+  const [motivoFechamento, setMotivoFechamento] = useState("Fechamento temporário pelo painel CaixaDoce");
+  const [duracaoFechamentoMinutos, setDuracaoFechamentoMinutos] = useState(1440);
+
+  // Consulta do Status da Loja no iFood (sem polling automático, sob demanda com cache de estado)
+  const handleConsultarStatusIFood = useCallback(async () => {
+    if (!activeCode || !ifoodConectado) return;
+    setCarregandoMerchantStatus(true);
+    try {
+      const res = await fetch(`/api/ifood/merchant/status?estabelecimento_codigo=${encodeURIComponent(activeCode)}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setMerchantStatus({
+          available: Boolean(data.isAvailable),
+          state: data.state || (data.isAvailable ? "OK" : "CLOSED"),
+          title: data.title,
+          subtitle: data.subtitle,
+          description: data.description,
+          reasons: data.reasons || [],
+          merchantId: data.merchantId || ifoodMerchantId || undefined,
+          lastUpdated: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        });
+      } else {
+        console.warn("[iFood Merchant Status Check]", data.error);
+      }
+    } catch (err) {
+      console.warn("[iFood Merchant Status Exception]", err);
+    } finally {
+      setCarregandoMerchantStatus(false);
+    }
+  }, [activeCode, ifoodConectado, ifoodMerchantId]);
+
+  // Consulta de status ao conectar ou alternar para a aba de integrações (sem setInterval)
+  useEffect(() => {
+    if (ifoodConectado && activeSection === "integracoes") {
+      handleConsultarStatusIFood();
+    }
+  }, [ifoodConectado, activeSection, handleConsultarStatusIFood]);
+
+  // Abrir Loja no iFood
+  const handleAbrirLojaIFood = async () => {
+    if (!activeCode) return;
+    setAlterandoStatusLoja(true);
+    try {
+      const res = await fetch("/api/ifood/merchant/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estabelecimento_codigo: activeCode,
+          status: "open",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success("Loja aberta com sucesso no iFood!");
+        await handleConsultarStatusIFood();
+      } else {
+        toast.error(data.error || "Não foi possível abrir a loja no iFood.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao conectar com o servidor.");
+    } finally {
+      setAlterandoStatusLoja(false);
+    }
+  };
+
+  // Fechar Loja no iFood (Interrupção)
+  const handleFecharLojaIFood = async () => {
+    if (!activeCode) return;
+    setAlterandoStatusLoja(true);
+    try {
+      const res = await fetch("/api/ifood/merchant/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estabelecimento_codigo: activeCode,
+          status: "close",
+          motivo: motivoFechamento,
+          duracaoMinutos: duracaoFechamentoMinutos,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success("Loja fechada temporariamente no iFood!");
+        setModalFecharLojaAberto(false);
+        await handleConsultarStatusIFood();
+      } else {
+        toast.error(data.error || "Não foi possível fechar a loja no iFood.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao conectar com o servidor.");
+    } finally {
+      setAlterandoStatusLoja(false);
+    }
+  };
+
+  // Sincronizar Horários (Shifts) com o iFood
+  const handleSincronizarHorariosIFood = async () => {
+    if (!activeCode) return;
+    setSincronizandoHorarios(true);
+    try {
+      // Mapeia a grade semanal atual do CaixaDoce para o formato Shifts do iFood
+      const mapDiaToIfood: Record<string, string> = {
+        segunda: "MONDAY",
+        terca: "TUESDAY",
+        quarta: "WEDNESDAY",
+        quinta: "THURSDAY",
+        sexta: "FRIDAY",
+        sabado: "SATURDAY",
+        domingo: "SUNDAY",
+      };
+
+      const shiftsPayload: any[] = [];
+      if (horariosConfig.dias) {
+        Object.entries(horariosConfig.dias).forEach(([diaKey, cfg]: [string, any]) => {
+          const ifoodDay = mapDiaToIfood[diaKey];
+          if (ifoodDay && cfg.aberto) {
+            const [hIni, mIni] = (cfg.inicio || "08:00").split(":").map(Number);
+            const [hFim, mFim] = (cfg.fim || "18:00").split(":").map(Number);
+            const totalMinIni = (hIni || 0) * 60 + (mIni || 0);
+            const totalMinFim = (hFim || 0) * 60 + (mFim || 0);
+            const duracaoMin = totalMinFim > totalMinIni ? totalMinFim - totalMinIni : 600;
+
+            shiftsPayload.push({
+              dayOfWeek: ifoodDay,
+              start: `${String(hIni || 8).padStart(2, "0")}:${String(mIni || 0).padStart(2, "0")}:00`,
+              duration: duracaoMin,
+              salesChannel: "IFOOD",
+              status: "AVAILABLE",
+            });
+          }
+        });
+      }
+
+      const res = await fetch("/api/ifood/merchant/shifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estabelecimento_codigo: activeCode,
+          shifts: shiftsPayload.length > 0 ? shiftsPayload : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success("Grade de horários sincronizada com o iFood com sucesso!");
+      } else {
+        toast.error(data.error || "Não foi possível sincronizar horários com o iFood.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro de comunicação ao sincronizar horários.");
+    } finally {
+      setSincronizandoHorarios(false);
     }
   };
 
@@ -4270,36 +4443,313 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* CARD IFOOD */}
-                  <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-3 shadow-2xs">
+                  {/* CARD IFOOD (MÓDULO MERCHANT & PEDIDOS) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 space-y-4 shadow-xs">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 border border-red-500/20">
+                        <div className="w-11 h-11 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 border border-red-500/20 shadow-xs">
                           <ShoppingBag className="w-5 h-5" />
                         </div>
                         <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="text-sm font-extrabold text-foreground">iFood Delivery</h4>
-                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                              Em Homologação
-                            </Badge>
+                            {ifoodConectado ? (
+                              <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-0.5 flex items-center gap-1 shadow-2xs">
+                                <CheckCircle2 className="w-3 h-3" /> Conectado
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                                Homologação Aberta
+                              </Badge>
+                            )}
+                            {ifoodMerchantId && (
+                              <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                                Merchant ID: {ifoodMerchantId}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Receba e sincronize pedidos do iFood diretamente nas suas encomendas em tempo real.
+                            Gestão de loja (abrir/fechar), sincronização de horários e recepção de pedidos em tempo real.
                           </p>
                         </div>
                       </div>
 
-                      <Button
-                        type="button"
-                        disabled={true}
-                        variant="outline"
-                        className="text-xs font-bold shrink-0 opacity-70 cursor-not-allowed border-dashed"
-                      >
-                        <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Conectar (Em Breve)
-                      </Button>
+                      {ifoodConectado ? (
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleConsultarStatusIFood}
+                            disabled={carregandoMerchantStatus}
+                            className="h-8 text-xs font-bold border-border hover:bg-muted/50 rounded-xl gap-1.5"
+                            title="Consultar status atual da loja no iFood"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${carregandoMerchantStatus ? "animate-spin text-purple-600" : ""}`} />
+                            Atualizar Status
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleDesconectarIFood}
+                            disabled={desconectandoIfood}
+                            className="h-8 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 rounded-xl"
+                          >
+                            {desconectandoIfood ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1" />}
+                            Desconectar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={handleConectarIFood}
+                          disabled={gerandoUserCode}
+                          className="font-bold text-xs h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-xs shrink-0 gap-1.5"
+                        >
+                          {gerandoUserCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                          {gerandoUserCode ? "Gerando Código..." : "Conectar Loja ao iFood"}
+                        </Button>
+                      )}
                     </div>
+
+                    {/* SE CONECTADO: PAINEL DE CONTROLE DO MÓDULO MERCHANT */}
+                    {ifoodConectado && (
+                      <div className="p-4 rounded-xl bg-muted/30 border border-border/80 space-y-4">
+                        {/* 1. STATUS OPERACIONAL DA LOJA NO IFOOD */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Status Operacional:</span>
+                              {merchantStatus ? (
+                                <Badge
+                                  className={`text-[11px] font-extrabold px-2.5 py-0.5 ${
+                                    merchantStatus.isAvailable
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-amber-600 text-white"
+                                  }`}
+                                >
+                                  {merchantStatus.isAvailable ? "● LOJA ABERTA NO IFOOD" : "■ LOJA FECHADA / PAUSADA"}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[11px] font-medium text-muted-foreground">
+                                  {carregandoMerchantStatus ? "Consultando..." : "Status não carregado"}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-foreground font-medium">
+                              {merchantStatus?.title ? `${merchantStatus.title} — ${merchantStatus.subtitle || ""}` : "Pronta para receber operações e pedidos."}
+                            </p>
+                            {merchantStatus?.description && (
+                              <p className="text-[11px] text-muted-foreground italic">{merchantStatus.description}</p>
+                            )}
+                            {merchantStatus?.lastUpdated && (
+                              <p className="text-[10px] text-muted-foreground">Última checagem manual: {merchantStatus.lastUpdated}</p>
+                            )}
+                          </div>
+
+                          {/* BOTÕES DE AÇÃO RÁPIDA: ABRIR E FECHAR LOJA */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button
+                              type="button"
+                              onClick={handleAbrirLojaIFood}
+                              disabled={alterandoStatusLoja || merchantStatus?.isAvailable}
+                              className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs gap-1.5 disabled:opacity-50"
+                            >
+                              {alterandoStatusLoja ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                              Abrir Loja
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setModalFecharLojaAberto(true)}
+                              disabled={alterandoStatusLoja}
+                              className="h-9 px-3.5 rounded-xl border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 font-bold text-xs shadow-xs gap-1.5"
+                            >
+                              <Pause className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                              Fechar / Pausar
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* 2. SINCRONIZAÇÃO DE HORÁRIOS (SHIFTS) */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-card border border-border">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-purple-600" />
+                              <span className="text-xs font-bold text-foreground">Sincronização de Grade de Horários (Shifts)</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Envia os horários semanais definidos na aba "Horários" diretamente para a agenda do iFood.
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleSincronizarHorariosIFood}
+                            disabled={sincronizandoHorarios}
+                            className="h-9 px-4 rounded-xl border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 font-bold text-xs shadow-xs gap-1.5 shrink-0"
+                          >
+                            {sincronizandoHorarios ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3.5 h-3.5" /> Sincronizar Horários
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SE NÃO CONECTADO: FLUXO DE CÓDIGO DE AUTORIZAÇÃO */}
+                    {!ifoodConectado && userCodeGerado && (
+                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-amber-600" /> Passo 1: Autorize no Portal do iFood
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setUserCodeGerado(null)}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-card border border-border flex items-center justify-between gap-2">
+                          <div>
+                            <span className="text-[11px] text-muted-foreground block">Código do Dispositivo:</span>
+                            <span className="text-base font-mono font-black tracking-widest text-purple-600 dark:text-purple-400">
+                              {userCodeGerado}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(userCodeGerado);
+                                toast.success("Código copiado para a área de transferência!");
+                              }}
+                              className="h-8 text-xs font-bold rounded-lg"
+                            >
+                              <Copy className="w-3.5 h-3.5 mr-1" /> Copiar
+                            </Button>
+                            {urlVerificacao && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => window.open(urlVerificacao, "_blank")}
+                                className="h-8 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 mr-1" /> Abrir iFood
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-1">
+                          <Label className="text-xs font-bold text-foreground">
+                            Passo 2: Cole o Código de Autorização gerado pelo iFood
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder="Cole o Authorization Code aqui..."
+                              value={authCodeInput}
+                              onChange={(e) => setAuthCodeInput(e.target.value)}
+                              className="h-9 text-xs font-mono"
+                            />
+                            <Button
+                              type="button"
+                              onClick={handleConfirmarCodigoIFood}
+                              disabled={confirmandoAuthCode || !authCodeInput.trim()}
+                              className="h-9 px-4 font-bold text-xs rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                            >
+                              {confirmandoAuthCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+                              Confirmar Conexão
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* MODAL PARA FECHAR LOJA / INTERRUPÇÃO PROGRAMADA */}
+                  <Dialog open={modalFecharLojaAberto} onOpenChange={setModalFecharLojaAberto}>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                          <Pause className="w-5 h-5 text-amber-600" />
+                          <span>Fechar / Pausar Loja no iFood</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                          Crie uma interrupção temporária na operação do iFood. Seus clientes verão a loja como temporariamente fechada.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Duração do Fechamento</Label>
+                          <Select
+                            value={String(duracaoFechamentoMinutos)}
+                            onValueChange={(val) => setDuracaoFechamentoMinutos(Number(val))}
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="30">30 Minutos</SelectItem>
+                              <SelectItem value="60">1 Hora</SelectItem>
+                              <SelectItem value="120">2 Horas</SelectItem>
+                              <SelectItem value="240">4 Horas</SelectItem>
+                              <SelectItem value="480">8 Horas</SelectItem>
+                              <SelectItem value="1440">Resto do Dia (24 Horas)</SelectItem>
+                              <SelectItem value="2880">2 Dias</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Motivo (Opcional)</Label>
+                          <Input
+                            value={motivoFechamento}
+                            onChange={(e) => setMotivoFechamento(e.target.value)}
+                            placeholder="Ex: Alta demanda, manutenção na cozinha..."
+                            className="text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <DialogFooter className="gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setModalFecharLojaAberto(false)}
+                          className="rounded-xl text-xs font-bold"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleFecharLojaIFood}
+                          disabled={alterandoStatusLoja}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl"
+                        >
+                          {alterandoStatusLoja ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+                          Confirmar Fechamento
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {/* CARD 99FOOD */}
                   <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-3 shadow-2xs">
