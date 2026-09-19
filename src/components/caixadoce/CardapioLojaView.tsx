@@ -1217,52 +1217,95 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. BUSCA DE PRODUTOS E KITS (SUPABASE + FALLBACK)
+        // 2. BUSCA DE PRODUTOS E KITS (RESILIÊNCIA EM CASCATA)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
-        if (estUuid) {
-          console.log(`[Cardápio Público] Buscando produtos por estabelecimento_id (${estUuid})...`);
-          const { data: pByEstId, error: errEstId } = await supabase
-            .from("produtos" as any)
-            .select("*")
-            .eq("estabelecimento_id", estUuid)
-            .order("nome", { ascending: true });
+        // Estratégia de busca resiliente em cascata para evitar que erros 500 ou campos corrompidos quebrem a página
+        const tentarBuscarProdutos = async (): Promise<any[]> => {
+          // Tentativa 1: Por estabelecimento_id (UUID) com ordenação
+          if (estUuid) {
+            console.log(`[Cardápio Público] (Tentativa 1) Buscando produtos por estabelecimento_id (${estUuid})...`);
+            try {
+              const { data, error } = await supabase
+                .from("produtos" as any)
+                .select("*")
+                .eq("estabelecimento_id", estUuid)
+                .order("nome", { ascending: true });
+              if (!error && data && data.length > 0) return data;
+              if (error) console.warn("[Cardápio Público] Erro na tentativa 1:", error.message);
+            } catch (e: any) {
+              console.warn("[Cardápio Público] Exceção na tentativa 1:", e?.message);
+            }
 
-          if (!errEstId && pByEstId && pByEstId.length > 0) {
-            prodsDb = pByEstId;
-          }
-        }
-
-        // Fallback por código de estabelecimento (busca flexível em produtos e products)
-        if (prodsDb.length === 0 && resolvedCode) {
-          console.log(`[Cardápio Público] Buscando produtos por código (${resolvedCode})...`);
-          const { data: pByCode } = await supabase
-            .from("produtos" as any)
-            .select("*")
-            .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`)
-            .order("nome", { ascending: true });
-
-          if (pByCode && pByCode.length > 0) {
-            prodsDb = pByCode;
-          } else {
-            const { data: legacyProds } = await supabase
-              .from("products" as any)
-              .select("*")
-              .or(`estabelecimento_codigo.eq.${resolvedCode},codigo.eq.${resolvedCode},store_id.eq.${resolvedCode}`);
-            if (legacyProds && legacyProds.length > 0) {
-              prodsDb = legacyProds;
+            // Tentativa 2: Por estabelecimento_id sem ordenação (caso a coluna nome tenha collation ou nulls problemáticos)
+            try {
+              console.log(`[Cardápio Público] (Tentativa 2) Buscando por estabelecimento_id sem ordenação...`);
+              const { data, error } = await supabase
+                .from("produtos" as any)
+                .select("*")
+                .eq("estabelecimento_id", estUuid);
+              if (!error && data && data.length > 0) return data;
+            } catch (e: any) {
+              console.warn("[Cardápio Público] Exceção na tentativa 2:", e?.message);
             }
           }
-        }
+
+          // Tentativa 3: Por estabelecimento_codigo
+          if (resolvedCode) {
+            console.log(`[Cardápio Público] (Tentativa 3) Buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
+            try {
+              const { data, error } = await supabase
+                .from("produtos" as any)
+                .select("*")
+                .eq("estabelecimento_codigo", resolvedCode)
+                .order("nome", { ascending: true });
+              if (!error && data && data.length > 0) return data;
+            } catch (e: any) {
+              console.warn("[Cardápio Público] Exceção na tentativa 3:", e?.message);
+            }
+
+            // Tentativa 4: Por código na coluna codigo
+            try {
+              const { data, error } = await supabase
+                .from("produtos" as any)
+                .select("*")
+                .eq("codigo", resolvedCode);
+              if (!error && data && data.length > 0) return data;
+            } catch {}
+
+            // Tentativa 5: Colunas essenciais apenas (caso campos JSONB/Array como opcoes ou galeria estejam mal formatados no banco)
+            try {
+              console.log(`[Cardápio Público] (Tentativa 5) Buscando colunas essenciais seguras...`);
+              const { data, error } = await supabase
+                .from("produtos" as any)
+                .select("id, nome, preco, categoria, descricao, foto_url, ativo, visivel_cardapio_digital, estabelecimento_id, estabelecimento_codigo")
+                .or(`estabelecimento_codigo.eq.${resolvedCode}${estUuid ? `,estabelecimento_id.eq.${estUuid}` : ""}`);
+              if (!error && data && data.length > 0) return data;
+            } catch {}
+
+            // Tentativa 6: Tabela legada products
+            try {
+              const { data, error } = await supabase
+                .from("products" as any)
+                .select("*")
+                .eq("estabelecimento_codigo", resolvedCode);
+              if (!error && data && data.length > 0) return data;
+            } catch {}
+          }
+
+          return [];
+        };
+
+        prodsDb = await tentarBuscarProdutos();
 
         // 3. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
         let kitsDb: KitProduto[] = [];
-        if (resolvedCode) {
+        if (estUuid || resolvedCode) {
           try {
-            console.log(`[Cardápio Público] Buscando kits para o estabelecimento (${resolvedCode})...`);
-            kitsDb = await obterKitsEstabelecimento(resolvedCode);
+            console.log(`[Cardápio Público] Buscando kits para o estabelecimento (${estUuid || resolvedCode})...`);
+            kitsDb = await obterKitsEstabelecimento(estUuid || resolvedCode);
           } catch (eKits) {
             console.warn("[Cardápio Público] Aviso ao carregar kits:", eKits);
           }
@@ -1273,40 +1316,64 @@ export function CardapioLojaView() {
         let mapeados: ProdutoCardapio[] = [];
 
         if (prodsDb.length > 0) {
-          mapeados = prodsDb.map((p: any) => ({
-            id: String(p.id),
-            estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || resolvedCode,
-            nome: p.nome || p.name || "Doce Artesanal",
-            descricao: p.descricao || p.description || "",
-            preco: Number(p.preco ?? p.price ?? 0),
-            fotoUrl: p.foto_url || p.image_url || (Array.isArray(p.galeria_fotos) && p.galeria_fotos[0]) || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80",
-            galeria_fotos: Array.isArray(p.galeria_fotos) ? p.galeria_fotos : (p.foto_url ? [p.foto_url] : []),
-            serve_pessoas: p.serve_pessoas !== null && p.serve_pessoas !== undefined ? Number(p.serve_pessoas) : undefined,
-            peso_detalhe: p.peso_detalhe || undefined,
-            categoria: p.categoria || p.category || "Doces & Bolos",
-            destaque: Boolean(p.destaque),
-            tempoPreparoHoras: p.tempo_preparo_horas ?? p.prep_time_hours ?? 24,
-            ativo: (p.ativo ?? p.is_active) !== false,
-            createdAt: p.created_at,
-            availability_type: p.availability_type || "encomenda",
-            available_days: Array.isArray(p.available_days)
-              ? p.available_days
-              : (typeof p.available_days === "string" ? (() => { try { return JSON.parse(p.available_days); } catch { return undefined; } })() : undefined),
-            min_lead_time_days: p.min_lead_time_days !== undefined ? Number(p.min_lead_time_days) : undefined,
-            isKit: Boolean(p.is_kit),
-            custoTotalInsumos: p.custo_total_insumos ? Number(p.custo_total_insumos) : undefined,
-            margemLucroPercentual: p.margem_lucro ? Number(p.margem_lucro) : undefined,
-            prazoEntregaIndependente: p.prazo_entrega,
-            itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
-            opcoes: Array.isArray(p.opcoes)
-              ? p.opcoes
-              : (typeof p.opcoes === "string" ? (() => { try { return JSON.parse(p.opcoes); } catch { return []; } })() : []),
-            permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
-            vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
-            unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
-            visivel_cardapio_digital: p.visivel_cardapio_digital === false || p.visivel_cardapio_digital === "false" ? false : true,
-            visivel_pdv: p.visivel_pdv === false || p.visivel_pdv === "false" ? false : true,
-          }));
+          for (const p of prodsDb) {
+            try {
+              if (!p || !p.id) continue;
+              const precoNum = Number(p.preco ?? p.price ?? 0);
+              const nomeStr = String(p.nome || p.name || "Doce Artesanal").trim();
+
+              let parsedOpcoes: any[] = [];
+              if (Array.isArray(p.opcoes)) {
+                parsedOpcoes = p.opcoes;
+              } else if (typeof p.opcoes === "string" && p.opcoes.trim().length > 0) {
+                try { parsedOpcoes = JSON.parse(p.opcoes); } catch { parsedOpcoes = []; }
+              }
+
+              let parsedDays: any = undefined;
+              if (Array.isArray(p.available_days)) {
+                parsedDays = p.available_days;
+              } else if (typeof p.available_days === "string" && p.available_days.trim().length > 0) {
+                try { parsedDays = JSON.parse(p.available_days); } catch { parsedDays = undefined; }
+              }
+
+              const galeria = Array.isArray(p.galeria_fotos)
+                ? p.galeria_fotos.filter((url: any) => typeof url === "string" && url.length > 0)
+                : (p.foto_url ? [p.foto_url] : []);
+
+              mapeados.push({
+                id: String(p.id),
+                estabelecimentoCodigo: p.estabelecimento_codigo || p.codigo || resolvedCode,
+                nome: nomeStr || "Doce Artesanal",
+                descricao: String(p.descricao || p.description || ""),
+                preco: isNaN(precoNum) ? 0 : precoNum,
+                fotoUrl: p.foto_url || p.image_url || (galeria.length > 0 ? galeria[0] : "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"),
+                galeria_fotos: galeria,
+                serve_pessoas: p.serve_pessoas !== null && p.serve_pessoas !== undefined && !isNaN(Number(p.serve_pessoas)) ? Number(p.serve_pessoas) : undefined,
+                peso_detalhe: p.peso_detalhe || undefined,
+                categoria: String(p.categoria || p.category || "Doces & Bolos"),
+                destaque: Boolean(p.destaque),
+                tempoPreparoHoras: !isNaN(Number(p.tempo_preparo_horas ?? p.prep_time_hours)) ? Number(p.tempo_preparo_horas ?? p.prep_time_hours) : 24,
+                ativo: (p.ativo ?? p.is_active) !== false,
+                createdAt: p.created_at || new Date().toISOString(),
+                availability_type: p.availability_type || "encomenda",
+                available_days: parsedDays,
+                min_lead_time_days: p.min_lead_time_days !== undefined && !isNaN(Number(p.min_lead_time_days)) ? Number(p.min_lead_time_days) : undefined,
+                isKit: Boolean(p.is_kit),
+                custoTotalInsumos: p.custo_total_insumos && !isNaN(Number(p.custo_total_insumos)) ? Number(p.custo_total_insumos) : undefined,
+                margemLucroPercentual: p.margem_lucro && !isNaN(Number(p.margem_lucro)) ? Number(p.margem_lucro) : undefined,
+                prazoEntregaIndependente: p.prazo_entrega,
+                itensKit: Array.isArray(p.itens_kit) ? p.itens_kit : undefined,
+                opcoes: parsedOpcoes,
+                permite_multiplas_opcoes: Boolean(p.permite_multiplas_opcoes),
+                vende_por_peso: Boolean(p.vende_por_peso || p.unidade_venda === "kg"),
+                unidade_venda: (p.unidade_venda || (p.vende_por_peso ? "kg" : "un")) as "un" | "kg",
+                visivel_cardapio_digital: p.visivel_cardapio_digital === false || p.visivel_cardapio_digital === "false" ? false : true,
+                visivel_pdv: p.visivel_pdv === false || p.visivel_pdv === "false" ? false : true,
+              });
+            } catch (errProd) {
+              console.warn("[Cardápio Público] Erro ao processar item individual:", p, errProd);
+            }
+          }
         } else {
           // Fallback para localStorage
           const localList = obterProdutosCardapio(resolvedCode);

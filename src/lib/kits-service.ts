@@ -68,17 +68,32 @@ export function converterKitParaProdutoCardapio(kit: KitProduto): ProdutoCardapi
 /**
  * Busca todos os Kits do estabelecimento no Supabase (tabela `kits` + `kit_itens`).
  */
-export async function obterKitsEstabelecimento(estabelecimentoCodigo: string): Promise<KitProduto[]> {
-  const code = (estabelecimentoCodigo || "CD-1001").toUpperCase();
+export async function obterKitsEstabelecimento(estabelecimentoCodigoOuId: string): Promise<KitProduto[]> {
+  const param = (estabelecimentoCodigoOuId || "CD-1001").trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param);
 
   try {
-    const { data: kitsData, error: kitsErr } = await supabase
-      .from("kits")
-      .select("*")
-      .ilike("estabelecimento_codigo", code);
+    let kitsData: any[] | null = null;
+    let kitsErr: any = null;
+
+    if (isUuid) {
+      const res = await supabase.from("kits").select("*").eq("estabelecimento_id", param);
+      kitsData = res.data;
+      kitsErr = res.error;
+    }
+
+    if (!kitsData || kitsData.length === 0) {
+      const resCode = await supabase.from("kits").select("*").ilike("estabelecimento_codigo", param.toUpperCase());
+      if (resCode.data && resCode.data.length > 0) {
+        kitsData = resCode.data;
+        kitsErr = null;
+      } else if (!kitsErr) {
+        kitsErr = resCode.error;
+      }
+    }
 
     if (kitsErr || !kitsData) {
-      console.warn("[Kits Service] Tabela 'kits' não disponível no Supabase ou erro:", kitsErr?.message);
+      console.warn("[Kits Service] Tabela 'kits' não disponível no Supabase ou aviso:", kitsErr?.message);
       return [];
     }
 

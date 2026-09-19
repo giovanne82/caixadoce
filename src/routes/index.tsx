@@ -1037,9 +1037,12 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
 
+    const storeUuid = (profile as any)?.estabelecimento_id || (profile as any)?.id;
+
     const payloadClean = {
       id: novo.id,
       user_id: getValidUuid(user?.id, profile?.ownerUserId),
+      ...(storeUuid ? { estabelecimento_id: storeUuid } : {}),
       estabelecimento_codigo: activeCode,
       codigo: activeCode,
       store_id: activeCode,
@@ -1088,7 +1091,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
       localStorage.setItem(`caixadoce_cardapio_${activeCode}`, JSON.stringify(atualizados));
     } catch {}
 
+    const storeUuid = (profile as any)?.estabelecimento_id || (profile as any)?.id;
     const payload: Record<string, any> = {};
+    if (storeUuid) payload.estabelecimento_id = storeUuid;
     if (dados.nome !== undefined) payload.nome = dados.nome;
     if (dados.categoria !== undefined) payload.categoria = dados.categoria;
     if (dados.preco !== undefined) payload.preco = Number(dados.preco) || 0;
@@ -1149,12 +1154,14 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
   const salvarKit = async (kit: KitProduto) => {
     const saved = await salvarKitEstabelecimento(kit);
     const prodKit = converterKitParaProdutoCardapio(saved);
+    const storeUuid = (profile as any)?.estabelecimento_id || (profile as any)?.id;
 
     try {
       await supabase.from("produtos").upsert([
         {
           id: prodKit.id,
           user_id: getValidUuid(user?.id, profile?.ownerUserId),
+          ...(storeUuid ? { estabelecimento_id: storeUuid } : {}),
           estabelecimento_codigo: activeCode,
           codigo: activeCode,
           store_id: activeCode,
