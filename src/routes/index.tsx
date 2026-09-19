@@ -895,12 +895,37 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     };
   }, [profile, activeCode, fetchDespesas, fetchEncomendasECalendario, fetchProdutos, fetchTransacoes, fetchClientes, fetchListasCompras]);
 
-  // Revalidação imediata de encomendas ao selecionar a aba 'encomendas'
+  // Rede de Segurança Híbrida para Encomendas (Polling leve de 60s + Verificação no Foco com Throttle)
+  // Garante que nenhum novo pedido seja perdido caso a conexão WebSocket do Supabase Realtime oscile silenciosamente.
   useEffect(() => {
-    if (activeTab === "encomendas" && activeCode) {
-      fetchEncomendasECalendario(true);
-    }
-  }, [activeTab, activeCode, fetchEncomendasECalendario]);
+    if (!activeCode) return;
+
+    // 1. Polling de fallback a cada 60 segundos
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchEncomendasECalendario(true);
+      }
+    }, 60000);
+
+    // 2. Verificação no foco com throttle (só dispara se a última busca tiver mais de 30 segundos)
+    let lastFocusFetch = Date.now();
+    const handleFocus = () => {
+      const now = Date.now();
+      if (document.visibilityState === "visible" && now - lastFocusFetch > 30000) {
+        lastFocusFetch = now;
+        fetchEncomendasECalendario(true);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [activeCode, fetchEncomendasECalendario]);
 
 
 
