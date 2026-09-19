@@ -1217,121 +1217,95 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. BUSCA DE PRODUTOS E KITS (BUSCA PARALELA ULTRA-RÁPIDA COM SELECT *)
+        // 2. BUSCA DE PRODUTOS E KITS (ROBUSTA, DIRETA E COM LOG EXPLÍCITO)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
-        const tentarBuscarProdutosRapido = async (): Promise<any[]> => {
-          // Cria promessas de busca rápida em paralelo com select("*") para nunca quebrar por coluna ausente
-          const buscas: Promise<any[]>[] = [];
-
-          if (estUuid) {
-            buscas.push(
-              supabase
-                .from("produtos" as any)
-                .select("*")
-                .eq("estabelecimento_id", estUuid)
-                .then((res) => {
-                  if (res.error) {
-                    console.error("[Cardápio Público] ERRO Supabase (busca por estabelecimento_id):", {
-                      message: res.error.message,
-                      details: res.error.details,
-                      hint: res.error.hint,
-                      code: res.error.code,
-                      status: (res as any).status,
-                    });
-                    return [];
-                  }
-                  return res.data && res.data.length > 0 ? res.data : [];
-                })
-                .catch((err) => {
-                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por estabelecimento_id):", err);
-                  return [];
-                })
-            );
-          }
-
-          if (resolvedCode) {
-            buscas.push(
-              supabase
-                .from("produtos" as any)
-                .select("*")
-                .eq("estabelecimento_codigo", resolvedCode)
-                .then((res) => {
-                  if (res.error) {
-                    console.error("[Cardápio Público] ERRO Supabase (busca por estabelecimento_codigo):", {
-                      message: res.error.message,
-                      details: res.error.details,
-                      hint: res.error.hint,
-                      code: res.error.code,
-                      status: (res as any).status,
-                    });
-                    return [];
-                  }
-                  return res.data && res.data.length > 0 ? res.data : [];
-                })
-                .catch((err) => {
-                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por estabelecimento_codigo):", err);
-                  return [];
-                })
-            );
-
-            buscas.push(
-              supabase
-                .from("produtos" as any)
-                .select("*")
-                .eq("codigo", resolvedCode)
-                .then((res) => {
-                  if (res.error) {
-                    console.error("[Cardápio Público] ERRO Supabase (busca por codigo):", {
-                      message: res.error.message,
-                      details: res.error.details,
-                      hint: res.error.hint,
-                      code: res.error.code,
-                      status: (res as any).status,
-                    });
-                    return [];
-                  }
-                  return res.data && res.data.length > 0 ? res.data : [];
-                })
-                .catch((err) => {
-                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por codigo):", err);
-                  return [];
-                })
-            );
-          }
-
+        // 1. Busca por estabelecimento_id (UUID)
+        if (estUuid) {
           try {
-            // Executa as consultas em paralelo e pega o primeiro resultado válido
-            const resultados = await Promise.all(buscas);
-            for (const lista of resultados) {
-              if (Array.isArray(lista) && lista.length > 0) {
-                console.log(`[Cardápio Público] Sucesso: ${lista.length} produtos carregados instantaneamente.`);
-                return lista;
-              }
+            const res = await supabase
+              .from("produtos" as any)
+              .select("*")
+              .eq("estabelecimento_id", estUuid);
+
+            if (res.error) {
+              console.error("ERRO SUPABASE (produtos por estabelecimento_id):", {
+                message: res.error.message,
+                details: res.error.details,
+                hint: res.error.hint,
+                code: res.error.code,
+                status: (res as any).status,
+                raw: res.error,
+              });
+            } else if (res.data && res.data.length > 0) {
+              prodsDb = res.data;
             }
-          } catch (e: any) {
-            console.warn("[Cardápio Público] Exceção na busca paralela de produtos:", e?.message);
+          } catch (err) {
+            console.error("ERRO SUPABASE EXCEPTION (produtos por estabelecimento_id):", err);
           }
+        }
 
-          return [];
-        };
+        // 2. Fallback imediato por estabelecimento_codigo (Código da Loja)
+        if (prodsDb.length === 0 && resolvedCode) {
+          try {
+            const res = await supabase
+              .from("produtos" as any)
+              .select("*")
+              .eq("estabelecimento_codigo", resolvedCode);
 
-        prodsDb = await tentarBuscarProdutosRapido();
+            if (res.error) {
+              console.error("ERRO SUPABASE (produtos por estabelecimento_codigo):", {
+                message: res.error.message,
+                details: res.error.details,
+                hint: res.error.hint,
+                code: res.error.code,
+                status: (res as any).status,
+                raw: res.error,
+              });
+            } else if (res.data && res.data.length > 0) {
+              prodsDb = res.data;
+            }
+          } catch (err) {
+            console.error("ERRO SUPABASE EXCEPTION (produtos por estabelecimento_codigo):", err);
+          }
+        }
+
+        // 3. Fallback adicional por codigo
+        if (prodsDb.length === 0 && resolvedCode) {
+          try {
+            const res = await supabase
+              .from("produtos" as any)
+              .select("*")
+              .eq("codigo", resolvedCode);
+
+            if (res.error) {
+              console.error("ERRO SUPABASE (produtos por codigo):", {
+                message: res.error.message,
+                details: res.error.details,
+                hint: res.error.hint,
+                code: res.error.code,
+                status: (res as any).status,
+                raw: res.error,
+              });
+            } else if (res.data && res.data.length > 0) {
+              prodsDb = res.data;
+            }
+          } catch (err) {
+            console.error("ERRO SUPABASE EXCEPTION (produtos por codigo):", err);
+          }
+        }
 
         // 3. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
         let kitsDb: KitProduto[] = [];
         if (estUuid || resolvedCode) {
           try {
-            console.log(`[Cardápio Público] Buscando kits para o estabelecimento (${estUuid || resolvedCode})...`);
             kitsDb = await obterKitsEstabelecimento(estUuid || resolvedCode);
           } catch (eKits) {
             console.warn("[Cardápio Público] Aviso ao carregar kits:", eKits);
           }
         }
-
-        if (cancelado) return;
 
         let mapeados: ProdutoCardapio[] = [];
 
@@ -1425,18 +1399,14 @@ export function CardapioLojaView() {
             localStorage.setItem(`caixadoce_cardapio_${resolvedCode}`, JSON.stringify(ativos));
           } catch {}
         }
+      } catch (errGeral) {
+        console.error("ERRO GERAL CARDAPIO:", errGeral);
       } finally {
-        if (!cancelado) {
-          setLoadingProdutos(false);
-        }
+        setLoadingProdutos(false);
       }
     }
 
     carregarDadosLojaEProdutos();
-
-    return () => {
-      cancelado = true;
-    };
   }, [rawParam]);
 
   // Garante que se o lojista desativou o delivery, a modalidade seja forçada para "retirada"
