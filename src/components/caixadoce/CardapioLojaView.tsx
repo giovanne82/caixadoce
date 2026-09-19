@@ -1217,88 +1217,78 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. BUSCA DE PRODUTOS E KITS (RESILIÊNCIA EM CASCATA)
+        // 2. BUSCA DE PRODUTOS E KITS (BUSCA PARALELA ULTRA-RÁPIDA)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
-        // Estratégia de busca resiliente em cascata para evitar que erros 500 ou campos corrompidos quebrem a página
-        const tentarBuscarProdutos = async (): Promise<any[]> => {
-          // Tentativa 1: Por estabelecimento_id (UUID) com ordenação
+        const tentarBuscarProdutosRapido = async (): Promise<any[]> => {
+          const colunasCompletas = "id, nome, preco, categoria, descricao, foto_url, galeria_fotos, serve_pessoas, peso_detalhe, destaque, tempo_preparo_horas, ativo, availability_type, available_days, min_lead_time_days, is_kit, custo_total_insumos, margem_lucro, prazo_entrega, itens_kit, opcoes, permite_multiplas_opcoes, vende_por_peso, unidade_venda, visivel_cardapio_digital, visivel_pdv, estabelecimento_id, estabelecimento_codigo, codigo";
+          const colunasEssenciais = "id, nome, preco, categoria, descricao, foto_url, galeria_fotos, serve_pessoas, peso_detalhe, destaque, tempo_preparo_horas, ativo, visivel_cardapio_digital, visivel_pdv, opcoes, estabelecimento_id, estabelecimento_codigo";
+
+          // Cria promessas de busca rápida em paralelo (por UUID e por Código)
+          const buscas: Promise<any[]>[] = [];
+
           if (estUuid) {
-            console.log(`[Cardápio Público] (Tentativa 1) Buscando produtos por estabelecimento_id (${estUuid})...`);
-            try {
-              const { data, error } = await supabase
+            buscas.push(
+              supabase
                 .from("produtos" as any)
-                .select("*")
+                .select(colunasCompletas)
                 .eq("estabelecimento_id", estUuid)
-                .order("nome", { ascending: true });
-              if (!error && data && data.length > 0) return data;
-              if (error) console.warn("[Cardápio Público] Erro na tentativa 1:", error.message);
-            } catch (e: any) {
-              console.warn("[Cardápio Público] Exceção na tentativa 1:", e?.message);
-            }
-
-            // Tentativa 2: Por estabelecimento_id sem ordenação (caso a coluna nome tenha collation ou nulls problemáticos)
-            try {
-              console.log(`[Cardápio Público] (Tentativa 2) Buscando por estabelecimento_id sem ordenação...`);
-              const { data, error } = await supabase
-                .from("produtos" as any)
-                .select("*")
-                .eq("estabelecimento_id", estUuid);
-              if (!error && data && data.length > 0) return data;
-            } catch (e: any) {
-              console.warn("[Cardápio Público] Exceção na tentativa 2:", e?.message);
-            }
+                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
+                .catch(() => [])
+            );
           }
 
-          // Tentativa 3: Por estabelecimento_codigo
           if (resolvedCode) {
-            console.log(`[Cardápio Público] (Tentativa 3) Buscando produtos por estabelecimento_codigo (${resolvedCode})...`);
-            try {
-              const { data, error } = await supabase
+            buscas.push(
+              supabase
                 .from("produtos" as any)
-                .select("*")
+                .select(colunasCompletas)
                 .eq("estabelecimento_codigo", resolvedCode)
-                .order("nome", { ascending: true });
-              if (!error && data && data.length > 0) return data;
-            } catch (e: any) {
-              console.warn("[Cardápio Público] Exceção na tentativa 3:", e?.message);
-            }
-
-            // Tentativa 4: Por código na coluna codigo
-            try {
-              const { data, error } = await supabase
-                .from("produtos" as any)
-                .select("*")
-                .eq("codigo", resolvedCode);
-              if (!error && data && data.length > 0) return data;
-            } catch {}
-
-            // Tentativa 5: Colunas essenciais apenas (caso campos JSONB/Array como opcoes ou galeria estejam mal formatados no banco)
-            try {
-              console.log(`[Cardápio Público] (Tentativa 5) Buscando colunas essenciais seguras...`);
-              const { data, error } = await supabase
-                .from("produtos" as any)
-                .select("id, nome, preco, categoria, descricao, foto_url, ativo, visivel_cardapio_digital, estabelecimento_id, estabelecimento_codigo")
-                .or(`estabelecimento_codigo.eq.${resolvedCode}${estUuid ? `,estabelecimento_id.eq.${estUuid}` : ""}`);
-              if (!error && data && data.length > 0) return data;
-            } catch {}
-
-            // Tentativa 6: Tabela legada products
-            try {
-              const { data, error } = await supabase
-                .from("products" as any)
-                .select("*")
-                .eq("estabelecimento_codigo", resolvedCode);
-              if (!error && data && data.length > 0) return data;
-            } catch {}
+                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
+                .catch(() => [])
+            );
           }
+
+          // Busca imediata com colunas essenciais (blindada contra timeout de serialização)
+          if (resolvedCode || estUuid) {
+            buscas.push(
+              supabase
+                .from("produtos" as any)
+                .select(colunasEssenciais)
+                .or(`estabelecimento_codigo.eq.${resolvedCode}${estUuid ? `,estabelecimento_id.eq.${estUuid}` : ""}`)
+                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
+                .catch(() => [])
+            );
+          }
+
+          try {
+            // Executa as consultas em paralelo e pega o primeiro resultado que contiver produtos
+            const resultados = await Promise.all(buscas);
+            for (const lista of resultados) {
+              if (Array.isArray(lista) && lista.length > 0) {
+                console.log(`[Cardápio Público] Sucesso: ${lista.length} produtos carregados instantaneamente.`);
+                return lista;
+              }
+            }
+          } catch (e: any) {
+            console.warn("[Cardápio Público] Exceção na busca paralela de produtos:", e?.message);
+          }
+
+          // Fallback final direto caso todas as buscas paralelas acima falhem
+          try {
+            const { data } = await supabase
+              .from("produtos" as any)
+              .select(colunasEssenciais)
+              .eq("estabelecimento_codigo", resolvedCode);
+            if (data && data.length > 0) return data;
+          } catch {}
 
           return [];
         };
 
-        prodsDb = await tentarBuscarProdutos();
+        prodsDb = await tentarBuscarProdutosRapido();
 
         // 3. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
         let kitsDb: KitProduto[] = [];
