@@ -3723,18 +3723,36 @@ export function OrdersView({
                               <Printer className="w-3.5 h-3.5" />
                             </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAbrirEdicao(ord);
-                              }}
-                              title="Editar pedido"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary shrink-0"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {isOrcamentoPedido(ord) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAbrirEdicao(ord);
+                                }}
+                                title="Ver e editar detalhes do orçamento"
+                                className="h-7 px-2.5 text-xs bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 font-bold whitespace-nowrap"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400" />
+                                Ver Orçamento
+                              </Button>
+                            )}
+
+                            {!isOrcamentoPedido(ord) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAbrirEdicao(ord);
+                                }}
+                                title="Editar pedido"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-primary shrink-0"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
 
                             <Button
                               variant="ghost"
@@ -3863,18 +3881,20 @@ export function OrdersView({
                               <MessageCircle className="w-3.5 h-3.5 fill-emerald-600" />
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAbrirEdicao(ord);
-                            }}
-                            title="Editar pedido"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary rounded-lg"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {!isOrcamentoPedido(ord) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAbrirEdicao(ord);
+                              }}
+                              title="Editar pedido"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary rounded-lg"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -3955,6 +3975,25 @@ export function OrdersView({
                         </p>
                       )}
                     </div>
+
+                    {/* BOTÃO EM EVIDÊNCIA PARA ORÇAMENTO */}
+                    {isOrcamentoPedido(ord) && (
+                      <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAbrirEdicao(ord);
+                          }}
+                          className="w-full h-9 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 border-amber-500/40 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span>Ver Pedido de Orçamento</span>
+                        </Button>
+                      </div>
+                    )}
 
                     {/* BOTÕES DE AÇÃO DO RODAPÉ DO CARD */}
                     {isPedidoIFood(ord) ? (
