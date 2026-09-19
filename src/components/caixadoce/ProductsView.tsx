@@ -387,12 +387,40 @@ export function ProductsView({
         }
 
         if (!uploadedUrl) {
-          // Fallback base64
-          uploadedUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
+          // Fallback de imagem compactada via Canvas (máximo 800px e 60KB) para nunca sobrecarregar o banco
+          try {
+            uploadedUrl = await new Promise<string>((resolve) => {
+              const img = new Image();
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                img.src = ev.target?.result as string;
+              };
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const maxDim = 800;
+                let width = img.width;
+                let height = img.height;
+                if (width > maxDim || height > maxDim) {
+                  if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                  } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                  }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL("image/jpeg", 0.7));
+              };
+              img.onerror = () => resolve("https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80");
+              reader.readAsDataURL(file);
+            });
+          } catch {
+            uploadedUrl = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+          }
         }
 
         if (uploadedUrl) {

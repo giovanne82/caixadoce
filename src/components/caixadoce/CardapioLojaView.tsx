@@ -453,8 +453,13 @@ export function ProductImageCarousel({
         {fotos.map((url, idx) => (
           <div key={`${url}_${idx}`} className="w-full h-full shrink-0 relative">
             <img
-              src={url}
+              src={url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
               alt={`${nome} - Foto ${idx + 1}`}
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+              }}
               className="w-full h-full object-cover pointer-events-none"
             />
           </div>
@@ -1372,9 +1377,25 @@ export function CardapioLojaView() {
                 try { parsedDays = JSON.parse(p.available_days); } catch { parsedDays = undefined; }
               }
 
-              const galeria = Array.isArray(p.galeria_fotos)
-                ? p.galeria_fotos.filter((url: any) => typeof url === "string" && url.length > 0)
-                : (p.foto_url ? [p.foto_url] : []);
+              // Sanitização segura de fotos
+              const isSafeUrl = (u: any): boolean => {
+                if (!u || typeof u !== "string") return false;
+                const trimmed = u.trim();
+                if (!trimmed) return false;
+                if (trimmed.startsWith("data:") && trimmed.length > 25000) return false;
+                return true;
+              };
+
+              const galeriaBruta = Array.isArray(p.galeria_fotos) ? p.galeria_fotos : [];
+              const galeriaLimpa = galeriaBruta.filter((u: any) => isSafeUrl(u));
+              
+              const fotoPrincipal = isSafeUrl(p.foto_url)
+                ? p.foto_url
+                : isSafeUrl(p.image_url)
+                ? p.image_url
+                : (galeriaLimpa.length > 0 ? galeriaLimpa[0] : "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80");
+
+              const galeriaFinal = galeriaLimpa.length > 0 ? galeriaLimpa : [fotoPrincipal];
 
               mapeados.push({
                 id: String(p.id),
@@ -1382,8 +1403,8 @@ export function CardapioLojaView() {
                 nome: nomeStr || "Doce Artesanal",
                 descricao: String(p.descricao || p.description || ""),
                 preco: isNaN(precoNum) ? 0 : precoNum,
-                fotoUrl: p.foto_url || p.image_url || (galeria.length > 0 ? galeria[0] : "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"),
-                galeria_fotos: galeria,
+                fotoUrl: fotoPrincipal,
+                galeria_fotos: galeriaFinal,
                 serve_pessoas: p.serve_pessoas !== null && p.serve_pessoas !== undefined && !isNaN(Number(p.serve_pessoas)) ? Number(p.serve_pessoas) : undefined,
                 peso_detalhe: p.peso_detalhe || undefined,
                 categoria: String(p.categoria || p.category || "Doces & Bolos"),
@@ -3763,8 +3784,13 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   <div>
                     <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
                       <img
-                        src={prod.fotoUrl}
+                        src={prod.fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
                         alt={prod.nome}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+                        }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
