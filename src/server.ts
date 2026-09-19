@@ -1155,7 +1155,6 @@ async function obterTokenAppIFoodServer(env?: any): Promise<string> {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
         },
         body: bodyParams.toString(),
       });
