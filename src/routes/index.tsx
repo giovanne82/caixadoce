@@ -902,22 +902,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     }
   }, [activeTab, activeCode, fetchEncomendasECalendario]);
 
-  // Revalidação ao retomar foco na janela / mudar visibilidade da página
-  useEffect(() => {
-    if (!activeCode) return;
-    const handleFocus = () => {
-      if (document.visibilityState === "visible") {
-        fetchEncomendasECalendario(true);
-        fetchTransacoes(true);
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [activeCode, fetchEncomendasECalendario, fetchTransacoes]);
+
 
   // Handlers de Clientes
   const criarCliente = async (dados: Omit<Cliente, "id" | "estabelecimentoCodigo" | "createdAt">) => {
