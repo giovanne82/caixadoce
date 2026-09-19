@@ -1710,6 +1710,9 @@ export default {
           // POST estritamente para /authentication/v1.0/oauth/userCode com x-www-form-urlencoded
           const bodyParams = new URLSearchParams();
           bodyParams.append("clientId", ifoodClientId);
+          if (ifoodClientSecret) {
+            bodyParams.append("clientSecret", ifoodClientSecret);
+          }
 
           const ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
             method: "POST",
@@ -2202,55 +2205,7 @@ export default {
         }
       }
 
-      // =========================================================================
-      // ENDPOINT DE WEBHOOK IFOOD (/api/ifood/webhook)
-      // =========================================================================
-      if (url.pathname === "/api/ifood/webhook") {
-        const corsHeaders = {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-          "Access-Control-Allow-Headers": "*",
-        };
 
-        // Trata requisição OPTIONS (CORS preflight)
-        if (request.method === "OPTIONS") {
-          return new Response(null, { status: 200, headers: corsHeaders });
-        }
-
-        // Trata requisição GET (Health Check / Testes de verificação)
-        if (request.method === "GET") {
-          return new Response("OK - iFood Webhook Endpoint Active", {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
-          });
-        }
-
-        // Processa evento POST enviado pelos servidores do iFood
-        if (request.method === "POST") {
-          try {
-            const bodyText = await request.text();
-            let body: any = bodyText;
-            try {
-              body = JSON.parse(bodyText);
-            } catch {}
-
-            console.log("📦 Evento iFood Recebido:", typeof body === "object" ? JSON.stringify(body, null, 2) : body);
-
-            // Dispara o processamento assíncrono em segundo plano (sem travar o retorno HTTP 200)
-            processIFoodEventsInServer(body, env).catch((err) =>
-              console.error("[Server iFood Webhook Background Error]", err)
-            );
-          } catch (err) {
-            console.error("[iFood Webhook Error]", err);
-          }
-
-          // Retorna HTTP 200 OK imediatamente (em menos de 3 segundos exigidos pelo iFood)
-          return new Response("OK", {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
-          });
-        }
-      }
 
       // =========================================================================
       // VALIDAÇÃO SERVER-SIDE SEGURA DE CUPOM PROMOCIONAL DE ASSINATURA (/api/validate-promo)
