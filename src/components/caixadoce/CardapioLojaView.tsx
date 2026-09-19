@@ -1251,13 +1251,15 @@ export function CardapioLojaView() {
           }
         };
 
-        // 1. Busca por estabelecimento_id (UUID) com limite
+        // 1. Busca por estabelecimento_id (UUID) com colunas leves
+        const colunasLeves = "id, nome, preco, categoria, foto_url, descricao, ativo, is_active, visivel_cardapio_digital, estabelecimento_id, estabelecimento_codigo, codigo, opcoes, serve_pessoas, peso_detalhe, tempo_preparo_horas, availability_type, available_days";
+
         if (estUuid) {
           try {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select("*")
+                .select(colunasLeves)
                 .eq("estabelecimento_id", estUuid)
                 .order("nome", { ascending: true })
                 .limit(150)
@@ -1286,7 +1288,7 @@ export function CardapioLojaView() {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select("*")
+                .select(colunasLeves)
                 .eq("estabelecimento_codigo", resolvedCode)
                 .order("nome", { ascending: true })
                 .limit(150)
@@ -1315,7 +1317,7 @@ export function CardapioLojaView() {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select("*")
+                .select(colunasLeves)
                 .eq("codigo", resolvedCode)
                 .limit(150)
             );
@@ -1337,11 +1339,11 @@ export function CardapioLojaView() {
           }
         }
 
-        // 4. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
+        // 4. BUSCA DE KITS CADASTRADOS (Tabela 'kits') - Opcional e assíncrono não-bloqueante
         let kitsDb: KitProduto[] = [];
         if (estUuid || resolvedCode) {
           try {
-            kitsDb = await queryWithTimeout(obterKitsEstabelecimento(estUuid || resolvedCode), 10000) || [];
+            kitsDb = await queryWithTimeout(obterKitsEstabelecimento(estUuid || resolvedCode), 5000) || [];
           } catch (eKits) {
             console.warn("[Cardápio Público] Aviso ao carregar kits:", eKits);
           }
