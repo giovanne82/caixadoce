@@ -1319,7 +1319,17 @@ export function salvarNovoInsumoCatalogo(estabelecimentoCodigo: string, novoNome
 // ENCOMENDAS & CALENDÁRIO & INSUMOS NECESSÁRIOS
 // ==============================================================================
 
-export type StatusEncomenda = "pendente" | "em_producao" | "pronta" | "entregue" | "cancelada";
+export type StatusEncomenda =
+  | "novo"
+  | "em_analise"
+  | "aprovado"
+  | "confirmado"
+  | "pendente"
+  | "em_producao"
+  | "pronta"
+  | "entregue"
+  | "cancelado"
+  | "cancelada";
 export type StatusPagamentoEncomenda = "pendente" | "sinal_pago" | "pago_integral" | "pago_na_entrega" | "cartao_pendente" | "pix_pendente";
 
 export interface ItemPedidoEncomenda {
@@ -1484,10 +1494,15 @@ export const STATUS_ENCOMENDA_CONFIG: Record<
   StatusEncomenda,
   { label: string; color: string; badgeVariant: "default" | "secondary" | "outline" | "destructive" }
 > = {
+  novo: { label: "Novo Pedido", color: "text-amber-700 bg-amber-500/15 border-amber-500/30", badgeVariant: "secondary" },
+  em_analise: { label: "Em Análise", color: "text-blue-700 bg-blue-500/15 border-blue-500/30", badgeVariant: "secondary" },
+  aprovado: { label: "Aprovado", color: "text-purple-700 bg-purple-500/15 border-purple-500/30", badgeVariant: "secondary" },
+  confirmado: { label: "Confirmado", color: "text-emerald-700 bg-emerald-500/15 border-emerald-500/30", badgeVariant: "secondary" },
   pendente: { label: "Pendente", color: "text-amber-600 bg-amber-500/10 border-amber-500/30", badgeVariant: "secondary" },
   em_producao: { label: "Em Produção", color: "text-blue-600 bg-blue-500/10 border-blue-500/30", badgeVariant: "secondary" },
   pronta: { label: "Pronta p/ Entrega", color: "text-purple-600 bg-purple-500/10 border-purple-500/30", badgeVariant: "secondary" },
   entregue: { label: "Entregue", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30", badgeVariant: "default" },
+  cancelado: { label: "Cancelado", color: "text-rose-600 bg-rose-500/10 border-rose-500/30", badgeVariant: "destructive" },
   cancelada: { label: "Cancelada", color: "text-rose-600 bg-rose-500/10 border-rose-500/30", badgeVariant: "destructive" },
 };
 

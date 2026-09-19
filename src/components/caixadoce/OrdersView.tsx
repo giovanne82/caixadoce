@@ -90,6 +90,7 @@ import {
   Image as ImageIcon,
   Maximize2,
   ExternalLink,
+  XCircle,
 } from "lucide-react";
 import { CustomersView } from "@/components/caixadoce/CustomersView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -2616,6 +2617,331 @@ export function OrdersView({
     return listaBase.filter(atendeFiltrosGerais);
   }, [viewMode, encomendasAtivas, encomendasConcluidas, encomendas, atendeFiltrosGerais]);
 
+  // Identificador de Orçamento vs Compra Imediata (Pedido Direto)
+  const isOrcamentoPedido = useCallback((ord: Partial<Encomenda> | null | undefined): boolean => {
+    if (!ord) return false;
+    if (ord.is_orcamento) return true;
+    if ((ord as any).isOrcamento) return true;
+    const metodo = String(ord.metodoPagamento || ord.metodo_pagamento || "").toLowerCase();
+    if (metodo.includes("orçamento") || metodo.includes("orcamento")) return true;
+    const forma = String((ord as any).forma_pagamento || (ord as any).formaPagamento || "").toLowerCase();
+    if (forma.includes("orçamento") || forma.includes("orcamento")) return true;
+    const itens = String(ord.itens || "").toLowerCase();
+    if (itens.includes("orçamento personalizado") || itens.includes("sob medida") || itens.includes("modo orçamento")) return true;
+    const obs = String(ord.observacoes || "").toLowerCase();
+    if (obs.includes("modo orçamento") || obs.includes("orcamento personalizado") || obs.includes("orçamento personalizado")) return true;
+    if (ord.status === "em_analise" || ord.status === "aprovado") return true;
+    return false;
+  }, []);
+
+  // Renderização Dinâmica de Badge de Status da Máquina de Estados
+  const renderizarBadgeStatus = useCallback((status: StatusEncomenda | string | undefined, isOrcamento = false) => {
+    const st = (status || "novo").toLowerCase();
+
+    if (isOrcamento) {
+      if (st === "novo" || st === "pendente") {
+        return (
+          <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+            📝 Orçamento Novo
+          </Badge>
+        );
+      }
+      if (st === "em_analise") {
+        return (
+          <Badge className="bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+            🔍 Em Análise
+          </Badge>
+        );
+      }
+      if (st === "aprovado") {
+        return (
+          <Badge className="bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+            ✨ Orçamento Aprovado
+          </Badge>
+        );
+      }
+      if (st === "entregue" || st === "concluido" || st === "concluida") {
+        return (
+          <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+            ✓ Entregue & Concluído
+          </Badge>
+        );
+      }
+      if (st === "cancelado" || st === "cancelada") {
+        return (
+          <Badge className="bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+            ✕ Cancelado
+          </Badge>
+        );
+      }
+    }
+
+    // Pedido Direto (Compra Imediata)
+    if (st === "novo" || st === "pendente") {
+      return (
+        <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          🟡 Novo Pedido
+        </Badge>
+      );
+    }
+    if (st === "confirmado") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          ⚡ Confirmado
+        </Badge>
+      );
+    }
+    if (st === "em_producao") {
+      return (
+        <Badge className="bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          👨‍🍳 Em Produção
+        </Badge>
+      );
+    }
+    if (st === "pronta") {
+      return (
+        <Badge className="bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          📦 Pronto p/ Entrega
+        </Badge>
+      );
+    }
+    if (st === "entregue" || st === "concluido" || st === "concluida") {
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          ✓ Entregue
+        </Badge>
+      );
+    }
+    if (st === "cancelado" || st === "cancelada") {
+      return (
+        <Badge className="bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30 text-[9.5px] font-extrabold px-2 py-0.5">
+          ✕ Cancelado
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge className="bg-muted text-muted-foreground text-[9.5px] font-extrabold px-2 py-0.5">
+        {status}
+      </Badge>
+    );
+  }, []);
+
+  // Renderização dos Botões de Ação da Máquina de Estados (Card & Tabela)
+  const renderBotoesAcaoPedido = useCallback((ord: Encomenda, variant: "card" | "table" = "card") => {
+    if (isPedidoIFood(ord)) {
+      return renderBotoesAcaoIFood(ord, variant === "card" ? "mobile" : "desktop");
+    }
+
+    const isOrc = isOrcamentoPedido(ord);
+    const status = (ord.status || "novo").toLowerCase();
+
+    // 1. LÓGICA PARA ORÇAMENTO
+    if (isOrc) {
+      if (status === "novo" || status === "pendente") {
+        return (
+          <div className="pt-1 flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await onEditarEncomenda(ord.id, { status: "em_analise" });
+                toast.success("Orçamento marcado como Em Análise!");
+              }}
+              title="Marcar como Recebido (Em Análise)"
+              className={`flex-1 font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white ${variant === "card" ? "h-8 text-xs" : "h-7 text-xs px-2.5"}`}
+            >
+              <Eye className="w-3.5 h-3.5 mr-1" />
+              Marcar como Recebido
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await onEditarEncomenda(ord.id, { status: "cancelado" });
+                toast.info("Orçamento cancelado.");
+              }}
+              title="Cancelar orçamento"
+              className={`font-semibold rounded-xl text-rose-600 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 ${variant === "card" ? "h-8 px-2.5 text-xs" : "h-7 px-2 text-xs"}`}
+            >
+              <XCircle className="w-3.5 h-3.5 mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        );
+      }
+
+      if (status === "em_analise") {
+        return (
+          <div className="pt-1 flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await onEditarEncomenda(ord.id, { status: "aprovado" });
+                toast.success("Orçamento aprovado pelo cliente!");
+              }}
+              title="Aprovar orçamento"
+              className={`flex-1 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white ${variant === "card" ? "h-8 text-xs" : "h-7 text-xs px-2.5"}`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+              Aprovar Orçamento
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await onEditarEncomenda(ord.id, { status: "cancelado" });
+                toast.info("Orçamento cancelado.");
+              }}
+              title="Cancelar orçamento"
+              className={`font-semibold rounded-xl text-rose-600 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 ${variant === "card" ? "h-8 px-2.5 text-xs" : "h-7 px-2 text-xs"}`}
+            >
+              <XCircle className="w-3.5 h-3.5 mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        );
+      }
+
+      if (status === "aprovado") {
+        return (
+          <div className="pt-1 flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await onEditarEncomenda(ord.id, { status: "entregue" });
+                toast.success("Orçamento concluído e marcado como Entregue!");
+              }}
+              title="Marcar como Entregue"
+              className={`flex-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold rounded-xl hover:bg-emerald-500/20 ${variant === "card" ? "h-8 text-xs" : "h-7 text-xs px-2.5"}`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+              Marcar como Entregue
+            </Button>
+          </div>
+        );
+      }
+
+      // Se entregue ou cancelado:
+      return (
+        <div className="pt-1 flex items-center justify-between gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+          <Badge
+            className={
+              status === "entregue"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-[10px]"
+                : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 font-bold text-[10px]"
+            }
+          >
+            {status === "entregue" ? "✅ Concluído & Entregue" : "❌ Orçamento Cancelado"}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              await onEditarEncomenda(ord.id, { status: "em_analise" });
+              toast.success("Orçamento reaberto para análise!");
+            }}
+            className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground font-semibold"
+          >
+            <RotateCcw className="w-3 h-3 mr-0.5" /> Reabrir
+          </Button>
+        </div>
+      );
+    }
+
+    // 2. LÓGICA PARA COMPRA IMEDIATA (Pedido Direto)
+    if (status === "novo" || status === "pendente") {
+      return (
+        <div className="pt-1 flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              await onEditarEncomenda(ord.id, { status: "confirmado" });
+              toast.success("Pedido confirmado com sucesso!");
+            }}
+            title="Confirmar Pedido"
+            className={`flex-1 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white ${variant === "card" ? "h-8 text-xs" : "h-7 text-xs px-2.5"}`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+            Confirmar Pedido
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              await onEditarEncomenda(ord.id, { status: "cancelado" });
+              toast.info("Pedido cancelado.");
+            }}
+            title="Cancelar pedido"
+            className={`font-semibold rounded-xl text-rose-600 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 ${variant === "card" ? "h-8 px-2.5 text-xs" : "h-7 px-2 text-xs"}`}
+          >
+            <XCircle className="w-3.5 h-3.5 mr-1" />
+            Cancelar
+          </Button>
+        </div>
+      );
+    }
+
+    if (status === "confirmado" || status === "em_producao" || status === "pronta") {
+      return (
+        <div className="pt-1 flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async (e) => {
+              e.stopPropagation();
+              await onEditarEncomenda(ord.id, { status: "entregue" });
+              toast.success("Pedido marcado como entregue!");
+            }}
+            title="Marcar como Entregue"
+            className={`flex-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold rounded-xl hover:bg-emerald-500/20 ${variant === "card" ? "h-8 text-xs" : "h-7 text-xs px-2.5"}`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+            Marcar como Entregue
+          </Button>
+        </div>
+      );
+    }
+
+    // Se entregue ou cancelado:
+    return (
+      <div className="pt-1 flex items-center justify-between gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+        <Badge
+          className={
+            status === "entregue"
+              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-[10px]"
+              : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 font-bold text-[10px]"
+          }
+        >
+          {status === "entregue" ? "✅ Entregue & Finalizado" : "❌ Pedido Cancelado"}
+        </Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={async (e) => {
+            e.stopPropagation();
+            await onEditarEncomenda(ord.id, { status: "confirmado" });
+            toast.success("Pedido reaberto como confirmado!");
+          }}
+          className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground font-semibold"
+        >
+          <RotateCcw className="w-3 h-3 mr-0.5" /> Reabrir
+        </Button>
+      </div>
+    );
+  }, [onEditarEncomenda, isOrcamentoPedido]);
+
   // Navegação de Período
   const navegarPeriodo = (delta: number) => {
     const nova = new Date(currentDate);
@@ -3283,6 +3609,7 @@ export function OrdersView({
                           <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
                             <span>{ord.clienteNome}</span>
                             {renderizarBadgeOrigem(ord.origem)}
+                            {renderizarBadgeStatus(ord.status, isOrcamentoPedido(ord))}
                           </div>
                           {(isPedidoIFood(ord) || ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood) && (
                             <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
@@ -3365,36 +3692,8 @@ export function OrdersView({
                           <div className="flex flex-row items-center justify-end gap-1 flex-nowrap">
                             {isPedidoIFood(ord) ? (
                               renderBotoesAcaoIFood(ord, "desktop")
-                            ) : ord.status === "entregue" ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEditarEncomenda(ord.id, { status: "pendente" });
-                                  toast.success("Pedido reaberto como pendente!");
-                                }}
-                                title="Reabrir pedido para pendente"
-                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground font-semibold border-border whitespace-nowrap"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                                Reabrir
-                              </Button>
                             ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEditarEncomenda(ord.id, { status: "entregue" });
-                                  toast.success("Pedido marcado como entregue!");
-                                }}
-                                title="Marcar pedido como Entregue"
-                                className="h-7 px-2 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 font-bold whitespace-nowrap"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                                Entregue
-                              </Button>
+                              renderBotoesAcaoPedido(ord, "table")
                             )}
 
                             <Button
@@ -3510,11 +3809,7 @@ export function OrdersView({
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-extrabold truncate">{ord.clienteNome}</span>
                           {renderizarBadgeOrigemMobile(ord.origem)}
-                          {ord.status === "entregue" && (
-                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 font-bold">
-                              ✓ Entregue
-                            </Badge>
-                          )}
+                          {renderizarBadgeStatus(ord.status, isOrcamentoPedido(ord))}
                         </div>
 
                         {/* ID do Pedido em texto pequeno e cinza logo abaixo do nome */}
@@ -3664,38 +3959,8 @@ export function OrdersView({
                     {/* BOTÕES DE AÇÃO DO RODAPÉ DO CARD */}
                     {isPedidoIFood(ord) ? (
                       renderBotoesAcaoIFood(ord, "mobile")
-                    ) : ord.status === "entregue" ? (
-                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditarEncomenda(ord.id, { status: "pendente" });
-                            toast.success("Pedido reaberto como pendente!");
-                          }}
-                          className="w-full h-8 text-xs text-muted-foreground font-semibold rounded-xl"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                          Reabrir Pedido
-                        </Button>
-                      </div>
                     ) : (
-                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditarEncomenda(ord.id, { status: "entregue" });
-                            toast.success("Pedido marcado como entregue!");
-                          }}
-                          className="w-full h-8 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold rounded-xl"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                          Marcar como Entregue
-                        </Button>
-                      </div>
+                      renderBotoesAcaoPedido(ord, "card")
                     )}
                   </div>
                 );
@@ -4519,11 +4784,15 @@ export function OrdersView({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pendente">🟡 Pendente</SelectItem>
-                    <SelectItem value="em_producao">🔵 Em Produção</SelectItem>
-                    <SelectItem value="pronta">🟣 Pronta p/ Entrega</SelectItem>
+                    <SelectItem value="novo">🟡 Novo Pedido</SelectItem>
+                    <SelectItem value="em_analise">🔍 Em Análise (Orçamento)</SelectItem>
+                    <SelectItem value="aprovado">✨ Aprovado (Orçamento)</SelectItem>
+                    <SelectItem value="confirmado">⚡ Confirmado</SelectItem>
+                    <SelectItem value="pendente">⏳ Pendente</SelectItem>
+                    <SelectItem value="em_producao">👨‍🍳 Em Produção</SelectItem>
+                    <SelectItem value="pronta">📦 Pronta p/ Entrega</SelectItem>
                     <SelectItem value="entregue">🟢 Entregue (Concluído)</SelectItem>
-                    <SelectItem value="cancelada">🔴 Cancelada</SelectItem>
+                    <SelectItem value="cancelado">🔴 Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -5525,15 +5794,7 @@ export function OrdersView({
                   >
                     <Edit2 className="w-3.5 h-3.5 mr-1" /> Editar
                   </Button>
-                  {(encomendaDetalhes.is_orcamento || (encomendaDetalhes as any).origem_pagamento === "orcamento" || (encomendaDetalhes as any).metodo_pagamento === "Orçamento") && (
-                    <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] shadow-xs flex items-center gap-1">
-                      <span>📝</span>
-                      <span>ORÇAMENTO</span>
-                    </Badge>
-                  )}
-                  <Badge className={STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.color || "bg-amber-500"}>
-                    {STATUS_ENCOMENDA_CONFIG[encomendaDetalhes.status || "pendente"]?.label || "Pendente"}
-                  </Badge>
+                  {renderizarBadgeStatus(encomendaDetalhes.status, isOrcamentoPedido(encomendaDetalhes))}
                 </div>
               )}
             </DialogTitle>
