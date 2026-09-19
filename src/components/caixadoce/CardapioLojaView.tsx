@@ -1232,8 +1232,23 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("estabelecimento_id", estUuid)
-                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
-                .catch(() => [])
+                .then((res) => {
+                  if (res.error) {
+                    console.error("[Cardápio Público] ERRO Supabase (busca por estabelecimento_id):", {
+                      message: res.error.message,
+                      details: res.error.details,
+                      hint: res.error.hint,
+                      code: res.error.code,
+                      status: (res as any).status,
+                    });
+                    return [];
+                  }
+                  return res.data && res.data.length > 0 ? res.data : [];
+                })
+                .catch((err) => {
+                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por estabelecimento_id):", err);
+                  return [];
+                })
             );
           }
 
@@ -1243,8 +1258,23 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("estabelecimento_codigo", resolvedCode)
-                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
-                .catch(() => [])
+                .then((res) => {
+                  if (res.error) {
+                    console.error("[Cardápio Público] ERRO Supabase (busca por estabelecimento_codigo):", {
+                      message: res.error.message,
+                      details: res.error.details,
+                      hint: res.error.hint,
+                      code: res.error.code,
+                      status: (res as any).status,
+                    });
+                    return [];
+                  }
+                  return res.data && res.data.length > 0 ? res.data : [];
+                })
+                .catch((err) => {
+                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por estabelecimento_codigo):", err);
+                  return [];
+                })
             );
 
             buscas.push(
@@ -1252,8 +1282,23 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("codigo", resolvedCode)
-                .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
-                .catch(() => [])
+                .then((res) => {
+                  if (res.error) {
+                    console.error("[Cardápio Público] ERRO Supabase (busca por codigo):", {
+                      message: res.error.message,
+                      details: res.error.details,
+                      hint: res.error.hint,
+                      code: res.error.code,
+                      status: (res as any).status,
+                    });
+                    return [];
+                  }
+                  return res.data && res.data.length > 0 ? res.data : [];
+                })
+                .catch((err) => {
+                  console.error("[Cardápio Público] EXCEÇÃO Supabase (busca por codigo):", err);
+                  return [];
+                })
             );
           }
 
