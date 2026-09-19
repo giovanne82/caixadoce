@@ -26,7 +26,7 @@ export function getSupabaseBackendClient() {
 let cachedAppToken: { token: string; expiresAt: number } | null = null;
 
 /**
- * Obtém o access_token da aplicação CaixaDoce via client_credentials de forma padrão
+ * Obtém o access_token da loja conectada no Supabase
  */
 export async function obterTokenAppIFood(env?: any): Promise<string> {
   const now = Date.now();
@@ -34,57 +34,28 @@ export async function obterTokenAppIFood(env?: any): Promise<string> {
     return cachedAppToken.token;
   }
 
-  const envObj = (env as Record<string, string>) || {};
-  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
+  // Busca token no Supabase da loja conectada
+  try {
+    const supabase = getSupabaseBackendClient();
+    const { data: ests } = await supabase
+      .from("estabelecimentos")
+      .select("ifood_access_token")
+      .not("ifood_access_token", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(1);
 
-  const ifoodClientId =
-    envObj.IFOOD_CLIENT_ID ||
-    procObj.IFOOD_CLIENT_ID ||
-    envObj.VITE_IFOOD_CLIENT_ID ||
-    procObj.VITE_IFOOD_CLIENT_ID ||
-    "";
-  const ifoodClientSecret =
-    envObj.IFOOD_CLIENT_SECRET ||
-    procObj.IFOOD_CLIENT_SECRET ||
-    envObj.VITE_IFOOD_CLIENT_SECRET ||
-    procObj.VITE_IFOOD_CLIENT_SECRET ||
-    "";
-
-  if (!ifoodClientId || !ifoodClientSecret) {
-    throw new Error("Credenciais IFOOD_CLIENT_ID ou IFOOD_CLIENT_SECRET não encontradas no ambiente.");
+    if (Array.isArray(ests) && ests.length > 0 && ests[0].ifood_access_token) {
+      cachedAppToken = {
+        token: ests[0].ifood_access_token,
+        expiresAt: now + 3600 * 1000,
+      };
+      return ests[0].ifood_access_token;
+    }
+  } catch (err) {
+    console.warn("[obterTokenAppIFood Supabase fetch warning]", err);
   }
 
-  const bodyParams = new URLSearchParams();
-  bodyParams.append("grant_type", "client_credentials");
-  bodyParams.append("clientId", ifoodClientId.trim());
-  bodyParams.append("clientSecret", ifoodClientSecret.trim());
-
-  const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: bodyParams.toString(),
-  });
-
-  if (!res.ok) {
-    const errTxt = await res.text();
-    throw new Error(`Falha ao obter token client_credentials do iFood (${res.status}): ${errTxt}`);
-  }
-
-  const data: any = await res.json();
-  const token = data.accessToken || data.access_token;
-  const expiresIn = Number(data.expiresIn || data.expires_in || 21599);
-
-  if (token) {
-    cachedAppToken = {
-      token,
-      expiresAt: now + expiresIn * 1000,
-    };
-    return token;
-  }
-
-  throw new Error("Resposta do iFood não continha accessToken.");
+  return "";
 }
 
 export const obterTokenAppIFoodServer = obterTokenAppIFood;
