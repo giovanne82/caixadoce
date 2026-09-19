@@ -1710,9 +1710,6 @@ export default {
           // POST estritamente para /authentication/v1.0/oauth/userCode com x-www-form-urlencoded
           const bodyParams = new URLSearchParams();
           bodyParams.append("clientId", ifoodClientId);
-          if (ifoodClientSecret) {
-            bodyParams.append("clientSecret", ifoodClientSecret);
-          }
 
           const ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
             method: "POST",
