@@ -87,7 +87,9 @@ import {
   formatarCep,
   DEFAULT_CUSTOM_BUDGET_SETTINGS,
   DEFAULT_CUSTOM_BUDGET_CATEGORIES,
+  DEFAULT_BUDGET_PAYMENT_METHODS,
   normalizeCustomBudgetSettings,
+  normalizeBudgetPaymentMethods,
   type CustomBudgetSettings,
   type CustomBudgetCategoryItem,
   type CustomBudgetCategoryCampos,
@@ -347,6 +349,10 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
   const [customBudgetSettings, setCustomBudgetSettings] = useState<CustomBudgetCategoryItem[]>(() => {
     return normalizeCustomBudgetSettings(profile?.custom_budget_settings);
   });
+  const [budgetPaymentMethods, setBudgetPaymentMethods] = useState<string[]>(() => {
+    return normalizeBudgetPaymentMethods(profile?.custom_budget_settings);
+  });
+  const [novoMetodoPagamentoInput, setNovoMetodoPagamentoInput] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
     const norm = normalizeCustomBudgetSettings(profile?.custom_budget_settings);
     return norm[0]?.id || "cat-bolos";
@@ -365,6 +371,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
     if (profile?.custom_budget_settings) {
       const norm = normalizeCustomBudgetSettings(profile.custom_budget_settings);
       setCustomBudgetSettings(norm);
+      setBudgetPaymentMethods(normalizeBudgetPaymentMethods(profile.custom_budget_settings));
       if (!norm.some((c) => c.id === selectedCategoryId)) {
         setSelectedCategoryId(norm[0]?.id || "cat-bolos");
       }
@@ -532,9 +539,14 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
     try {
       setSalvandoAssistenteOrcamento(true);
 
+      const payloadSave = {
+        categorias: customBudgetSettings,
+        formas_pagamento: budgetPaymentMethods.length > 0 ? budgetPaymentMethods : DEFAULT_BUDGET_PAYMENT_METHODS,
+      };
+
       let query = supabase
         .from("estabelecimentos")
-        .update({ custom_budget_settings: customBudgetSettings });
+        .update({ custom_budget_settings: payloadSave });
 
       if (targetId) {
         query = query.eq("id", targetId);
@@ -549,7 +561,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
       if (error) throw error;
 
       if (updateEstablishmentDetails) {
-        await updateEstablishmentDetails({ custom_budget_settings: customBudgetSettings } as any);
+        await updateEstablishmentDetails({ custom_budget_settings: payloadSave } as any);
       }
 
       toast.success("Configurações do Assistente salvas com sucesso!");
@@ -3367,6 +3379,111 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
                                 </button>
                               </Badge>
                             ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SEÇÃO: FORMAS DE PAGAMENTO ACEITAS NO ASSISTENTE */}
+                      <div className="pt-6 border-t border-border/60 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <Label className="text-sm font-black text-foreground flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-fuchsia-600" />
+                              <span>Formas de Pagamento Aceitas no Assistente</span>
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Defina as opções de pagamento que o cliente poderá escolher na etapa final (Passo 3/3) da solicitação do orçamento.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Tags Rápidas / Presets */}
+                        <div className="space-y-2.5 bg-muted/30 p-4 rounded-2xl border border-border/60">
+                          <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-border/40">
+                            <span className="text-[11px] font-bold text-muted-foreground mr-1">Sugestões rápidas:</span>
+                            {["Pix", "Cartão de Crédito", "Cartão de Débito", "Dinheiro", "Transferência Bancária"].map((preset) => {
+                              const jaAdicionado = budgetPaymentMethods.includes(preset);
+                              return (
+                                <Button
+                                  key={preset}
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (jaAdicionado) {
+                                      setBudgetPaymentMethods((prev) => prev.filter((p) => p !== preset));
+                                    } else {
+                                      setBudgetPaymentMethods((prev) => [...prev, preset]);
+                                    }
+                                  }}
+                                  className={`h-7 px-2.5 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                    jaAdicionado
+                                      ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/40 hover:bg-fuchsia-500/25 shadow-2xs"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  }`}
+                                >
+                                  {jaAdicionado ? <Check className="w-3 h-3 mr-1 text-fuchsia-600" /> : <Plus className="w-3 h-3 mr-1" />}
+                                  {preset}
+                                </Button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Adicionar Forma de Pagamento Personalizada */}
+                          <div className="flex gap-2 pt-1">
+                            <Input
+                              value={novoMetodoPagamentoInput}
+                              onChange={(e) => setNovoMetodoPagamentoInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const val = novoMetodoPagamentoInput.trim();
+                                  if (val && !budgetPaymentMethods.includes(val)) {
+                                    setBudgetPaymentMethods((prev) => [...prev, val]);
+                                    setNovoMetodoPagamentoInput("");
+                                  }
+                                }
+                              }}
+                              placeholder="Adicionar outra forma de pagamento (ex: Vale Refeição, PicPay, Boleto)..."
+                              className="text-xs rounded-xl flex-1"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const val = novoMetodoPagamentoInput.trim();
+                                if (val && !budgetPaymentMethods.includes(val)) {
+                                  setBudgetPaymentMethods((prev) => [...prev, val]);
+                                  setNovoMetodoPagamentoInput("");
+                                }
+                              }}
+                              className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold rounded-xl h-9 px-3 shrink-0 cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4 mr-1" /> Adicionar
+                            </Button>
+                          </div>
+
+                          {/* Lista Ativa de Formas de Pagamento */}
+                          <div className="flex flex-wrap gap-1.5 pt-2 min-h-[36px]">
+                            {budgetPaymentMethods.map((metodo, idx) => (
+                              <Badge
+                                key={`${metodo}-${idx}`}
+                                variant="secondary"
+                                className="px-3 py-1 text-xs font-bold rounded-xl flex items-center gap-2 bg-fuchsia-500/10 text-fuchsia-900 dark:text-fuchsia-200 border border-fuchsia-500/20 shadow-2xs"
+                              >
+                                <span>{metodo}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setBudgetPaymentMethods((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="Remover forma de pagamento"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </Badge>
+                            ))}
+                            {budgetPaymentMethods.length === 0 && (
+                              <span className="text-xs text-muted-foreground italic">Nenhuma forma de pagamento configurada. Selecione as sugestões acima ou adicione uma personalizada.</span>
+                            )}
                           </div>
                         </div>
                       </div>

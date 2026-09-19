@@ -82,7 +82,21 @@ import {
   validarDataEntrega,
   validarHorarioEntrega,
 } from "@/lib/cardapio-helpers";
-import { generatePixPayload, CATALOGO_PRODUTOS_PADRAO, identificarMetodoPagamento, type ProdutoCardapio, type ProdutoOpcao, type KitProduto, DEFAULT_CUSTOM_BUDGET_SETTINGS, DEFAULT_CUSTOM_BUDGET_CATEGORIES, normalizeCustomBudgetSettings, type CustomBudgetSettings, type CustomBudgetCategoryItem } from "@/lib/caixadoce-data";
+import {
+  generatePixPayload,
+  CATALOGO_PRODUTOS_PADRAO,
+  identificarMetodoPagamento,
+  type ProdutoCardapio,
+  type ProdutoOpcao,
+  type KitProduto,
+  DEFAULT_CUSTOM_BUDGET_SETTINGS,
+  DEFAULT_CUSTOM_BUDGET_CATEGORIES,
+  DEFAULT_BUDGET_PAYMENT_METHODS,
+  normalizeCustomBudgetSettings,
+  normalizeBudgetPaymentMethods,
+  type CustomBudgetSettings,
+  type CustomBudgetCategoryItem,
+} from "@/lib/caixadoce-data";
 import {
   obterConfiguracoesStripeLoja,
   createStripeSession,
@@ -619,12 +633,17 @@ export function CardapioLojaView() {
   const [notes, setNotes] = useState<string>("");
   const [deliveryDate, setDeliveryDate] = useState<string>("");
   const [deliveryTime, setDeliveryTime] = useState<string>("");
+  const [selectedBudgetPaymentMethod, setSelectedBudgetPaymentMethod] = useState<string>("");
 
   // Continuity Modal State (3 options after custom item added)
   const [continuityModalOpen, setContinuityModalOpen] = useState(false);
 
   const customBudgetSettings = useMemo(() => {
     return normalizeCustomBudgetSettings((lojaInfo as any)?.custom_budget_settings);
+  }, [(lojaInfo as any)?.custom_budget_settings]);
+
+  const budgetPaymentMethods = useMemo(() => {
+    return normalizeBudgetPaymentMethods((lojaInfo as any)?.custom_budget_settings);
   }, [(lojaInfo as any)?.custom_budget_settings]);
 
   const handleOpenCustomBudgetWizard = (catToSelect?: CustomBudgetCategoryItem | string) => {
@@ -657,6 +676,7 @@ export function CardapioLojaView() {
     setNotes("");
     setDeliveryDate("");
     setDeliveryTime("");
+    setSelectedBudgetPaymentMethod(budgetPaymentMethods[0] || "Pix");
     setCustomBudgetModalOpen(true);
   };
 
@@ -730,6 +750,11 @@ export function CardapioLojaView() {
       setUploadingReference(false);
     }
 
+    if (!selectedBudgetPaymentMethod && budgetPaymentMethods.length > 0) {
+      toast.error("Por favor, selecione como deseja pagar (Forma de Pagamento).");
+      return;
+    }
+
     const detLinhas: string[] = [];
     if (customQuantity) detLinhas.push(`• Quantidade/Tamanho: ${customQuantity}`);
     if (selectedTypes.length > 0) detLinhas.push(`• Formatos/Tamanhos: ${selectedTypes.join(", ")}`);
@@ -737,9 +762,16 @@ export function CardapioLojaView() {
     if (selectedDecorations.length > 0)
       detLinhas.push(`• Estilos/Decoração: ${selectedDecorations.join(", ")}`);
     if (selectedExtras.length > 0) detLinhas.push(`• Extras/Adicionais: ${selectedExtras.join(", ")}`);
+    if (selectedBudgetPaymentMethod)
+      detLinhas.push(`• Forma de Pagamento Pretendida: ${selectedBudgetPaymentMethod}`);
     if (deliveryDate)
       detLinhas.push(`• Data Desejada: ${deliveryDate}${deliveryTime ? ` às ${deliveryTime}` : ""}`);
     if (notes) detLinhas.push(`• Observações: ${notes}`);
+
+    if (selectedBudgetPaymentMethod) {
+      const isPix = selectedBudgetPaymentMethod.toLowerCase().includes("pix");
+      setMetodoPagamento(isPix ? "pix" : "cartao");
+    }
 
     const produtoCustomizado: ProdutoCardapio = {
       id: `custom-${activeCat.id}-${Date.now()}`,
@@ -2200,6 +2232,9 @@ export function CardapioLojaView() {
         console.warn("Aviso ao processar tabela clientes_loja:", eCli);
       }
 
+      const isOrcamento = purchaseIntent === "orcamento" || carrinho.some((it) => it.produto.categoria === "Orçamento Personalizado");
+      const formaPagamentoOrcamento = selectedBudgetPaymentMethod || (metodoPagamento === "pix" ? "Pix" : "Cartão");
+
       // 2. Criação do Pedido em 'encomendas' vinculado ao cliente_id
       const payloadInsert: Record<string, any> = {
         id: pedidoId,
@@ -2213,10 +2248,11 @@ export function CardapioLojaView() {
         tipo_entrega: tipoEntrega,
         endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
-        status_pagamento: lojaInfo?.usar_mercadopago ? "pix_pendente" : (metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente"),
-        metodo_pagamento: lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão"),
-        forma_pagamento: lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão"),
-        origem_pagamento: lojaInfo?.usar_mercadopago ? "mercadopago" : "manual",
+        status_pagamento: isOrcamento ? "orcamento" : (lojaInfo?.usar_mercadopago ? "pix_pendente" : (metodoPagamento === "pix" ? "pix_pendente" : "cartao_pendente")),
+        metodo_pagamento: isOrcamento ? formaPagamentoOrcamento : (lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão")),
+        forma_pagamento: isOrcamento ? formaPagamentoOrcamento : (lojaInfo?.usar_mercadopago ? "Mercado Pago" : (metodoPagamento === "pix" ? "Pix Manual" : "Cartão")),
+        origem_pagamento: isOrcamento ? "orcamento" : (lojaInfo?.usar_mercadopago ? "mercadopago" : "manual"),
+        is_orcamento: isOrcamento,
         status: "pendente",
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
@@ -5773,6 +5809,37 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     className="text-xs rounded-xl"
                   />
                 </div>
+              </div>
+
+              {/* Forma de Pagamento Pretendida */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                  <CreditCard className="w-3.5 h-3.5 text-amber-600" /> Forma de Pagamento Pretendida *
+                </Label>
+                {budgetPaymentMethods.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {budgetPaymentMethods.map((metodo) => {
+                      const isSelected = selectedBudgetPaymentMethod === metodo;
+                      return (
+                        <button
+                          key={metodo}
+                          type="button"
+                          onClick={() => setSelectedBudgetPaymentMethod(metodo)}
+                          className={`p-2.5 rounded-xl border text-xs font-bold text-left transition-all cursor-pointer flex items-center justify-between gap-1.5 ${
+                            isSelected
+                              ? "bg-amber-500/15 border-amber-500 text-amber-950 dark:text-amber-200 ring-2 ring-amber-500/30 shadow-xs"
+                              : "border-border/70 hover:border-border hover:bg-muted/30 text-foreground"
+                          }`}
+                        >
+                          <span className="truncate">{metodo}</span>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Formas de pagamento não configuradas pela loja.</p>
+                )}
               </div>
 
               {/* Observações Gerais */}

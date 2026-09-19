@@ -3729,9 +3729,9 @@ export function OrdersView({
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleAbrirEdicao(ord);
+                                  handleAbrirDetalhes(ord);
                                 }}
-                                title="Ver e editar detalhes do orçamento"
+                                title="Ver detalhes do orçamento"
                                 className="h-7 px-2.5 text-xs bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 font-bold whitespace-nowrap"
                               >
                                 <FileText className="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400" />
@@ -3985,7 +3985,7 @@ export function OrdersView({
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleAbrirEdicao(ord);
+                            handleAbrirDetalhes(ord);
                           }}
                           className="w-full h-9 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 border-amber-500/40 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
                         >

@@ -196,7 +196,30 @@ export const DEFAULT_CUSTOM_BUDGET_CATEGORIES: CustomBudgetCategoryItem[] = [
   }
 ];
 
+export const DEFAULT_BUDGET_PAYMENT_METHODS: string[] = [
+  "Pix",
+  "Cartão de Crédito",
+  "Cartão de Débito",
+  "Dinheiro",
+];
+
+export function normalizeBudgetPaymentMethods(raw: any): string[] {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    if (Array.isArray(raw.formas_pagamento) && raw.formas_pagamento.length > 0) {
+      return raw.formas_pagamento.map((item: any) => String(item).trim()).filter(Boolean);
+    }
+    if (Array.isArray(raw.payment_methods) && raw.payment_methods.length > 0) {
+      return raw.payment_methods.map((item: any) => String(item).trim()).filter(Boolean);
+    }
+  }
+  return DEFAULT_BUDGET_PAYMENT_METHODS;
+}
+
 export function normalizeCustomBudgetSettings(raw: any): CustomBudgetCategoryItem[] {
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray(raw.categorias)) {
+    return normalizeCustomBudgetSettings(raw.categorias);
+  }
+
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.map((item, idx) => ({
       id: item.id || `cat-${idx + 1}`,
