@@ -749,15 +749,32 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
   let baseMs = agoraMs;
 
   try {
-    const searchRes = await fetch(
-      `${supabaseUrl}/rest/v1/estabelecimentos?or=(codigo.ilike.${encodeURIComponent(code)},slug.ilike.${encodeURIComponent(code)})&select=id,codigo,plano_expira_em`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    );
+    const cleanCode = (code || "").trim();
+    const isCodigo = cleanCode.toUpperCase().startsWith("CD-");
+    let searchUrl = `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(cleanCode.toUpperCase())}&select=id,codigo,plano_expira_em`;
+
+    if (!isCodigo) {
+      searchUrl = `${supabaseUrl}/rest/v1/estabelecimentos?slug=ilike.${encodeURIComponent(cleanCode.toLowerCase())}&select=id,codigo,plano_expira_em`;
+    }
+
+    let searchRes = await fetch(searchUrl, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+    });
+
+    if (!searchRes.ok && !isCodigo) {
+      searchRes = await fetch(
+        `${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(cleanCode.toUpperCase())}&select=id,codigo,plano_expira_em`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+    }
     if (searchRes.ok) {
       const list = await searchRes.json();
       if (Array.isArray(list) && list.length > 0) {

@@ -1054,36 +1054,58 @@ export function CardapioLojaView() {
           return;
         }
 
-        const paramLower = rawParam.toLowerCase();
-        const paramUpper = rawParam.toUpperCase();
+        const cleanParam = rawParam.trim();
+        const paramLower = cleanParam.toLowerCase();
+        const paramUpper = cleanParam.toUpperCase();
 
-        // 1. Busca flexível do Estabelecimento por slug OU codigo OU id (se for UUID)
+        // 1. Busca inteligente do Estabelecimento por ID (UUID), Código ("CD-") ou Slug
         let estData: any = null;
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawParam)) {
+
+        // A. Se for UUID (ex: 84392a8e-...)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanParam)) {
           const { data: dById } = await supabase
             .from("estabelecimentos")
             .select("*")
-            .eq("id", rawParam)
+            .eq("id", cleanParam)
             .maybeSingle();
           if (dById) estData = dById;
         }
 
-        if (!estData) {
-          const { data: dFlex } = await supabase
-            .from("estabelecimentos")
-            .select("*")
-            .or(`slug.eq.${paramLower},codigo.eq.${paramUpper}`)
-            .maybeSingle();
-          if (dFlex) estData = dFlex;
-        }
-
-        if (!estData) {
-          const { data: d1 } = await supabase
+        // B. Se começar com "CD-" (ex: "CD-1004", "CD-1001"), busca estritamente pela coluna 'codigo'
+        if (!estData && paramUpper.startsWith("CD-")) {
+          const { data: dCodigo } = await supabase
             .from("estabelecimentos")
             .select("*")
             .eq("codigo", paramUpper)
             .maybeSingle();
-          if (d1) estData = d1;
+          if (dCodigo) estData = dCodigo;
+        }
+
+        // C. Caso não comece com "CD-" (ex: slug amigável "docesdaana"), tenta primeiro pela coluna 'slug'
+        if (!estData && !paramUpper.startsWith("CD-")) {
+          try {
+            const { data: dSlug, error: slugErr } = await supabase
+              .from("estabelecimentos")
+              .select("*")
+              .eq("slug", paramLower)
+              .maybeSingle();
+            if (dSlug) estData = dSlug;
+            if (slugErr) {
+              console.warn("[Cardápio Query Slug Warning]:", slugErr.message);
+            }
+          } catch (eSlug) {
+            console.warn("[Cardápio Query Slug Catch]:", eSlug);
+          }
+        }
+
+        // D. Fallback resiliente: se não encontrou por slug ou se a coluna 'slug' ainda não existir, busca por 'codigo'
+        if (!estData) {
+          const { data: dCodigoFallback } = await supabase
+            .from("estabelecimentos")
+            .select("*")
+            .eq("codigo", paramUpper)
+            .maybeSingle();
+          if (dCodigoFallback) estData = dCodigoFallback;
         }
 
         const resolvedCode = estData?.codigo || paramUpper;
