@@ -1217,23 +1217,20 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. BUSCA DE PRODUTOS E KITS (BUSCA PARALELA ULTRA-RÁPIDA)
+        // 2. BUSCA DE PRODUTOS E KITS (BUSCA PARALELA ULTRA-RÁPIDA COM SELECT *)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
         const tentarBuscarProdutosRapido = async (): Promise<any[]> => {
-          const colunasCompletas = "id, nome, preco, categoria, descricao, foto_url, galeria_fotos, serve_pessoas, peso_detalhe, destaque, tempo_preparo_horas, ativo, availability_type, available_days, min_lead_time_days, is_kit, custo_total_insumos, margem_lucro, prazo_entrega, itens_kit, opcoes, permite_multiplas_opcoes, vende_por_peso, unidade_venda, visivel_cardapio_digital, visivel_pdv, estabelecimento_id, estabelecimento_codigo, codigo";
-          const colunasEssenciais = "id, nome, preco, categoria, descricao, foto_url, galeria_fotos, serve_pessoas, peso_detalhe, destaque, tempo_preparo_horas, ativo, visivel_cardapio_digital, visivel_pdv, opcoes, estabelecimento_id, estabelecimento_codigo";
-
-          // Cria promessas de busca rápida em paralelo (por UUID e por Código)
+          // Cria promessas de busca rápida em paralelo com select("*") para nunca quebrar por coluna ausente
           const buscas: Promise<any[]>[] = [];
 
           if (estUuid) {
             buscas.push(
               supabase
                 .from("produtos" as any)
-                .select(colunasCompletas)
+                .select("*")
                 .eq("estabelecimento_id", estUuid)
                 .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
                 .catch(() => [])
@@ -1244,27 +1241,24 @@ export function CardapioLojaView() {
             buscas.push(
               supabase
                 .from("produtos" as any)
-                .select(colunasCompletas)
+                .select("*")
                 .eq("estabelecimento_codigo", resolvedCode)
                 .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
                 .catch(() => [])
             );
-          }
 
-          // Busca imediata com colunas essenciais (blindada contra timeout de serialização)
-          if (resolvedCode || estUuid) {
             buscas.push(
               supabase
                 .from("produtos" as any)
-                .select(colunasEssenciais)
-                .or(`estabelecimento_codigo.eq.${resolvedCode}${estUuid ? `,estabelecimento_id.eq.${estUuid}` : ""}`)
+                .select("*")
+                .eq("codigo", resolvedCode)
                 .then((res) => (!res.error && res.data && res.data.length > 0 ? res.data : []))
                 .catch(() => [])
             );
           }
 
           try {
-            // Executa as consultas em paralelo e pega o primeiro resultado que contiver produtos
+            // Executa as consultas em paralelo e pega o primeiro resultado válido
             const resultados = await Promise.all(buscas);
             for (const lista of resultados) {
               if (Array.isArray(lista) && lista.length > 0) {
@@ -1275,15 +1269,6 @@ export function CardapioLojaView() {
           } catch (e: any) {
             console.warn("[Cardápio Público] Exceção na busca paralela de produtos:", e?.message);
           }
-
-          // Fallback final direto caso todas as buscas paralelas acima falhem
-          try {
-            const { data } = await supabase
-              .from("produtos" as any)
-              .select(colunasEssenciais)
-              .eq("estabelecimento_codigo", resolvedCode);
-            if (data && data.length > 0) return data;
-          } catch {}
 
           return [];
         };
