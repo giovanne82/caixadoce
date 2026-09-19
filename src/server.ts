@@ -1147,12 +1147,9 @@ async function obterTokenAppIFoodServer(env?: any): Promise<string> {
     try {
       console.log(`[Server iFood App Token] Solicitando token de autenticação da aplicação CaixaDoce (${ifoodClientId.slice(0, 8)}...)...`);
       const bodyParams = new URLSearchParams();
-      bodyParams.append("grantType", "client_credentials");
       bodyParams.append("grant_type", "client_credentials");
       bodyParams.append("clientId", ifoodClientId.trim());
-      bodyParams.append("client_id", ifoodClientId.trim());
       bodyParams.append("clientSecret", ifoodClientSecret.trim());
-      bodyParams.append("client_secret", ifoodClientSecret.trim());
 
       const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
         method: "POST",
@@ -1758,7 +1755,7 @@ export default {
           const runClientCredentials = async () => {
             const targetCode = (estCode || "CD-5411").trim().toUpperCase();
             const tokenParams = new URLSearchParams();
-            tokenParams.append("grantType", "client_credentials");
+            tokenParams.append("grant_type", "client_credentials");
             tokenParams.append("clientId", ifoodClientId.trim());
             tokenParams.append("clientSecret", ifoodClientSecret.trim());
 

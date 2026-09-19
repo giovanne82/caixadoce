@@ -55,12 +55,9 @@ export async function obterTokenAppIFood(env?: any): Promise<string> {
   }
 
   const bodyParams = new URLSearchParams();
-  bodyParams.append("grantType", "client_credentials");
   bodyParams.append("grant_type", "client_credentials");
   bodyParams.append("clientId", ifoodClientId.trim());
-  bodyParams.append("client_id", ifoodClientId.trim());
   bodyParams.append("clientSecret", ifoodClientSecret.trim());
-  bodyParams.append("client_secret", ifoodClientSecret.trim());
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
     method: "POST",
