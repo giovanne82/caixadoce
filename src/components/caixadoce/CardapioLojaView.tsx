@@ -308,7 +308,7 @@ export function SocialLinks({
   }
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="hidden md:flex items-center gap-1.5 shrink-0 flex-wrap">
       {instaUrl && (
         <a
           href={instaUrl}
@@ -3154,28 +3154,29 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-foreground pb-24">
       {/* Top Header Fixo / Sticky com Valorização da Marca */}
-      <header className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md text-foreground py-3.5 px-4 shadow-xs border-b border-border sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+      <header className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md text-foreground py-2.5 sm:py-3.5 px-3 sm:px-4 shadow-xs border-b border-border sticky top-0 z-30 w-full overflow-hidden">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3.5 w-full">
+          {/* Esquerda: Logo + Nome + Status */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {lojaInfo?.logo_url || lojaInfo?.store_logo_url ? (
               <img
                 src={lojaInfo.logo_url || lojaInfo.store_logo_url}
                 alt={lojaInfo.nome || "Logo"}
-                className="w-11 h-11 sm:w-12 sm:h-12 object-cover rounded-2xl border border-border shadow-xs shrink-0"
+                className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-2xl border border-border shadow-xs shrink-0"
               />
             ) : (
               <CaixaDoceLogo size="md" className="shrink-0" />
             )}
-            <div className="border-l border-border/80 pl-3 min-w-0 flex flex-col justify-center space-y-0.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-xl font-black tracking-tight text-foreground truncate max-w-[180px] sm:max-w-sm md:max-w-md">
+            <div className="border-l border-border/80 pl-2 sm:pl-3 min-w-0 flex-1 flex flex-col justify-center space-y-0.5">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <h1 className="text-sm sm:text-lg md:text-xl font-black tracking-tight text-foreground truncate min-w-0 shrink-1">
                   {lojaInfo?.nome || "Confeitaria Artesanal"}
                 </h1>
                 {/* Status de Horário Integrado no Header */}
                 <button
                   type="button"
                   onClick={() => setModalHorariosOpen(true)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] sm:text-xs font-bold border transition-colors shadow-2xs cursor-pointer ${
+                  className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border transition-colors shadow-2xs cursor-pointer shrink-0 whitespace-nowrap ${
                     statusHorario.aberta
                       ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
                       : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
@@ -3183,23 +3184,26 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   title="Clique para ver os horários de funcionamento"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusHorario.aberta ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
-                  <span>{statusHorario.aberta ? "🟢 Aberto agora" : "🟠 Fechado"}</span>
+                  <span>{statusHorario.aberta ? "🟢 Aberto" : "🟠 Fechado"}</span>
                   <span className="underline opacity-80 font-normal hidden sm:inline ml-0.5">Ver horários</span>
                 </button>
               </div>
 
-              <SocialLinks
-                instagram={lojaInfo?.instagram}
-                tiktok={lojaInfo?.tiktok}
-                facebook={lojaInfo?.facebook}
-                whatsapp={lojaInfo?.whatsapp}
-                telefone={lojaInfo?.telefone}
-                variant="header"
-              />
+              <div className="hidden md:block">
+                <SocialLinks
+                  instagram={lojaInfo?.instagram}
+                  tiktok={lojaInfo?.tiktok}
+                  facebook={lojaInfo?.facebook}
+                  whatsapp={lojaInfo?.whatsapp}
+                  telefone={lojaInfo?.telefone}
+                  variant="header"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Direita: Controles e Carrinho */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* TOGGLE / CONTROLE DE MODO (APENAS SE MODO_VENDA === 'AMBOS') */}
             {lojaInfo?.modo_venda === "ambos" && (
               <div className="flex items-center bg-muted/80 p-0.5 sm:p-1 rounded-2xl border border-border/80 shrink-0 shadow-2xs">
@@ -3207,11 +3211,11 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                   <button
                     type="button"
                     onClick={() => setModalHorariosOpen(true)}
-                    className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs bg-amber-600 text-white font-extrabold shadow-xs cursor-pointer"
+                    className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs bg-amber-600 text-white font-extrabold shadow-xs cursor-pointer shrink-0"
                     title="Loja fora do horário de atendimento imediato. Aceitando apenas orçamentos."
                   >
                     <span className="text-xs">📝</span>
-                    <span className="text-[10.5px]">Apenas Orçamento</span>
+                    <span className="text-[10px] sm:text-[10.5px]">Apenas Orçamento</span>
                   </button>
                 ) : (
                   <>
@@ -3221,7 +3225,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         setPurchaseIntent("pedido");
                         intencaoInicialDefinidaRef.current = true;
                       }}
-                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all shrink-0 ${
                         purchaseIntent === "pedido"
                           ? "bg-purple-600 text-white font-extrabold shadow-xs"
                           : "text-muted-foreground hover:text-foreground font-semibold"
@@ -3237,7 +3241,7 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                         setPurchaseIntent("orcamento");
                         intencaoInicialDefinidaRef.current = true;
                       }}
-                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs transition-all shrink-0 ${
                         purchaseIntent === "orcamento"
                           ? "bg-amber-600 text-white font-extrabold shadow-xs"
                           : "text-muted-foreground hover:text-foreground font-semibold"
@@ -3256,14 +3260,17 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
             <Button
               onClick={() => setCartOpen(true)}
               style={{ backgroundColor: purchaseIntent === "orcamento" ? "#D97706" : corTemaDestaque }}
-              className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-3 sm:px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity"
+              className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-2.5 sm:px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity flex items-center"
             >
               <ShoppingCart className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />
               <span className="hidden sm:inline">
                 {purchaseIntent === "orcamento" ? "Meu Orçamento" : "Meu Pedido"}
               </span>
+              <span className="sm:hidden text-[11px]">
+                {purchaseIntent === "orcamento" ? "Orçamento" : "Pedido"}
+              </span>
               {totalItensCarrinho > 0 && (
-                <span className="ml-1 sm:ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px]">
+                <span className="ml-1 sm:ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px] shrink-0">
                   {totalItensCarrinho}
                 </span>
               )}
