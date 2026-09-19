@@ -26,9 +26,9 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 4. Otimizar e atualizar estatísticas do planejador do PostgreSQL
-VACUUM ANALYZE public.produtos;
-VACUUM ANALYZE public.estabelecimentos;
+-- 4. Atualizar estatísticas do planejador do PostgreSQL (compatível com transações)
+ANALYZE public.produtos;
+ANALYZE public.estabelecimentos;
 
 -- 5. Recarregar Schema Cache
 NOTIFY pgrst, 'reload schema';
