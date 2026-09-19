@@ -1217,18 +1217,18 @@ export function CardapioLojaView() {
         }
 
         // =====================================================================
-        // 2. BUSCA DE PRODUTOS E KITS (COM TIMEOUT ESTREITO DE 3.5s)
+        // 2. BUSCA DE PRODUTOS E KITS (TIMEOUT GENEROSO DE 15s + LIMIT 150)
         // =====================================================================
         let prodsDb: any[] = [];
         const estUuid = estData?.id;
 
-        // Helper de timeout estrito para que nenhuma consulta do Supabase trave a UI por mais de 3.5s
-        const queryWithTimeout = async (queryPromise: Promise<any>, timeoutMs = 3500): Promise<any> => {
+        // Helper de timeout generoso para dar tempo ao PostgreSQL de processar bancos com muitos itens
+        const queryWithTimeout = async (queryPromise: Promise<any>, timeoutMs = 15000): Promise<any> => {
           let timer: any;
           const timeout = new Promise((resolve) => {
             timer = setTimeout(() => {
-              console.warn(`[Cardápio Público] Consulta cancelada após ${timeoutMs}ms (timeout de segurança)`);
-              resolve({ error: { message: "Timeout de 3.5s atingido pelo frontend", code: "CLIENT_TIMEOUT" } });
+              console.warn(`[Cardápio Público] Consulta cancelada após ${timeoutMs}ms`);
+              resolve({ error: { message: `Timeout de ${timeoutMs / 1000}s atingido`, code: "CLIENT_TIMEOUT" } });
             }, timeoutMs);
           });
 
@@ -1242,7 +1242,7 @@ export function CardapioLojaView() {
           }
         };
 
-        // 1. Busca por estabelecimento_id (UUID)
+        // 1. Busca por estabelecimento_id (UUID) com limite
         if (estUuid) {
           try {
             const res = await queryWithTimeout(
@@ -1250,6 +1250,8 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("estabelecimento_id", estUuid)
+                .order("nome", { ascending: true })
+                .limit(150)
             );
 
             if (res.error) {
@@ -1269,7 +1271,7 @@ export function CardapioLojaView() {
           }
         }
 
-        // 2. Fallback imediato por estabelecimento_codigo (Código da Loja)
+        // 2. Fallback imediato por estabelecimento_codigo (Código da Loja) com limite
         if (prodsDb.length === 0 && resolvedCode) {
           try {
             const res = await queryWithTimeout(
@@ -1277,6 +1279,8 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("estabelecimento_codigo", resolvedCode)
+                .order("nome", { ascending: true })
+                .limit(150)
             );
 
             if (res.error) {
@@ -1296,7 +1300,7 @@ export function CardapioLojaView() {
           }
         }
 
-        // 3. Fallback adicional por codigo
+        // 3. Fallback adicional por codigo com limite
         if (prodsDb.length === 0 && resolvedCode) {
           try {
             const res = await queryWithTimeout(
@@ -1304,6 +1308,7 @@ export function CardapioLojaView() {
                 .from("produtos" as any)
                 .select("*")
                 .eq("codigo", resolvedCode)
+                .limit(150)
             );
 
             if (res.error) {
@@ -1323,11 +1328,11 @@ export function CardapioLojaView() {
           }
         }
 
-        // 3. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
+        // 4. BUSCA DE KITS CADASTRADOS (Tabela 'kits')
         let kitsDb: KitProduto[] = [];
         if (estUuid || resolvedCode) {
           try {
-            kitsDb = await queryWithTimeout(obterKitsEstabelecimento(estUuid || resolvedCode), 3000) || [];
+            kitsDb = await queryWithTimeout(obterKitsEstabelecimento(estUuid || resolvedCode), 10000) || [];
           } catch (eKits) {
             console.warn("[Cardápio Público] Aviso ao carregar kits:", eKits);
           }
