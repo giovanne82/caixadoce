@@ -197,18 +197,16 @@ export async function renovarAccessTokenIFood(estabelecimentoId: string, refresh
     throw new Error("Credenciais insuficientes para renovar o token iFood.");
   }
 
-  const bodyParams = new URLSearchParams({
-    grantType: "refresh_token",
-    clientId: ifoodClientId.trim(),
-    clientSecret: ifoodClientSecret.trim(),
-    refreshToken: refreshToken.trim(),
-  });
+  const bodyParams = new URLSearchParams();
+  bodyParams.append("grant_type", "refresh_token");
+  bodyParams.append("clientId", ifoodClientId.trim());
+  bodyParams.append("clientSecret", ifoodClientSecret.trim());
+  bodyParams.append("refreshToken", refreshToken.trim());
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
     },
     body: bodyParams.toString(),
   });

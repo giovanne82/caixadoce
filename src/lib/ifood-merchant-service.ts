@@ -28,7 +28,7 @@ export interface IFoodShiftItem {
 }
 
 /**
- * Resolve credenciais ativas do iFood (token e merchantId) com múltiplas camadas de fallback
+ * Resolve as credenciais da loja a partir do Supabase (access_token, refresh_token e merchantId)
  */
 async function resolverCredenciaisIFood(
   estabelecimentoCodigo?: string,
@@ -49,19 +49,13 @@ async function resolverCredenciaisIFood(
   const envObj = (env as Record<string, string>) || {};
   const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
 
-  // 1. Obtém accessToken via client_credentials da aplicação (padrão oficial CaixaDoce)
-  if (!accessToken) {
+  // 1. Se não tiver accessToken salvo mas tiver refresh_token, renova usando grant_type=refresh_token
+  if (!accessToken && refreshToken && estId) {
     try {
-      accessToken = await obterTokenAppIFood(env);
-      if (accessToken && estId) {
-        const supabase = getSupabaseBackendClient();
-        await supabase
-          .from("estabelecimentos")
-          .update({ ifood_access_token: accessToken, updated_at: new Date().toISOString() })
-          .eq("id", estId);
-      }
+      console.log(`[resolverCredenciaisIFood] Renovando access_token via refresh_token para loja ${estabelecimentoCodigo || estId}...`);
+      accessToken = await renovarAccessTokenIFood(estId, refreshToken, env);
     } catch (e) {
-      console.warn("[resolverCredenciaisIFood App Token Warning]", e);
+      console.warn("[resolverCredenciaisIFood Refresh Warning]", e);
     }
   }
 
@@ -109,7 +103,7 @@ async function resolverCredenciaisIFood(
 }
 
 /**
- * Executa uma chamada à API do iFood com auto-refresh via client_credentials em caso de 401
+ * Executa uma chamada à API do iFood com auto-refresh exclusivo via refresh_token em caso de 401
  */
 async function fetchComAutoRefresh(
   url: string,
@@ -123,26 +117,16 @@ async function fetchComAutoRefresh(
 
   let res = await fetch(url, { ...options, headers });
 
-  if (res.status === 401) {
-    console.warn(`[iFood Auto-Refresh] Recebido 401 em ${url}. Renovando token via client_credentials...`);
-    let novoToken: string | null = null;
-
+  if (res.status === 401 && authInfo.refreshToken && authInfo.estId) {
+    console.warn(`[iFood Auto-Refresh] Recebido 401 em ${url}. Renovando token via refresh_token...`);
     try {
-      novoToken = await obterTokenAppIFood(env);
-      if (novoToken && authInfo.estId) {
-        const supabase = getSupabaseBackendClient();
-        await supabase
-          .from("estabelecimentos")
-          .update({ ifood_access_token: novoToken, updated_at: new Date().toISOString() })
-          .eq("id", authInfo.estId);
+      const novoToken = await renovarAccessTokenIFood(authInfo.estId, authInfo.refreshToken, env);
+      if (novoToken) {
+        headers.set("Authorization", `Bearer ${novoToken}`);
+        res = await fetch(url, { ...options, headers });
       }
-    } catch (cErr) {
-      console.warn("[iFood Auto-Refresh App Token Fail]", cErr);
-    }
-
-    if (novoToken) {
-      headers.set("Authorization", `Bearer ${novoToken}`);
-      res = await fetch(url, { ...options, headers });
+    } catch (rErr) {
+      console.warn("[iFood Auto-Refresh Refresh Token Fail]", rErr);
     }
   }
 
