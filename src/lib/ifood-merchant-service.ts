@@ -454,8 +454,10 @@ export async function sincronizarHorariosLojaIFood(
   try {
     console.log(`[iFood Merchant Shifts] Sincronizando ${payload.length} turnos para loja ${auth.merchantId}...`);
 
-    const res = await fetchComAutoRefresh(
-      `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/shifts`,
+    const shiftsUrl = `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/shifts`;
+
+    let res = await fetchComAutoRefresh(
+      shiftsUrl,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -464,6 +466,22 @@ export async function sincronizarHorariosLojaIFood(
       { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
       env
     );
+
+    // Fallback para rota opening-hours se a rota shifts devolver 404
+    if (res.status === 404) {
+      console.warn(`[iFood Merchant Shifts] Rota /shifts retornou 404. Tentando rota /opening-hours...`);
+      const openingHoursUrl = `https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${encodeURIComponent(auth.merchantId)}/opening-hours`;
+      res = await fetchComAutoRefresh(
+        openingHoursUrl,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        { estId: auth.estId, accessToken: auth.accessToken, refreshToken: auth.refreshToken },
+        env
+      );
+    }
 
     if (!res.ok && res.status !== 200 && res.status !== 201 && res.status !== 204) {
       const errTxt = await res.text();

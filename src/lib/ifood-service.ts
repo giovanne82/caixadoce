@@ -26,7 +26,7 @@ export function getSupabaseBackendClient() {
 let cachedAppToken: { token: string; expiresAt: number } | null = null;
 
 /**
- * Obtém o access_token da aplicação CaixaDoce via client_credentials
+ * Obtém o access_token da aplicação CaixaDoce via client_credentials de forma padrão
  */
 export async function obterTokenAppIFood(env?: any): Promise<string> {
   const now = Date.now();
@@ -54,11 +54,13 @@ export async function obterTokenAppIFood(env?: any): Promise<string> {
     throw new Error("Credenciais IFOOD_CLIENT_ID ou IFOOD_CLIENT_SECRET não encontradas no ambiente.");
   }
 
-  const bodyParams = new URLSearchParams({
-    grantType: "client_credentials",
-    clientId: ifoodClientId.trim(),
-    clientSecret: ifoodClientSecret.trim(),
-  });
+  const bodyParams = new URLSearchParams();
+  bodyParams.append("grantType", "client_credentials");
+  bodyParams.append("grant_type", "client_credentials");
+  bodyParams.append("clientId", ifoodClientId.trim());
+  bodyParams.append("client_id", ifoodClientId.trim());
+  bodyParams.append("clientSecret", ifoodClientSecret.trim());
+  bodyParams.append("client_secret", ifoodClientSecret.trim());
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
     method: "POST",
@@ -88,6 +90,8 @@ export async function obterTokenAppIFood(env?: any): Promise<string> {
 
   throw new Error("Resposta do iFood não continha accessToken.");
 }
+
+export const obterTokenAppIFoodServer = obterTokenAppIFood;
 
 /**
  * Obtém as credenciais e tokens iFood de um estabelecimento no Supabase
@@ -370,3 +374,10 @@ export async function executarAcaoPedidoIFood(
     status: 200,
   };
 }
+
+export {
+  sincronizarHorariosLojaIFood,
+  consultarHorariosLojaIFood,
+  consultarStatusLojaIFood,
+  alterarStatusLojaIFood,
+} from "./ifood-merchant-service";
