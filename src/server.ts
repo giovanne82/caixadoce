@@ -1127,67 +1127,22 @@ async function obterTokenAppIFoodServer(env?: any): Promise<string> {
     return cachedServerAppToken.token;
   }
 
-  const envObj = (env as Record<string, string>) || {};
-  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
-
-  const ifoodClientId =
-    envObj.IFOOD_CLIENT_ID ||
-    procObj.IFOOD_CLIENT_ID ||
-    envObj.VITE_IFOOD_CLIENT_ID ||
-    procObj.VITE_IFOOD_CLIENT_ID ||
-    "";
-  const ifoodClientSecret =
-    envObj.IFOOD_CLIENT_SECRET ||
-    procObj.IFOOD_CLIENT_SECRET ||
-    envObj.VITE_IFOOD_CLIENT_SECRET ||
-    procObj.VITE_IFOOD_CLIENT_SECRET ||
-    "";
-
-  if (ifoodClientId && ifoodClientSecret) {
-    try {
-      console.log(`[Server iFood App Token] Solicitando token de autenticação da aplicação CaixaDoce (${ifoodClientId.slice(0, 8)}...)...`);
-      const bodyParams = new URLSearchParams();
-      bodyParams.append("grant_type", "client_credentials");
-      bodyParams.append("clientId", ifoodClientId.trim());
-      bodyParams.append("clientSecret", ifoodClientSecret.trim());
-
-      const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: bodyParams.toString(),
-      });
-
-      if (res.ok) {
-        const data: any = await res.json();
-        const token = data.accessToken || data.access_token;
-        const expiresIn = Number(data.expiresIn || data.expires_in || 21599);
-        if (token) {
-          cachedServerAppToken = {
-            token,
-            expiresAt: now + expiresIn * 1000,
-          };
-          console.log("[Server iFood App Token Success] Token de aplicação CaixaDoce obtido com sucesso!");
-          return token;
-        }
-      } else {
-        const errTxt = await res.text();
-        console.error(`[Server iFood App Token Error] HTTP ${res.status}: ${errTxt}`);
-      }
-    } catch (err) {
-      console.error("[Server iFood App Token Exception]", err);
-    }
-  }
-
-  // Fallback: Busca token no Supabase (loja CD-5411)
+  // Busca token no Supabase (loja CD-5411 ou primeiro estabelecimento conectado)
   try {
     const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
     const headers = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
-    const res = await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.CD-5411&select=ifood_access_token`, { headers });
+
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/estabelecimentos?or=(codigo.ilike.CD-5411,ifood_status.eq.conectado,not.ifood_access_token.is.null)&select=ifood_access_token,ifood_refresh_token,ifood_merchant_id&order=updated_at.desc&limit=1`,
+      { headers }
+    );
     if (res.ok) {
       const list = await res.json();
-      if (Array.isArray(list) && list[0]?.ifood_access_token) {
+      if (Array.isArray(list) && list.length > 0 && list[0]?.ifood_access_token) {
+        cachedServerAppToken = {
+          token: list[0].ifood_access_token,
+          expiresAt: now + 3600 * 1000,
+        };
         return list[0].ifood_access_token;
       }
     }
@@ -1721,118 +1676,40 @@ export default {
             url.searchParams.get("state") ||
             bodyJson.estabelecimento_codigo ||
             bodyJson.state ||
-            "";
+            "CD-5411";
 
           const envObj = (env as Record<string, string>) || {};
           const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
 
-          const ifoodClientId =
+          const ifoodClientId = (
             envObj.IFOOD_CLIENT_ID ||
             procObj.IFOOD_CLIENT_ID ||
             envObj.VITE_IFOOD_CLIENT_ID ||
             procObj.VITE_IFOOD_CLIENT_ID ||
-            "";
+            ""
+          ).replace(/^["']|["']$/g, "").trim();
 
-          const ifoodClientSecret =
+          const ifoodClientSecret = (
             envObj.IFOOD_CLIENT_SECRET ||
             procObj.IFOOD_CLIENT_SECRET ||
             envObj.VITE_IFOOD_CLIENT_SECRET ||
             procObj.VITE_IFOOD_CLIENT_SECRET ||
-            "";
+            ""
+          ).replace(/^["']|["']$/g, "").trim();
 
           if (!ifoodClientId) {
-            console.error("[iFood OAuth] Credencial IFOOD_CLIENT_ID não encontrada!");
+            console.error("[iFood OAuth] Credencial IFOOD_CLIENT_ID não encontrada nas variáveis de ambiente!");
             return new Response(
-              JSON.stringify({ success: false, error: "Credencial IFOOD_CLIENT_ID não configurada." }),
+              JSON.stringify({ success: false, error: "Credencial IFOOD_CLIENT_ID não configurada nas variáveis de ambiente." }),
               { status: 500, headers: corsHeaders }
             );
           }
 
-          const grantType = url.searchParams.get("grantType") || bodyJson.grantType || "";
-
-          // Função interna para client_credentials
-          const runClientCredentials = async () => {
-            const targetCode = (estCode || "CD-5411").trim().toUpperCase();
-            const tokenParams = new URLSearchParams();
-            tokenParams.append("grant_type", "client_credentials");
-            tokenParams.append("clientId", ifoodClientId.trim());
-            tokenParams.append("clientSecret", ifoodClientSecret.trim());
-
-            const tokenRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Accept: "application/json",
-              },
-              body: tokenParams.toString(),
-            });
-
-            if (!tokenRes.ok) {
-              const errBody = await tokenRes.text();
-              throw new Error(`iFood Token Error (${tokenRes.status}): ${errBody}`);
-            }
-
-            const tokenData: any = await tokenRes.json();
-            const accessToken = tokenData.accessToken || tokenData.access_token;
-            const refreshToken = tokenData.refreshToken || tokenData.refresh_token || "";
-            const expiresIn = tokenData.expiresIn || tokenData.expires_in || 21599;
-
-            let merchantId = tokenData.merchantId || tokenData.merchant_id || "";
-            if (!merchantId && accessToken) {
-              try {
-                const merchantsRes = await fetch("https://merchant-api.ifood.com.br/merchant/v1.0/merchants", {
-                  headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-                });
-                if (merchantsRes.ok) {
-                  const merchantsData: any = await merchantsRes.json();
-                  if (Array.isArray(merchantsData) && merchantsData.length > 0) {
-                    merchantId = merchantsData[0]?.id || merchantsData[0]?.merchantId || "";
-                  } else if (merchantsData?.id) {
-                    merchantId = merchantsData.id;
-                  }
-                }
-              } catch {}
-            }
-            if (!merchantId) merchantId = "4115946";
-
-            const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
-            await fetch(`${supabaseUrl}/rest/v1/estabelecimentos?codigo=ilike.${encodeURIComponent(targetCode)}`, {
-              method: "PATCH",
-              headers: {
-                apikey: supabaseKey,
-                Authorization: `Bearer ${supabaseKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                ifood_access_token: accessToken,
-                ifood_refresh_token: refreshToken,
-                ifood_merchant_id: merchantId,
-                ifood_status: "conectado",
-                updated_at: new Date().toISOString(),
-              }),
-            }).catch(() => {});
-
-            return {
-              success: true,
-              connected: true,
-              mode: "client_credentials",
-              accessToken,
-              merchantId,
-              expiresIn,
-              message: `Loja ${targetCode} conectada via Client Credentials com sucesso!`,
-            };
-          };
-
-          if (grantType === "client_credentials" || grantType === "centralizado") {
-            const ccResult = await runClientCredentials();
-            return new Response(JSON.stringify(ccResult), { status: 200, headers: corsHeaders });
-          }
-
-          console.log(`[iFood OAuth userCode] Solicitando userCode para '${estCode}' com clientId '${ifoodClientId}'...`);
+          console.log(`[iFood OAuth userCode] Solicitando userCode para '${estCode}' com clientId '${ifoodClientId.slice(0, 8)}...'...`);
 
           // POST estritamente para /authentication/v1.0/oauth/userCode com x-www-form-urlencoded
           const bodyParams = new URLSearchParams();
-          bodyParams.append("clientId", ifoodClientId.trim());
+          bodyParams.append("clientId", ifoodClientId);
 
           const ifoodRes = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/userCode", {
             method: "POST",
@@ -1916,6 +1793,7 @@ export default {
           return new Response(null, { status: 200, headers: corsHeaders });
         }
 
+        let isJsonReq = false;
         try {
           let bodyJson: any = {};
           try {
@@ -1944,7 +1822,7 @@ export default {
             "";
 
           const ifoodError = url.searchParams.get("error");
-          const isJsonReq =
+          isJsonReq =
             request.headers.get("accept")?.includes("application/json") ||
             request.headers.get("content-type")?.includes("application/json") ||
             request.method === "POST";
@@ -1966,19 +1844,21 @@ export default {
           const envObj = (env as Record<string, string>) || {};
           const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
 
-          const ifoodClientId =
+          const ifoodClientId = (
             envObj.IFOOD_CLIENT_ID ||
             procObj.IFOOD_CLIENT_ID ||
             envObj.VITE_IFOOD_CLIENT_ID ||
             procObj.VITE_IFOOD_CLIENT_ID ||
-            "";
+            ""
+          ).replace(/^["']|["']$/g, "").trim();
 
-          const ifoodClientSecret =
+          const ifoodClientSecret = (
             envObj.IFOOD_CLIENT_SECRET ||
             procObj.IFOOD_CLIENT_SECRET ||
             envObj.VITE_IFOOD_CLIENT_SECRET ||
             procObj.VITE_IFOOD_CLIENT_SECRET ||
-            "";
+            ""
+          ).replace(/^["']|["']$/g, "").trim();
 
           const { supabaseUrl, supabaseKey } = getSupabaseCredentials(env);
 
@@ -2001,8 +1881,8 @@ export default {
           // POST para /authentication/v1.0/oauth/token no iFood
           const bodyParams = new URLSearchParams();
           bodyParams.append("grantType", "authorization_code");
-          bodyParams.append("clientId", ifoodClientId.trim());
-          bodyParams.append("clientSecret", ifoodClientSecret.trim());
+          bodyParams.append("clientId", ifoodClientId);
+          bodyParams.append("clientSecret", ifoodClientSecret);
           bodyParams.append("authorizationCode", authCode.trim());
           bodyParams.append("authorizationCodeVerifier", codeVerifier ? codeVerifier.trim() : "");
 
@@ -2114,6 +1994,12 @@ export default {
           return Response.redirect(`${url.origin}/painel/configuracoes?ifood_connected=true`, 302);
         } catch (err: any) {
           console.error("[iFood OAuth Callback Exception]", err);
+          if (isJsonReq) {
+            return new Response(
+              JSON.stringify({ success: false, error: err?.message || "server_error" }),
+              { status: 500, headers: corsHeaders }
+            );
+          }
           return Response.redirect(
             `${url.origin}/painel/configuracoes?ifood=error&message=${encodeURIComponent(err?.message || "server_error")}`,
             302

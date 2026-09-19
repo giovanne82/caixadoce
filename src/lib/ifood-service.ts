@@ -180,40 +180,44 @@ export async function renovarAccessTokenIFood(estabelecimentoId: string, refresh
   const envObj = (env as Record<string, string>) || {};
   const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
 
-  const ifoodClientId =
+  const ifoodClientId = (
     envObj.IFOOD_CLIENT_ID ||
     procObj.IFOOD_CLIENT_ID ||
     envObj.VITE_IFOOD_CLIENT_ID ||
     procObj.VITE_IFOOD_CLIENT_ID ||
-    "";
-  const ifoodClientSecret =
+    ""
+  ).replace(/^["']|["']$/g, "").trim();
+
+  const ifoodClientSecret = (
     envObj.IFOOD_CLIENT_SECRET ||
     procObj.IFOOD_CLIENT_SECRET ||
     envObj.VITE_IFOOD_CLIENT_SECRET ||
     procObj.VITE_IFOOD_CLIENT_SECRET ||
-    "";
+    ""
+  ).replace(/^["']|["']$/g, "").trim();
 
-  if (!refreshToken || !ifoodClientId) {
+  if (!refreshToken || !ifoodClientId || !ifoodClientSecret) {
     throw new Error("Credenciais insuficientes para renovar o token iFood.");
   }
 
   const bodyParams = new URLSearchParams();
-  bodyParams.append("grant_type", "refresh_token");
-  bodyParams.append("clientId", ifoodClientId.trim());
-  bodyParams.append("clientSecret", ifoodClientSecret.trim());
+  bodyParams.append("grantType", "refresh_token");
+  bodyParams.append("clientId", ifoodClientId);
+  bodyParams.append("clientSecret", ifoodClientSecret);
   bodyParams.append("refreshToken", refreshToken.trim());
 
   const res = await fetch("https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
     },
     body: bodyParams.toString(),
   });
 
   if (!res.ok) {
     const errTxt = await res.text();
-    throw new Error(`Falha ao renovar token iFood: ${errTxt}`);
+    throw new Error(`Falha ao renovar token iFood (${res.status}): ${errTxt}`);
   }
 
   const data = await res.json();

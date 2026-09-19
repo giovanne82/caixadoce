@@ -1,7 +1,6 @@
 import {
   obterTokensIFoodEstabelecimento,
   renovarAccessTokenIFood,
-  obterTokenAppIFood,
   getSupabaseBackendClient,
 } from "./ifood-service";
 
@@ -61,12 +60,13 @@ async function resolverCredenciaisIFood(
 
   // 2. Resolução do merchantId
   if (!merchantId) {
-    merchantId =
+    const rawMerchant =
       envObj.IFOOD_MERCHANT_ID ||
       procObj.IFOOD_MERCHANT_ID ||
       envObj.VITE_IFOOD_MERCHANT_ID ||
       procObj.VITE_IFOOD_MERCHANT_ID ||
-      null;
+      "";
+    merchantId = rawMerchant.replace(/^["']|["']$/g, "").trim() || null;
   }
 
   // 3. Descoberta automática do merchantId na API do iFood se tivermos accessToken
