@@ -529,10 +529,19 @@ export function CardapioLojaView() {
   // Estados dos Produtos e Carrinho
   const [produtos, setProdutos] = useState<ProdutoCardapio[]>([]);
   const [loadingProdutos, setLoadingProdutos] = useState<boolean>(true);
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>("todas");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [pedidoConcluido, setPedidoConcluido] = useState(false);
+
+  // Safety Timer: Garante que o loadingProdutos NUNCA fique preso por mais de 4s no cliente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadingProdutos(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [rawParam]);
 
   // Modal de Detalhes / Opções do Produto para o Cliente
   const [produtoModal, setProdutoModal] = useState<ProdutoCardapio | null>(null);
