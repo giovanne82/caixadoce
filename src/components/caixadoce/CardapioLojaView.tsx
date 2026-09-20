@@ -441,8 +441,13 @@ export function ProductImageCarousel({
     return (
       <div className="relative h-48 sm:h-56 w-full overflow-hidden rounded-2xl bg-muted border border-border/80 shadow-xs">
         <img
-          src={fotos[0]}
+          src={fotos[0] || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
           alt={nome}
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
+          }}
           className="w-full h-full object-cover"
         />
         <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm">
@@ -1315,18 +1320,15 @@ export function CardapioLojaView() {
           }
         };
 
-        // 1. Busca por estabelecimento_id (UUID) com colunas leves
-        const colunasLeves = "id, nome, preco, categoria, foto_url, descricao, ativo, is_active, visivel_cardapio_digital, estabelecimento_id, estabelecimento_codigo, codigo, opcoes, serve_pessoas, peso_detalhe, tempo_preparo_horas, availability_type, available_days";
-
+        // 1. Busca por estabelecimento_id (UUID)
         if (estUuid) {
           try {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select(colunasLeves)
+                .select("*")
                 .eq("estabelecimento_id", estUuid)
                 .order("nome", { ascending: true })
-                .limit(150)
             );
 
             if (res.error) {
@@ -1346,16 +1348,15 @@ export function CardapioLojaView() {
           }
         }
 
-        // 2. Fallback imediato por estabelecimento_codigo (Código da Loja) com limite
+        // 2. Fallback imediato por estabelecimento_codigo (Código da Loja)
         if (prodsDb.length === 0 && resolvedCode) {
           try {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select(colunasLeves)
+                .select("*")
                 .eq("estabelecimento_codigo", resolvedCode)
                 .order("nome", { ascending: true })
-                .limit(150)
             );
 
             if (res.error) {
@@ -1375,15 +1376,15 @@ export function CardapioLojaView() {
           }
         }
 
-        // 3. Fallback adicional por codigo com limite
+        // 3. Fallback adicional por codigo
         if (prodsDb.length === 0 && resolvedCode) {
           try {
             const res = await queryWithTimeout(
               supabase
                 .from("produtos" as any)
-                .select(colunasLeves)
+                .select("*")
                 .eq("codigo", resolvedCode)
-                .limit(150)
+                .order("nome", { ascending: true })
             );
 
             if (res.error) {
@@ -1414,6 +1415,7 @@ export function CardapioLojaView() {
         }
 
         let mapeados: ProdutoCardapio[] = [];
+        const DEFAULT_PROD_FALLBACK_IMG = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
 
         if (prodsDb.length > 0) {
           for (const p of prodsDb) {
@@ -1436,24 +1438,42 @@ export function CardapioLojaView() {
                 try { parsedDays = JSON.parse(p.available_days); } catch { parsedDays = undefined; }
               }
 
-              // Sanitização segura de fotos
-              const isSafeUrl = (u: any): boolean => {
-                if (!u || typeof u !== "string") return false;
-                const trimmed = u.trim();
-                if (!trimmed) return false;
-                if (trimmed.startsWith("data:") && trimmed.length > 25000) return false;
-                return true;
-              };
+              // Extração completa e resiliente de fotos da galeria
+              let galeriaBruta: string[] = [];
+              if (Array.isArray(p.galeria_fotos)) {
+                galeriaBruta = p.galeria_fotos;
+              } else if (typeof p.galeria_fotos === "string" && p.galeria_fotos.trim()) {
+                try {
+                  const parsed = JSON.parse(p.galeria_fotos);
+                  if (Array.isArray(parsed)) galeriaBruta = parsed;
+                  else if (typeof parsed === "string") galeriaBruta = [parsed];
+                } catch {
+                  galeriaBruta = p.galeria_fotos.split(",").map((s: string) => s.trim()).filter(Boolean);
+                }
+              } else if (Array.isArray(p.fotos)) {
+                galeriaBruta = p.fotos;
+              } else if (typeof p.fotos === "string" && p.fotos.trim()) {
+                try {
+                  const parsed = JSON.parse(p.fotos);
+                  if (Array.isArray(parsed)) galeriaBruta = parsed;
+                } catch {
+                  galeriaBruta = [p.fotos];
+                }
+              }
 
-              const galeriaBruta = Array.isArray(p.galeria_fotos) ? p.galeria_fotos : [];
-              const galeriaLimpa = galeriaBruta.filter((u: any) => isSafeUrl(u));
-              
-              const fotoPrincipal = isSafeUrl(p.foto_url)
-                ? p.foto_url
-                : isSafeUrl(p.image_url)
-                ? p.image_url
-                : (galeriaLimpa.length > 0 ? galeriaLimpa[0] : "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80");
+              const galeriaLimpa = galeriaBruta
+                .map((u: any) => (typeof u === "string" ? u.trim() : ""))
+                .filter((u: string) => u.length > 0);
 
+              // Identifica a foto principal real cadastrada no produto
+              const fotoRaw =
+                (typeof p.foto_url === "string" && p.foto_url.trim() ? p.foto_url.trim() : "") ||
+                (typeof p.image_url === "string" && p.image_url.trim() ? p.image_url.trim() : "") ||
+                (typeof p.fotoUrl === "string" && p.fotoUrl.trim() ? p.fotoUrl.trim() : "") ||
+                (typeof p.imagem === "string" && p.imagem.trim() ? p.imagem.trim() : "") ||
+                (galeriaLimpa.length > 0 ? galeriaLimpa[0] : "");
+
+              const fotoPrincipal = fotoRaw || DEFAULT_PROD_FALLBACK_IMG;
               const galeriaFinal = galeriaLimpa.length > 0 ? galeriaLimpa : [fotoPrincipal];
 
               mapeados.push({
