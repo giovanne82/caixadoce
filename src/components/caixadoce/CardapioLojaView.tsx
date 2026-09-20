@@ -376,6 +376,59 @@ export function SocialLinks({
 }
 
 // ==========================================
+// 2.0 IMAGEM DE PRODUTO COM FALLBACK INFORMATIVO
+// ==========================================
+
+export interface ProductImageWithFallbackProps {
+  src?: string | null;
+  alt: string;
+  className?: string;
+  fallbackText?: string;
+  iconSize?: "sm" | "md" | "lg";
+}
+
+export function ProductImageWithFallback({
+  src,
+  alt,
+  className = "w-full h-full object-cover",
+  fallbackText = "Foto em atualização",
+  iconSize = "md",
+}: ProductImageWithFallbackProps) {
+  const [hasError, setHasError] = useState(false);
+  const isValidUrl = Boolean(src && typeof src === "string" && src.trim().length > 0);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!isValidUrl || hasError) {
+    return (
+      <div className="w-full h-full min-h-28 flex flex-col items-center justify-center bg-stone-100 dark:bg-stone-850 text-muted-foreground p-3 text-center select-none border border-stone-200/50 dark:border-stone-800/50">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-stone-200/80 dark:bg-stone-800 flex items-center justify-center mb-1.5 shadow-2xs text-stone-400 dark:text-stone-400">
+          <ImageIcon className={iconSize === "sm" ? "w-3.5 h-3.5" : iconSize === "lg" ? "w-6 h-6" : "w-4 h-4 sm:w-5 sm:h-5"} />
+        </div>
+        <span className="text-[11px] sm:text-xs font-bold text-stone-600 dark:text-stone-300 leading-tight">
+          {fallbackText}
+        </span>
+        <span className="text-[9.5px] sm:text-[10px] text-stone-400 dark:text-stone-400 mt-0.5 line-clamp-1 max-w-[90%] font-medium">
+          {alt}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src!}
+      alt={alt}
+      loading="lazy"
+      onError={() => setHasError(true)}
+      className={className}
+    />
+  );
+}
+
+// ==========================================
 // 2.1 CARROSSEL DE IMAGENS DO PRODUTO (SLIDER / SWIPE)
 // ==========================================
 
@@ -396,22 +449,22 @@ export function ProductImageCarousel({
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
+  const fotosValidas = Array.isArray(fotos)
+    ? fotos.filter((f) => typeof f === "string" && f.trim().length > 0)
+    : [];
+
   useEffect(() => {
     setCurrentIndex(0);
   }, [fotos]);
 
-  if (!fotos || fotos.length === 0) {
-    return null;
-  }
-
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setCurrentIndex((prev) => (prev === 0 ? fotos.length - 1 : prev - 1));
+    setCurrentIndex((prev) => (prev === 0 ? fotosValidas.length - 1 : prev - 1));
   };
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setCurrentIndex((prev) => (prev === fotos.length - 1 ? 0 : prev + 1));
+    setCurrentIndex((prev) => (prev === fotosValidas.length - 1 ? 0 : prev + 1));
   };
 
   const minSwipeDistance = 40;
@@ -437,18 +490,15 @@ export function ProductImageCarousel({
     }
   };
 
-  if (fotos.length === 1) {
+  if (fotosValidas.length <= 1) {
     return (
       <div className="relative h-48 sm:h-56 w-full overflow-hidden rounded-2xl bg-muted border border-border/80 shadow-xs">
-        <img
-          src={fotos[0] || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
+        <ProductImageWithFallback
+          src={fotosValidas[0]}
           alt={nome}
-          loading="lazy"
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
-          }}
           className="w-full h-full object-cover"
+          fallbackText="Foto em atualização"
+          iconSize="lg"
         />
         <div className="absolute bottom-2.5 right-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-xl text-white font-mono font-bold text-xs shadow-sm">
           {(!preco || preco <= 0) ? "Preço sob Consulta / Orçamento" : `Base: ${formatarMoeda(preco)}${vendePorPeso ? "/kg" : ""}`}
@@ -469,17 +519,14 @@ export function ProductImageCarousel({
         className="flex h-full w-full transition-transform duration-300 ease-out"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
-        {fotos.map((url, idx) => (
+        {fotosValidas.map((url, idx) => (
           <div key={`${url}_${idx}`} className="w-full h-full shrink-0 relative">
-            <img
-              src={url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
+            <ProductImageWithFallback
+              src={url}
               alt={`${nome} - Foto ${idx + 1}`}
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
-              }}
               className="w-full h-full object-cover pointer-events-none"
+              fallbackText="Foto em atualização"
+              iconSize="lg"
             />
           </div>
         ))}
@@ -506,12 +553,12 @@ export function ProductImageCarousel({
 
       {/* Contador de Fotos no Topo Direito */}
       <div className="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-full text-white text-[10px] font-bold z-10 font-mono">
-        {currentIndex + 1} / {fotos.length}
+        {currentIndex + 1} / {fotosValidas.length}
       </div>
 
       {/* Indicadores de Paginação (Bolinhas) */}
       <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full">
-        {fotos.map((_, idx) => (
+        {fotosValidas.map((_, idx) => (
           <button
             key={idx}
             type="button"
@@ -1472,9 +1519,8 @@ export function CardapioLojaView() {
                 (typeof p.fotoUrl === "string" && p.fotoUrl.trim() ? p.fotoUrl.trim() : "") ||
                 (typeof p.imagem === "string" && p.imagem.trim() ? p.imagem.trim() : "") ||
                 (galeriaLimpa.length > 0 ? galeriaLimpa[0] : "");
-
-              const fotoPrincipal = fotoRaw || DEFAULT_PROD_FALLBACK_IMG;
-              const galeriaFinal = galeriaLimpa.length > 0 ? galeriaLimpa : [fotoPrincipal];
+              const fotoPrincipal = fotoRaw || "";
+              const galeriaFinal = galeriaLimpa.length > 0 ? galeriaLimpa : (fotoPrincipal ? [fotoPrincipal] : []);
 
               mapeados.push({
                 id: String(p.id),
@@ -3905,15 +3951,12 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                 >
                   <div>
                     <div className="relative h-32 sm:h-48 w-full overflow-hidden bg-muted">
-                      <img
-                        src={prod.fotoUrl || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"}
+                      <ProductImageWithFallback
+                        src={prod.fotoUrl}
                         alt={prod.nome}
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80";
-                        }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fallbackText="Foto em atualização"
+                        iconSize="md"
                       />
                       <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
                         <Badge className="bg-black/60 backdrop-blur-md text-white border-0 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 sm:px-2 sm:py-0.5">
