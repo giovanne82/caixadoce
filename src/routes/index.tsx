@@ -623,7 +623,28 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
           let valorTotalFinal = Number(d.valor_total || 0);
           let itensFinal = d.itens || (d.codigo_pedido_ifood ? `Pedido iFood #${d.codigo_pedido_ifood}` : "Pedido iFood");
-          let itensDetalhesFinal = Array.isArray(d.itens_detalhes) ? d.itens_detalhes : [];
+
+          let itensDetalhesFinal: any[] = [];
+          if (Array.isArray(d.itens_detalhes)) {
+            itensDetalhesFinal = d.itens_detalhes;
+          } else if (typeof d.itens_detalhes === "string" && d.itens_detalhes.trim()) {
+            try {
+              const parsed = JSON.parse(d.itens_detalhes);
+              if (Array.isArray(parsed)) itensDetalhesFinal = parsed;
+              else if (parsed && typeof parsed === "object") itensDetalhesFinal = [parsed];
+            } catch {}
+          } else if (d.detalhes || d.opcoes_personalizadas) {
+            const alt = d.detalhes || d.opcoes_personalizadas;
+            if (Array.isArray(alt)) itensDetalhesFinal = alt;
+            else if (typeof alt === "string" && alt.trim()) {
+              try {
+                const parsed = JSON.parse(alt);
+                if (Array.isArray(parsed)) itensDetalhesFinal = parsed;
+                else if (parsed && typeof parsed === "object") itensDetalhesFinal = [parsed];
+              } catch {}
+            }
+          }
+
           let clienteNomeFinal = d.cliente_nome || d.client_name || "Cliente";
           let clienteWhatsappFinal = d.cliente_whatsapp || d.client_whatsapp || "";
           let tipoEntregaFinal = d.tipo_entrega || "delivery";
@@ -650,6 +671,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             }
           }
 
+          const fotoRefMaster = d.foto_url || d.fotoUrl || d.foto_referencia || d.imagem_referencia || undefined;
+
           return {
             id: String(d.id),
             estabelecimentoCodigo: d.estabelecimento_codigo,
@@ -668,6 +691,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             statusPagamento: d.status_pagamento || "pendente",
             metodoPagamento: d.metodo_pagamento || d.metodoPagamento || d.forma_pagamento || (d.origem_pagamento === "mercadopago" ? "Mercado Pago" : undefined),
             metodo_pagamento: d.metodo_pagamento || d.metodoPagamento || d.forma_pagamento || (d.origem_pagamento === "mercadopago" ? "Mercado Pago" : undefined),
+            forma_pagamento: d.forma_pagamento || d.metodo_pagamento || d.metodoPagamento || undefined,
             origem_pagamento: d.origem_pagamento,
             origem: d.origem || undefined,
             codigo_pedido_ifood: d.codigo_pedido_ifood || undefined,
@@ -678,6 +702,10 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             tipoEntrega: tipoEntregaFinal,
             taxaEntrega: d.taxa_entrega !== undefined && d.taxa_entrega !== null ? Number(d.taxa_entrega) : undefined,
             is_orcamento: Boolean(d.is_orcamento),
+            fotoUrl: fotoRefMaster,
+            foto_url: fotoRefMaster,
+            foto_referencia: fotoRefMaster,
+            imagem_referencia: fotoRefMaster,
             createdAt: d.created_at,
           };
         });

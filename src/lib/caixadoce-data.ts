@@ -1368,6 +1368,14 @@ export interface ItemPedidoEncomenda {
   opcaoNome?: string;
   opcaoPrecoAdicional?: number;
   categoria?: string;
+  descricao?: string;
+  detalhes?: string;
+  fotoUrl?: string;
+  foto_url?: string;
+  foto_referencia?: string;
+  imagem_referencia?: string;
+  referenceImage?: string;
+  opcoes_personalizadas?: any;
 }
 
 export interface InsumoNecessarioPedido {
@@ -1479,6 +1487,7 @@ export interface Encomenda {
   statusPagamento: StatusPagamentoEncomenda;
   metodoPagamento?: string;
   metodo_pagamento?: string;
+  forma_pagamento?: string;
   origem_pagamento?: string;
   origem?: string;
   codigo_pedido_ifood?: string;
@@ -1502,6 +1511,10 @@ export interface Encomenda {
   detalhesVela?: string;
   is_orcamento?: boolean;
   taxaEntrega?: number;
+  fotoUrl?: string;
+  foto_url?: string;
+  foto_referencia?: string;
+  imagem_referencia?: string;
   createdAt?: string;
 }
 

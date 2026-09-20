@@ -994,8 +994,15 @@ export function OrdersView({
       for (const it of ord.itensDetalhes) {
         if (it.fotoUrl && typeof it.fotoUrl === "string") fotos.push(it.fotoUrl);
         if (it.foto_url && typeof it.foto_url === "string") fotos.push(it.foto_url);
-        if (it.referenceImage && typeof it.referenceImage === "string") fotos.push(it.referenceImage);
+        if (it.foto_referencia && typeof it.foto_referencia === "string") fotos.push(it.foto_referencia);
         if (it.imagem_referencia && typeof it.imagem_referencia === "string") fotos.push(it.imagem_referencia);
+        if (it.referenceImage && typeof it.referenceImage === "string") fotos.push(it.referenceImage);
+        if (it.opcoes_personalizadas?.foto_referencia && typeof it.opcoes_personalizadas.foto_referencia === "string") {
+          fotos.push(it.opcoes_personalizadas.foto_referencia);
+        }
+        if (it.opcoes_personalizadas?.imagem_referencia && typeof it.opcoes_personalizadas.imagem_referencia === "string") {
+          fotos.push(it.opcoes_personalizadas.imagem_referencia);
+        }
       }
     }
 
@@ -5938,15 +5945,48 @@ export function OrdersView({
                           const precoUnit = it.precoUnitario ?? it.preco ?? it.valorUnitario ?? 0;
                           const qtd = it.quantidade || 1;
 
+                          const customOpts = it.opcoes_personalizadas || (typeof it.detalhes === "object" ? it.detalhes : null);
+
                           const isCustomItem =
                             it.categoria === "Orçamento Personalizado" ||
                             (it.nome && (it.nome.includes("Sob Medida") || it.nome.includes("Orçamento") || it.nome.startsWith("📝"))) ||
-                            Boolean(it.descricao && (it.descricao.includes("•") || it.descricao.includes("Sabores/Recheios")));
+                            Boolean(it.descricao && (it.descricao.includes("•") || it.descricao.includes("Sabores/Recheios") || it.descricao.includes("Formatos"))) ||
+                            Boolean(customOpts);
 
-                          const fotoItem = it.fotoUrl || it.foto_url || it.referenceImage || it.imagem_referencia || "";
+                          const fotoItem =
+                            it.fotoUrl ||
+                            it.foto_url ||
+                            it.foto_referencia ||
+                            it.imagem_referencia ||
+                            it.referenceImage ||
+                            customOpts?.foto_referencia ||
+                            customOpts?.imagem_referencia ||
+                            "";
 
                           // Linhas de descrição customizada (separadas por \n ou •)
-                          const descLinhas = typeof it.descricao === "string" ? it.descricao.split("\n").filter((l: string) => l.trim()) : [];
+                          let descLinhas: string[] = [];
+                          if (typeof it.descricao === "string" && it.descricao.trim()) {
+                            descLinhas = it.descricao.split("\n").map((l: string) => l.trim()).filter(Boolean);
+                          } else if (typeof it.detalhes === "string" && it.detalhes.trim()) {
+                            descLinhas = it.detalhes.split("\n").map((l: string) => l.trim()).filter(Boolean);
+                          }
+
+                          // Se temos objeto estruturado de personalização e descLinhas vazias, geramos as linhas
+                          if (customOpts && descLinhas.length === 0) {
+                            if (customOpts.quantidade) descLinhas.push(`• Quantidade/Tamanho: ${customOpts.quantidade}`);
+                            if (Array.isArray(customOpts.tipos) && customOpts.tipos.length > 0)
+                              descLinhas.push(`• Formatos/Tamanhos: ${customOpts.tipos.join(", ")}`);
+                            if (Array.isArray(customOpts.sabores) && customOpts.sabores.length > 0)
+                              descLinhas.push(`• Sabores/Recheios: ${customOpts.sabores.join(", ")}`);
+                            if (Array.isArray(customOpts.decoracoes) && customOpts.decoracoes.length > 0)
+                              descLinhas.push(`• Estilos/Decoração: ${customOpts.decoracoes.join(", ")}`);
+                            if (Array.isArray(customOpts.extras) && customOpts.extras.length > 0)
+                              descLinhas.push(`• Extras/Adicionais: ${customOpts.extras.join(", ")}`);
+                            if (customOpts.forma_pagamento)
+                              descLinhas.push(`• Forma de Pagamento Pretendida: ${customOpts.forma_pagamento}`);
+                            if (customOpts.observacoes)
+                              descLinhas.push(`• Observações: ${customOpts.observacoes}`);
+                          }
 
                           return (
                             <div key={idx} className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-2.5">
@@ -5978,15 +6018,35 @@ export function OrdersView({
 
                               {/* Detalhes do Orçamento Personalizado */}
                               {descLinhas.length > 0 && (
-                                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1 text-amber-950 dark:text-amber-200">
-                                  <p className="font-black text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1 pb-0.5">
-                                    <Sparkles className="w-3.5 h-3.5" /> Especificações da Personalização:
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs space-y-1.5 text-amber-950 dark:text-amber-200">
+                                  <p className="font-black text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5 pb-0.5 border-b border-amber-500/20">
+                                    <Sparkles className="w-3.5 h-3.5" /> Escolhas e Especificações do Orçamento:
                                   </p>
-                                  {descLinhas.map((linha: string, lIdx: number) => (
-                                    <p key={lIdx} className="font-medium leading-relaxed pl-1 text-[11.5px]">
-                                      {linha}
-                                    </p>
-                                  ))}
+                                  <div className="space-y-1 pt-0.5">
+                                    {descLinhas.map((linha: string, lIdx: number) => {
+                                      const limpa = linha.replace(/^[•\-\*]\s*/, "");
+                                      const [titulo, ...resto] = limpa.split(":");
+                                      const valor = resto.join(":").trim();
+
+                                      if (valor) {
+                                        return (
+                                          <p key={lIdx} className="leading-relaxed text-[11.5px] flex items-start gap-1.5">
+                                            <span className="text-amber-600 dark:text-amber-400 font-black">•</span>
+                                            <span>
+                                              <strong className="text-foreground">{titulo.trim()}:</strong>{" "}
+                                              <span className="text-muted-foreground font-medium">{valor}</span>
+                                            </span>
+                                          </p>
+                                        );
+                                      }
+
+                                      return (
+                                        <p key={lIdx} className="leading-relaxed pl-1 text-[11.5px] font-medium text-muted-foreground">
+                                          {linha}
+                                        </p>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
 
@@ -6008,10 +6068,10 @@ export function OrdersView({
                                   </div>
                                   <div className="space-y-1 text-xs flex-1 min-w-0">
                                     <span className="font-bold text-foreground flex items-center gap-1 text-amber-700 dark:text-amber-300">
-                                      <ImageIcon className="w-3.5 h-3.5 text-amber-500" /> Imagem Anexa / Referência
+                                      <ImageIcon className="w-3.5 h-3.5 text-amber-500" /> Imagem Anexa / Modelo de Referência
                                     </span>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                      Modelo enviado pelo cliente para esta opção.
+                                      Foto enviada pelo cliente no Assistente de Orçamento.
                                     </p>
                                     <div className="flex items-center gap-2 pt-1">
                                       <Button
@@ -6021,7 +6081,7 @@ export function OrdersView({
                                         onClick={() => setFotoExpandidaModalUrl(fotoItem)}
                                         className="h-7 px-2.5 text-[11px] font-bold border-amber-500/40 hover:bg-amber-500/10 text-amber-900 dark:text-amber-200 rounded-lg cursor-pointer"
                                       >
-                                        <Maximize2 className="w-3 h-3 mr-1" /> Ampliar
+                                        <Maximize2 className="w-3 h-3 mr-1" /> Ampliar Imagem
                                       </Button>
                                       {fotoItem.startsWith("http") && (
                                         <a
@@ -6030,7 +6090,7 @@ export function OrdersView({
                                           rel="noreferrer"
                                           className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
                                         >
-                                          <ExternalLink className="w-3 h-3" /> Abrir Link
+                                          <ExternalLink className="w-3 h-3" /> Abrir Original
                                         </a>
                                       )}
                                     </div>
@@ -6042,8 +6102,11 @@ export function OrdersView({
                         })}
                       </div>
                     ) : (
-                      <div className="p-3.5 rounded-2xl border border-border bg-card text-xs text-muted-foreground font-medium">
-                        {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
+                      <div className="p-3.5 rounded-2xl border border-border bg-card space-y-2 text-xs">
+                        <p className="font-bold text-foreground">Itens Solicitados:</p>
+                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                          {encomendaDetalhes.itens || "Nenhum detalhe de item informado."}
+                        </p>
                       </div>
                     )}
                   </div>

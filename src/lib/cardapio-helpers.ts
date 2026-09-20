@@ -345,12 +345,22 @@ export function calcularRegrasAgendamentoCarrinho(
   let diasPermitidos = [...(regrasLoja.diasSemanaDisponiveis || [0, 1, 2, 3, 4, 5, 6])];
 
   itensCarrinho.forEach(({ produto }) => {
-    const isEncomenda = produto.availability_type !== "pronta_entrega";
+    const isCustomBudget =
+      produto.categoria === "Orçamento Personalizado" ||
+      produto.id.startsWith("custom-") ||
+      Boolean((produto as any).opcoes_personalizadas);
+
+    const isEncomenda = produto.availability_type !== "pronta_entrega" || isCustomBudget;
 
     if (isEncomenda) {
+      const defaultLead = isCustomBudget ? 2 : 1;
       const leadTime =
-        produto.min_lead_time_days ??
-        (produto.tempoPreparoHoras ? Math.ceil(produto.tempoPreparoHoras / 24) : 1);
+        produto.min_lead_time_days !== undefined
+          ? produto.min_lead_time_days
+          : produto.tempoPreparoHoras
+          ? Math.ceil(produto.tempoPreparoHoras / 24)
+          : defaultLead;
+
       if (leadTime > maxLeadTime) {
         maxLeadTime = leadTime;
       }

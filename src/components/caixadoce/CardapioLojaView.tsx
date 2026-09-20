@@ -631,8 +631,6 @@ export function CardapioLojaView() {
   const [referenceFilePreview, setReferenceFilePreview] = useState<string | null>(null);
   const [uploadingReference, setUploadingReference] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
-  const [deliveryDate, setDeliveryDate] = useState<string>("");
-  const [deliveryTime, setDeliveryTime] = useState<string>("");
   const [selectedBudgetPaymentMethod, setSelectedBudgetPaymentMethod] = useState<string>("");
 
   // Continuity Modal State (3 options after custom item added)
@@ -674,8 +672,6 @@ export function CardapioLojaView() {
     setReferenceFilePreview(null);
     setUploadingReference(false);
     setNotes("");
-    setDeliveryDate("");
-    setDeliveryTime("");
     setSelectedBudgetPaymentMethod(budgetPaymentMethods[0] || "Pix");
     setCustomBudgetModalOpen(true);
   };
@@ -764,14 +760,26 @@ export function CardapioLojaView() {
     if (selectedExtras.length > 0) detLinhas.push(`• Extras/Adicionais: ${selectedExtras.join(", ")}`);
     if (selectedBudgetPaymentMethod)
       detLinhas.push(`• Forma de Pagamento Pretendida: ${selectedBudgetPaymentMethod}`);
-    if (deliveryDate)
-      detLinhas.push(`• Data Desejada: ${deliveryDate}${deliveryTime ? ` às ${deliveryTime}` : ""}`);
     if (notes) detLinhas.push(`• Observações: ${notes}`);
 
     if (selectedBudgetPaymentMethod) {
       const isPix = selectedBudgetPaymentMethod.toLowerCase().includes("pix");
       setMetodoPagamento(isPix ? "pix" : "cartao");
     }
+
+    const leadTimeCustom = Number(activeCat.diasPreparo ?? activeCat.prazoMinimoDias ?? 2);
+
+    const opcoesPersonalizadasObj = {
+      categoria: activeCat.nome || "Sob Medida",
+      quantidade: customQuantity,
+      tipos: selectedTypes,
+      sabores: selectedFlavors,
+      decoracoes: selectedDecorations,
+      extras: selectedExtras,
+      forma_pagamento: selectedBudgetPaymentMethod,
+      observacoes: notes,
+      foto_referencia: finalFotoUrl,
+    };
 
     const produtoCustomizado: ProdutoCardapio = {
       id: `custom-${activeCat.id}-${Date.now()}`,
@@ -781,6 +789,11 @@ export function CardapioLojaView() {
       preco: 0,
       categoria: "Orçamento Personalizado",
       fotoUrl: finalFotoUrl,
+      foto_url: finalFotoUrl,
+      imagem_referencia: finalFotoUrl,
+      availability_type: "sob_encomenda",
+      min_lead_time_days: leadTimeCustom,
+      opcoes_personalizadas: opcoesPersonalizadasObj,
     };
 
     const novoItem: ItemCarrinho = {
@@ -848,11 +861,25 @@ export function CardapioLojaView() {
 
   const dataMinimaStr = useMemo(() => {
     const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const diasAntecedencia = regras.antecedenciaMinimaDias || 0;
+    if (diasAntecedencia > 0) {
+      d.setDate(d.getDate() + diasAntecedencia);
+    }
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
-  }, []);
+  }, [regras.antecedenciaMinimaDias]);
+
+  // Sincroniza e garante que a data de entrega respeite o maior prazo de produção do carrinho
+  useEffect(() => {
+    if (dataMinimaStr) {
+      if (!dataEntrega || dataEntrega < dataMinimaStr) {
+        setDataEntrega(dataMinimaStr);
+      }
+    }
+  }, [dataMinimaStr, dataEntrega]);
 
   const necessitaConfirmacaoDisponibilidade = useMemo(() => {
     if (!dataEntrega) return false;
@@ -2052,6 +2079,9 @@ export function CardapioLojaView() {
       const fotoRefGlobal = carrinho.find((i) => i.produto?.fotoUrl)?.produto?.fotoUrl || "";
 
       const itensDetalhesJson = carrinho.map((item) => {
+        const customObj = (item.produto as any).opcoes_personalizadas;
+        const fotoItem = item.produto.fotoUrl || (item.produto as any).foto_url || (item.produto as any).imagem_referencia || (item.produto as any).foto_referencia || "";
+
         if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
           const subtotal = item.opcoesSelecionadas.reduce(
             (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
@@ -2073,8 +2103,13 @@ export function CardapioLojaView() {
             opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
             categoria: item.produto.categoria,
             descricao: item.produto.descricao || "",
-            fotoUrl: item.produto.fotoUrl || (item.produto as any).foto_url || "",
-            foto_url: item.produto.fotoUrl || (item.produto as any).foto_url || "",
+            detalhes: item.produto.descricao || "",
+            fotoUrl: fotoItem,
+            foto_url: fotoItem,
+            foto_referencia: fotoItem,
+            imagem_referencia: fotoItem,
+            referenceImage: fotoItem,
+            opcoes_personalizadas: customObj || undefined,
           };
         }
         const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
@@ -2090,8 +2125,13 @@ export function CardapioLojaView() {
           opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
           categoria: item.produto.categoria,
           descricao: item.produto.descricao || "",
-          fotoUrl: item.produto.fotoUrl || (item.produto as any).foto_url || "",
-          foto_url: item.produto.fotoUrl || (item.produto as any).foto_url || "",
+          detalhes: item.produto.descricao || "",
+          fotoUrl: fotoItem,
+          foto_url: fotoItem,
+          foto_referencia: fotoItem,
+          imagem_referencia: fotoItem,
+          referenceImage: fotoItem,
+          opcoes_personalizadas: customObj || undefined,
         };
       });
 
@@ -2611,7 +2651,12 @@ export function CardapioLojaView() {
         })
         .join(", ");
 
+      const fotoRefGlobal = carrinho.find((i) => i.produto?.fotoUrl)?.produto?.fotoUrl || "";
+
       const itensDetalhesJson = carrinho.map((item) => {
+        const customObj = (item.produto as any).opcoes_personalizadas;
+        const fotoItem = item.produto.fotoUrl || (item.produto as any).foto_url || (item.produto as any).imagem_referencia || (item.produto as any).foto_referencia || "";
+
         if (item.opcoesSelecionadas && item.opcoesSelecionadas.length > 0) {
           const subtotal = item.opcoesSelecionadas.reduce(
             (s, o) => s + (o.quantidade || 1) * (item.produto.preco + (Number(o.preco_adicional) || 0)),
@@ -2632,6 +2677,14 @@ export function CardapioLojaView() {
             opcaoNome: descOpcoes,
             opcaoPrecoAdicional: item.opcoesSelecionadas.reduce((s, o) => s + (Number(o.preco_adicional) || 0), 0),
             categoria: item.produto.categoria,
+            descricao: item.produto.descricao || "",
+            detalhes: item.produto.descricao || "",
+            fotoUrl: fotoItem,
+            foto_url: fotoItem,
+            foto_referencia: fotoItem,
+            imagem_referencia: fotoItem,
+            referenceImage: fotoItem,
+            opcoes_personalizadas: customObj || undefined,
           };
         }
         const unitPrice = item.precoUnitario ?? (item.produto.preco + (item.opcaoSelecionada?.preco_adicional || 0));
@@ -2646,6 +2699,14 @@ export function CardapioLojaView() {
           opcaoNome: item.opcaoSelecionada?.nome || null,
           opcaoPrecoAdicional: item.opcaoSelecionada?.preco_adicional || 0,
           categoria: item.produto.categoria,
+          descricao: item.produto.descricao || "",
+          detalhes: item.produto.descricao || "",
+          fotoUrl: fotoItem,
+          foto_url: fotoItem,
+          foto_referencia: fotoItem,
+          imagem_referencia: fotoItem,
+          referenceImage: fotoItem,
+          opcoes_personalizadas: customObj || undefined,
         };
       });
 
@@ -2739,6 +2800,8 @@ export function CardapioLojaView() {
         console.warn("Aviso ao processar tabela clientes_loja no orçamento:", eCli);
       }
 
+      const formaPagamentoOrcamento = selectedBudgetPaymentMethod || (metodoPagamento === "pix" ? "Pix" : "Cartão");
+
       const payloadOrcamento: Record<string, any> = {
         id: pedidoId,
         estabelecimento_codigo: code,
@@ -2752,13 +2815,16 @@ export function CardapioLojaView() {
         endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
         taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
         status_pagamento: "orcamento",
-        metodo_pagamento: "Orçamento",
-        forma_pagamento: "Orçamento",
+        metodo_pagamento: formaPagamentoOrcamento,
+        forma_pagamento: formaPagamentoOrcamento,
         origem_pagamento: "orcamento",
         status: "pendente",
         is_orcamento: true,
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
+        foto_url: fotoRefGlobal,
+        foto_referencia: fotoRefGlobal,
+        imagem_referencia: fotoRefGlobal,
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
@@ -5783,32 +5849,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                     className="text-xs rounded-xl"
                   />
                 )}
-              </div>
-
-              {/* Data & Horário Desejado */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-amber-600" /> Data Desejada
-                  </Label>
-                  <Input
-                    type="date"
-                    value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="text-xs rounded-xl"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-amber-600" /> Horário Estimado
-                  </Label>
-                  <Input
-                    type="time"
-                    value={deliveryTime}
-                    onChange={(e) => setDeliveryTime(e.target.value)}
-                    className="text-xs rounded-xl"
-                  />
-                </div>
               </div>
 
               {/* Forma de Pagamento Pretendida */}
