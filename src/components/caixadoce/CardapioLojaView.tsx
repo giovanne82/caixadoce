@@ -2362,9 +2362,6 @@ export function CardapioLojaView() {
         status: "pendente",
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
-        foto_url: fotoRefGlobal,
-        foto_referencia: fotoRefGlobal,
-        imagem_referencia: fotoRefGlobal,
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
@@ -2380,7 +2377,6 @@ export function CardapioLojaView() {
           id: pedidoId,
           estabelecimento_codigo: code,
           user_id: payloadInsert.user_id,
-          cliente_id: clienteId,
           cliente_nome: clienteNome,
           cliente_whatsapp: clienteWhatsapp,
           data_entrega: dataEntrega,
@@ -2389,6 +2385,7 @@ export function CardapioLojaView() {
           endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
           taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
           itens: resumoItensTexto,
+          itens_detalhes: itensDetalhesJson,
           valor_total: valTotalCarrinho,
           total_amount: valTotalCarrinho,
           status: "pendente",
@@ -2403,11 +2400,26 @@ export function CardapioLojaView() {
         const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
         insertError = resMin.error;
 
-        // Se falhar caso cliente_id não exista na versão específica do schema
-        if (insertError && insertError.message?.toLowerCase().includes("cliente_id")) {
-          const { cliente_id: _cid, ...payloadSemCli } = payloadMinimal;
-          const resFallback = await supabase.from("encomendas").insert([payloadSemCli]);
-          insertError = resFallback.error;
+        if (insertError) {
+          const payloadUltraMin = {
+            id: pedidoId,
+            estabelecimento_codigo: code,
+            user_id: payloadInsert.user_id,
+            cliente_nome: clienteNome,
+            cliente_whatsapp: clienteWhatsapp,
+            data_entrega: dataEntrega,
+            horario_entrega: horarioEntrega || "15:00",
+            itens: resumoItensTexto,
+            itens_detalhes: itensDetalhesJson,
+            valor_total: valTotalCarrinho,
+            total_amount: valTotalCarrinho,
+            status: "pendente",
+            status_pagamento: payloadInsert.status_pagamento,
+            observacoes: obsFinal,
+            origem: "cardapio",
+          };
+          const resUltra = await supabase.from("encomendas").insert([payloadUltraMin]);
+          insertError = resUltra.error;
         }
       }
 
@@ -2888,9 +2900,6 @@ export function CardapioLojaView() {
         is_orcamento: true,
         itens: resumoItensTexto,
         itens_detalhes: itensDetalhesJson,
-        foto_url: fotoRefGlobal,
-        foto_referencia: fotoRefGlobal,
-        imagem_referencia: fotoRefGlobal,
         valor_total: valTotalCarrinho,
         total_amount: valTotalCarrinho,
         observacoes: obsFinal,
@@ -2901,9 +2910,55 @@ export function CardapioLojaView() {
 
       if (insertError) {
         console.warn("Tentativa de insert orcamento em encomendas falhou com payload estendido, tentando fallback:", insertError.message);
-        const { is_orcamento: _iso, ...payloadMinimal } = payloadOrcamento;
+        
+        const payloadMinimal: Record<string, any> = {
+          id: pedidoId,
+          estabelecimento_codigo: code,
+          user_id: payloadOrcamento.user_id,
+          cliente_nome: clienteNome,
+          cliente_whatsapp: clienteWhatsapp,
+          data_entrega: payloadOrcamento.data_entrega,
+          horario_entrega: payloadOrcamento.horario_entrega,
+          tipo_entrega: tipoEntrega,
+          endereco_entrega: tipoEntrega === "delivery" ? enderecoEntrega : "",
+          taxa_entrega: tipoEntrega === "delivery" ? freteCalculado.valorFrete : 0,
+          itens: resumoItensTexto,
+          itens_detalhes: itensDetalhesJson,
+          valor_total: valTotalCarrinho,
+          total_amount: valTotalCarrinho,
+          status: "pendente",
+          status_pagamento: "orcamento",
+          metodo_pagamento: formaPagamentoOrcamento,
+          forma_pagamento: formaPagamentoOrcamento,
+          origem_pagamento: "orcamento",
+          observacoes: obsFinal,
+          origem: "cardapio",
+        };
+
         const resMin = await supabase.from("encomendas").insert([payloadMinimal]);
         insertError = resMin.error;
+
+        if (insertError) {
+          const payloadUltraMin = {
+            id: pedidoId,
+            estabelecimento_codigo: code,
+            user_id: payloadOrcamento.user_id,
+            cliente_nome: clienteNome,
+            cliente_whatsapp: clienteWhatsapp,
+            data_entrega: payloadOrcamento.data_entrega,
+            horario_entrega: payloadOrcamento.horario_entrega,
+            itens: resumoItensTexto,
+            itens_detalhes: itensDetalhesJson,
+            valor_total: valTotalCarrinho,
+            total_amount: valTotalCarrinho,
+            status: "pendente",
+            status_pagamento: "orcamento",
+            observacoes: obsFinal,
+            origem: "cardapio",
+          };
+          const resUltra = await supabase.from("encomendas").insert([payloadUltraMin]);
+          insertError = resUltra.error;
+        }
       }
 
       if (insertError) {
