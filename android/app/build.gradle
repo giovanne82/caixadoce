@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keyPropertiesFile = rootProject.file('key.properties')
+def keyProperties = new Properties()
+if (keyPropertiesFile.exists()) {
+    keyProperties.load(new FileInputStream(keyPropertiesFile))
+}
+
 android {
     namespace = "com.caixadoce.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +13,8 @@ android {
         applicationId "com.caixadoce.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -18,10 +24,17 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('caixadoce-release-key.jks')
-            storePassword 'caixadoce123'
-            keyAlias 'caixadoce-key-alias'
-            keyPassword 'caixadoce123'
+            if (keyPropertiesFile.exists() && keyProperties.getProperty('storeFile')) {
+                storeFile file(keyProperties.getProperty('storeFile'))
+                storePassword keyProperties.getProperty('storePassword')
+                keyAlias keyProperties.getProperty('keyAlias')
+                keyPassword keyProperties.getProperty('keyPassword')
+            } else {
+                storeFile file('caixadoce-release-key.jks')
+                storePassword 'caixadoce123'
+                keyAlias 'caixadoce-key-alias'
+                keyPassword 'caixadoce123'
+            }
         }
     }
     buildTypes {
