@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ESTABELECIMENTO_PADRAO,
@@ -535,8 +537,42 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       setAuthLoading(false);
     });
 
+    // Listener para Deep Links no Android/iOS (Captura callbacks do Google / Supabase Auth)
+    let appUrlListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      appUrlListener = App.addListener("appUrlOpen", async (event: { url: string }) => {
+        console.log("[Auth] Capacitor appUrlOpen capturado:", event.url);
+        try {
+          if (event.url.includes("access_token") || event.url.includes("refresh_token") || event.url.includes("code=")) {
+            const urlStr = event.url.replace("#", "?");
+            const urlObj = new URL(urlStr);
+            const accessToken = urlObj.searchParams.get("access_token");
+            const refreshToken = urlObj.searchParams.get("refresh_token");
+            const code = urlObj.searchParams.get("code");
+
+            if (accessToken && refreshToken) {
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!error) {
+                toast.success("Login com Google efetuado com sucesso!");
+              }
+            } else if (code) {
+              await supabase.auth.exchangeCodeForSession(code);
+            }
+          }
+        } catch (err) {
+          console.error("[Auth] Erro ao processar appUrlOpen:", err);
+        }
+      });
+    }
+
     return () => {
       subscription.unsubscribe();
+      if (appUrlListener) {
+        appUrlListener.then((h: any) => h?.remove?.()).catch(() => {});
+      }
     };
   }, []);
 
@@ -850,9 +886,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
   const loginWithGoogle = async (customRedirectTo?: string) => {
     try {
-      // Captura a URL/origem atual de forma dinâmica e resiliente (Preview Vercel, localhost ou Prod)
+      // Captura a URL/origem atual de forma dinâmica (Native App, Web ou Preview Vercel)
       let origin = "https://www.caixadoce.com.br";
-      if (typeof window !== "undefined" && window.location?.origin) {
+      if (Capacitor.isNativePlatform()) {
+        origin = "com.caixadoce.app://";
+      } else if (typeof window !== "undefined" && window.location?.origin) {
         origin = window.location.origin.replace(/\/+$/, "");
       } else {
         origin = getAppBaseUrl();
