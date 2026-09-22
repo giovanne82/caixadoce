@@ -12,7 +12,7 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 let globalKeyRotationCounter = 0;
 
 // Configuração Centralizada e Segura do Supabase no Backend
-const DEFAULT_SUPABASE_URL = "https://camuhitzmsfmxvsowzlf.supabase.co";
+const DEFAULT_SUPABASE_URL = "https://whfrjoqolyatylcwccon.supabase.co";
 const DEFAULT_SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
@@ -157,7 +157,7 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
 
 // Injeção de Seed Data dos Cupons Iniciais ("ARTFESTA50" e "ARFESTAVIP30") na Tabela cupons_assinatura
 async function seedInitialCouponInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -200,7 +200,7 @@ seedInitialCouponInSupabase();
 
 // Injeção de Inicialização da Tabela insumos no Supabase
 async function seedInsumosTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
@@ -258,7 +258,7 @@ seedInsumosTableInSupabase();
 
 // Injeção de Inicialização da Tabela clientes_loja no Supabase
 async function seedClientesLojaTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -375,7 +375,7 @@ seedClientesLojaTableInSupabase();
 
 // Hotfix de RLS para Acesso Público ao Cardápio no Supabase
 async function seedPublicCardapioRlsHotfixInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -491,7 +491,7 @@ seedPublicCardapioRlsHotfixInSupabase();
 
 // Injeção de Inicialização da Tabela afiliados e Colunas de Afiliado no Supabase
 async function seedAfiliadosTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -722,7 +722,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 }) {
   const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 10.90, cupomUtilizado } = params;
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -2271,7 +2271,7 @@ export default {
             );
           }
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.VITE_SUPABASE_ANON_KEY ||
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -2458,7 +2458,7 @@ export default {
           ).trim().toUpperCase();
           const dias = Number(payload.diasGratis || payload.dias || 30);
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.SUPABASE_SERVICE_ROLE_KEY ||
             process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
@@ -2619,7 +2619,7 @@ export default {
       // =========================================================================
       if (url.pathname === "/api/afiliados" && request.method === "GET") {
         try {
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
           const cupom = url.searchParams.get("cupom") || "";
           const email = url.searchParams.get("email") || "";
@@ -2652,7 +2652,7 @@ export default {
 
       if (url.pathname === "/api/afiliados" && request.method === "POST") {
         try {
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
 
           const bodyText = await request.text();
@@ -4345,7 +4345,7 @@ export default {
             );
           }
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.VITE_SUPABASE_ANON_KEY ||
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbXVoaXR6bXNmbXh2c293emxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
@@ -4451,7 +4451,7 @@ export default {
           console.log(`[Formulário de Contato] Motivo: '${motivoStr}' | Loja: '${nomeLoja}' (${codigoLoja}) | E-mail: '${remetenteEmail}'`);
           console.log(`[Mensagem]: "${mensagem.trim()}"`);
 
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://camuhitzmsfmxvsowzlf.supabase.co";
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
           const supabaseKey =
             process.env.SUPABASE_SERVICE_ROLE_KEY ||
             process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
