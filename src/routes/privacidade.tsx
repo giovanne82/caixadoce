@@ -7,7 +7,7 @@ import { PrivacidadeContent } from "@/components/caixadoce/PrivacidadeContent";
 import { TermosDeUsoContent } from "@/components/caixadoce/TermosDeUsoContent";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-function PrivacidadeComponent() {
+export function PrivacidadeComponent() {
   const [activeTab, setActiveTab] = useState<"privacidade" | "termos">("privacidade");
 
   return (

@@ -81,20 +81,30 @@ export function PrivacidadeContent() {
         </div>
       </section>
 
-      {/* 6. DIREITOS DO USUÁRIO (LGPD) & EXCLUSÃO DE DADOS */}
+      {/* 6. DADOS RECOLHIDOS VIA INÍCIO DE SESSÃO COM O GOOGLE (OAUTH) */}
       <section className="space-y-2.5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
         <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-          <Lock className="w-4 h-4 text-emerald-600 shrink-0" /> 6. Direitos do Usuário &amp; Solicitação de Exclusão (LGPD)
+          <Lock className="w-4 h-4 text-emerald-600 shrink-0" /> 6. Dados Recolhidos via Início de Sessão com o Google (OAuth)
+        </h4>
+        <p>
+          A aplicação CaixaDoce permite o início de sessão através da sua conta Google. Ao utilizar este método, o nosso sistema recolhe apenas o seu endereço de email, nome e fotografia de perfil pública. Estes dados são utilizados estritamente para criar e autenticar a sua conta na nossa plataforma, associar os seus pedidos de orçamento ao seu perfil e garantir a segurança do seu acesso. Não partilhamos, não vendemos e não utilizamos as suas informações pessoais provenientes do Google para quaisquer outros fins.
+        </p>
+      </section>
+
+      {/* 7. DIREITOS DO USUÁRIO (LGPD) & EXCLUSÃO DE DADOS */}
+      <section className="space-y-2.5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+        <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" /> 7. Direitos do Usuário &amp; Solicitação de Exclusão (LGPD)
         </h4>
         <p>
           Em conformidade com a Lei Geral de Proteção de Dados (LGPD), você tem o direito garantido de consultar, atualizar, exportar ou solicitar a <strong>exclusão permanente e irrevogável de todos os seus dados pessoais e de sua loja</strong> de nossa base de dados a qualquer momento, seja diretamente pelo painel de configurações ou por e-mail.
         </p>
       </section>
 
-      {/* 7. CANAL DE ATENDIMENTO E CONTATO */}
+      {/* 8. CANAL DE ATENDIMENTO E CONTATO */}
       <section className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs sm:text-sm space-y-1">
         <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-          <HelpCircle className="w-4 h-4 text-emerald-600 shrink-0" /> 7. Dúvidas ou Solicitações Legais?
+          <HelpCircle className="w-4 h-4 text-emerald-600 shrink-0" /> 8. Dúvidas ou Solicitações Legais?
         </h4>
         <p className="text-muted-foreground">
           Para esclarecimentos sobre esta Política de Privacidade ou solicitações relativas aos seus dados, entre em contato através do e-mail oficial:{" "}

@@ -1,4 +1,5 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PrivacidadeComponent } from "./privacidade";
 
 export const Route = createFileRoute("/politica-de-privacidade")({
   head: () => ({
@@ -7,9 +8,5 @@ export const Route = createFileRoute("/politica-de-privacidade")({
       { name: "description", content: "Política de Privacidade e Proteção de Dados (LGPD) do CaixaDoce." },
     ],
   }),
-  component: PoliticaDePrivacidadeRouteComponent,
+  component: PrivacidadeComponent,
 });
-
-function PoliticaDePrivacidadeRouteComponent() {
-  return <Navigate to="/privacidade" replace />;
-}
