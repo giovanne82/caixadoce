@@ -14,7 +14,7 @@ let globalKeyRotationCounter = 0;
 // Configuração Centralizada e Segura do Supabase no Backend
 const DEFAULT_SUPABASE_URL = "https://whfrjoqolyatylcwccon.supabase.co";
 const DEFAULT_SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
 export function getSupabaseCredentials(env?: any) {
   const envObj = (env as Record<string, string>) || {};
@@ -160,7 +160,7 @@ async function seedInitialCouponInSupabase() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
   const supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   try {
     await fetch(`${supabaseUrl}/rest/v1/cupons_assinatura`, {
@@ -204,7 +204,7 @@ async function seedInsumosTableInSupabase() {
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   try {
     const createTableSql = `
@@ -263,7 +263,7 @@ async function seedClientesLojaTableInSupabase() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   try {
     const createTableSql = `
@@ -380,7 +380,7 @@ async function seedPublicCardapioRlsHotfixInSupabase() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   try {
     const hotfixSql = `
@@ -496,7 +496,7 @@ async function seedAfiliadosTableInSupabase() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   try {
     const createSql = `
@@ -729,7 +729,7 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwMzAzMTYsImV4cCI6MjEwMjYwNjMxNn0.km5zbjt0ZchneApZvVXzjdkYWS44CMZWwaLRz8nSeyY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
   const code = (establishmentCode || "CD-1001").toUpperCase();
 
