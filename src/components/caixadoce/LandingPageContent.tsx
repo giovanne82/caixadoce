@@ -107,6 +107,10 @@ export function LandingPageContent() {
               PDV de Balcão
               <Badge className="bg-purple-600 text-white text-[9px] px-1.5 py-0">NOVO</Badge>
             </a>
+            <Link to="/blog/" className="hover:text-purple-600 transition-colors flex items-center gap-1 font-bold text-purple-700">
+              <Sparkles className="w-3.5 h-3.5 text-pink-500" />
+              Blog &amp; Receitas
+            </Link>
             <a href="#encomendas" className="hover:text-purple-600 transition-colors">
               Gestão de Encomendas
             </a>
@@ -1538,6 +1542,9 @@ export function LandingPageContent() {
             <a href="#precos" className="hover:text-purple-700 transition-colors">
               Planos
             </a>
+            <Link to="/blog/" className="hover:text-purple-700 transition-colors font-bold text-purple-700">
+              Blog &amp; Receitas
+            </Link>
             <Link to="/privacidade" className="hover:text-purple-700 transition-colors font-bold text-emerald-700">
               Privacidade
             </Link>

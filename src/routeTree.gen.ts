@@ -23,6 +23,8 @@ import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as AgendarStoreSlugRouteImport } from './routes/agendar.$storeSlug'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as CardapioIndexRouteImport } from './routes/cardapio.index'
 import { Route as CardapioStoreCodeRouteImport } from './routes/cardapio.$storeCode'
 import { Route as PagarCobrancaIdRouteImport } from './routes/pagar.$cobrancaId'
@@ -98,6 +100,16 @@ const AgendarStoreSlugRoute = AgendarStoreSlugRouteImport.update({
   path: '/agendar/$storeSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CardapioIndexRoute = CardapioIndexRouteImport.update({
   id: '/cardapio/',
   path: '/cardapio/',
@@ -134,9 +146,11 @@ export interface FileRoutesByFullPath {
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/painel/configuracoes': typeof PainelConfiguracoesRoute
+  '/blog/': typeof BlogIndexRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRoutesByTo {
@@ -154,9 +168,11 @@ export interface FileRoutesByTo {
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/painel/configuracoes': typeof PainelConfiguracoesRoute
+  '/blog': typeof BlogIndexRoute
   '/cardapio': typeof CardapioIndexRoute
 }
 export interface FileRoutesById {
@@ -175,9 +191,11 @@ export interface FileRoutesById {
   '/termos': typeof TermosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/agendar/$storeSlug': typeof AgendarStoreSlugRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/cardapio/$storeCode': typeof CardapioStoreCodeRoute
   '/pagar/$cobrancaId': typeof PagarCobrancaIdRoute
   '/painel/configuracoes': typeof PainelConfiguracoesRoute
+  '/blog/': typeof BlogIndexRoute
   '/cardapio/': typeof CardapioIndexRoute
 }
 export interface FileRouteTypes {
@@ -197,9 +215,11 @@ export interface FileRouteTypes {
     | '/termos'
     | '/admin/afiliados'
     | '/agendar/$storeSlug'
+    | '/blog/$slug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
     | '/painel/configuracoes'
+    | '/blog/'
     | '/cardapio/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -217,9 +237,11 @@ export interface FileRouteTypes {
     | '/termos'
     | '/admin/afiliados'
     | '/agendar/$storeSlug'
+    | '/blog/$slug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
     | '/painel/configuracoes'
+    | '/blog'
     | '/cardapio'
   id:
     | '__root__'
@@ -237,9 +259,11 @@ export interface FileRouteTypes {
     | '/termos'
     | '/admin/afiliados'
     | '/agendar/$storeSlug'
+    | '/blog/$slug'
     | '/cardapio/$storeCode'
     | '/pagar/$cobrancaId'
     | '/painel/configuracoes'
+    | '/blog/'
     | '/cardapio/'
   fileRoutesById: FileRoutesById
 }
@@ -258,9 +282,11 @@ export interface RootRouteChildren {
   TermosRoute: typeof TermosRoute
   AdminAfiliadosRoute: typeof AdminAfiliadosRoute
   AgendarStoreSlugRoute: typeof AgendarStoreSlugRoute
+  BlogSlugRoute: typeof BlogSlugRoute
   CardapioStoreCodeRoute: typeof CardapioStoreCodeRoute
   PagarCobrancaIdRoute: typeof PagarCobrancaIdRoute
   PainelConfiguracoesRoute: typeof PainelConfiguracoesRoute
+  BlogIndexRoute: typeof BlogIndexRoute
   CardapioIndexRoute: typeof CardapioIndexRoute
 }
 
@@ -364,6 +390,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgendarStoreSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blog/': {
+      id: '/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cardapio/': {
       id: '/cardapio/'
       path: '/cardapio'
@@ -410,9 +450,11 @@ const rootRouteChildren: RootRouteChildren = {
   TermosRoute: TermosRoute,
   AdminAfiliadosRoute: AdminAfiliadosRoute,
   AgendarStoreSlugRoute: AgendarStoreSlugRoute,
+  BlogSlugRoute: BlogSlugRoute,
   CardapioStoreCodeRoute: CardapioStoreCodeRoute,
   PagarCobrancaIdRoute: PagarCobrancaIdRoute,
   PainelConfiguracoesRoute: PainelConfiguracoesRoute,
+  BlogIndexRoute: BlogIndexRoute,
   CardapioIndexRoute: CardapioIndexRoute,
 }
 export const routeTree = rootRouteImport
