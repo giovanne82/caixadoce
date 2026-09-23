@@ -17,30 +17,7 @@ const DEFAULT_SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
 export function getSupabaseCredentials(env?: any) {
-  const envObj = (env as Record<string, string>) || {};
-  const procObj = (typeof process !== "undefined" && process.env ? process.env : {}) as Record<string, string>;
-
-  const supabaseUrl =
-    envObj.VITE_SUPABASE_URL ||
-    procObj.VITE_SUPABASE_URL ||
-    envObj.SUPABASE_URL ||
-    procObj.SUPABASE_URL ||
-    DEFAULT_SUPABASE_URL;
-
-  const supabaseKey =
-    envObj.SUPABASE_SERVICE_ROLE_KEY ||
-    procObj.SUPABASE_SERVICE_ROLE_KEY ||
-    envObj.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    procObj.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    envObj.SUPABASE_SERVICE_KEY ||
-    procObj.SUPABASE_SERVICE_KEY ||
-    envObj.SERVICE_ROLE_KEY ||
-    procObj.SERVICE_ROLE_KEY ||
-    envObj.VITE_SUPABASE_ANON_KEY ||
-    procObj.VITE_SUPABASE_ANON_KEY ||
-    DEFAULT_SUPABASE_KEY;
-
-  return { supabaseUrl, supabaseKey };
+  return { supabaseUrl: DEFAULT_SUPABASE_URL, supabaseKey: DEFAULT_SUPABASE_KEY };
 }
 
 export function createSupabaseBackendClient(env?: any) {
@@ -157,10 +134,8 @@ async function getCheckoutUrlFromSupabase(id: string): Promise<string | null> {
 
 // Injeção de Seed Data dos Cupons Iniciais ("ARTFESTA50" e "ARFESTAVIP30") na Tabela cupons_assinatura
 async function seedInitialCouponInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   try {
     await fetch(`${supabaseUrl}/rest/v1/cupons_assinatura`, {
@@ -200,11 +175,8 @@ seedInitialCouponInSupabase();
 
 // Injeção de Inicialização da Tabela insumos no Supabase
 async function seedInsumosTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   try {
     const createTableSql = `
@@ -258,12 +230,8 @@ seedInsumosTableInSupabase();
 
 // Injeção de Inicialização da Tabela clientes_loja no Supabase
 async function seedClientesLojaTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   try {
     const createTableSql = `
@@ -375,12 +343,8 @@ seedClientesLojaTableInSupabase();
 
 // Hotfix de RLS para Acesso Público ao Cardápio no Supabase
 async function seedPublicCardapioRlsHotfixInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   try {
     const hotfixSql = `
@@ -491,12 +455,8 @@ seedPublicCardapioRlsHotfixInSupabase();
 
 // Injeção de Inicialização da Tabela afiliados e Colunas de Afiliado no Supabase
 async function seedAfiliadosTableInSupabase() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   try {
     const createSql = `
@@ -722,14 +682,8 @@ async function ativarPlanoEstabelecimentoNoSupabase(params: {
 }) {
   const { establishmentCode, planId = "mensal", paymentId, paymentMethod = "pix", amount = 10.90, cupomUtilizado } = params;
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://whfrjoqolyatylcwccon.supabase.co";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
 
   const code = (establishmentCode || "CD-1001").toUpperCase();
 

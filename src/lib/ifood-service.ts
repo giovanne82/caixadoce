@@ -5,20 +5,7 @@ const DEFAULT_SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJqb3FvbHlhdHlsY3djY29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTg2NzYsImV4cCI6MjEwMjgzNDY3Nn0.jr-E--3S_NyzKgeB-ChHmsTdowxOEzIpWDEJTgQvHzQ";
 
 export function getSupabaseBackendClient() {
-  const supabaseUrl =
-    (typeof process !== "undefined" && (process.env?.VITE_SUPABASE_URL || process.env?.SUPABASE_URL)) ||
-    DEFAULT_SUPABASE_URL;
-  const supabaseKey =
-    (typeof process !== "undefined" &&
-      (process.env?.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env?.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-        process.env?.SUPABASE_SERVICE_KEY ||
-        process.env?.SERVICE_ROLE_KEY ||
-        process.env?.SUPABASE_ANON_KEY ||
-        process.env?.VITE_SUPABASE_ANON_KEY)) ||
-    DEFAULT_SUPABASE_KEY;
-
-  return createClient(supabaseUrl, supabaseKey, {
+  return createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
