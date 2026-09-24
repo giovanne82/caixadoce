@@ -68,6 +68,7 @@ import {
   Upload,
   Trash2,
   Link as LinkIcon,
+  Eye,
 } from "lucide-react";
 import {
   formatarMoeda,
