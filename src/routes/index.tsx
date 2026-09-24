@@ -438,8 +438,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
 
   const handleSelectTab = useCallback(
     (tab: string) => {
-      const isFuncional = ["encomendas", "produtos", "insumos", "despesas", "scanner", "financeiro"].includes(tab);
-      if (isFuncional && !isPlanoPagoAtivo && isTrialExpirado) {
+      const isFuncionalBloqueavel = ["encomendas", "insumos", "despesas", "scanner", "financeiro"].includes(tab);
+      if (isFuncionalBloqueavel && !isPlanoPagoAtivo && isTrialExpirado) {
         toast.error("Seu teste gratuito de 7 dias expirou! Assine um dos planos para continuar utilizando o sistema.");
         setActiveTab("plano");
         return;
@@ -449,9 +449,9 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
     [isPlanoPagoAtivo, isTrialExpirado]
   );
 
-  // Interceptação de Navegação e Hard Block (Paywall apenas se trial expirado e SEM plano PRO pago ativo)
+  // Interceptação de Navegação e Hard Block (Paywall apenas para módulos que exigem plano ativo, preservando o Cardápio em Modo Vitrine)
   useEffect(() => {
-    if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config") {
+    if (!isPlanoPagoAtivo && isTrialExpirado && activeTab !== "plano" && activeTab !== "config" && activeTab !== "produtos") {
       toast.error("Seu período de teste de 7 dias expirou! Escolha um plano para liberar o acesso aos módulos.");
       setActiveTab("plano");
     }
@@ -2295,30 +2295,27 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
             )}
           </TabsContent>
 
-          {/* 4. Aba: Meus Produtos / Cardápio (ProductsView) */}
+          {/* 4. Aba: Meus Produtos / Cardápio (ProductsView) - Sempre liberado para o lojista */}
           <TabsContent value="produtos">
-            {verificarAcessoModulo("produtos", infoPlano) ? (
-              <ProductsView
-                produtos={produtos}
-                estabelecimentoCodigo={activeCode}
-                onCriarProduto={criarProduto}
-                onEditarProduto={editarProduto}
-                onExcluirProduto={excluirProduto}
-                onSalvarKit={salvarKit}
-                onIrParaConfiguracoes={(section) => {
-                  setConfigSection(section || "aparencia");
-                  setActiveTab("config");
-                  setTimeout(() => {
-                    const el = document.getElementById("identidade-visual");
-                    if (el) {
-                      el.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }
-                  }, 100);
-                }}
-              />
-            ) : (
-              <UpgradeBanner onIrParaPlano={() => setActiveTab("plano")} />
-            )}
+            <ProductsView
+              produtos={produtos}
+              estabelecimentoCodigo={activeCode}
+              onCriarProduto={criarProduto}
+              onEditarProduto={editarProduto}
+              onExcluirProduto={excluirProduto}
+              onSalvarKit={salvarKit}
+              onNavigateTab={setActiveTab}
+              onIrParaConfiguracoes={(section) => {
+                setConfigSection(section || "aparencia");
+                setActiveTab("config");
+                setTimeout(() => {
+                  const el = document.getElementById("identidade-visual");
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }, 100);
+              }}
+            />
           </TabsContent>
 
           {/* 6. Financeiro & Caixa */}

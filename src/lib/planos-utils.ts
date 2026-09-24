@@ -132,7 +132,7 @@ export interface InfoPlanoEstabelecimento {
   stripeSubscriptionId?: string;
 }
 
-export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?: string): InfoPlanoEstabelecimento {
+export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?: string, estData?: any): InfoPlanoEstabelecimento {
   const code = (codigo || "DEFAULT").toUpperCase();
 
   // Conta de Teste/Master (CD-1001 e CD-4606 - Avaliação Google Play Console) - Plano Completo PRO Vitalício sem expirar
@@ -142,6 +142,31 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
       status: "ativo",
       dataExpiracao: "2099-12-31T23:59:59.000Z",
     };
+  }
+
+  // 0. Se dados da loja vindo do Supabase forem fornecidos
+  if (estData) {
+    const isProInDb = Boolean(estData.is_pro || estData.plano_status === "ativo" || estData.status_assinatura === "ativa");
+    const expStr = estData.plano_expira_em || estData.plano_exp;
+    if (isProInDb) {
+      if (expStr) {
+        const expMs = new Date(expStr).getTime();
+        if (!isNaN(expMs) && expMs > Date.now()) {
+          return {
+            planoId: (estData.plano_id || "mensal") as PlanoId,
+            status: "ativo",
+            dataExpiracao: expStr,
+            diasRestantesTrial: 0,
+          };
+        }
+      } else {
+        return {
+          planoId: (estData.plano_id || "mensal") as PlanoId,
+          status: "ativo",
+          diasRestantesTrial: 0,
+        };
+      }
+    }
   }
 
   let planoSalvo: InfoPlanoEstabelecimento | null = null;
@@ -198,7 +223,7 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
   }
 
   // 2. Validação Segura do Trial (7 Dias Padrão + trialDiasAdicionais de Cupons Beta)
-  const dataCriacaoStr = userCreatedAt || planoSalvo?.dataInicio;
+  const dataCriacaoStr = userCreatedAt || estData?.created_at || planoSalvo?.dataInicio;
   const diasAdicionais = Number(planoSalvo?.trialDiasAdicionais) || 0;
   const diasTotaisTrial = 7 + diasAdicionais;
 
@@ -251,10 +276,28 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
   };
 }
 
+export function isPlanoPagoOuTrialAtivo(infoPlano: InfoPlanoEstabelecimento): boolean {
+  if (infoPlano.status === "ativo") {
+    return (
+      infoPlano.planoId === "mensal" ||
+      infoPlano.planoId === "anual" ||
+      infoPlano.planoId === "pro" ||
+      infoPlano.planoId === "ilimitado"
+    );
+  }
+  if (infoPlano.status === "trial") {
+    return (infoPlano.diasRestantesTrial ?? 0) > 0;
+  }
+  return false;
+}
+
 export function verificarAcessoModulo(
   modulo: "despesas" | "insumos" | "scanner" | "encomendas" | "produtos" | "financeiro",
   infoPlano: InfoPlanoEstabelecimento
 ): boolean {
+  // O menu "Cardápio" (produtos) permanece SEMPRE liberado para o lojista, funcionando em Modo Vitrine se sem plano pago ativo
+  if (modulo === "produtos") return true;
+
   // 1. No período de teste de 7 dias (trial), todos os módulos ficam liberados
   if (infoPlano.status === "trial") return true;
 

@@ -56,6 +56,7 @@ import {
   Users,
   X,
   Loader2,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
@@ -71,6 +72,7 @@ import {
   type KitProduto,
   type ProdutoOpcao,
 } from "@/lib/caixadoce-data";
+import { obterPlanoEfetivoEstabelecimento, isPlanoPagoOuTrialAtivo } from "@/lib/planos-utils";
 import {
   normalizarConfiguracaoCompleta,
   salvarHorariosLocal,
@@ -87,6 +89,7 @@ interface ProductsViewProps {
   onExcluirProduto: (id: string) => Promise<void>;
   onSalvarKit?: (kit: KitProduto) => Promise<void>;
   onIrParaConfiguracoes?: (section?: string) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 const CATEGORIAS_PADRAO = [
@@ -106,8 +109,17 @@ export function ProductsView({
   onExcluirProduto,
   onSalvarKit,
   onIrParaConfiguracoes,
+  onNavigateTab,
 }: ProductsViewProps) {
   const navigate = useNavigate();
+
+  const infoPlano = useMemo(() => {
+    return obterPlanoEfetivoEstabelecimento(estabelecimentoCodigo);
+  }, [estabelecimentoCodigo]);
+
+  const isModoVitrine = useMemo(() => {
+    return !isPlanoPagoOuTrialAtivo(infoPlano);
+  }, [infoPlano]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [busca, setBusca] = useState("");
@@ -658,6 +670,35 @@ export function ProductsView({
 
   return (
     <div className="space-y-6">
+      {/* Alerta de Conversão - Modo Vitrine */}
+      {isModoVitrine && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-amber-500/15 border border-amber-500/40 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-amber-950 dark:text-amber-100">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 mt-0.5 shadow-xs">
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">
+                  Modo Vitrine Ativo
+                </Badge>
+              </div>
+              <p className="text-xs sm:text-sm font-semibold mt-1 text-slate-800 dark:text-slate-100 leading-relaxed">
+                Seu catálogo está funcionando apenas em Modo Vitrine (visualização). Assine um plano para liberar as vendas e receber pedidos dos seus clientes.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => onNavigateTab ? onNavigateTab("plano") : null}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-md shrink-0 w-full md:w-auto transition-all hover:scale-[1.02] cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4 mr-1.5" />
+            Fazer Upgrade
+          </Button>
+        </div>
+      )}
+
       {/* Banner de Compartilhamento do Cardápio Público em Lilás Suave / Lavanda #8E7CC3 */}
       <div className="bg-gradient-to-r from-[#8E7CC3] via-[#7C69B3] to-[#5B478E] rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1.5">

@@ -129,6 +129,7 @@ import {
   type HorariosFuncionamento,
   type StatusLojaHorario,
 } from "@/lib/horarios-service";
+import { obterPlanoEfetivoEstabelecimento, isPlanoPagoOuTrialAtivo } from "@/lib/planos-utils";
 import { toast } from "sonner";
 
 // ==========================================
@@ -647,6 +648,15 @@ export function CardapioLojaView() {
   const statusHorario = useMemo<StatusLojaHorario>(() => {
     return verificarStatusFuncionamento(lojaInfo?.horarios_funcionamento);
   }, [lojaInfo?.horarios_funcionamento]);
+
+  // Status do Plano & Modo Vitrine (Sem plano pago ativo ou sem trial ativo => Modo Vitrine)
+  const infoPlano = useMemo(() => {
+    return obterPlanoEfetivoEstabelecimento(code, (lojaInfo as any)?.created_at, lojaInfo);
+  }, [code, lojaInfo]);
+
+  const isModoVitrine = useMemo(() => {
+    return !isPlanoPagoOuTrialAtivo(infoPlano);
+  }, [infoPlano]);
 
   // Estados de Identificação e Retenção do Cliente (Local Storage)
   const [savedUserPhone, setSavedUserPhone] = useState<string>("");
@@ -3599,31 +3609,47 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
               </div>
             )}
 
-            {/* Botão do Carrinho Flutuante 'Meu Pedido' / 'Meu Orçamento' no Topo */}
-            <Button
-              onClick={() => setCartOpen(true)}
-              style={{ backgroundColor: purchaseIntent === "orcamento" ? "#D97706" : corTemaDestaque }}
-              className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-2.5 sm:px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity flex items-center"
-            >
-              <ShoppingCart className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />
-              <span className="hidden sm:inline">
-                {purchaseIntent === "orcamento" ? "Meu Orçamento" : "Meu Pedido"}
-              </span>
-              <span className="sm:hidden text-[11px]">
-                {purchaseIntent === "orcamento" ? "Orçamento" : "Pedido"}
-              </span>
-              {totalItensCarrinho > 0 && (
-                <span className="ml-1 sm:ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px] shrink-0">
-                  {totalItensCarrinho}
+            {/* Botão do Carrinho Flutuante 'Meu Pedido' / 'Meu Orçamento' no Topo (Oculto em Modo Vitrine) */}
+            {!isModoVitrine && (
+              <Button
+                onClick={() => setCartOpen(true)}
+                style={{ backgroundColor: purchaseIntent === "orcamento" ? "#D97706" : corTemaDestaque }}
+                className="font-extrabold shrink-0 relative text-white text-xs shadow-md rounded-2xl py-2 px-2.5 sm:px-3.5 whitespace-nowrap hover:opacity-90 transition-opacity flex items-center"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />
+                <span className="hidden sm:inline">
+                  {purchaseIntent === "orcamento" ? "Meu Orçamento" : "Meu Pedido"}
                 </span>
-              )}
-            </Button>
+                <span className="sm:hidden text-[11px]">
+                  {purchaseIntent === "orcamento" ? "Orçamento" : "Pedido"}
+                </span>
+                {totalItensCarrinho > 0 && (
+                  <span className="ml-1 sm:ml-1.5 bg-black/40 text-white font-mono px-1.5 py-0.2 rounded-full text-[10px] shrink-0">
+                    {totalItensCarrinho}
+                  </span>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Tarja Informativa de Modo Orçamento / Fora de Expediente */}
-      {(purchaseIntent === "orcamento" || !statusHorario.aberta) && (
+      {/* Tarja Informativa de Modo Vitrine / Orçamento / Fora de Expediente */}
+      {isModoVitrine ? (
+        <div className="bg-gradient-to-r from-purple-950 via-purple-900 to-indigo-950 text-purple-100 border-b border-purple-700/40 shadow-xs">
+          <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm shrink-0">✨</span>
+              <span className="truncate">
+                <strong>VITRINE DIGITAL:</strong> Catálogo para visualização de produtos, fotos e preços.
+              </span>
+            </div>
+            <Badge variant="outline" className="border-purple-400/40 text-purple-200 text-[10px] font-black uppercase shrink-0">
+              Modo Vitrine
+            </Badge>
+          </div>
+        </div>
+      ) : (purchaseIntent === "orcamento" || !statusHorario.aberta) && (
         <div className="bg-amber-500 text-amber-950 dark:bg-amber-600 dark:text-white border-b border-amber-600/30 shadow-xs">
           <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold">
             <div className="flex items-center gap-2 min-w-0">
@@ -3763,58 +3789,60 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
       {/* Conteúdo Principal do Cardápio */}
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* BANNER ASSISTENTE DE ORÇAMENTO PERSONALIZADO */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-fuchsia-950 via-purple-900 to-amber-950 text-white shadow-lg border border-fuchsia-500/30 backdrop-blur-md space-y-3">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-fuchsia-400/20 text-fuchsia-200 border border-fuchsia-300/30">
-                <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
-                Assistente de Orçamento Personalizado
+        {/* BANNER ASSISTENTE DE ORÇAMENTO PERSONALIZADO (Oculto em Modo Vitrine) */}
+        {!isModoVitrine && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-fuchsia-950 via-purple-900 to-amber-950 text-white shadow-lg border border-fuchsia-500/30 backdrop-blur-md space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-fuchsia-400/20 text-fuchsia-200 border border-fuchsia-300/30">
+                  <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+                  Assistente de Orçamento Personalizado
+                </div>
+                <h3 className="text-lg sm:text-xl font-black tracking-tight text-white">
+                  Monte seu Pedido Sob Medida
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-200 max-w-xl font-medium">
+                  Escolha o tipo, recheios, decoração ou forminhas para Bolos, Doces e Salgados e receba uma cotação exclusiva.
+                </p>
               </div>
-              <h3 className="text-lg sm:text-xl font-black tracking-tight text-white">
-                Monte seu Pedido Sob Medida
-              </h3>
-              <p className="text-xs sm:text-sm text-stone-200 max-w-xl font-medium">
-                Escolha o tipo, recheios, decoração ou forminhas para Bolos, Doces e Salgados e receba uma cotação exclusiva.
-              </p>
+
+              <Button
+                type="button"
+                onClick={() => handleOpenCustomBudgetWizard()}
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm px-5 py-2.5 h-auto rounded-2xl shadow-md transition-all hover:scale-[1.02] shrink-0 border border-amber-300/40 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 mr-2 text-slate-950" />
+                Personalizar Item / Criar Orçamento
+              </Button>
             </div>
 
-            <Button
-              type="button"
-              onClick={() => handleOpenCustomBudgetWizard()}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm px-5 py-2.5 h-auto rounded-2xl shadow-md transition-all hover:scale-[1.02] shrink-0 border border-amber-300/40 cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 mr-2 text-slate-950" />
-              Personalizar Item / Criar Orçamento
-            </Button>
+            {/* Quick Category Buttons */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {customBudgetSettings
+                .filter((c) => c.ativo)
+                .map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => handleOpenCustomBudgetWizard(cat)}
+                    className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group flex-1 min-w-[130px]"
+                  >
+                    <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">
+                      {cat.icone || "✨"}
+                    </span>
+                    <div>
+                      <p className="text-xs font-black text-white">{cat.nome}</p>
+                      {cat.descricao && (
+                        <p className="text-[10px] text-stone-300 hidden sm:block truncate max-w-[130px]">
+                          {cat.descricao}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+            </div>
           </div>
-
-          {/* Quick Category Buttons */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {customBudgetSettings
-              .filter((c) => c.ativo)
-              .map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => handleOpenCustomBudgetWizard(cat)}
-                  className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition-all cursor-pointer flex items-center gap-2 group flex-1 min-w-[130px]"
-                >
-                  <span className="text-lg sm:text-2xl group-hover:scale-110 transition-transform">
-                    {cat.icone || "✨"}
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-white">{cat.nome}</p>
-                    {cat.descricao && (
-                      <p className="text-[10px] text-stone-300 hidden sm:block truncate max-w-[130px]">
-                        {cat.descricao}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              ))}
-          </div>
-        </div>
+        )}
         {/* 1. SELETOR DE MODALIDADE HÍBRIDA (Apenas no Modo Híbrido) */}
         {modeloNegocio === "hibrido" && (
           <div className="p-1.5 rounded-2xl bg-muted/60 border border-border flex items-center justify-center gap-1 max-w-md mx-auto shadow-xs">
@@ -4083,25 +4111,31 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
                       </span>
                     )}
 
-                    <Button
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAbrirModalProduto(prod);
-                      }}
-                      style={{ backgroundColor: corTemaDestaque }}
-                      className="font-bold text-[11px] sm:text-xs text-white shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center hover:opacity-90 transition-opacity"
-                    >
-                      {(!prod.preco || prod.preco <= 0) ? (
-                        <>
-                          <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Solicitar Orçamento
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> {prod.opcoes && prod.opcoes.length > 0 ? "Escolher" : "Pedir"}
-                        </>
-                      )}
-                    </Button>
+                    {isModoVitrine ? (
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-center sm:justify-end gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600 dark:text-purple-400" /> Ver Detalhes
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAbrirModalProduto(prod);
+                        }}
+                        style={{ backgroundColor: corTemaDestaque }}
+                        className="font-bold text-[11px] sm:text-xs text-white shadow-xs h-7 sm:h-8 px-2 sm:px-3.5 w-full sm:w-auto shrink-0 flex items-center justify-center hover:opacity-90 transition-opacity"
+                      >
+                        {(!prod.preco || prod.preco <= 0) ? (
+                          <>
+                            <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> Solicitar Orçamento
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-0.5 sm:mr-1" /> {prod.opcoes && prod.opcoes.length > 0 ? "Escolher" : "Pedir"}
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               );
@@ -4132,8 +4166,8 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
         </div>
       </footer>
 
-      {/* Barra Flutuante Inferior se houver itens no Carrinho */}
-      {carrinho.length > 0 && !cartOpen && (
+      {/* Barra Flutuante Inferior se houver itens no Carrinho (Oculta em Modo Vitrine) */}
+      {!isModoVitrine && carrinho.length > 0 && !cartOpen && (
         <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto z-40 animate-slide-up">
           <div
             onClick={() => setCartOpen(true)}
@@ -5273,52 +5307,65 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
 
               {/* BOTÕES DE AÇÃO */}
               <div className="flex items-center gap-2 pt-2 border-t border-border/60">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setProdutoModal(null)}
-                  className="w-1/3 text-xs font-bold h-10 rounded-xl"
-                >
-                  Cancelar
-                </Button>
-
-                {(() => {
-                  const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
-                  const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
-                  const desabilitado = isMulti
-                    ? totalQtdMultiOpcoes === 0
-                    : temOpcoes && !opcaoSelecionadaModal;
-
-                  const isSobOrcamento = (!produtoModal.preco || produtoModal.preco <= 0);
-
-                  const labelBotao = isMulti
-                    ? totalQtdMultiOpcoes === 0
-                      ? "Selecione as Quantidades"
-                      : isSobOrcamento
-                      ? "Adicionar à Solicitação de Orçamento"
-                      : "Adicionar ao Pedido"
-                    : temOpcoes && !opcaoSelecionadaModal
-                    ? "Selecione uma Opção"
-                    : isSobOrcamento
-                    ? "Adicionar à Solicitação de Orçamento"
-                    : "Adicionar ao Pedido";
-
-                  return (
+                {isModoVitrine ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setProdutoModal(null)}
+                    className="w-full font-bold text-xs h-10 rounded-xl border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                  >
+                    Fechar Visualização (Modo Vitrine)
+                  </Button>
+                ) : (
+                  <>
                     <Button
                       type="button"
-                      disabled={desabilitado}
-                      onClick={handleConfirmarAdicionarCarrinho}
-                      style={!desabilitado ? { backgroundColor: corTemaDestaque } : {}}
-                      className={`w-2/3 font-extrabold text-xs h-10 rounded-xl shadow-md transition-all ${
-                        desabilitado
-                          ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60 border border-border"
-                          : "text-white hover:opacity-90"
-                      }`}
+                      variant="outline"
+                      onClick={() => setProdutoModal(null)}
+                      className="w-1/3 text-xs font-bold h-10 rounded-xl"
                     >
-                      {labelBotao}
+                      Cancelar
                     </Button>
-                  );
-                })()}
+
+                    {(() => {
+                      const isMulti = Boolean(produtoModal.permite_multiplas_opcoes);
+                      const temOpcoes = Boolean(produtoModal.opcoes && produtoModal.opcoes.length > 0);
+                      const desabilitado = isMulti
+                        ? totalQtdMultiOpcoes === 0
+                        : temOpcoes && !opcaoSelecionadaModal;
+
+                      const isSobOrcamento = (!produtoModal.preco || produtoModal.preco <= 0);
+
+                      const labelBotao = isMulti
+                        ? totalQtdMultiOpcoes === 0
+                          ? "Selecione as Quantidades"
+                          : isSobOrcamento
+                          ? "Adicionar à Solicitação de Orçamento"
+                          : "Adicionar ao Pedido"
+                        : temOpcoes && !opcaoSelecionadaModal
+                        ? "Selecione uma Opção"
+                        : isSobOrcamento
+                        ? "Adicionar à Solicitação de Orçamento"
+                        : "Adicionar ao Pedido";
+
+                      return (
+                        <Button
+                          type="button"
+                          disabled={desabilitado}
+                          onClick={handleConfirmarAdicionarCarrinho}
+                          style={!desabilitado ? { backgroundColor: corTemaDestaque } : {}}
+                          className={`w-2/3 font-extrabold text-xs h-10 rounded-xl shadow-md transition-all ${
+                            desabilitado
+                              ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60 border border-border"
+                              : "text-white hover:opacity-90"
+                          }`}
+                        >
+                          {labelBotao}
+                        </Button>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
             </>
           )}

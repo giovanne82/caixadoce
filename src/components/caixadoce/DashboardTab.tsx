@@ -42,6 +42,7 @@ import {
   type Encomenda,
   type DespesaNotaFiscal,
 } from "@/lib/caixadoce-data";
+import { obterPlanoEfetivoEstabelecimento, isPlanoPagoOuTrialAtivo } from "@/lib/planos-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -67,6 +68,14 @@ export function DashboardTab({
   const [copiedLink, setCopiedLink] = useState(false);
   const [periodoGrafico, setPeriodoGrafico] = useState<"mes" | "semana">("mes");
   const [mostrarAnalise, setMostrarAnalise] = useState(false);
+
+  const infoPlano = useMemo(() => {
+    return obterPlanoEfetivoEstabelecimento(activeCode);
+  }, [activeCode]);
+
+  const isModoVitrine = useMemo(() => {
+    return !isPlanoPagoOuTrialAtivo(infoPlano);
+  }, [infoPlano]);
 
   // 1. Total Faturado (Entrada): Receitas financeiras concluídas + Encomendas confirmadas
   const totalReceitasFinanceiro = useMemo(() => {
@@ -227,6 +236,35 @@ export function DashboardTab({
 
   return (
     <div className="space-y-6">
+      {/* Alerta de Conversão - Modo Vitrine */}
+      {isModoVitrine && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-amber-500/15 border border-amber-500/40 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-amber-950 dark:text-amber-100">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 mt-0.5 shadow-xs">
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">
+                  Modo Vitrine Ativo
+                </Badge>
+              </div>
+              <p className="text-xs sm:text-sm font-semibold mt-1 text-slate-800 dark:text-slate-100 leading-relaxed">
+                Seu catálogo está funcionando apenas em Modo Vitrine (visualização). Assine um plano para liberar as vendas e receber pedidos dos seus clientes.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => onNavigateTab("plano")}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-md shrink-0 w-full md:w-auto transition-all hover:scale-[1.02] cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4 mr-1.5" />
+            Fazer Upgrade
+          </Button>
+        </div>
+      )}
+
       {/* Banner Principal com Link do Cardápio Público */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/15 p-5 rounded-2xl border border-amber-500/25 shadow-xs">
         <div className="space-y-1">
