@@ -199,6 +199,11 @@ export interface LojaInfoState {
   social_media?: any;
   modo_venda?: "apenas_pedido" | "apenas_orcamento" | "ambos";
   horarios_funcionamento?: any;
+  created_at?: string;
+  plano_status?: string;
+  status_assinatura?: string;
+  plano_expira_em?: string;
+  is_pro?: boolean;
 }
 
 // ==========================================
@@ -1348,6 +1353,11 @@ export function CardapioLojaView() {
               } catch {}
               return undefined;
             })()),
+            created_at: estData?.created_at,
+            plano_status: estData?.plano_status,
+            status_assinatura: estData?.status_assinatura,
+            plano_expira_em: estData?.plano_expira_em,
+            is_pro: estData?.is_pro,
           });
         }
 

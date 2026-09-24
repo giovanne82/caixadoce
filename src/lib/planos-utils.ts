@@ -144,28 +144,49 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     };
   }
 
-  // 0. Se dados da loja vindo do Supabase forem fornecidos
+  // 0. Se dados da loja vindo do Supabase ou state forem fornecidos
   if (estData) {
-    const isProInDb = Boolean(estData.is_pro || estData.plano_status === "ativo" || estData.status_assinatura === "ativa");
+    const statusStr = String(estData.status_assinatura || estData.plano_status || "").toLowerCase();
     const expStr = estData.plano_expira_em || estData.plano_exp;
+
+    // Se o status no DB for explicitamente expirado, cancelado ou basico
+    if (statusStr === "expirado" || statusStr === "expirada" || statusStr === "cancelado" || statusStr === "basico") {
+      return {
+        planoId: "basico",
+        status: "expirado",
+        diasRestantesTrial: 0,
+        dataExpiracao: expStr,
+      };
+    }
+
+    const isProInDb = Boolean(estData.is_pro || statusStr === "ativo" || statusStr === "ativa" || statusStr === "pro" || statusStr === "ilimitado");
+
     if (isProInDb) {
       if (expStr) {
         const expMs = new Date(expStr).getTime();
-        if (!isNaN(expMs) && expMs > Date.now()) {
-          return {
-            planoId: (estData.plano_id || "mensal") as PlanoId,
-            status: "ativo",
-            dataExpiracao: expStr,
-            diasRestantesTrial: 0,
-          };
+        if (!isNaN(expMs)) {
+          if (expMs > Date.now()) {
+            return {
+              planoId: (estData.plano_id || "mensal") as PlanoId,
+              status: "ativo",
+              dataExpiracao: expStr,
+              diasRestantesTrial: 0,
+            };
+          } else {
+            return {
+              planoId: "basico",
+              status: "expirado",
+              dataExpiracao: expStr,
+              diasRestantesTrial: 0,
+            };
+          }
         }
-      } else {
-        return {
-          planoId: (estData.plano_id || "mensal") as PlanoId,
-          status: "ativo",
-          diasRestantesTrial: 0,
-        };
       }
+      return {
+        planoId: (estData.plano_id || "mensal") as PlanoId,
+        status: "ativo",
+        diasRestantesTrial: 0,
+      };
     }
   }
 
@@ -213,7 +234,6 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
     }
 
     if (planoSalvo.status === "ativo" && (planoSalvo.planoId === "mensal" || planoSalvo.planoId === "anual" || planoSalvo.planoId === "pro" || planoSalvo.planoId === "ilimitado")) {
-      // Se possui status ativo porem a data de expiracao era valida no passado, respeita a expiracao
       return {
         ...planoSalvo,
         status: "ativo",
@@ -229,33 +249,47 @@ export function obterPlanoEfetivoEstabelecimento(codigo?: string, userCreatedAt?
 
   if (dataCriacaoStr) {
     const inicioMs = new Date(dataCriacaoStr).getTime();
-    const agoraMs = Date.now();
-    const diffMs = agoraMs - inicioMs;
-    const diasDecorridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diasRestantes = Math.max(0, diasTotaisTrial - diasDecorridos);
+    if (!isNaN(inicioMs)) {
+      const agoraMs = Date.now();
+      const diffMs = agoraMs - inicioMs;
+      const diasDecorridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diasRestantes = Math.max(0, diasTotaisTrial - diasDecorridos);
 
-    if (diasDecorridos >= diasTotaisTrial || diasRestantes <= 0) {
+      if (diasDecorridos >= diasTotaisTrial || diasRestantes <= 0) {
+        return {
+          ...(planoSalvo || {}),
+          planoId: "basico",
+          status: "expirado",
+          diasRestantesTrial: 0,
+          trialDiasAdicionais: diasAdicionais,
+          dataInicio: dataCriacaoStr,
+        };
+      }
+
       return {
         ...(planoSalvo || {}),
-        planoId: "basico",
-        status: "expirado",
-        diasRestantesTrial: 0,
+        planoId: "mensal",
+        status: "trial",
+        diasRestantesTrial: diasRestantes,
         trialDiasAdicionais: diasAdicionais,
         dataInicio: dataCriacaoStr,
       };
     }
+  }
 
+  // Fallback seguro se dataCriacaoStr não estiver disponível ainda:
+  // Se dados estData da loja já foram carregados do Supabase e não possuem assinatura PRO,
+  // assume-se expirado para garantir o funcionamento correto do Modo Vitrine no catálogo público.
+  if (estData) {
     return {
       ...(planoSalvo || {}),
-      planoId: "mensal",
-      status: "trial",
-      diasRestantesTrial: diasRestantes,
+      planoId: "basico",
+      status: "expirado",
+      diasRestantesTrial: 0,
       trialDiasAdicionais: diasAdicionais,
-      dataInicio: dataCriacaoStr,
     };
   }
 
-  // Fallback se dataCriacaoStr não estiver disponível ainda
   const diasRestantes = planoSalvo?.diasRestantesTrial !== undefined ? planoSalvo.diasRestantesTrial : diasTotaisTrial;
   if (diasRestantes <= 0) {
     return {
