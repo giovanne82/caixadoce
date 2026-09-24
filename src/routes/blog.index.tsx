@@ -211,90 +211,60 @@ export function BlogIndexComponent() {
               return (
                 <article
                   key={post.id}
-                  className="group bg-white rounded-3xl border border-purple-100 shadow-sm hover:shadow-xl hover:border-purple-300 transition-all duration-300 flex flex-col overflow-hidden"
+                  className="group bg-white rounded-3xl border border-purple-100 shadow-sm hover:shadow-xl hover:border-purple-300 transition-all duration-300 flex flex-col justify-between p-6 sm:p-7 space-y-5"
                 >
-                  {/* Foto de Capa com Zoom suave */}
-                  <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-                    <img
-                      src={
-                        post.cover_image ||
-                        "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80"
-                      }
-                      alt={post.title}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      loading="lazy"
-                    />
-
-                    {/* Tag Categoria e Status Flutuante */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
-                      {post.category && (
-                        <Badge className="bg-white/95 text-purple-900 backdrop-blur-xs font-black text-[11px] shadow-sm border border-purple-100">
-                          <Tag className="w-3 h-3 mr-1 text-purple-600" />
+                  <div className="space-y-4">
+                    {/* Header: Categoria e Status */}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      {post.category ? (
+                        <Badge className="bg-purple-50 text-purple-800 font-bold text-[11px] px-3 py-1 border border-purple-200/60 rounded-full">
+                          <Tag className="w-3 h-3 mr-1 text-purple-600 inline" />
                           {post.category}
                         </Badge>
+                      ) : (
+                        <div />
                       )}
                       {post.status === "draft" && (
-                        <Badge className="bg-amber-500 text-white font-black text-[10px] shadow-sm">
-                          Rascunho / Draft
+                        <Badge className="bg-amber-100 text-amber-900 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                          Rascunho
                         </Badge>
                       )}
                     </div>
 
-                    {/* Badge Margem de Lucro Destaque */}
-                    {sim && sim.margem_lucro > 0 && (
-                      <div className="absolute bottom-3 right-3 bg-emerald-600/95 text-white backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-black shadow-md flex items-center gap-1">
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        <span>+{sim.margem_lucro.toFixed(0)}% de Margem</span>
-                      </div>
+                    {/* Meta Info: Tempo de Leitura & Data */}
+                    <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                      {post.reading_time && (
+                        <span className="flex items-center gap-1 text-slate-500 font-semibold">
+                          <Clock className="w-3.5 h-3.5 text-purple-500" />
+                          {post.reading_time}
+                        </span>
+                      )}
+                      {post.reading_time && <span>•</span>}
+                      <span>{new Date(post.created_at).toLocaleDateString("pt-BR")}</span>
+                    </div>
+
+                    {/* Título */}
+                    <h2 className="text-xl font-extrabold text-slate-900 leading-snug group-hover:text-purple-700 transition-colors">
+                      {post.title}
+                    </h2>
+
+                    {/* Resumo (Excerpt) */}
+                    {post.excerpt && (
+                      <p className="text-xs sm:text-sm text-slate-600 line-clamp-3 leading-relaxed font-normal">
+                        {post.excerpt}
+                      </p>
                     )}
                   </div>
 
-                  {/* Conteúdo do Card */}
-                  <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-                        {post.reading_time && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            {post.reading_time}
-                          </span>
-                        )}
-                        <span>•</span>
-                        <span>{new Date(post.created_at).toLocaleDateString("pt-BR")}</span>
-                      </div>
-
-                      <h2 className="text-lg font-black text-slate-900 leading-snug group-hover:text-purple-700 transition-colors line-clamp-2">
-                        {post.title}
-                      </h2>
-
-                      {post.excerpt && (
-                        <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                          {post.excerpt}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Mini Ficha de Custo Preview */}
-                    {sim && (
-                      <div className="pt-3 border-t border-purple-50 bg-purple-50/40 -mx-6 -mb-6 p-4 px-6 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] uppercase font-bold text-slate-400">
-                            Custo Médio
-                          </div>
-                          <div className="text-sm font-black font-mono text-slate-800">
-                            R$ {sim.custo_total.toFixed(2).replace(".", ",")}
-                          </div>
-                        </div>
-
-                        <Link
-                          to={`/blog/${post.slug}`}
-                          className="inline-flex items-center gap-1 text-xs font-black text-purple-700 hover:text-purple-900 group-hover:translate-x-0.5 transition-all"
-                        >
-                          <span>Ver Ficha</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
-                    )}
+                  {/* Rodapé: Botão CTA "Ler Artigo" / "Ver Ficha" */}
+                  <div className="pt-4 border-t border-purple-100/80 flex items-center justify-between">
+                    <Link
+                      to={`/blog/${post.slug}`}
+                      className="w-full inline-flex items-center justify-between text-xs font-extrabold text-purple-700 hover:text-purple-900 group-hover:translate-x-0.5 transition-all bg-purple-50 hover:bg-purple-100/80 px-4 py-2.5 rounded-xl border border-purple-200/50"
+                    >
+                      <span>{sim ? "Ver Ficha & Receita" : "Ler Artigo"}</span>
+                      <ArrowRight className="w-4 h-4 text-purple-600" />
+                    </Link>
                   </div>
                 </article>
               );
