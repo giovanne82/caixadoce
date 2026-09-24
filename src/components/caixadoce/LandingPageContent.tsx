@@ -111,20 +111,8 @@ export function LandingPageContent() {
               <Sparkles className="w-3.5 h-3.5 text-pink-500" />
               Blog &amp; Receitas
             </Link>
-            <a href="#encomendas" className="hover:text-purple-600 transition-colors">
-              Gestão de Encomendas
-            </a>
-            <a href="#precificacao" className="hover:text-purple-600 transition-colors">
-              Precificação &amp; Ficha Técnica
-            </a>
-            <a href="#demonstracao" className="hover:text-purple-600 transition-colors">
-              Demonstração
-            </a>
             <a href="#precos" className="hover:text-purple-600 transition-colors">
               Preços &amp; Planos
-            </a>
-            <a href="#faq" className="hover:text-purple-600 transition-colors">
-              FAQ
             </a>
           </nav>
 
