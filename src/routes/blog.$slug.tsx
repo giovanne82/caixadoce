@@ -197,7 +197,7 @@ export function BlogPostDetailComponent() {
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
     utterance.lang = "pt-BR";
-    utterance.rate = 1.0;
+    utterance.rate = 1.2;
     utterance.pitch = 1.0;
 
     // Tenta selecionar prioritariamente uma voz em Português do Brasil (pt-BR)
