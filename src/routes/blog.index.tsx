@@ -225,13 +225,20 @@ export function BlogIndexComponent() {
                       loading="lazy"
                     />
 
-                    {/* Tag Categoria Flutuante */}
-                    {post.category && (
-                      <Badge className="absolute top-3 left-3 bg-white/95 text-purple-900 backdrop-blur-xs font-black text-[11px] shadow-sm border border-purple-100">
-                        <Tag className="w-3 h-3 mr-1 text-purple-600" />
-                        {post.category}
-                      </Badge>
-                    )}
+                    {/* Tag Categoria e Status Flutuante */}
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
+                      {post.category && (
+                        <Badge className="bg-white/95 text-purple-900 backdrop-blur-xs font-black text-[11px] shadow-sm border border-purple-100">
+                          <Tag className="w-3 h-3 mr-1 text-purple-600" />
+                          {post.category}
+                        </Badge>
+                      )}
+                      {post.status === "draft" && (
+                        <Badge className="bg-amber-500 text-white font-black text-[10px] shadow-sm">
+                          Rascunho / Draft
+                        </Badge>
+                      )}
+                    </div>
 
                     {/* Badge Margem de Lucro Destaque */}
                     {sim && sim.margem_lucro > 0 && (

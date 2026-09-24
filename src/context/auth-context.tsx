@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Capacitor } from "@capacitor/core";
-import { App } from "@capacitor/app";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ESTABELECIMENTO_PADRAO,

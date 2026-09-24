@@ -252,6 +252,11 @@ export function BlogPostDetailComponent() {
                 {post.category}
               </Badge>
             )}
+            {post.status === "draft" && (
+              <Badge className="bg-amber-500 text-white font-black text-xs py-1 px-3">
+                Rascunho / Draft (Pré-visualização)
+              </Badge>
+            )}
             {post.reading_time && (
               <span className="flex items-center gap-1 text-xs text-slate-500 font-semibold bg-white border border-slate-200 rounded-full px-3 py-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
