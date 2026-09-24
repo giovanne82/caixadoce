@@ -2456,9 +2456,10 @@ export const Route = createFileRoute("/")({
   }),
   head: () => ({
     meta: [
-      { title: "CaixaDoce — Gestão Financeira, Scanner, Encomendas & Cardápio" },
-      { name: "description", content: "Sistema inteligente para scanner de cupons, conciliação de insumos, encomendas e cardápio de confeitaria." },
-      { property: "og:title", content: "CaixaDoce — Gestão Inteligente" },
+      { title: "CaixaDoce | Aplicativo de Gestão para Confeitaria e Doceria" },
+      { name: "description", content: "O aplicativo completo para confeiteiras. Crie seu cardápio digital, calcule fichas técnicas exatas e receba pedidos no piloto automático. Teste grátis!" },
+      { property: "og:title", content: "CaixaDoce | Aplicativo de Gestão para Confeitaria e Doceria" },
+      { property: "og:description", content: "O aplicativo completo para confeiteiras. Crie seu cardápio digital, calcule fichas técnicas exatas e receba pedidos no piloto automático. Teste grátis!" },
     ],
   }),
   component: Index,
