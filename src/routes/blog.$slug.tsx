@@ -16,6 +16,8 @@ import {
   ChevronRight,
   MessageCircle,
   TrendingUp,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { fetchBlogPostBySlug, fetchPublishedBlogPosts } from "@/lib/blog-service";
 import { BlogPost } from "@/types/blog";
@@ -152,6 +154,73 @@ export function BlogPostDetailComponent() {
     };
   }, [slug]);
 
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  // Parar qualquer síntese de voz ativa ao desmontar o componente ou mudar de artigo
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [slug]);
+
+  const toggleAudioReading = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      toast.error("A funcionalidade de ouvir artigo não é suportada neste navegador.");
+      return;
+    }
+
+    const synth = window.speechSynthesis;
+
+    if (isPlayingAudio) {
+      synth.cancel();
+      setIsPlayingAudio(false);
+      toast.info("Leitura do artigo pausada.");
+      return;
+    }
+
+    if (!post?.content) {
+      toast.error("Conteúdo indisponível para leitura.");
+      return;
+    }
+
+    // Interrompe leituras anteriores
+    synth.cancel();
+
+    // Limpa caracteres de sintaxe markdown para uma narração em voz natural e fluida
+    const textToRead = (post.title + ". " + post.content)
+      .replace(/[#*`_~]/g, "")
+      .replace(/!\[.*?\]\(.*?\)/g, "")
+      .replace(/\[.*?\]\(.*?\)/g, "")
+      .replace(/\n+/g, ". ");
+
+    const utterance = new SpeechSynthesisUtterance(textToRead);
+    utterance.lang = "pt-BR";
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Tenta selecionar prioritariamente uma voz em Português do Brasil (pt-BR)
+    const voices = synth.getVoices();
+    const ptVoice = voices.find((v) => v.lang.includes("pt-BR") || v.lang.includes("pt"));
+    if (ptVoice) {
+      utterance.voice = ptVoice;
+    }
+
+    utterance.onend = () => {
+      setIsPlayingAudio(false);
+    };
+
+    utterance.onerror = (err) => {
+      console.warn("[WebSpeechAPI Error]:", err);
+      setIsPlayingAudio(false);
+    };
+
+    synth.speak(utterance);
+    setIsPlayingAudio(true);
+    toast.success("Iniciando leitura em áudio do artigo!");
+  };
+
   const handleShare = () => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
@@ -263,6 +332,31 @@ export function BlogPostDetailComponent() {
                 {post.reading_time}
               </span>
             )}
+
+            {/* BOTÃO DE ÁUDIO (TEXT-TO-SPEECH NATIVO WEB SPEECH API) */}
+            <Button
+              type="button"
+              variant={isPlayingAudio ? "default" : "outline"}
+              size="sm"
+              onClick={toggleAudioReading}
+              className={`h-7 px-3 text-xs font-bold rounded-full transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                isPlayingAudio
+                  ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse"
+                  : "bg-white border-purple-200 text-purple-700 hover:bg-purple-50"
+              }`}
+            >
+              {isPlayingAudio ? (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-white" />
+                  <span>Parar Leitura</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Ouvir Artigo</span>
+                </>
+              )}
+            </Button>
           </div>
 
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-950 tracking-tight leading-tight">
