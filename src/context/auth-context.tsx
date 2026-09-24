@@ -537,39 +537,50 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
 
     // Listener para Deep Links no Android/iOS (Captura callbacks do Google / Supabase Auth)
     let appUrlListener: any = null;
-    if (Capacitor.isNativePlatform()) {
-      appUrlListener = App.addListener("appUrlOpen", async (event: { url: string }) => {
-        console.log("[Auth] Capacitor appUrlOpen capturado:", event.url);
+    if (typeof window !== "undefined") {
+      const capApp = (window as any)?.Capacitor?.Plugins?.App;
+      if (capApp?.addListener) {
         try {
-          if (event.url.includes("access_token") || event.url.includes("refresh_token") || event.url.includes("code=")) {
-            const urlStr = event.url.replace("#", "?");
-            const urlObj = new URL(urlStr);
-            const accessToken = urlObj.searchParams.get("access_token");
-            const refreshToken = urlObj.searchParams.get("refresh_token");
-            const code = urlObj.searchParams.get("code");
+          appUrlListener = capApp.addListener("appUrlOpen", async (event: { url: string }) => {
+            console.log("[Auth] Capacitor appUrlOpen capturado:", event.url);
+            try {
+              if (event.url.includes("access_token") || event.url.includes("refresh_token") || event.url.includes("code=")) {
+                const urlStr = event.url.replace("#", "?");
+                const urlObj = new URL(urlStr);
+                const accessToken = urlObj.searchParams.get("access_token");
+                const refreshToken = urlObj.searchParams.get("refresh_token");
+                const code = urlObj.searchParams.get("code");
 
-            if (accessToken && refreshToken) {
-              const { error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              if (!error) {
-                toast.success("Login com Google efetuado com sucesso!");
+                if (accessToken && refreshToken) {
+                  const { error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                  });
+                  if (!error) {
+                    toast.success("Login com Google efetuado com sucesso!");
+                  }
+                } else if (code) {
+                  await supabase.auth.exchangeCodeForSession(code);
+                }
               }
-            } else if (code) {
-              await supabase.auth.exchangeCodeForSession(code);
+            } catch (err) {
+              console.error("[Auth] Erro ao processar appUrlOpen:", err);
             }
-          }
-        } catch (err) {
-          console.error("[Auth] Erro ao processar appUrlOpen:", err);
+          });
+        } catch (e) {
+          console.warn("[Auth] Capacitor listener skip:", e);
         }
-      });
+      }
     }
 
     return () => {
       subscription.unsubscribe();
       if (appUrlListener) {
-        appUrlListener.then((h: any) => h?.remove?.()).catch(() => {});
+        if (typeof appUrlListener.remove === "function") {
+          appUrlListener.remove();
+        } else if (typeof appUrlListener.then === "function") {
+          appUrlListener.then((h: any) => h?.remove?.()).catch(() => {});
+        }
       }
     };
   }, []);
@@ -886,7 +897,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     try {
       // Captura a URL/origem atual de forma dinâmica (Native App, Web ou Preview Vercel)
       let origin = "https://www.caixadoce.com.br";
-      if (Capacitor.isNativePlatform()) {
+      if (typeof window !== "undefined" && ((window as any)?.Capacitor?.isNativePlatform?.() || (window as any)?.Capacitor?.isPluginAvailable?.("App"))) {
         origin = "com.caixadoce.app://";
       } else if (typeof window !== "undefined" && window.location?.origin) {
         origin = window.location.origin.replace(/\/+$/, "");
