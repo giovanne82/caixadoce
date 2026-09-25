@@ -22,6 +22,7 @@ import { MeuPlanoTab } from "@/components/caixadoce/MeuPlanoTab";
 import { ConfiguracoesTab } from "@/components/caixadoce/ConfiguracoesTab";
 import { InsumosView } from "@/components/caixadoce/InsumosView";
 import { NotificationBell } from "@/components/caixadoce/NotificationBell";
+import { ProductTour } from "@/components/caixadoce/ProductTour";
 
 // UI Components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -2190,7 +2191,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           <div className="hidden md:block -mx-4 overflow-x-auto px-4">
             <TabsList className="w-max bg-slate-200/80 border border-slate-300/60 p-1 rounded-xl">
               {podeAcessarAba("encomendas") && (
-                <TabsTrigger value="encomendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                <TabsTrigger value="encomendas" data-tour="aba-vendas" className="flex items-center gap-1.5 font-bold text-xs text-slate-700 data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                   <Package className="w-4 h-4" /> Vendas
                 </TabsTrigger>
               )}
@@ -2359,6 +2360,7 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           {podeAcessarAba("encomendas") && (
             <button
               onClick={() => handleSelectTab("encomendas")}
+              data-tour="aba-vendas"
               className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-2xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 activeTab === "encomendas"
                   ? "bg-gradient-to-b from-[#8E7CC3] to-purple-700 text-white font-black shadow-md shadow-purple-900/40 scale-105"
@@ -2441,6 +2443,14 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
           )}
         </div>
       </nav>
+
+      {/* Product Tour (Onboarding) para novos usuários */}
+      <ProductTour
+        userId={user?.id}
+        establishmentCode={activeCode}
+        activeTab={activeTab}
+        onNavigateTab={setActiveTab}
+      />
     </div>
   </ScannerProvider>
 );

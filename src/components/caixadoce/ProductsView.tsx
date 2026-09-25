@@ -700,7 +700,7 @@ export function ProductsView({
       )}
 
       {/* Banner de Compartilhamento do Cardápio Público em Lilás Suave / Lavanda #8E7CC3 */}
-      <div className="bg-gradient-to-r from-[#8E7CC3] via-[#7C69B3] to-[#5B478E] rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#8E7CC3] via-[#7C69B3] to-[#5B478E] rounded-3xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4" data-tour="link-loja">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="bg-white/20 border border-white/30 text-white font-mono text-xs font-black px-2.5 py-0.5 rounded-full">
@@ -872,6 +872,7 @@ export function ProductsView({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={handleAbrirCriacao}
+            data-tour="novo-produto"
             className="font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Novo Produto
