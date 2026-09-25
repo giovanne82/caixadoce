@@ -818,7 +818,7 @@ export function ProductsView({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ambos" className="text-xs font-medium">
-                  ✨ Vendas e Orçamentos (Cliente escolhe)
+                  ✨ Vendas e Orçamentos (Acesso direto à vitrine)
                 </SelectItem>
                 <SelectItem value="apenas_pedido" className="text-xs font-medium">
                   🛒 Apenas Vendas Diretas

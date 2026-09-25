@@ -646,7 +646,6 @@ export function CardapioLojaView() {
 
   // Modo de Compra / Intenção do Cliente ('pedido' | 'orcamento')
   const [purchaseIntent, setPurchaseIntent] = useState<"pedido" | "orcamento">("pedido");
-  const [modalBoasVindasOpen, setModalBoasVindasOpen] = useState<boolean>(false);
   const intencaoInicialDefinidaRef = useRef<boolean>(false);
 
   // Horários de Funcionamento da Loja & Modal de Horários
@@ -1625,7 +1624,7 @@ export function CardapioLojaView() {
     }
   }, [lojaInfo]);
 
-  // Sincronização do Modo de Venda e Inicialização da Intenção de Compra (com Regra de Horário)
+  // Sincronização do Modo de Venda e Inicialização da Intenção de Compra (Carregamento Direto da Vitrine)
   useEffect(() => {
     if (!lojaInfo) return;
     const modo = lojaInfo.modo_venda || "ambos";
@@ -1633,24 +1632,16 @@ export function CardapioLojaView() {
     // Regra de Negócio: Se a loja estiver fechada ou fora do expediente, força modo Orçamento
     if (!statusHorario.aberta) {
       setPurchaseIntent("orcamento");
-      setModalBoasVindasOpen(false);
       intencaoInicialDefinidaRef.current = true;
       return;
     }
 
-    if (modo === "apenas_pedido") {
-      setPurchaseIntent("pedido");
-      setModalBoasVindasOpen(false);
-      intencaoInicialDefinidaRef.current = true;
-    } else if (modo === "apenas_orcamento") {
+    if (modo === "apenas_orcamento") {
       setPurchaseIntent("orcamento");
-      setModalBoasVindasOpen(false);
-      intencaoInicialDefinidaRef.current = true;
-    } else if (modo === "ambos") {
-      if (!intencaoInicialDefinidaRef.current) {
-        setModalBoasVindasOpen(true);
-      }
+    } else {
+      setPurchaseIntent("pedido");
     }
+    intencaoInicialDefinidaRef.current = true;
   }, [lojaInfo?.modo_venda, statusHorario.aberta]);
 
   // =========================================================================
@@ -5458,77 +5449,6 @@ Já gravei o pedido no sistema. Aguardo a confirmação da confeitaria! Muito ob
           >
             Fechar
           </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL DE BOAS-VINDAS / ESCOLHA DE INTENÇÃO (QUANDO MODO_VENDA === 'AMBOS') */}
-      <Dialog
-        open={modalBoasVindasOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            intencaoInicialDefinidaRef.current = true;
-            setModalBoasVindasOpen(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-md w-full p-6 sm:p-7 rounded-3xl space-y-4">
-          <DialogHeader className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto shadow-xs">
-              <Sparkles className="w-7 h-7" />
-            </div>
-            <DialogTitle className="text-xl sm:text-2xl font-black text-foreground">
-              Como podemos te ajudar hoje?
-            </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm text-muted-foreground max-w-xs mx-auto">
-              Bem-vindo(a) à <strong>{lojaInfo?.nome || "nossa confeitaria"}</strong>! Escolha como prefere navegar pelo nosso cardápio:
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPurchaseIntent("pedido");
-                intencaoInicialDefinidaRef.current = true;
-                setModalBoasVindasOpen(false);
-              }}
-              className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-left space-y-2.5 transition-all group hover:scale-[1.02] shadow-xs cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xl shadow-xs">
-                🛒
-              </div>
-              <div>
-                <h4 className="font-extrabold text-sm text-foreground group-hover:text-purple-600">
-                  🛒 Fazer Pedido
-                </h4>
-                <p className="text-[11px] text-muted-foreground leading-snug mt-1">
-                  Comprar direto com fechamento por Pix ou Cartão de Crédito.
-                </p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPurchaseIntent("orcamento");
-                intencaoInicialDefinidaRef.current = true;
-                setModalBoasVindasOpen(false);
-              }}
-              className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-left space-y-2.5 transition-all group hover:scale-[1.02] shadow-xs cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center text-xl shadow-xs">
-                📝
-              </div>
-              <div>
-                <h4 className="font-extrabold text-sm text-foreground group-hover:text-amber-600">
-                  📝 Solicitar Orçamento
-                </h4>
-                <p className="text-[11px] text-muted-foreground leading-snug mt-1">
-                  Montar lista personalizada e enviar para cotação sem pagar agora.
-                </p>
-              </div>
-            </button>
-          </div>
         </DialogContent>
       </Dialog>
 
