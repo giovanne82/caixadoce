@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { X, ChevronRight, Sparkles, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface Step {
   id: string;
@@ -89,29 +88,13 @@ export function ProductTour({
   }, [storageKey]);
 
   // Complete & dismiss tour permanently
-  const finalizeTour = useCallback(async () => {
+  const finalizeTour = useCallback(() => {
     setIsOpen(false);
+    setTargetRect(null);
     try {
       localStorage.setItem(storageKey, "true");
     } catch {}
-
-    if (userId) {
-      try {
-        await supabase
-          .from("profiles")
-          .update({ has_seen_tutorial: true } as any)
-          .eq("id", userId);
-      } catch {}
-    }
-    if (establishmentCode) {
-      try {
-        await supabase
-          .from("estabelecimentos")
-          .update({ has_seen_tutorial: true } as any)
-          .ilike("codigo", establishmentCode);
-      } catch {}
-    }
-  }, [storageKey, userId, establishmentCode]);
+  }, [storageKey]);
 
   const currentStep = TOUR_STEPS[currentStepIndex];
 
@@ -122,7 +105,18 @@ export function ProductTour({
     const el = document.querySelector(`[data-tour="${currentStep.targetAttr}"]`);
     if (el) {
       const rect = el.getBoundingClientRect();
-      setTargetRect(rect);
+      setTargetRect((prev) => {
+        if (
+          prev &&
+          prev.top === rect.top &&
+          prev.left === rect.left &&
+          prev.width === rect.width &&
+          prev.height === rect.height
+        ) {
+          return prev;
+        }
+        return rect;
+      });
     } else {
       setTargetRect(null);
     }
