@@ -55,6 +55,7 @@ export function ProductTour({
   const [isOpen, setIsOpen] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const tourInitializedRef = useRef(false);
 
   const storageKey = userId
     ? `caixadoce_has_seen_tutorial_${userId}`
@@ -64,21 +65,24 @@ export function ProductTour({
 
   // Check if tour should be opened on mount
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || tourInitializedRef.current) return;
 
     try {
       const hasSeenLocal = localStorage.getItem(storageKey);
       if (hasSeenLocal === "true") {
-        setIsOpen(false);
         return;
       }
     } catch {}
+
+    tourInitializedRef.current = true;
 
     // Slight delay so DOM elements and tabs render completely
     const timer = setTimeout(() => {
       setIsOpen(true);
       setCurrentStepIndex(0);
-      onNavigateTab(TOUR_STEPS[0].tab);
+      if (activeTab !== TOUR_STEPS[0].tab) {
+        onNavigateTab(TOUR_STEPS[0].tab);
+      }
     }, 1200);
 
     return () => clearTimeout(timer);
@@ -111,9 +115,9 @@ export function ProductTour({
 
   const currentStep = TOUR_STEPS[currentStepIndex];
 
-  // Update target rect location
+  // Update target rect location safely without infinite loops
   const updateTargetRect = useCallback(() => {
-    if (!isOpen || !currentStep) return;
+    if (!currentStep) return;
 
     const el = document.querySelector(`[data-tour="${currentStep.targetAttr}"]`);
     if (el) {
@@ -122,29 +126,26 @@ export function ProductTour({
     } else {
       setTargetRect(null);
     }
-  }, [isOpen, currentStep]);
+  }, [currentStep]);
 
   useEffect(() => {
     if (!isOpen || !currentStep) return;
 
-    // Switch tab if step requires a specific active tab
-    if (activeTab !== currentStep.tab) {
-      onNavigateTab(currentStep.tab);
-    }
-
     const timer = setTimeout(() => {
       updateTargetRect();
-    }, 250);
+    }, 150);
 
-    window.addEventListener("resize", updateTargetRect);
-    window.addEventListener("scroll", updateTargetRect, true);
+    const handleScrollOrResize = () => updateTargetRect();
+
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("scroll", handleScrollOrResize, true);
 
     return () => {
       clearTimeout(timer);
-      window.removeEventListener("resize", updateTargetRect);
-      window.removeEventListener("scroll", updateTargetRect, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
     };
-  }, [isOpen, currentStepIndex, activeTab, currentStep, onNavigateTab, updateTargetRect]);
+  }, [isOpen, currentStepIndex, updateTargetRect]);
 
   if (!isOpen || !currentStep) return null;
 
@@ -155,9 +156,11 @@ export function ProductTour({
       finalizeTour();
     } else {
       const nextIdx = currentStepIndex + 1;
+      const nextStep = TOUR_STEPS[nextIdx];
       setCurrentStepIndex(nextIdx);
-      if (TOUR_STEPS[nextIdx]?.tab) {
-        onNavigateTab(TOUR_STEPS[nextIdx].tab);
+
+      if (nextStep && nextStep.tab !== activeTab) {
+        onNavigateTab(nextStep.tab);
       }
     }
   };
@@ -205,16 +208,10 @@ export function ProductTour({
 
   return (
     <>
-      {/* Dark Backdrop with Spotlight Hole if Target Rect Exists */}
-      <div
-        className="fixed inset-0 z-[9990] bg-slate-950/60 backdrop-blur-[2px] transition-all duration-300 pointer-events-auto"
-        onClick={finalizeTour}
-      />
-
-      {/* Spotlight Ring around target element */}
+      {/* Target Ring Highlight (NO DARK BACKDROP, KEEP SCREEN NORMAL AS REQUESTED) */}
       {targetRect && (
         <div
-          className="fixed z-[9995] rounded-2xl pointer-events-none transition-all duration-300 border-2 border-purple-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.65),0_0_25px_rgba(168,85,247,0.5)] animate-pulse"
+          className="fixed z-[9995] rounded-2xl pointer-events-none transition-all duration-300 border-2 border-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.4)] animate-pulse"
           style={{
             top: `${targetRect.top - 6}px`,
             left: `${targetRect.left - 6}px`,
