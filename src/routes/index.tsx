@@ -177,7 +177,7 @@ function ScannerProgressBanner({ activeTab, onNavigateTab }: { activeTab: string
 }
 
 export function Index({ defaultTab }: { defaultTab?: string } = {}) {
-  const { user, profile, isMounted, authLoading, logout, switchProfile } = useAuth();
+  const { user, profile, isMounted, authLoading, logout, switchProfile, markTutorialAsSeen } = useAuth();
 
   // Limpeza e tratamento de erros de redirecionamento OAuth na URL
   useEffect(() => {
@@ -2444,10 +2444,12 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         </div>
       </nav>
 
-      {/* Product Tour (Onboarding) para novos usuários */}
+      {/* Product Tour (Onboarding) para novos usuários com persistência cross-device */}
       <ProductTour
         userId={user?.id}
         establishmentCode={activeCode}
+        hasSeenTutorial={profile?.has_seen_tutorial ?? profile?.hasSeenTutorial}
+        onCompleteTutorial={markTutorialAsSeen}
         activeTab={activeTab}
         onNavigateTab={setActiveTab}
         isPlanoPagoAtivo={isPlanoPagoAtivo}

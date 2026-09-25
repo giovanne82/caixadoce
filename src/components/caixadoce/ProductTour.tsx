@@ -41,6 +41,8 @@ const TOUR_STEPS: Step[] = [
 interface ProductTourProps {
   userId?: string;
   establishmentCode?: string;
+  hasSeenTutorial?: boolean;
+  onCompleteTutorial?: () => void;
   activeTab: string;
   onNavigateTab: (tab: string) => void;
   isPlanoPagoAtivo?: boolean;
@@ -50,6 +52,8 @@ interface ProductTourProps {
 export function ProductTour({
   userId,
   establishmentCode,
+  hasSeenTutorial,
+  onCompleteTutorial,
   activeTab,
   onNavigateTab,
   isPlanoPagoAtivo = false,
@@ -69,6 +73,11 @@ export function ProductTour({
   // Check if tour should be opened on mount
   useEffect(() => {
     if (typeof window === "undefined" || tourInitializedRef.current) return;
+
+    // Regra Estrita: Se o perfil do banco já possui has_seen_tutorial = true, não abre o tour
+    if (hasSeenTutorial === true) {
+      return;
+    }
 
     try {
       const hasSeenLocal = localStorage.getItem(storageKey);
@@ -90,16 +99,17 @@ export function ProductTour({
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [storageKey]);
+  }, [storageKey, hasSeenTutorial]);
 
-  // Complete & dismiss tour permanently
+  // Complete & dismiss tour permanently cross-device
   const finalizeTour = useCallback(() => {
     setIsOpen(false);
     setTargetRect(null);
     try {
       localStorage.setItem(storageKey, "true");
     } catch {}
-  }, [storageKey]);
+    onCompleteTutorial?.();
+  }, [storageKey, onCompleteTutorial]);
 
   const currentStep = TOUR_STEPS[currentStepIndex];
 

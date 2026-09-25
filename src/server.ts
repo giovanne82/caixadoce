@@ -259,6 +259,12 @@ async function seedClientesLojaTableInSupabase() {
       GRANT ALL ON TABLE public.clientes_loja TO anon, authenticated, service_role;
       ALTER TABLE public.encomendas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
       ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS slug TEXT;
+      ALTER TABLE public.estabelecimentos ADD COLUMN IF NOT EXISTS has_seen_tutorial BOOLEAN DEFAULT false;
+      DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'perfis') THEN
+              ALTER TABLE public.perfis ADD COLUMN IF NOT EXISTS has_seen_tutorial BOOLEAN DEFAULT false;
+          END IF;
+      END $$;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_estabelecimentos_slug ON public.estabelecimentos(slug);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_loja_code_tel ON public.clientes_loja (estabelecimento_codigo, telefone);
       ALTER TABLE public.produtos ADD COLUMN IF NOT EXISTS opcoes JSONB DEFAULT '[]'::jsonb;

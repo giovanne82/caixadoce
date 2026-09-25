@@ -79,6 +79,8 @@ export type UpdateEstablishmentDetailsInput = {
   assinatura_data_url?: string;
   horarios_funcionamento?: any;
   horariosFuncionamento?: any;
+  has_seen_tutorial?: boolean;
+  hasSeenTutorial?: boolean;
 };
 
 export type StaffProfile = {
@@ -138,6 +140,8 @@ export type StaffProfile = {
   abasPermitidas?: string[];
   ownerUserId?: string;
   userCreatedAt?: string;
+  has_seen_tutorial?: boolean;
+  hasSeenTutorial?: boolean;
 };
 
 export type UserProfile = StaffProfile;
@@ -161,6 +165,7 @@ type AuthContextType = {
   createEstablishment: (nome: string, endereco: string, role?: StaffRole) => Promise<{ code: string }>;
   updateEstablishmentDetails: (details: UpdateEstablishmentDetailsInput) => Promise<void>;
   updateEstablishmentPlan: (planoId: PlanoId, pagamentoConfirmado?: boolean) => Promise<void>;
+  markTutorialAsSeen: () => Promise<void>;
   selectProfile: (profile: UserProfile) => void;
   switchProfile: () => void;
   logout: () => Promise<void>;
@@ -258,6 +263,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     }
 
     const isUserUuid = authUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUser.id);
+    const hasSeenTut = Boolean(authUser?.user_metadata?.has_seen_tutorial ?? authUser?.user_metadata?.hasSeenTutorial ?? (masterEst as any)?.has_seen_tutorial ?? false);
     return {
       role: isColab ? "operador" : "admin",
       establishmentCode: formattedCode,
@@ -270,6 +276,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
       abasPermitidas: isColab ? abasPermitidas : undefined,
       ownerUserId: isUserUuid ? authUser.id : undefined,
       userCreatedAt: authUser?.created_at || (authUser as any)?.user_metadata?.created_at || (masterEst as any)?.created_at,
+      has_seen_tutorial: hasSeenTut,
+      hasSeenTutorial: hasSeenTut,
     };
   };
 
@@ -401,6 +409,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
           horariosFuncionamento: data.horarios_funcionamento || data.opening_hours || baseProf.horarios_funcionamento,
           ownerUserId: data.user_id || authUser.id,
           userCreatedAt: data.created_at || authUser.created_at || baseProf.userCreatedAt,
+          has_seen_tutorial: data.has_seen_tutorial ?? data.hasSeenTutorial ?? authUser?.user_metadata?.has_seen_tutorial ?? false,
+          hasSeenTutorial: data.has_seen_tutorial ?? data.hasSeenTutorial ?? authUser?.user_metadata?.has_seen_tutorial ?? false,
         };
         setProfile(merged);
         safeStorage.setItem("caixadoce_profile", JSON.stringify(merged));
@@ -415,6 +425,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
                 nome: baseProf.establishmentName || `Confeitaria ${baseProf.establishmentCode}`,
                 user_id: authUser.id,
                 created_at: authUser.created_at || new Date().toISOString(),
+                has_seen_tutorial: false,
               },
             ],
             { onConflict: "codigo" }
@@ -432,6 +443,8 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
             establishmentCode: d.codigo,
             establishmentName: d.nome,
             ownerUserId: authUser.id,
+            has_seen_tutorial: d.has_seen_tutorial ?? authUser?.user_metadata?.has_seen_tutorial ?? false,
+            hasSeenTutorial: d.has_seen_tutorial ?? authUser?.user_metadata?.has_seen_tutorial ?? false,
           };
           setProfile(newProf);
           safeStorage.setItem("caixadoce_profile", JSON.stringify(newProf));
@@ -1105,6 +1118,11 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         updatePayload.horarios_funcionamento = h;
       }
 
+      if (details.has_seen_tutorial !== undefined || details.hasSeenTutorial !== undefined) {
+        const hst = details.has_seen_tutorial ?? details.hasSeenTutorial;
+        updatePayload.has_seen_tutorial = Boolean(hst);
+      }
+
       if (
         instaVal !== undefined ||
         tiktokVal !== undefined ||
@@ -1340,6 +1358,59 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
     toast.success(`Plano atualizado para: ${planoId.toUpperCase()}`);
   };
 
+  const markTutorialAsSeen = async () => {
+    // 1. Atualização Imediata (Otimista) no Estado e Cache Local
+    if (profile) {
+      const updatedProf: UserProfile = {
+        ...profile,
+        has_seen_tutorial: true,
+        hasSeenTutorial: true,
+      };
+      setProfile(updatedProf);
+      safeStorage.setItem("caixadoce_profile", JSON.stringify(updatedProf));
+      if (profile.establishmentCode) {
+        try {
+          localStorage.setItem(`caixadoce_has_seen_tutorial_${profile.establishmentCode}`, "true");
+        } catch {}
+      }
+    }
+    if (user?.id) {
+      try {
+        localStorage.setItem(`caixadoce_has_seen_tutorial_${user.id}`, "true");
+      } catch {}
+    }
+
+    // 2. Persistência REAL Cross-Device no Banco de Dados (Supabase)
+    try {
+      // Atualiza metadados do auth do usuário
+      supabase.auth.updateUser({ data: { has_seen_tutorial: true, hasSeenTutorial: true } }).catch(() => {});
+
+      const code = profile?.establishmentCode;
+      if (code) {
+        await supabase
+          .from("estabelecimentos")
+          .update({ has_seen_tutorial: true, updated_at: new Date().toISOString() })
+          .ilike("codigo", code);
+      } else if (user?.id) {
+        await supabase
+          .from("estabelecimentos")
+          .update({ has_seen_tutorial: true, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id);
+      }
+
+      if (user?.id) {
+        supabase
+          .from("perfis")
+          .update({ has_seen_tutorial: true, updated_at: new Date().toISOString() })
+          .eq("id", user.id)
+          .then(() => {})
+          .catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[Auth] Erro ao sincronizar has_seen_tutorial no Supabase:", err);
+    }
+  };
+
   const selectProfile = (p: UserProfile) => {
     setProfile(p);
     safeStorage.setItem("caixadoce_profile", JSON.stringify(p));
@@ -1432,6 +1503,7 @@ const generateUniqueCodeFromUserId = (userId?: string): string => {
         createEstablishment,
         updateEstablishmentDetails,
         updateEstablishmentPlan,
+        markTutorialAsSeen,
         selectProfile,
         switchProfile,
         logout,
