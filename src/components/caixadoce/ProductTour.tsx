@@ -43,6 +43,8 @@ interface ProductTourProps {
   establishmentCode?: string;
   activeTab: string;
   onNavigateTab: (tab: string) => void;
+  isPlanoPagoAtivo?: boolean;
+  isTrialExpirado?: boolean;
 }
 
 export function ProductTour({
@@ -50,6 +52,8 @@ export function ProductTour({
   establishmentCode,
   activeTab,
   onNavigateTab,
+  isPlanoPagoAtivo = false,
+  isTrialExpirado = false,
 }: ProductTourProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -79,6 +83,7 @@ export function ProductTour({
     const timer = setTimeout(() => {
       setIsOpen(true);
       setCurrentStepIndex(0);
+      // "produtos" (Cardápio) is always unlocked even in Modo Vitrine
       if (activeTab !== TOUR_STEPS[0].tab) {
         onNavigateTab(TOUR_STEPS[0].tab);
       }
@@ -108,10 +113,10 @@ export function ProductTour({
       setTargetRect((prev) => {
         if (
           prev &&
-          prev.top === rect.top &&
-          prev.left === rect.left &&
-          prev.width === rect.width &&
-          prev.height === rect.height
+          Math.abs(prev.top - rect.top) < 2 &&
+          Math.abs(prev.left - rect.left) < 2 &&
+          Math.abs(prev.width - rect.width) < 2 &&
+          Math.abs(prev.height - rect.height) < 2
         ) {
           return prev;
         }
@@ -153,8 +158,12 @@ export function ProductTour({
       const nextStep = TOUR_STEPS[nextIdx];
       setCurrentStepIndex(nextIdx);
 
+      // Only attempt tab navigation if target tab is accessible and not blocked by plan paywall
       if (nextStep && nextStep.tab !== activeTab) {
-        onNavigateTab(nextStep.tab);
+        const isTabBlocked = !isPlanoPagoAtivo && isTrialExpirado && nextStep.tab !== "produtos" && nextStep.tab !== "config" && nextStep.tab !== "plano";
+        if (!isTabBlocked) {
+          onNavigateTab(nextStep.tab);
+        }
       }
     }
   };

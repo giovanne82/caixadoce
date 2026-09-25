@@ -2450,6 +2450,8 @@ export function Index({ defaultTab }: { defaultTab?: string } = {}) {
         establishmentCode={activeCode}
         activeTab={activeTab}
         onNavigateTab={setActiveTab}
+        isPlanoPagoAtivo={isPlanoPagoAtivo}
+        isTrialExpirado={isTrialExpirado}
       />
     </div>
   </ScannerProvider>
