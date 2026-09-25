@@ -1162,6 +1162,13 @@ export function OrdersView({
         .filter(Boolean).join(", ")
     ) || "";
     const estTel = profile?.whatsapp || profile?.telefone || "";
+    const sigUrl =
+      profile?.signature_data_url ||
+      (profile as any)?.assinatura_data_url ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem(`caixadoce_signature_${profile?.establishmentCode || estabelecimentoCodigo || ""}`) ||
+          localStorage.getItem(`caixadoce_signature_${user?.id || ""}`)
+        : null);
     const numPedido = ord.codigoPedidoIfood || (ord as any).codigo_pedido_ifood || ord.id.slice(-6).toUpperCase();
     const isOrc = ord.is_orcamento || (ord as any).origem_pagamento === "orcamento" || (ord as any).metodo_pagamento === "Orçamento";
     const tituloDoc = isOrc ? "ORÇAMENTO DE ENCOMENDA" : "COMPROVANTE DE PEDIDO / ORÇAMENTO";
@@ -1380,17 +1387,40 @@ export function OrdersView({
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 40px;
-            margin-top: 60px;
-            padding-top: 20px;
+            margin-top: 40px;
+            padding-top: 10px;
+            page-break-inside: avoid;
           }
           .sig-box {
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+          }
+          .sig-img-container {
+            height: 60px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 4px;
+            width: 100%;
+          }
+          .sig-img {
+            max-width: 150px;
+            max-height: 60px;
+            object-fit: contain;
+            display: block;
+            border-bottom: 1px solid #94a3b8;
+            padding-bottom: 4px;
+            width: auto;
           }
           .sig-line {
             border-top: 1px solid #94a3b8;
             margin-bottom: 6px;
+            width: 100%;
           }
-          .sig-name { font-weight: bold; font-size: 12px; color: #334155; }
+          .sig-name { font-weight: bold; font-size: 12px; color: #334155; margin-top: 2px; }
           .sig-role { font-size: 10.5px; color: #64748b; }
 
           .doc-footer {
@@ -1490,7 +1520,13 @@ export function OrdersView({
 
           <div class="signatures-grid">
             <div class="sig-box">
-              <div class="sig-line"></div>
+              ${sigUrl ? `
+                <div class="sig-img-container">
+                  <img src="${sigUrl}" alt="Assinatura ${estNome}" class="sig-img" />
+                </div>
+              ` : `
+                <div class="sig-line"></div>
+              `}
               <div class="sig-name">${estNome}</div>
               <div class="sig-role">Assinatura do Responsável</div>
             </div>

@@ -1899,6 +1899,14 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
         assinatura_data_url: signatureDataUrl || undefined,
       });
 
+      if (typeof window !== "undefined" && activeCode) {
+        if (signatureDataUrl) {
+          localStorage.setItem(`caixadoce_signature_${activeCode}`, signatureDataUrl);
+        } else {
+          localStorage.removeItem(`caixadoce_signature_${activeCode}`);
+        }
+      }
+
       // Garante sincronização imediata dos campos locais sem reversão
       if (nomeEst) setNomeEst(nomeEst);
       if (responsavelEst) setResponsavelEst(responsavelEst);
