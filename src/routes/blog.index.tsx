@@ -27,8 +27,12 @@ import {
 import { fetchPublishedBlogPosts } from "@/lib/blog-service";
 import { BlogPost } from "@/types/blog";
 import { useAuth } from "@/context/auth-context";
+import { isEmailAdmin, checkCurrentSupabaseUserIsAdmin } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/blog/")({
+  staleTime: 0,
+  gcTime: 0,
+  shouldReload: true,
   head: () => ({
     meta: [
       { title: "Blog & Receitas Lucrativas — CaixaDoce" },
@@ -51,7 +55,7 @@ export const Route = createFileRoute("/blog/")({
 export function BlogIndexComponent() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const isAdmin = Boolean(user || profile?.role === "admin");
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => isEmailAdmin(user?.email) || profile?.role === "admin");
 
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +65,22 @@ export function BlogIndexComponent() {
   // Estado para o Modal de Edição
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isEmailAdmin(user?.email) || profile?.role === "admin") {
+      setIsAdmin(true);
+    } else {
+      checkCurrentSupabaseUserIsAdmin(user).then((res) => {
+        if (isMounted) {
+          setIsAdmin(res.isAdmin || profile?.role === "admin");
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [user, profile]);
 
   const loadPosts = () => {
     let isMounted = true;
