@@ -77,15 +77,33 @@ serve(async (req) => {
       );
     }
 
-    // Gerador de slug amigável caso não tenha sido enviado
-    const finalSlug =
-      slug ||
-      title
-        .toLowerCase()
+    // Função para sanitização e geração de slug limpo e seguro
+    const generateCleanSlug = (input: string): string => {
+      if (!input) return "";
+      return String(input)
+        // 1. Remove qualquer resíduo literal de Regex acidental (/.../g, \s+/g, [^...], etc.) vindo do Make/n8n
+        .replace(/\/\[\^[^\]]+\]\/[gimy]*/gi, "")
+        .replace(/\/\\s\+\/[gimy]*/gi, "")
+        .replace(/\/[a-z0-9^$\[\]\\*+?|()]+\/[gimy]*/gi, "")
+        // 2. Remove acentuação
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
+        // 3. Converte para minúsculas
+        .toLowerCase()
+        // 4. Substitui qualquer caractere não alfanumérico por hífen
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
+        // 5. Remove hífens duplicados
+        .replace(/-+/g, "-")
+        // 6. Remove hífens no início e fim
+        .replace(/^-+|-+$/g, "")
+        .trim();
+    };
+
+    // Gerador de slug amigável e sanitizado (limpa o slug recebido ou gera a partir do título)
+    const finalSlug =
+      generateCleanSlug(slug) ||
+      generateCleanSlug(title) ||
+      `post-${Date.now()}`;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey =

@@ -60,6 +60,36 @@ export function normalizeCostSimulation(raw: any): CostSimulation | null {
 }
 
 /**
+ * Gera um slug limpo, URL-friendly e seguro.
+ * 1. Remove qualquer resíduo literal de Regex acidental (ex: /[...]/g, /\s+/g)
+ * 2. Remove acentuação (.normalize("NFD"))
+ * 3. Converte para minúsculas
+ * 4. Substitui qualquer caractere não alfanumérico por hífen
+ * 5. Remove hífens duplicados e nas extremidades
+ */
+export function generateCleanSlug(input: string): string {
+  if (!input) return "";
+
+  return String(input)
+    // 1. Remove qualquer literal de regex acidental (/.../g, \s+/g, [^...], etc.) que venha do Make/n8n ou fórmulas
+    .replace(/\/\[\^[^\]]+\]\/[gimy]*/gi, "")
+    .replace(/\/\\s\+\/[gimy]*/gi, "")
+    .replace(/\/[a-z0-9^$\[\]\\*+?|()]+\/[gimy]*/gi, "")
+    // 2. Remove acentuação
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // 3. Converte para minúsculas
+    .toLowerCase()
+    // 4. Substitui qualquer caractere não alfanumérico por hífen
+    .replace(/[^a-z0-9]+/g, "-")
+    // 5. Remove hífens duplicados
+    .replace(/-+/g, "-")
+    // 6. Remove hífens no início e fim
+    .replace(/^-+|-+$/g, "")
+    .trim();
+}
+
+/**
  * Normaliza uma linha da tabela `blog_posts` vinda do Supabase
  */
 export function normalizeBlogPost(row: any): BlogPost {
@@ -73,12 +103,12 @@ export function normalizeBlogPost(row: any): BlogPost {
     rawStatus === "active" ||
     rawStatus === "true";
 
-  const rawSlug = String(row.slug || `post-${row.id}`).trim();
+  const rawSlug = row.slug ? generateCleanSlug(row.slug) : generateCleanSlug(row.title || `post-${row.id}`);
 
   return {
     id: String(row.id),
     title: String(row.title || "Sem Título").trim(),
-    slug: rawSlug,
+    slug: rawSlug || `post-${row.id}`,
     content: String(row.content || ""),
     cost_simulation: normalizeCostSimulation(row.cost_simulation),
     status: isPublished ? "published" : "draft",
@@ -256,8 +286,8 @@ export async function updateBlogPost(
       updated_at: new Date().toISOString(),
     };
 
-    if (dados.title !== undefined) payload.title = dados.title;
-    if (dados.slug !== undefined) payload.slug = dados.slug;
+    if (dados.title !== undefined) payload.title = dados.title.trim();
+    if (dados.slug !== undefined) payload.slug = generateCleanSlug(dados.slug) || generateCleanSlug(dados.title || "post");
     if (dados.content !== undefined) payload.content = dados.content;
     if (dados.cost_simulation !== undefined) payload.cost_simulation = dados.cost_simulation;
     if (dados.status !== undefined) payload.status = dados.status;

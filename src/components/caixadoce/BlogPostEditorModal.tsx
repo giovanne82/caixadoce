@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BlogPost, CostSimulation } from "@/types/blog";
-import { updateBlogPost, publishBlogPost, deleteBlogPost } from "@/lib/blog-service";
+import { updateBlogPost, publishBlogPost, deleteBlogPost, generateCleanSlug } from "@/lib/blog-service";
 import {
   Dialog,
   DialogContent,
@@ -62,7 +62,7 @@ export function BlogPostEditorModal({
   useEffect(() => {
     if (post) {
       setTitle(post.title || "");
-      setSlug(post.slug || "");
+      setSlug(generateCleanSlug(post.slug || post.title || ""));
       setCategory(post.category || "Receitas Virais");
       setCoverImage(post.cover_image || "");
       setReadingTime(post.reading_time || "5 min de leitura");
@@ -78,19 +78,19 @@ export function BlogPostEditorModal({
 
   const handleSlugify = () => {
     if (!title) return;
-    const autoSlug = title
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-    setSlug(autoSlug);
+    setSlug(generateCleanSlug(title));
   };
 
   const handleSave = async (novoStatus?: "draft" | "published") => {
     if (!post) return;
-    if (!title.trim() || !slug.trim()) {
-      toast.error("Por favor, preencha o título e o slug.");
+    if (!title.trim()) {
+      toast.error("Por favor, preencha o título.");
+      return;
+    }
+
+    const cleanSlug = generateCleanSlug(slug || title);
+    if (!cleanSlug) {
+      toast.error("Por favor, informe um slug válido para o artigo.");
       return;
     }
 
@@ -107,19 +107,11 @@ export function BlogPostEditorModal({
       }
     }
 
-    const cleanSlug = slug
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
     const finalStatus = novoStatus || status;
 
     const res = await updateBlogPost(post.id, {
       title: title.trim(),
-      slug: cleanSlug || slug.trim(),
+      slug: cleanSlug,
       category: category.trim(),
       cover_image: coverImage.trim() || null,
       reading_time: readingTime.trim(),
