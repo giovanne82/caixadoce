@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
+import { BlogPostEditorModal } from "@/components/caixadoce/BlogPostEditorModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,9 +19,14 @@ import {
   Crown,
   Tag,
   ArrowLeft,
+  Edit,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
 } from "lucide-react";
 import { fetchPublishedBlogPosts } from "@/lib/blog-service";
 import { BlogPost } from "@/types/blog";
+import { useAuth } from "@/context/auth-context";
 
 export const Route = createFileRoute("/blog/")({
   head: () => ({
@@ -44,14 +50,22 @@ export const Route = createFileRoute("/blog/")({
 
 export function BlogIndexComponent() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const isAdmin = Boolean(user || profile?.role === "admin");
+
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("Todas");
 
-  useEffect(() => {
+  // Estado para o Modal de Edição
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+  const loadPosts = () => {
     let isMounted = true;
-    fetchPublishedBlogPosts().then((res) => {
+    setLoading(true);
+    fetchPublishedBlogPosts(isAdmin).then((res) => {
       if (isMounted) {
         setPosts(res);
         setLoading(false);
@@ -60,7 +74,11 @@ export function BlogIndexComponent() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, [isAdmin]);
 
   const categorias = useMemo(() => {
     const list = new Set<string>();
@@ -84,6 +102,23 @@ export function BlogIndexComponent() {
       return matchBusca && matchCategoria;
     });
   }, [posts, busca, categoriaSelecionada]);
+
+  const handleCardClick = (post: BlogPost) => {
+    // Se for admin e o post for um rascunho, abre direto o editor para revisão e publicação!
+    if (isAdmin && post.status === "draft") {
+      setEditingPost(post);
+      setIsEditorOpen(true);
+    } else {
+      navigate({ to: `/blog/${post.slug}` as any });
+    }
+  };
+
+  const handleOpenEditor = (e: React.MouseEvent, post: BlogPost) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingPost(post);
+    setIsEditorOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-slate-900 font-sans selection:bg-purple-600 selection:text-white relative">
@@ -115,7 +150,7 @@ export function BlogIndexComponent() {
             <Link to="/login" search={{} as any}>
               <Button className="font-extrabold text-xs bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl shadow-md py-2 px-4 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Criar Loja Grátis</span>
+                <span>{isAdmin ? "Meu Painel" : "Criar Loja Grátis"}</span>
               </Button>
             </Link>
           </div>
@@ -208,10 +243,17 @@ export function BlogIndexComponent() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {postsFiltrados.map((post) => {
               const sim = post.cost_simulation;
+              const isDraft = post.status === "draft";
+
               return (
                 <article
                   key={post.id}
-                  className="group bg-white rounded-3xl border border-purple-100 shadow-sm hover:shadow-xl hover:border-purple-300 transition-all duration-300 flex flex-col justify-between p-6 sm:p-7 space-y-5"
+                  onClick={() => handleCardClick(post)}
+                  className={`group bg-white rounded-3xl border shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-7 space-y-5 cursor-pointer relative ${
+                    isDraft
+                      ? "border-amber-300 hover:border-amber-400 bg-amber-50/10"
+                      : "border-purple-100 hover:border-purple-300"
+                  }`}
                 >
                   <div className="space-y-4">
                     {/* Header: Categoria e Status */}
@@ -224,11 +266,24 @@ export function BlogIndexComponent() {
                       ) : (
                         <div />
                       )}
-                      {post.status === "draft" && (
-                        <Badge className="bg-amber-100 text-amber-900 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
-                          Rascunho
-                        </Badge>
-                      )}
+
+                      <div className="flex items-center gap-1.5">
+                        {isDraft && (
+                          <Badge className="bg-amber-500 text-white font-extrabold text-[10px] px-2.5 py-0.5 rounded-full shadow-xs">
+                            Rascunho
+                          </Badge>
+                        )}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditor(e, post)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-purple-700 hover:bg-purple-100 transition-colors"
+                            title="Editar Post"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Meta Info: Tempo de Leitura & Data */}
@@ -256,15 +311,22 @@ export function BlogIndexComponent() {
                     )}
                   </div>
 
-                  {/* Rodapé: Botão CTA "Ler Artigo" / "Ver Ficha" */}
-                  <div className="pt-4 border-t border-purple-100/80 flex items-center justify-between">
-                    <Link
-                      to={`/blog/${post.slug}`}
-                      className="w-full inline-flex items-center justify-between text-xs font-extrabold text-purple-700 hover:text-purple-900 group-hover:translate-x-0.5 transition-all bg-purple-50 hover:bg-purple-100/80 px-4 py-2.5 rounded-xl border border-purple-200/50"
-                    >
-                      <span>{sim ? "Ver Ficha & Receita" : "Ler Artigo"}</span>
-                      <ArrowRight className="w-4 h-4 text-purple-600" />
-                    </Link>
+                  {/* Rodapé: Ação do Card */}
+                  <div className="pt-4 border-t border-purple-100/80 flex items-center justify-between gap-2">
+                    {isAdmin && isDraft ? (
+                      <div className="w-full flex items-center justify-between text-xs font-black text-amber-800 bg-amber-100/80 hover:bg-amber-200/80 px-4 py-2.5 rounded-xl border border-amber-300 transition-colors">
+                        <span className="flex items-center gap-1.5">
+                          <Edit className="w-3.5 h-3.5 text-amber-700" />
+                          Revisar &amp; Publicar
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-amber-700" />
+                      </div>
+                    ) : (
+                      <div className="w-full inline-flex items-center justify-between text-xs font-extrabold text-purple-700 group-hover:text-purple-900 bg-purple-50 group-hover:bg-purple-100/80 px-4 py-2.5 rounded-xl border border-purple-200/50 transition-all">
+                        <span>{sim ? "Ver Ficha & Receita" : "Ler Artigo"}</span>
+                        <ArrowRight className="w-4 h-4 text-purple-600 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    )}
                   </div>
                 </article>
               );
@@ -300,6 +362,17 @@ export function BlogIndexComponent() {
           </div>
         </div>
       </footer>
+
+      {/* MODAL DE EDIÇÃO DE ARTIGO (ADMIN) */}
+      <BlogPostEditorModal
+        post={editingPost}
+        isOpen={isEditorOpen}
+        onClose={() => {
+          setIsEditorOpen(false);
+          setEditingPost(null);
+        }}
+        onSaved={loadPosts}
+      />
     </div>
   );
 }

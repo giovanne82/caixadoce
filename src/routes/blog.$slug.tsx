@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { BlogCostSimulation } from "@/components/caixadoce/BlogCostSimulation";
+import { BlogPostEditorModal } from "@/components/caixadoce/BlogPostEditorModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,9 +19,14 @@ import {
   TrendingUp,
   Volume2,
   VolumeX,
+  Edit,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
 } from "lucide-react";
-import { fetchBlogPostBySlug, fetchPublishedBlogPosts } from "@/lib/blog-service";
+import { fetchBlogPostBySlug, fetchPublishedBlogPosts, publishBlogPost } from "@/lib/blog-service";
 import { BlogPost } from "@/types/blog";
+import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/blog/$slug")({
@@ -130,29 +136,31 @@ function MarkdownRenderer({ content }: { content: string }) {
 
 export function BlogPostDetailComponent() {
   const { slug } = useParams({ from: "/blog/$slug" });
+  const { user, profile } = useAuth();
+  const isAdmin = Boolean(user || profile?.role === "admin");
+
   const [post, setPost] = useState<BlogPost | null>(null);
   const [outrosPosts, setOutrosPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
+  const loadPostData = () => {
+    setLoading(true);
+    Promise.all([
+      fetchBlogPostBySlug(slug, isAdmin),
+      fetchPublishedBlogPosts(isAdmin),
+    ]).then(([resPost, allPosts]) => {
+      setPost(resPost);
+      setOutrosPosts(allPosts.filter((p) => p.slug !== slug).slice(0, 3));
+      setLoading(false);
+    });
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-
-    Promise.all([fetchBlogPostBySlug(slug), fetchPublishedBlogPosts()]).then(
-      ([resPost, allPosts]) => {
-        if (isMounted) {
-          setPost(resPost);
-          setOutrosPosts(allPosts.filter((p) => p.slug !== slug).slice(0, 3));
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      isMounted = false;
-    };
-  }, [slug]);
+    loadPostData();
+  }, [slug, isAdmin]);
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
@@ -185,10 +193,8 @@ export function BlogPostDetailComponent() {
       return;
     }
 
-    // Interrompe leituras anteriores
     synth.cancel();
 
-    // Limpa caracteres de sintaxe markdown para uma narração em voz natural e fluida
     const textToRead = (post.title + ". " + post.content)
       .replace(/[#*`_~]/g, "")
       .replace(/!\[.*?\]\(.*?\)/g, "")
@@ -200,7 +206,6 @@ export function BlogPostDetailComponent() {
     utterance.rate = 1.2;
     utterance.pitch = 1.0;
 
-    // Tenta selecionar prioritariamente uma voz em Português do Brasil (pt-BR)
     const voices = synth.getVoices();
     const ptVoice = voices.find((v) => v.lang.includes("pt-BR") || v.lang.includes("pt"));
     if (ptVoice) {
@@ -219,6 +224,20 @@ export function BlogPostDetailComponent() {
     synth.speak(utterance);
     setIsPlayingAudio(true);
     toast.success("Iniciando leitura em áudio do artigo!");
+  };
+
+  const handlePublishNow = async () => {
+    if (!post) return;
+    setPublishing(true);
+    const res = await publishBlogPost(post.id);
+    setPublishing(false);
+
+    if (res.success) {
+      toast.success("🎉 Artigo publicado com sucesso! Agora ele está visível para todo o público.");
+      setPost({ ...post, status: "published" });
+    } else {
+      toast.error(`Erro ao publicar artigo: ${res.error || "Erro desconhecido"}`);
+    }
   };
 
   const handleShare = () => {
@@ -250,12 +269,16 @@ export function BlogPostDetailComponent() {
     );
   }
 
-  if (!post) {
+  // Se o post não existe, OU se for um rascunho acessado por um visitante comum não autenticado -> Retorna 404
+  if (!post || (post.status === "draft" && !isAdmin)) {
     return (
       <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-2xl mx-auto">
+          🧁
+        </div>
         <h2 className="text-2xl font-black text-slate-900">Receita não encontrada</h2>
         <p className="text-xs text-slate-600 max-w-md">
-          A receita que você procura pode ter sido movida ou ainda não está disponível publicamente.
+          O artigo que você procura pode ter sido movido, ainda está em fase de rascunho ou não está disponível publicamente.
         </p>
         <Link to="/blog/">
           <Button className="bg-purple-600 hover:bg-purple-700 font-bold text-xs">
@@ -268,8 +291,54 @@ export function BlogPostDetailComponent() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-slate-900 font-sans selection:bg-purple-600 selection:text-white">
+      {/* BARRA DE ADMIN / PRÉ-VISUALIZAÇÃO DE RASCUNHO (SE LOGADO) */}
+      {isAdmin && (
+        <div className={`py-2.5 px-4 text-xs font-bold border-b flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 shadow-md ${
+          post.status === "draft"
+            ? "bg-amber-500 text-slate-950 border-amber-600"
+            : "bg-slate-900 text-white border-slate-800"
+        }`}>
+          <div className="flex items-center gap-2">
+            {post.status === "draft" ? (
+              <AlertCircle className="w-4 h-4 text-slate-950 shrink-0 animate-pulse" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>
+              <strong>{post.status === "draft" ? "Modo Pré-visualização de Rascunho:" : "Painel do Artigo:"}</strong>{" "}
+              {post.status === "draft"
+                ? "Este post ainda é um rascunho gerado pela IA e não está visível para visitantes públicos."
+                : "Artigo publicado e acessível publicamente."}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsEditorOpen(true)}
+              className="h-7 text-xs font-bold bg-white text-slate-900 border-slate-300 hover:bg-slate-100 rounded-lg gap-1 shadow-xs"
+            >
+              <Edit className="w-3.5 h-3.5" /> Editar Artigo
+            </Button>
+
+            {post.status === "draft" && (
+              <Button
+                size="sm"
+                onClick={handlePublishNow}
+                disabled={publishing}
+                className="h-7 text-xs font-black bg-slate-950 text-white hover:bg-black rounded-lg gap-1 shadow-md px-3"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                {publishing ? "Publicando..." : "Publicar Agora"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* HEADER FIXO */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/90 border-b border-purple-100 shadow-xs">
+      <header className={`backdrop-blur-md bg-white/90 border-b border-purple-100 shadow-xs ${isAdmin ? "" : "sticky top-0 z-50"}`}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CaixaDoceLogo size="sm" />
@@ -323,7 +392,7 @@ export function BlogPostDetailComponent() {
             )}
             {post.status === "draft" && (
               <Badge className="bg-amber-500 text-white font-black text-xs py-1 px-3">
-                Rascunho / Draft (Pré-visualização)
+                Rascunho / Draft (Prévia)
               </Badge>
             )}
             {post.reading_time && (
@@ -332,31 +401,6 @@ export function BlogPostDetailComponent() {
                 {post.reading_time}
               </span>
             )}
-
-            {/* BOTÃO DE ÁUDIO (TEXT-TO-SPEECH NATIVO WEB SPEECH API) */}
-            <Button
-              type="button"
-              variant={isPlayingAudio ? "default" : "outline"}
-              size="sm"
-              onClick={toggleAudioReading}
-              className={`h-7 px-3 text-xs font-bold rounded-full transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
-                isPlayingAudio
-                  ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse"
-                  : "bg-white border-purple-200 text-purple-700 hover:bg-purple-50"
-              }`}
-            >
-              {isPlayingAudio ? (
-                <>
-                  <VolumeX className="w-3.5 h-3.5 text-white" />
-                  <span>Parar Leitura</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Ouvir Artigo</span>
-                </>
-              )}
-            </Button>
           </div>
 
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-950 tracking-tight leading-tight">
@@ -379,8 +423,32 @@ export function BlogPostDetailComponent() {
               </div>
             </div>
 
-            {/* BOTÕES DE COMPARTILHAMENTO */}
-            <div className="flex items-center gap-2">
+            {/* BOTÕES DE AÇÃO: ÁUDIO & COMPARTILHAMENTO */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant={isPlayingAudio ? "default" : "outline"}
+                size="sm"
+                onClick={toggleAudioReading}
+                className={`text-xs font-bold rounded-xl transition-all ${
+                  isPlayingAudio
+                    ? "bg-purple-600 hover:bg-purple-700 text-white shadow-md animate-pulse"
+                    : "border-purple-200 text-purple-700 hover:bg-purple-50"
+                }`}
+              >
+                {isPlayingAudio ? (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5 mr-1.5" />
+                    Pausar Áudio
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                    Ouvir Artigo
+                  </>
+                )}
+              </Button>
+
               <Button
                 type="button"
                 variant="outline"
@@ -447,13 +515,15 @@ export function BlogPostDetailComponent() {
                   className="group bg-white rounded-2xl border border-purple-100 p-4 shadow-xs hover:shadow-md hover:border-purple-300 transition-all flex flex-col justify-between"
                 >
                   <div className="space-y-2">
-                    <div className="h-32 rounded-xl overflow-hidden bg-slate-100">
-                      <img
-                        src={op.cover_image || ""}
-                        alt={op.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    </div>
+                    {op.cover_image && (
+                      <div className="h-32 rounded-xl overflow-hidden bg-slate-100">
+                        <img
+                          src={op.cover_image}
+                          alt={op.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                      </div>
+                    )}
                     <h4 className="text-xs font-black text-slate-900 group-hover:text-purple-700 transition-colors line-clamp-2">
                       {op.title}
                     </h4>
@@ -496,6 +566,14 @@ export function BlogPostDetailComponent() {
           </div>
         </div>
       </footer>
+
+      {/* MODAL DE EDIÇÃO DE ARTIGO (ADMIN) */}
+      <BlogPostEditorModal
+        post={post}
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        onSaved={loadPostData}
+      />
     </div>
   );
 }
