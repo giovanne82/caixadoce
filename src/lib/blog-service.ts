@@ -128,83 +128,93 @@ export async function fetchPublishedBlogPosts(includeDrafts = true): Promise<Blo
  * Trata variações de maiúsculas/minúsculas, decodificação de URL, espaços em branco e status.
  */
 export async function fetchBlogPostBySlug(rawSlug: string, isAdminOrAuthenticated = false): Promise<BlogPost | null> {
+  console.log("🔎 SLUG RECEBIDO:", rawSlug, "| isAdmin:", isAdminOrAuthenticated);
   if (!rawSlug) return null;
 
   try {
     const cleanSlug = decodeURIComponent(rawSlug).trim();
     const cleanSlugLower = cleanSlug.toLowerCase();
 
-    // 1. Tentativa prioritária: Busca direta por slug (case-insensitive ou exato)
-    const { data, error } = await supabase
+    // 1. Busca exata por slug
+    let { data, error } = await supabase
       .from("blog_posts")
       .select("*")
-      .or(`slug.ilike.${cleanSlug},slug.eq.${cleanSlug},slug.eq.${rawSlug}`)
-      .limit(1)
+      .eq("slug", cleanSlug)
       .maybeSingle();
 
-    if (!error && data) {
-      const post = normalizeBlogPost(data);
-      if (post.status === "published" || isAdminOrAuthenticated) {
-        return post;
-      }
-      return null;
+    // 2. Se não encontrou, tenta busca case-insensitive (ILIKE)
+    if (!data && !error) {
+      const res = await supabase
+        .from("blog_posts")
+        .select("*")
+        .ilike("slug", cleanSlug)
+        .maybeSingle();
+      data = res.data;
+      error = res.error;
     }
 
-    // 2. Fallback por ID (se o slug passado for o UUID do artigo)
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSlug)) {
-      const { data: byId } = await supabase
+    // 3. Se não encontrou, tenta com o rawSlug original
+    if (!data && !error && rawSlug !== cleanSlug) {
+      const res = await supabase
+        .from("blog_posts")
+        .select("*")
+        .eq("slug", rawSlug)
+        .maybeSingle();
+      data = res.data;
+      error = res.error;
+    }
+
+    // 4. Fallback por UUID (se o slug passado for o ID do artigo)
+    if (!data && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSlug)) {
+      const res = await supabase
         .from("blog_posts")
         .select("*")
         .eq("id", cleanSlug)
         .maybeSingle();
+      data = res.data;
+    }
 
-      if (byId) {
-        const post = normalizeBlogPost(byId);
-        if (post.status === "published" || isAdminOrAuthenticated) {
-          return post;
-        }
-        return null;
+    // 5. Fallback inteligente: buscar posts e comparar slugs normalizados
+    if (!data) {
+      const { data: allRows } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .limit(100);
+
+      if (allRows && allRows.length > 0) {
+        data = allRows.find((row: any) => {
+          const rowSlug = String(row.slug || "").trim().toLowerCase();
+          const rowSlugDecoded = decodeURIComponent(rowSlug).trim().toLowerCase();
+          const targetSlugDecoded = cleanSlugLower;
+
+          if (rowSlug === targetSlugDecoded || rowSlugDecoded === targetSlugDecoded) return true;
+          if (rowSlug.replace(/-/g, " ") === targetSlugDecoded.replace(/-/g, " ")) return true;
+          if (String(row.id) === cleanSlug) return true;
+
+          const titleSlug = String(row.title || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "");
+
+          return titleSlug === targetSlugDecoded;
+        });
       }
     }
 
-    // 3. Fallback inteligente: buscar posts e comparar slugs normalizados (remove acentos, hífens e pontuação)
-    const { data: allRows } = await supabase
-      .from("blog_posts")
-      .select("*")
-      .limit(100);
+    console.log("📦 DADOS DO SUPABASE:", data, "Erro:", error);
 
-    if (allRows && allRows.length > 0) {
-      const matchedRow = allRows.find((row: any) => {
-        const rowSlug = String(row.slug || "").trim().toLowerCase();
-        const rowSlugDecoded = decodeURIComponent(rowSlug).trim().toLowerCase();
-        const targetSlugDecoded = cleanSlugLower;
-
-        // Comparações flexíveis
-        if (rowSlug === targetSlugDecoded || rowSlugDecoded === targetSlugDecoded) return true;
-        if (rowSlug.replace(/-/g, " ") === targetSlugDecoded.replace(/-/g, " ")) return true;
-        if (String(row.id) === cleanSlug) return true;
-
-        // Comparação com título slugificado
-        const titleSlug = String(row.title || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "");
-
-        return titleSlug === targetSlugDecoded;
-      });
-
-      if (matchedRow) {
-        const post = normalizeBlogPost(matchedRow);
-        if (post.status === "published" || isAdminOrAuthenticated) {
-          return post;
-        }
-        return null;
+    if (data) {
+      const post = normalizeBlogPost(data);
+      if (post.status === "published" || isAdminOrAuthenticated) {
+        return post;
       }
+      console.warn("⚠️ [fetchBlogPostBySlug] Post encontrado, mas está em rascunho e usuário não é admin:", post);
+      return null;
     }
   } catch (err) {
-    console.error(`[fetchBlogPostBySlug] Exceção ao buscar post '${rawSlug}':`, err);
+    console.error(`❌ [fetchBlogPostBySlug] Exceção ao buscar post '${rawSlug}':`, err);
   }
 
   return null;

@@ -27,15 +27,23 @@ import {
 import { fetchBlogPostBySlug, fetchPublishedBlogPosts, publishBlogPost } from "@/lib/blog-service";
 import { BlogPost } from "@/types/blog";
 import { useAuth } from "@/context/auth-context";
+import { isEmailAdmin, checkCurrentSupabaseUserIsAdmin } from "@/lib/admin-guard";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/blog/$slug")({
+  staleTime: 0,
+  gcTime: 0,
+  shouldReload: true,
   head: () => ({
     meta: [
       { title: "Receita & Simulação de Custos — CaixaDoce Blog" },
       {
         name: "description",
         content: "Aprenda a receita completa com ficha técnica e custos de insumos.",
+      },
+      {
+        name: "robots",
+        content: "index, follow",
       },
     ],
   }),
@@ -137,7 +145,8 @@ function MarkdownRenderer({ content }: { content: string }) {
 export function BlogPostDetailComponent() {
   const { slug } = useParams({ from: "/blog/$slug" });
   const { user, profile } = useAuth();
-  const isAdmin = Boolean(user || profile?.role === "admin");
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => isEmailAdmin(user?.email) || profile?.role === "admin");
+  const [authResolved, setAuthResolved] = useState(false);
 
   const [post, setPost] = useState<BlogPost | null>(null);
   const [outrosPosts, setOutrosPosts] = useState<BlogPost[]>([]);
@@ -146,21 +155,46 @@ export function BlogPostDetailComponent() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
-  const loadPostData = () => {
+  const loadPostData = async (adminStatus: boolean = isAdmin) => {
+    console.log("🔎 SLUG RECEBIDO:", slug, "| adminStatus:", adminStatus);
     setLoading(true);
-    Promise.all([
-      fetchBlogPostBySlug(slug, isAdmin),
-      fetchPublishedBlogPosts(isAdmin),
-    ]).then(([resPost, allPosts]) => {
+    try {
+      const [resPost, allPosts] = await Promise.all([
+        fetchBlogPostBySlug(slug, adminStatus),
+        fetchPublishedBlogPosts(adminStatus),
+      ]);
+      console.log("📦 DADOS DO SUPABASE (resPost):", resPost);
       setPost(resPost);
       setOutrosPosts(allPosts.filter((p) => p.slug !== slug).slice(0, 3));
+    } catch (err) {
+      console.error("❌ Erro ao carregar dados do post:", err);
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
-    loadPostData();
-  }, [slug, isAdmin]);
+    let isMounted = true;
+    const checkAndLoad = async () => {
+      let currentAdmin = isEmailAdmin(user?.email) || profile?.role === "admin";
+      if (!currentAdmin) {
+        const res = await checkCurrentSupabaseUserIsAdmin(user);
+        currentAdmin = res.isAdmin || profile?.role === "admin";
+      }
+
+      if (isMounted) {
+        setIsAdmin(currentAdmin);
+        setAuthResolved(true);
+        await loadPostData(currentAdmin);
+      }
+    };
+
+    checkAndLoad();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [slug, user, profile]);
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
@@ -258,7 +292,7 @@ export function BlogPostDetailComponent() {
     }
   };
 
-  if (loading) {
+  if (loading || !authResolved) {
     return (
       <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-6">
         <div className="text-center space-y-4">
