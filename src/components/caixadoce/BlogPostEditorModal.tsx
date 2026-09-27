@@ -107,16 +107,24 @@ export function BlogPostEditorModal({
       }
     }
 
+    const cleanSlug = slug
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
     const finalStatus = novoStatus || status;
 
     const res = await updateBlogPost(post.id, {
-      title,
-      slug,
-      category,
-      cover_image: coverImage || null,
-      reading_time: readingTime,
-      author,
-      excerpt,
+      title: title.trim(),
+      slug: cleanSlug || slug.trim(),
+      category: category.trim(),
+      cover_image: coverImage.trim() || null,
+      reading_time: readingTime.trim(),
+      author: author.trim(),
+      excerpt: excerpt.trim(),
       content,
       status: finalStatus,
       cost_simulation: parsedSim,

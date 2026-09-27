@@ -63,13 +63,25 @@ export function normalizeCostSimulation(raw: any): CostSimulation | null {
  * Normaliza uma linha da tabela `blog_posts` vinda do Supabase
  */
 export function normalizeBlogPost(row: any): BlogPost {
+  const rawStatus = String(row.status || "").trim().toLowerCase();
+  const isPublished =
+    rawStatus === "published" ||
+    rawStatus === "publicado" ||
+    rawStatus === "publish" ||
+    rawStatus === "publicar" ||
+    rawStatus === "ativo" ||
+    rawStatus === "active" ||
+    rawStatus === "true";
+
+  const rawSlug = String(row.slug || `post-${row.id}`).trim();
+
   return {
     id: String(row.id),
-    title: String(row.title || "Sem Título"),
-    slug: String(row.slug || `post-${row.id}`),
+    title: String(row.title || "Sem Título").trim(),
+    slug: rawSlug,
     content: String(row.content || ""),
     cost_simulation: normalizeCostSimulation(row.cost_simulation),
-    status: (row.status === "published" || row.status === "publicado" ? "published" : "draft") as "draft" | "published",
+    status: isPublished ? "published" : "draft",
     cover_image: row.cover_image || null,
     category: row.category || "Receitas Virais",
     reading_time: row.reading_time || "5 min de leitura",
@@ -83,20 +95,14 @@ export function normalizeBlogPost(row: any): BlogPost {
 /**
  * Busca posts da tabela `blog_posts`.
  * Se `includeDrafts` for true (usuário autenticado/admin), traz todos os posts.
- * Se for false (visitante público), traz apenas 'published'.
+ * Se for false (visitante público), filtra apenas os publicados.
  */
 export async function fetchPublishedBlogPosts(includeDrafts = true): Promise<BlogPost[]> {
   try {
-    let query = supabase
+    const { data, error } = await supabase
       .from("blog_posts")
       .select("*")
       .order("created_at", { ascending: false });
-
-    if (!includeDrafts) {
-      query = query.eq("status", "published");
-    }
-
-    const { data, error } = await query;
 
     if (error) {
       console.error("[fetchPublishedBlogPosts] Erro no Supabase:", error);
@@ -104,7 +110,11 @@ export async function fetchPublishedBlogPosts(includeDrafts = true): Promise<Blo
     }
 
     if (data && Array.isArray(data)) {
-      return data.map(normalizeBlogPost);
+      const normalized = data.map(normalizeBlogPost);
+      if (includeDrafts) {
+        return normalized;
+      }
+      return normalized.filter((p) => p.status === "published");
     }
   } catch (err) {
     console.error("[fetchPublishedBlogPosts] Exceção ao buscar posts do Supabase:", err);
@@ -114,35 +124,87 @@ export async function fetchPublishedBlogPosts(includeDrafts = true): Promise<Blo
 }
 
 /**
- * Busca um post específico pelo `slug` diretamente no Supabase.
- * Se `isAdminOrAuthenticated` for true, permite retornar o post mesmo em status 'draft'.
+ * Busca um post específico pelo `slug` (ou ID) diretamente no Supabase.
+ * Trata variações de maiúsculas/minúsculas, decodificação de URL, espaços em branco e status.
  */
-export async function fetchBlogPostBySlug(slug: string, isAdminOrAuthenticated = false): Promise<BlogPost | null> {
-  if (!slug) return null;
+export async function fetchBlogPostBySlug(rawSlug: string, isAdminOrAuthenticated = false): Promise<BlogPost | null> {
+  if (!rawSlug) return null;
 
   try {
-    let query = supabase
+    const cleanSlug = decodeURIComponent(rawSlug).trim();
+    const cleanSlugLower = cleanSlug.toLowerCase();
+
+    // 1. Tentativa prioritária: Busca direta por slug (case-insensitive ou exato)
+    const { data, error } = await supabase
       .from("blog_posts")
       .select("*")
-      .eq("slug", slug);
+      .or(`slug.ilike.${cleanSlug},slug.eq.${cleanSlug},slug.eq.${rawSlug}`)
+      .limit(1)
+      .maybeSingle();
 
-    if (!isAdminOrAuthenticated) {
-      // Se não for admin, só permite buscar se o status for published
-      query = query.eq("status", "published");
-    }
-
-    const { data, error } = await query.maybeSingle();
-
-    if (error) {
-      console.error(`[fetchBlogPostBySlug] Erro ao buscar post pelo slug '${slug}':`, error);
+    if (!error && data) {
+      const post = normalizeBlogPost(data);
+      if (post.status === "published" || isAdminOrAuthenticated) {
+        return post;
+      }
       return null;
     }
 
-    if (data) {
-      return normalizeBlogPost(data);
+    // 2. Fallback por ID (se o slug passado for o UUID do artigo)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSlug)) {
+      const { data: byId } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .eq("id", cleanSlug)
+        .maybeSingle();
+
+      if (byId) {
+        const post = normalizeBlogPost(byId);
+        if (post.status === "published" || isAdminOrAuthenticated) {
+          return post;
+        }
+        return null;
+      }
+    }
+
+    // 3. Fallback inteligente: buscar posts e comparar slugs normalizados (remove acentos, hífens e pontuação)
+    const { data: allRows } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .limit(100);
+
+    if (allRows && allRows.length > 0) {
+      const matchedRow = allRows.find((row: any) => {
+        const rowSlug = String(row.slug || "").trim().toLowerCase();
+        const rowSlugDecoded = decodeURIComponent(rowSlug).trim().toLowerCase();
+        const targetSlugDecoded = cleanSlugLower;
+
+        // Comparações flexíveis
+        if (rowSlug === targetSlugDecoded || rowSlugDecoded === targetSlugDecoded) return true;
+        if (rowSlug.replace(/-/g, " ") === targetSlugDecoded.replace(/-/g, " ")) return true;
+        if (String(row.id) === cleanSlug) return true;
+
+        // Comparação com título slugificado
+        const titleSlug = String(row.title || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "");
+
+        return titleSlug === targetSlugDecoded;
+      });
+
+      if (matchedRow) {
+        const post = normalizeBlogPost(matchedRow);
+        if (post.status === "published" || isAdminOrAuthenticated) {
+          return post;
+        }
+        return null;
+      }
     }
   } catch (err) {
-    console.error(`[fetchBlogPostBySlug] Exceção ao buscar post '${slug}':`, err);
+    console.error(`[fetchBlogPostBySlug] Exceção ao buscar post '${rawSlug}':`, err);
   }
 
   return null;
