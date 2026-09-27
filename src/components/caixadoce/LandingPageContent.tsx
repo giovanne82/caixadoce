@@ -1,38 +1,22 @@
-import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { CaixaDoceLogo } from "@/components/caixadoce/CaixaDoceLogo";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Sparkles,
-  Store,
   ArrowRight,
   CheckCircle2,
   ShoppingBag,
   CalendarDays,
   Calculator,
-  Clock,
   Star,
   Plus,
   Check,
   Zap,
-  ShieldCheck,
-  ExternalLink,
-  ChevronRight,
-  TrendingUp,
 } from "lucide-react";
 
 export function LandingPageContent() {
   const navigate = useNavigate();
-  const [modalDemoAberto, setModalDemoAberto] = useState(false);
 
   const irParaLogin = () => {
     navigate({ to: "/login", search: {} as any });
@@ -111,26 +95,16 @@ export function LandingPageContent() {
                 Organize seu cardápio, receba pedidos automaticamente e pare de perder vendas no meio das mensagens do WhatsApp. Tudo em um só link.
               </p>
 
-              {/* Botões de Ação (CTAs) */}
+              {/* Botão de Ação Principal (CTA) */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
                 <Button
                   onClick={irParaLogin}
                   size="lg"
-                  className="w-full sm:w-auto font-black text-sm bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl shadow-xl hover:shadow-2xl px-7 py-6 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]"
+                  className="w-full sm:w-auto font-black text-sm bg-gradient-to-r from-purple-600 via-purple-700 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl shadow-xl hover:shadow-2xl px-8 py-6 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
                   <span>Criar Minha Loja Grátis</span>
                   <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setModalDemoAberto(true)}
-                  className="w-full sm:w-auto font-bold text-sm text-slate-800 border-purple-200 hover:bg-purple-50 hover:border-purple-300 rounded-2xl px-6 py-6 flex items-center justify-center gap-2 transition-all"
-                >
-                  <Store className="w-4 h-4 text-purple-600" />
-                  <span>Ver Loja de Exemplo</span>
                 </Button>
               </div>
 
@@ -418,55 +392,6 @@ export function LandingPageContent() {
           </div>
         </div>
       </footer>
-
-      {/* ========================================================================= */}
-      {/* MODAL DE PRÉ-VISUALIZAÇÃO DA LOJA DE EXEMPLO */}
-      {/* ========================================================================= */}
-      <Dialog open={modalDemoAberto} onOpenChange={setModalDemoAberto}>
-        <DialogContent className="sm:max-w-md rounded-3xl p-6 text-slate-900">
-          <DialogHeader className="text-center pb-2">
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto mb-2">
-              <Store className="w-6 h-6" />
-            </div>
-            <DialogTitle className="text-lg font-black">Loja de Exemplo CaixaDoce</DialogTitle>
-            <DialogDescription className="text-xs text-slate-600">
-              Veja como é a experiência do seu cliente ao acessar seu cardápio digital pelo celular ou computador.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-3 text-xs text-slate-700">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-              <span>Link personalizado exclusivo com seu nome: <strong>caixadoce.com.br/cardapio/sua-loja</strong></span>
-            </div>
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-              <span>Fotos de alta qualidade, opções de massa, recheio e personalização.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-              <span>Pagamento por Pix ou Cartão com confirmação automática.</span>
-            </div>
-          </div>
-
-          <div className="pt-2 flex flex-col gap-2">
-            <Button
-              onClick={irParaLogin}
-              className="w-full font-black text-xs bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl shadow-md py-5"
-            >
-              <Sparkles className="w-4 h-4 mr-1.5 text-amber-300" />
-              <span>Criar Meu Cardápio Agora</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setModalDemoAberto(false)}
-              className="w-full font-bold text-xs rounded-xl"
-            >
-              Fechar Prévia
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
