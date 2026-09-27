@@ -2030,6 +2030,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
       icon: Truck,
       colorClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
     },
+    /* Pausado temporariamente para focar no núcleo da plataforma
     {
       id: "integracoes",
       title: "Integrações Delivery",
@@ -2038,6 +2039,7 @@ export function ConfiguracoesTab({ onIrParaPlano, initialSection }: Configuracoe
       colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
       badge: "Homologação",
     },
+    */
     {
       id: "equipe",
       title: "Equipe & Colaboradores",
